@@ -1037,6 +1037,14 @@ def cli_checks(kapitsa):
               j.get("model") == "qwen3.8-flash-next:kquant" and j.get("kind") == "catalog" and
               j.get("repo") == kquant_repo and j.get("revision") == kquant_revision and
               j.get("downloaded") is False, json.dumps(j))
+    # the combined KQuant repos' folders name the catalog entry of the same pack, companions included (#1210)
+    j = plan("nace-ai/Qwen3.5-9B-MLX-KQuant/Q5")
+    check("cli: nace-ai/Qwen3.5-9B-MLX-KQuant/Q5 -> 9b:kquant5 with its drafter and MTP head",
+          j.get("model") == "qwen3.5-9b:kquant5" and j.get("kind") == "catalog" and
+          j.get("repo") == "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant" and
+          {c.get("kind") for c in j.get("companions", [])} == {"mtp-sidecar", "dflash"}, json.dumps(j))
+    rc, _, err = run("pull", "--dry-run", "--json", "nace-ai/Qwen3.8-Flash-Next-MLX-KQuant/Q4")
+    check("cli: Flash-Next's combined Q4/ folder (a later checkpoint) is refused", rc != 0 and "Q4" in err, err)
     rc, _, err = run("serve", "--port", str(busy))
     check("cli: serve with no model, offline and nothing downloaded: a clear error", rc == 1 and "Can't reach" in err, err)
     agent_checks(run, home)

@@ -146,6 +146,41 @@ static ModelRef catalog_ref(const CatalogModel& m, const Variant& v) {
   return r;
 }
 
+// A combined KQuant repo, `org/name[/folder][@revision]` (Hugging Face URL prefixes too): the catalog variant pinning
+// the same pack, or nullptr when `arg` names no combined repo. A folder or revision it does not pin is refused, so the
+// id never becomes a plain download without the variant's drafter and MTP head (#1210).
+static const Variant* combined_variant(std::string s, const CatalogModel** model) {
+  for (const char* p : {"https://huggingface.co/", "http://huggingface.co/", "huggingface.co/", "hf.co/"})
+    if (s.rfind(p, 0) == 0) s = s.substr(strlen(p));
+  const size_t at = s.find('@');
+  const std::string rev = at == std::string::npos ? "" : s.substr(at + 1);
+  std::string path = at == std::string::npos ? s : s.substr(0, at);
+  while (!path.empty() && path.back() == '/') path.pop_back();
+  const size_t slash = path.find('/');
+  if (slash == std::string::npos) return nullptr;
+  const size_t second = path.find('/', slash + 1);
+  const std::string repo = lower(path.substr(0, second));
+  const std::string folder = second == std::string::npos ? "" : path.substr(second + 1);
+  const CombinedPack* hit = nullptr;
+  bool known = false;
+  for (const auto& c : combined_packs()) {
+    if (lower(c.repo) != repo) continue;
+    known = true;
+    // no folder: the repo's root row, else its Q4 pack
+    if (!hit && (folder.empty() ? c.folder.empty() || c.folder == "Q4" : lower(c.folder) == lower(folder))) hit = &c;
+    if (folder.empty() && c.folder.empty()) hit = &c;
+  }
+  if (!known) return nullptr;
+  if (!hit)
+    throw Error(path.substr(0, second) + " has no pack in folder \"" + folder + "\" that Kapitsa pins. Use a catalog name (" +
+                choices() + ").");
+  if (!rev.empty() && rev != hit->revision)
+    throw Error(s + ": Kapitsa pins this pack at " + hit->revision + ". Use the repo without a revision, or a catalog name.");
+  const Variant* v = find_variant_by_repo(hit->pinned_repo, "", model);
+  if (!v) throw Error("internal: no catalog variant pins " + hit->pinned_repo);
+  return v;
+}
+
 ModelRef resolve(const std::string& arg0) {
   std::string arg = arg0;
   while (!arg.empty() && std::isspace(static_cast<unsigned char>(arg.back()))) arg.pop_back();
@@ -183,6 +218,14 @@ ModelRef resolve(const std::string& arg0) {
     return c;
   }
   if (arg.find('/') != std::string::npos && is_dir(arg)) return local(arg);
+  {
+    const CatalogModel* m = nullptr;
+    if (const Variant* v = combined_variant(arg, &m)) {  // with its companions
+      ModelRef c = catalog_ref(*m, *v);
+      c.variant_given = true;
+      return c;
+    }
+  }
   std::string repo, rev;
   if (parse_repo(arg, repo, rev)) {
     const CatalogModel* m = nullptr;

@@ -85,6 +85,14 @@ const std::vector<CatalogModel>& catalog();
 // Pure device selection; the no-argument form uses the current device profile.
 const std::vector<CatalogModel>& catalog(const ni::DeviceProfile&);
 const CatalogModel* find_model(const std::string& name_or_alias);  // case-insensitive; nullptr if unknown
+// Nace AI's combined KQuant repos hold one model's packs, a folder each (Q4/, Q5/). Each row is a pack the catalog pins
+// in its standalone repo: the combined repo, its folder ("": the repo's root), the combined revision whose folder holds
+// the same safetensors, and the standalone repo the catalog downloads. `--model <combined repo>[/<folder>][@<revision>]`
+// takes that catalog variant, with its drafter and MTP head; without a folder, the repo's Q4 pack (or its root row).
+struct CombinedPack {
+  std::string repo, folder, revision, pinned_repo;
+};
+const std::vector<CombinedPack>& combined_packs();
 // The catalog variant whose weights are `repo` (case-insensitive) at `revision` ("" = any), or nullptr.
 const Variant* find_variant_by_repo(const std::string& repo, const std::string& revision, const CatalogModel** model);
 std::string short_name(const CatalogModel& m);                     // its shortest alias: "35b"

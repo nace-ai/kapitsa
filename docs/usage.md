@@ -66,6 +66,13 @@ Every released nace-ai Qwen KQuant pack has a catalog entry, so its repository I
 drafter and MTP head: the 9B's Q4 and Q5 packs are `9b:kquant` and `9b:kquant5`, the 27B's and 35B's Q5 packs
 `27b:kquant5` and `35b:kquant5`. These entries change no default. `9b:kquant` is the same Q4 pack `9b` uses on
 M5 and newer, so on other Macs it is how to opt into it.
+Nace AI also publishes these packs in one repository per model, a folder per pack:
+`nace-ai/Qwen3.5-4B-MLX-KQuant`, `nace-ai/Qwen3.5-9B-MLX-KQuant`, `nace-ai/Qwen3.8-27B-MLX-KQuant` and
+`nace-ai/Qwen3.6-35B-A3B-MLX-KQuant` hold `Q4/` and `Q5/` (the 4B only `Q4/`). `--model <repo>/Q4` or `/Q5`, with or
+without `@<revision>`, selects the catalog entry of the same pack, with its drafter and MTP head, and downloads the
+files it pins (the folder's safetensors are the same files). The repository without a folder means its Q4 pack.
+`nace-ai/Qwen3.8-Flash-Next-MLX-KQuant` without a folder is `flash-next:kquant`; its `Q4/` folder holds a later
+checkpoint that no catalog entry names, and is refused. A folder or revision the catalog does not pin is refused.
 
 | Name | Aliases | What it is | Download | Variants |
 | --- | --- | --- | ---: | --- |
