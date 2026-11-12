@@ -45,6 +45,14 @@ jobs:
       - uses: actions/checkout@v5
       - run: python3 tests/test_pr_size.py
 
+  server-test-lock:
+    # tests/test_server.py --cli takes the GPU lock itself and waits for it; this is that behavior, on a throwaway lock file
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 tests/test_server_lock.py
+
   profile-gates:
     # A new inline chip, core or RAM check outside src/engine/device_profile.cpp fails this, and so does a comment or doc line
     # that gives a measured-only-here or nothing-was-run reason for a narrow default, anywhere in the repo
