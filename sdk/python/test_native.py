@@ -1,6 +1,7 @@
 """Real-library CPU contracts, plus an explicitly requested model smoke test."""
 
 import argparse
+import ctypes
 import fcntl
 import json
 import os
@@ -8,7 +9,7 @@ from pathlib import Path
 import tempfile
 from unittest.mock import patch
 
-from kapitsa import Engine, KapitsaError, Status
+from kapitsa import Engine, KapitsaError, Status, _api, _DELTA
 
 
 def expect_error(status, call):
@@ -21,6 +22,21 @@ def expect_error(status, call):
 
 
 def cpu(library):
+    api = _api(library)
+    for call, args in ((api.request_create, (None, b"{}")),
+                       (api.generate, (None, _DELTA(), None))):
+        output = ctypes.c_void_p()
+        error = ctypes.c_void_p()
+        status = call(*args, ctypes.byref(output), ctypes.byref(error))
+        assert status == Status.INVALID_ARGUMENT and not output and error
+        message = ctypes.string_at(error).decode()
+        with patch.object(api, "string_free", wraps=api.string_free) as free:
+            exc = expect_error(Status.INVALID_ARGUMENT, lambda: api.result(status, error))
+            assert message and message in str(exc)
+            assert [args[0] for args, _ in free.call_args_list if args[0]] == [error]
+    api.request_cancel(None)
+    api.request_destroy(None)
+    api.engine_destroy(None)
     # Invalid options and unsupported metadata are rejected before GPU initialization.
     for options in ({}, {"model_dir": 42}, {"typo": True}):
         expect_error(Status.INVALID_ARGUMENT, lambda: Engine.load(options, library_path=library))

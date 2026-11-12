@@ -3,7 +3,9 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "kapitsa-native"
+name = "kapitsa"
+license = {text = "Apache-2.0"}
+readme = "README.md"
 version = "0.1.0"
 description = "Python bindings for the Kapitsa in-process C ABI"
 requires-python = ">=3.9"
