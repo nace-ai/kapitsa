@@ -1,0 +1,18 @@
+20:35:30 bin=/Users/alisheramantay/Documents/nace/k495/kapitsa-0.2.35/kapitsa sha=19737e9cd311 kapitsa 0.2.35 (30b18f9) order=[A B B A] macos=26.5.2
+20:35:30 arm A = /Users/alisheramantay/Documents/nace/k495/d27/models/qwen3.8-27b-4bit
+20:35:30 arm B = /Users/alisheramantay/Documents/nace/k495/d27/models/qwen3.8-27b-kquant
+20:35:30 waiting for load 4.03
+20:38:57 1-A rc=0 load 3.44->2.37 ok flags=["CONTENTION: sustained foreign GPU load > 5% in ['prefill_4000', 'tools'] (mean 4.55%, top ['com.apple.WebKit.GPU'])"]
+20:40:38 2-B rc=0 load 2.37->3.42 ok flags=[]
+20:42:09 3-B rc=0 load 3.42->2.67 ok flags=["CONTENTION: sustained foreign GPU load > 5% in ['prefill_4000'] (mean 3.62%, top ['com.apple.WebKit.GPU'])"]
+20:45:22 4-A rc=0 load 2.67->7.46 void-load flags=["CONTENTION: sustained foreign GPU load > 5% in ['decode', 'prefill_4000', 'tools'] (mean 4.91%, top ['com.apple.WebKit.GPU'])"]
+20:45:22 top-up: A has 1 valid, extra leg 1/2
+20:45:22 waiting for load 7.46
+20:45:37 waiting for load 6.46
+20:45:52 waiting for load 7.44
+20:46:07 waiting for load 6.44
+20:46:22 waiting for load 5.37
+20:46:37 waiting for load 4.68
+20:46:52 waiting for load 4.10
+20:48:38 5-A rc=0 load 3.47->2.03 ok flags=[]
+20:48:38 LEGSDONE

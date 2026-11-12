@@ -27,7 +27,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ## 🔥 What's new
 
-- [2026/11] 🎯 **KQuant: the 4B, 9B and 35B-A3B downloads are closer to the original model than the packs they replace, at the same size; the 27B has `27b:kquant`** ([numbers](#kquant)).
+- [2026/11] 🎯 **KQuant: the 4B, 9B, 27B and 35B-A3B downloads are closer to the original model than the packs they replace, at the same size** ([numbers](#kquant)).
 - [2026/11] ⚡ **Qwen3.8-Flash-Next 180B writes 6% faster on an M5 Max**, with the same tokens: greedy decode 107.3 → 113.9 tok/s after three verify-kernel changes ([numbers](bench/results/2026-11-04-m5-max-flash-next/README.md)).
 - [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 304 tok/s on an M5 Max**: `kapitsa serve --model clover` ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
 - [2026/10] 🗄️ **A 180B model runs on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
@@ -46,13 +46,13 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ### KQuant
 
-**Downloads closer to the original model, at the same size.** KQuant is our quantization for MLX packs. `4b`, `9b` and `35b` already use it; for the 27B, ask for `27b:kquant`.
+**Downloads closer to the original model, at the same size.** KQuant is our quantization for MLX packs. `4b`, `9b`, `27b` and `35b` use it.
 
 | 4-bit | Compared with | KL from bf16 (lower is closer) | GSM8K, 1,319 questions |
 | --- | --- | --- | --- |
 | 4B | lmstudio-community | 0.070 → **0.048** | 0.914 → 0.923 |
 | 9B | lmstudio-community | 0.081 → **0.037** | 0.927 → **0.944** |
-| 27B | the plain 4-bit `27b` | 0.054 → **0.035** | 0.950 → 0.953 |
+| 27B | the plain 4-bit pack (`27b:4bit`) | 0.054 → **0.035** | 0.950 → 0.953 |
 | 35B-A3B | MTPLX | 0.096 → **0.059** | 0.948 → 0.952 |
 
 The 9B row is the legacy pack (`9b` on M3 and M4); on M5 and newer `9b` is Q4-KQuant, which these numbers do not cover. [How it was measured](docs/benchmarks.md#kquant-against-the-packs-it-replaces) · [every run](bench/results/2026-11-10-m5-pro-kquant/README.md)

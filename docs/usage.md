@@ -78,7 +78,7 @@ checkpoint that no catalog entry names, and is refused. A folder or revision the
 | --- | --- | --- | ---: | --- |
 | `qwen3.5-4b` | `4b` | Qwen3.5, dense and small: for 16-24 GB Macs and simple tasks | 4.6 GB | `4bit` (default), `6bit`, `8bit`, `bf16` |
 | `qwen3.5-9b` | `9b` | Qwen3.5, dense: the 4B's bigger sibling, the most capable model for a 16 GB Mac | 9.1-9.3 GB | `4bit` (default), `kquant`, `kquant5` |
-| `qwen3.8-27b` | `27b` | Qwen3.8, dense: the strongest coder of the three Qwen models, slower to write | 20.2 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16`, `kquant` (opt-in), `kquant5` |
+| `qwen3.8-27b` | `27b` | Qwen3.8, dense: the strongest coder of the three Qwen models, slower to write | 20.2 GB | `kquant` (default), `4bit`, `5bit`, `6bit`, `8bit`, `bf16`, `kquant5` |
 | `qwen3.6-35b-a3b` | `35b`, `qwen3.6-35b`, `35b-a3b` | Qwen3.6, mixture of experts with 3B parameters active per token: quick to reply and to read | 22.1 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16`, `kquant5`, `16gb` (where `4bit` does not fit: 2-bit experts, 10.8 GB; [GGUF files](#gguf-files)) |
 | `qwen3.8-flash-next` | `flash-next`, `flash` | Qwen3.8-Flash-Next 180B-A7B: mixture of 512 experts with 4-stream hyper-connections, an n-gram embedding and sparse attention past 2K tokens; for 128 GB Macs, 64 GB with `64gb` | 105.9 GB | `4bit` (default), `kquant`, `64gb` (where `4bit` does not fit: Sushi's EXL3 2-bit experts, 69.6 GB) |
 | `nemotron-labs-dory1.0-4b` | `dory`, `dory-4b`, `dory1.0-4b` | NVIDIA Nemotron Dory1.0 4B: a looped model, its shared block run 1-4 times per token ([thinking depth](#dory-thinking-depth)); text only | 3.2 GB | `nvfp4` (default), `bf16` |
@@ -149,8 +149,8 @@ Each Qwen model comes in several precisions, its variants. Download sizes, compa
 
 | Variant | Weights | `4b` | `9b` | `27b` | `35b` |
 | --- | --- | ---: | ---: | ---: | ---: |
-| `4bit` (default) | MLX affine 4-bit, group 64; `9b` on M5 and newer uses mixed 4/5-bit KQuant Q4 | 4.6 GB | 9.1-9.3 GB | 20.2 GB | 22.1 GB |
-| `kquant` | the 4-bit weights, searched per group on real text to sit closer to the original than the plain 4-bit pack (KL from bf16 0.035 against 0.054; GSM8K, all 1,319 questions, 0.953 against 0.950). Opt-in: `27b` stays the plain 4-bit pack (decode on an M5 Pro with incoai's DFlash2 drafter on Kapitsa 0.2.32, not the nace-ai retrain this entry downloads: sampled 72.5 against 80.0 tok/s, greedy 91.0 against 82.8). For the 9B, the released Q4 pack (mixed 4/5-bit): what `9b` uses on M5 and newer, opt-in on other Macs | - | 9.3 GB | 20.2 GB | - |
+| `4bit` (default; the 27B's is `kquant`) | MLX affine 4-bit, group 64; `9b` on M5 and newer uses mixed 4/5-bit KQuant Q4; `27b:4bit` is the plain pack `27b` took before #495 | 4.6 GB | 9.1-9.3 GB | 20.2 GB | 22.1 GB |
+| `kquant` | the 4-bit weights, searched per group on real text to sit closer to the original than the plain 4-bit pack (KL from bf16 0.035 against 0.054; GSM8K, all 1,319 questions, 0.953 against 0.950). The 27B's default since #495 (decode, Kapitsa 0.2.35, both packs with the nace-ai drafter and the same MTP head, T 0.6 and T 0 pooled: 87.9 against 84.5 tok/s on an M5 Pro 48 GB, 67.2 against 66.8 on an M4 Pro 48 GB). For the 9B, the released Q4 pack (mixed 4/5-bit): what `9b` uses on M5 and newer, opt-in on other Macs | - | 9.3 GB | 20.2 GB | - |
 | `kquant5` | the released KQuant Q5 packs: mixed 5-, 6- and 8-bit weights on the 9B, mixed 4-, 6- and 8-bit on the 27B and 35B | - | 10.2 GB | 24.8 GB | 24.6 GB |
 | `5bit` | MLX affine 5-bit, group 64 | - | - | 23.5 GB | 26.4 GB |
 | `6bit` | MLX affine 6-bit, group 64: the quality choice | 5.6 GB | - | 26.9 GB | 30.7 GB |
