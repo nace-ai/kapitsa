@@ -58,6 +58,13 @@ int main() {
   CHECK(ni::resolve_model(a3b) == ni::ModelClass::kQwen35A3b);
   a3b.clover = true;
   CHECK(ni::resolve_model(a3b) == ni::ModelClass::kQwen35Shape);  // Clover has the wave's shape, not the drafter's
+  a3b.clover = false;
+  a3b.ornith = true;
+  // Ornith is the same shape in every field and was never measured with the lanes: a default earned on the 35B-A3B
+  // does not carry to it on the strength of its shape, and "not measured" is not licence to exclude it silently
+  // either, so the exclusion is its own named fact (#1201).
+  CHECK(ni::resolve_model(a3b) == ni::ModelClass::kQwen35Shape);
+  a3b.ornith = false;
   ni::ModelFacts shape_only;
   shape_only.moe = true;
   shape_only.hidden = 2048;
