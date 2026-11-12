@@ -162,7 +162,7 @@ The most precise variant of each catalog model that runs on a Mac of each size. 
 | Model | 16 GB | 24 GB | 32 GB | 36 GB | 48 GB | 64 GB | 128 GB |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | **Qwen3.5-4B** · `4b` | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 |
-| **Qwen3.5-9B** · `9b` | KQuant | KQuant | KQuant | KQuant | KQuant | KQuant | KQuant |
+| **Qwen3.5-9B** · `9b` | 4-bit | 4-bit | 4-bit | 4-bit | 4-bit | 4-bit | 4-bit |
 | **Qwen3.8-27B** · `27b` | — | 4-bit† | 5-bit | 5-bit | 8-bit | 8-bit | BF16 |
 | **Qwen3.6-35B-A3B** · `35b` | 2-bit† | 2-bit | 4-bit | 4-bit | 6-bit | 8-bit | BF16 |
 | **Qwen3.8-Flash-Next 180B-A7B** · `flash-next` | — | — | — | — | 2-bit + SSD | 2-bit | 4-bit |

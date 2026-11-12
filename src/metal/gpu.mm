@@ -315,6 +315,12 @@ size_t Gpu::recommended_working_set() const { return dev(device_).recommendedMax
 size_t Gpu::allocated_bytes() const { return dev(device_).currentAllocatedSize; }
 size_t Gpu::max_threadgroup_memory() const { return dev(device_).maxThreadgroupMemoryLength; }
 size_t Gpu::max_buffer_length() const { return dev(device_).maxBufferLength; }
+int probe_apple_family() {
+  id<MTLDevice> d = MTLCreateSystemDefaultDevice();
+  if (!d) return 0;
+  return apple_family_probed([d](int n) { return [d supportsFamily:(MTLGPUFamily)(1000 + n)]; });
+}
+
 int Gpu::apple_family() const {
   static const int f = apple_family_probed([this](int n) {
     return [dev(device_) supportsFamily:(MTLGPUFamily)(1000 + n)];  // MTLGPUFamilyApple<n> = 1000 + n

@@ -9,7 +9,7 @@ them and refuse each kind of implausible one; the labels must follow; the table 
 precision, with units and the contention marks; and the pull request check must work end to end against a stand-in
 GitHub API: the files read as data at the head commit, the labels set, the report in the job summary.
 """
-import copy, http.server, json, os, shutil, socketserver, subprocess, sys, tempfile, threading, urllib.parse
+import copy, http.server, json, os, re, shutil, socketserver, subprocess, sys, tempfile, threading, urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, ".."))
@@ -17,6 +17,7 @@ BUILD = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO,
 sys.path.insert(0, os.path.join(REPO, "tools"))
 import community_check as cc  # noqa: E402
 import community_table as ct  # noqa: E402
+import models_table as mt  # noqa: E402
 
 FAILS = []
 
@@ -49,8 +50,13 @@ check(cat["qwen3.6-35b-a3b"]["variants"] == {"4bit": "4-bit", "5bit": "5-bit", "
 # every variant in catalog.cpp is found by the checker: a comment between a variant's `{.name` and its `.quant` hid the 4B's and the 9B's 4-bit
 # (and the 35B's) from it, and a result for them was refused (kapitsa#1149, 10 Nov 2026)
 _src = open(os.path.join(REPO, "src", "hub", "catalog.cpp")).read()
-check(sum(len(m["variants"]) for m in cat.values()) == _src.count(".quant ="), "the checker finds every variant of catalog.cpp",
-      f"{sum(len(m['variants']) for m in cat.values())} found, {_src.count('.quant =')} `.quant =` in the source")
+_n_variants = len(re.findall(r"^\s*\.quant\s*=", _src, re.M))
+check(sum(len(m["variants"]) for m in cat.values()) == _n_variants, "the checker finds every variant of catalog.cpp",
+      f"{sum(len(m['variants']) for m in cat.values())} found, {_n_variants} `.quant =` initializer fields in the source")
+_model9 = next(m for m in mt.parse_catalog(_src) if m["name"] == "qwen3.5-9b")
+check(cat["qwen3.5-9b"] == {"title": _model9["title"], "variants": {"4bit": "4-bit"}}
+      and [v["name"] for v in _model9["variants"]] == ["4bit"],
+      "the community checker and models table read the same 9B row through catalog overloads")
 check(cat["nemotron-3.5-bolt"]["variants"] == {"24gb": "NVIDIA 24 GB"} and cat["qwen3.5-4b"]["title"] == "Qwen3.5-4B",
       "Bolt's precision and the 4B's title")
 check(macs["Mac16,7"]["name"] == "MacBook Pro (16-inch, 2024)" and len(macs) >= 58, "the Mac table")

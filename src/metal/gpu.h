@@ -41,6 +41,9 @@ int apple_family_probed(Supports supports) {
   return 7;
 }
 
+// Metadata only: no command queue or GPU singleton. Returns 0 when Metal has no device.
+int probe_apple_family();
+
 // A GPU-visible buffer (shared storage, so `ptr` is CPU-addressable on Apple silicon).
 // `offset` lets one MTLBuffer back many tensors (e.g. a whole mmapped safetensors file).
 struct Buffer {

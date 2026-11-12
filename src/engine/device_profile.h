@@ -104,6 +104,9 @@ DeviceFacts facts_from_gpu(long ram_bytes, bool ane);
 // own with them filled for its print.
 const DeviceProfile& current_device();
 
+// Catalog policy needs only the family: no command queue, unknown devices keep the legacy pack.
+const DeviceProfile& catalog_device();
+
 // The named checks the remaining gates call. The no-argument forms read the live GPU by calling the same Gpu methods
 // the sites used. The DeviceFacts forms are those predicates for the CPU test.
 bool ane_builtin_share(const std::string& chip);  // the families default_units() supports, independent of calibration

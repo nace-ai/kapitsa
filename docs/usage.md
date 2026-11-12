@@ -60,6 +60,8 @@ catalog resolution. The short names are unchanged. On Macs with matrix units (M5
 `ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4`. Other Macs, including M3 and M4, keep
 `nace-ai/Qwen3.5-9B-MLX-4bit-KQuant` at `867adaa1c6d84d1fd9b4f37f43836019c877ba59`.
 The device profile selects the pack, with the same companions on both paths; other catalog pins are unchanged.
+Cluster peers can advertise the same `qwen3.5-9b:4bit` name while using different packs. Match the repository and
+revision across peers when they need the same weights.
 
 | Name | Aliases | What it is | Download | Variants |
 | --- | --- | --- | ---: | --- |

@@ -541,6 +541,6 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
   return ni::default_on(ni::Knob::kQwen9bQ4, device, {}) ? c : legacy;
 }
 
-const std::vector<CatalogModel>& catalog() { return catalog(ni::current_device()); }
+const std::vector<CatalogModel>& catalog() { return catalog(ni::catalog_device()); }
 
 }  // namespace ni::hub

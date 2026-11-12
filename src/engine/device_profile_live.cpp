@@ -24,6 +24,11 @@ const DeviceProfile& current_device() {
   return p;
 }
 
+const DeviceProfile& catalog_device() {
+  static const DeviceProfile p = resolve_device({.apple_family = probe_apple_family()});
+  return p;
+}
+
 bool default_on(Knob k, const ModelFacts& m) { return default_on(k, current_device(), m); }
 
 bool ane_segmented_default() { return ane_segmented_default(facts_from_gpu(0, false)); }

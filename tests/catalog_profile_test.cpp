@@ -9,7 +9,8 @@
 // Inject the live-device seam: this target links no Metal code and opens no GPU queue.
 namespace ni {
 DeviceProfile test_device;
-const DeviceProfile& current_device() { return test_device; }
+const DeviceProfile& catalog_device() { return test_device; }
+const DeviceProfile& current_device() { std::abort(); }  // Catalog lookup must not initialize the GPU singleton.
 }
 
 int main() {
