@@ -211,12 +211,14 @@ const std::vector<CatalogModel>& catalog() {
            // them, by name or by repo id. `9b` keeps `4bit` as its default.
            {.name = "kquant",
             .quant = "MLX affine mixed 4/5-bit (KQuant Q4)",
+            .label = "KQuant Q4",
             .repo = "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant",
             .revision = "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
             .companions = {mtp9(), dflash9()},
             .download_gb = 9.30},
            {.name = "kquant5",
             .quant = "MLX affine mixed 5/6/8-bit (KQuant Q5)",
+            .label = "KQuant Q5",
             .repo = "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant",
             .revision = "bbddf39f41d3e0f682f2293351c67a9616d5941d",
             .companions = {mtp9(), dflash9()},
@@ -255,6 +257,7 @@ const std::vector<CatalogModel>& catalog() {
            // takes mtp27() as the plain packs do.
            {.name = "kquant5",
             .quant = "MLX affine mixed 4/6/8-bit (KQuant Q5)",
+            .label = "KQuant Q5",
             .repo = "nace-ai/Qwen3.8-27B-MLX-Q5-KQuant",
             .revision = "9f3187857e1940bf32fe7f23b4df0fb65631a874",
             .companions = {mtp27(), dflash27()},
@@ -308,6 +311,7 @@ const std::vector<CatalogModel>& catalog() {
            // The released KQuant Q5 pack (#495): no MTP head in the repo, so it takes mtp35() as the plain packs do.
            {.name = "kquant5",
             .quant = "MLX affine mixed 4/6/8-bit (KQuant Q5)",
+            .label = "KQuant Q5",
             .repo = "nace-ai/Qwen3.6-35B-A3B-MLX-Q5-KQuant",
             .revision = "50b3b1c57e2c096e007de22997ff6824224fccde",
             .companions = {mtp35(), dflash35()},

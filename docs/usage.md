@@ -138,7 +138,7 @@ Each Qwen model comes in several precisions, its variants. Download sizes, compa
 | --- | --- | ---: | ---: | ---: | ---: |
 | `4bit` (default) | MLX affine 4-bit, group 64: the fastest | 4.6 GB | 9.0 GB | 20.2 GB | 22.1 GB |
 | `kquant` | the 4-bit weights, searched per group on real text to sit closer to the original than the plain 4-bit pack (KL from bf16 0.035 against 0.054; GSM8K, all 1,319 questions, 0.953 against 0.950). Opt-in: `27b` stays the plain 4-bit pack (decode on an M5 Pro with incoai's DFlash2 drafter on Kapitsa 0.2.32, not the nace-ai retrain this entry downloads: sampled 72.5 against 80.0 tok/s, greedy 91.0 against 82.8). For the 9B, the released Q4 pack (mixed 4/5-bit), opt-in as well | - | 9.3 GB | 20.2 GB | - |
-| `kquant5` | the released KQuant Q5 packs: mostly 4- or 5-bit weights with 6- and 8-bit layers where they matter most | - | 10.2 GB | 24.8 GB | 24.6 GB |
+| `kquant5` | the released KQuant Q5 packs: mixed 5-, 6- and 8-bit weights on the 9B, mixed 4-, 6- and 8-bit on the 27B and 35B | - | 10.2 GB | 24.8 GB | 24.6 GB |
 | `5bit` | MLX affine 5-bit, group 64 | - | - | 23.5 GB | 26.4 GB |
 | `6bit` | MLX affine 6-bit, group 64: the quality choice | 5.6 GB | - | 26.9 GB | 30.7 GB |
 | `8bit` | MLX affine 8-bit, group 64 | 6.7 GB | - | 33.6 GB | 39.4 GB |
