@@ -1505,12 +1505,6 @@ int run_bench(int argc, char** argv, int first) {
       o.context = parse_context(next(), &why);
       if (o.context < 4096) usage_error(why.empty() ? "--ctx needs an explicit context of at least 4k (e.g. 64k)" : why, help);
     }
-    else if (a == "--dflash") {
-      o.dflash = next();
-      if (o.dflash != "auto" && o.dflash != "none" && o.dflash.empty())
-        usage_error("--dflash takes auto, none, or a drafter directory", help);
-      if (o.dflash != "auto" && o.dflash != "none") o.dflash = expand_home(o.dflash);
-    }
     else if (a == "--prefill-chunk") {
       o.prefill_chunk = to_int(a, next(), help);
       if (o.prefill_chunk <= 0) usage_error("--prefill-chunk must be a positive integer", help);
