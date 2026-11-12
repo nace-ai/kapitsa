@@ -213,7 +213,9 @@ without and after a draft.
 - Measure on the GPU only when nothing else runs on it, and interleave the runs of the old and the new build (A B A B
   ...). Report every run, not the best one, with the Mac, the macOS version and the commit.
 - A default changes only after an interleaved A/B and the [output check](#output-check): the logits against the old
-  build's, with differences allowed only within this Mac's noise floor (near-ties).
+  build's, with differences allowed only within this Mac's noise floor (near-ties). A default that only switches which
+  published pack a catalog name downloads has its own rule in AGENTS.md (KL to BF16 for both packs, a task score and the
+  speed A/B), not the floor check.
 - Put the numbers in the pull request, with the change that produced them.
 - A new feature ships on by default for the whole class of hardware or model it targets: a matrix-unit optimization for
   every Mac with matrix units, a MoE path for every MoE model. Show the interleaved A/B and the output check on at least
