@@ -806,8 +806,8 @@ uint32_t default_units(const std::string& chip, int cores, uint32_t total, bool 
     // GPU's part and mixer are M1 9.23 and 112 ms, M2 7.91 and 99 ms. The balance u = k (mixer + g x 34) / (a + g k)
     // with the plain split's a lands under both wavefront optima (M1 Ultra 18 against 20, M2 Pro 28 against 30): the
     // wavefront hides part of the ANE's time. So the wavefront's a is the one that puts each measured chip at its
-    // optimum: M1 3.76 ms, M2 4.58 ms. The plain split (a noncausal pass) keeps the plain split's a (13 of 34 on the
-    // M1 Ultra, measured best 12 of 12, 17 and 24).
+    // optimum: M1 3.76 ms, M2 4.58 ms. The plain split (a noncausal pass) keeps its own a: 13 of 34 on the M1 Ultra,
+    // where 12 measured best of 12, 17 and 24.
     // Neither ANE compiles more than 32 units (16,384 channels): 33 and 34 fail ANECCompile on both, 32 compiles.
     const bool m1 = family == 1;
     const double g = (m1 ? 9.23 : 7.91) * k, mixer = (m1 ? 112.0 : 99.0) * k;

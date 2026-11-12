@@ -1,0 +1,62 @@
+{
+ "base": "http://127.0.0.1:8091/v1",
+ "model": "qwen3.8-27b",
+ "target": 1000,
+ "runs": [
+  {
+   "offset": 0,
+   "prompt_tokens": 1109,
+   "completion_tokens": 400,
+   "finish": "length",
+   "ttft_s": 4.122084458,
+   "decode_tps": 83.45123388917729,
+   "cached": 0,
+   "text_head": "I'll create a complete LRU cache module with TTL expiry, thread-safe wrapper, and a comprehensive pytest test suite. Let",
+   "wall_s": 8.9
+  },
+  {
+   "offset": 120000,
+   "prompt_tokens": 1412,
+   "completion_tokens": 400,
+   "finish": "length",
+   "ttft_s": 5.12653025,
+   "decode_tps": 80.37902440260456,
+   "cached": 0,
+   "text_head": "I'll create a complete LRU cache module with TTL expiry, thread-safe wrapper, and a pytest test suite. Let me write this",
+   "wall_s": 10.1
+  },
+  {
+   "offset": 240000,
+   "prompt_tokens": 1179,
+   "completion_tokens": 400,
+   "finish": "length",
+   "ttft_s": 4.414287834,
+   "decode_tps": 88.55359872628244,
+   "cached": 0,
+   "text_head": "I'll create a complete LRU cache module with TTL expiry, thread-safe wrapper, and a comprehensive pytest test suite. Let",
+   "wall_s": 8.9
+  },
+  {
+   "offset": 360000,
+   "prompt_tokens": 1106,
+   "completion_tokens": 400,
+   "finish": "length",
+   "ttft_s": 4.046999375000002,
+   "decode_tps": 86.55897415189087,
+   "cached": 0,
+   "text_head": "I'll create a complete LRU cache module with TTL expiry, thread-safe wrapper, and a comprehensive pytest test suite. Let",
+   "wall_s": 8.7
+  },
+  {
+   "offset": 480000,
+   "prompt_tokens": 1358,
+   "completion_tokens": 96,
+   "finish": "stop",
+   "ttft_s": 4.9224851250000015,
+   "decode_tps": 125.63600921183867,
+   "cached": 0,
+   "text_head": "I'll create a complete LRU cache module with TTL expiry, thread safety, and a comprehensive test suite. Let me first che",
+   "wall_s": 5.8
+  }
+ ]
+}

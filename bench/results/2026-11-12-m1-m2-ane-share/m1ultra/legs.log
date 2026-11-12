@@ -1,0 +1,482 @@
+19:53:28 probe 32,33
+GPU alone: 7136 ms per chunk (287.0 tok/s)
+30 units: 6071 ms per chunk (337.4 tok/s, 1.18x the GPU alone); build 13.5 s
+32 units: 6230 ms per chunk (328.7 tok/s, 1.15x the GPU alone); build 14.8 s
+best: 30 units, 6071 ms per 2048-row chunk vs 7136 GPU alone (1.18x)
+2
+19:54:37 LEG dec32-k35def-195437-1: /Users/ec2-user/kapitsa-0.2.35-darwin-arm64/kapitsa serve --model 35b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+19:54:42   ready=1 after 5 s, model id 'qwen3.6-35b-a3b'
+19:54:42   quiet: load { 1.89 2.56 2.74 }
+19:54:58   warm:   sweep 8000: 8310 tok, TTFT 4.23s, 1965 tok/s prefill, decode 164.19 tok/s
+19:57:06   rc=0 0k:129.4 120k:133.7 240k:140.0 360k:145.8 480k:141.8
+19:57:06   cycles: 3.19 tok/cycle 3.33 tok/cycle 3.44 tok/cycle 3.63 tok/cycle 3.59 tok/cycle 
+19:57:09 LEG dec32-k35mlx-195709-2: /Users/ec2-user/kapitsa-0.2.35-darwin-arm64/kapitsa serve --model /Users/ec2-user/.cache/huggingface/hub/models--mlx-community--Qwen3.6-35B-A3B-4bit/snapshots/38740b847e4cb78f352aba30aa41c76e08e6eb46 --dflash /Users/ec2-user/.cache/huggingface/hub/models--incoai--Qwen3.6-35B-A3B-DFlash2/snapshots/51ef7b6923ad6c14cb1bb41c37a9041446496ab6 --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+19:57:15   ready=1 after 6 s, model id '38740b847e4cb78f352aba30aa41c76e08e6eb46'
+19:57:15   quiet: load { 1.22 1.92 2.43 }
+19:57:30   warm:   sweep 8000: 8313 tok, TTFT 4.23s, 1967 tok/s prefill, decode 183.80 tok/s
+19:59:37   rc=0 0k:152.8 120k:146.3 240k:152.8 360k:156.6 480k:148.6
+19:59:37   cycles: 3.84 tok/cycle 3.56 tok/cycle 3.73 tok/cycle 3.84 tok/cycle 3.73 tok/cycle 
+19:59:40 LEG dec32-k35mlx-195940-3: /Users/ec2-user/kapitsa-0.2.35-darwin-arm64/kapitsa serve --model /Users/ec2-user/.cache/huggingface/hub/models--mlx-community--Qwen3.6-35B-A3B-4bit/snapshots/38740b847e4cb78f352aba30aa41c76e08e6eb46 --dflash /Users/ec2-user/.cache/huggingface/hub/models--incoai--Qwen3.6-35B-A3B-DFlash2/snapshots/51ef7b6923ad6c14cb1bb41c37a9041446496ab6 --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+19:59:46   ready=1 after 6 s, model id '38740b847e4cb78f352aba30aa41c76e08e6eb46'
+19:59:46   quiet: load { 1.15 1.58 2.20 }
+20:00:01   warm:   sweep 8000: 8312 tok, TTFT 4.24s, 1960 tok/s prefill, decode 175.42 tok/s
+20:02:08   rc=0 0k:165.4 120k:146.4 240k:150.9 360k:157.6 480k:146.9
+20:02:08   cycles: 4.11 tok/cycle 3.59 tok/cycle 3.76 tok/cycle 3.95 tok/cycle 3.66 tok/cycle 
+20:02:11 LEG dec32-k35def-200211-4: /Users/ec2-user/kapitsa-0.2.35-darwin-arm64/kapitsa serve --model 35b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+20:02:16   ready=1 after 5 s, model id 'qwen3.6-35b-a3b'
+20:02:16   quiet: load { 1.11 1.35 2.00 }
+20:02:31   warm:   sweep 8000: 8312 tok, TTFT 4.24s, 1963 tok/s prefill, decode 173.35 tok/s
+20:04:39   rc=0 0k:132.3 120k:133.8 240k:144.0 360k:142.1 480k:143.7
+20:04:39   cycles: 3.33 tok/cycle 3.38 tok/cycle 3.59 tok/cycle 3.56 tok/cycle 3.73 tok/cycle 
+20:04:42 PASS dec32 done: k35def k35mlx k35mlx k35def
+20:04:42 packed
+20:04:42 CHAIN U1 DONE
+20:05:35 == output check: main (GPU only here) vs PR (default share)
+20:05:35 logit_dump main rc=1
+20:05:35 logit_dump pr rc=1
+20:05:35 logit_compare rc=2
+logit_compare: /Users/ec2-user/k520/ld-main and /Users/ec2-user/k520/ld-pr hold no path in common
+20:05:35 LEG pf16-k27main-200535-1: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+20:05:41   ready=1 after 6 s, model id 'qwen3.8-27b'
+20:09:03   quiet: load { 2.45 4.18 3.32 }
+20:10:04   warm:   sweep 8000: 8311 tok, TTFT 30.20s, 275 tok/s prefill, decode 86.58 tok/s
+20:11:44   rc=0   decode T=0: median 106.5 (min 106.45, max 107.32) over 3/3 valid|  sweep 700: 813 tok, TTFT 3.03s, 269 tok/s prefill, decode 72.11 tok/s|  sweep 1500: 1590 tok, TTFT 5.67s, 280 tok/s prefill, decode 77.79 tok/s|  sweep 16000: 16316 tok, TTFT 61.23s, 266 tok/s prefill, decode 67.02 tok/s|
+20:11:44   ane: no calibration for Apple M1 Ultra (run ane_calib) and no default share|
+20:11:48 LEG pf16-k27pr-201148-2: /Users/ec2-user/k520/pr/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+20:11:58   ready=1 after 10 s, model id 'qwen3.8-27b'
+20:11:58   quiet: load { 1.00 2.71 2.86 }
+20:13:00   warm:   sweep 8000: 8310 tok, TTFT 30.20s, 275 tok/s prefill, decode 86.67 tok/s
+20:14:28   rc=0   decode T=0: median 106.52 (min 106.49, max 107.06) over 3/3 valid|  sweep 700: 812 tok, TTFT 3.66s, 222 tok/s prefill, decode 71.52 tok/s|  sweep 1500: 1591 tok, TTFT 4.57s, 348 tok/s prefill, decode 68.17 tok/s|  sweep 16000: 16310 tok, TTFT 48.33s, 337 tok/s prefill, decode 61.39 tok/s|
+20:14:28   ane: FFN split (wavefront): 20/34 units (10240 channels|
+20:14:32 LEG pf16-s27v161-201432-3: /Users/ec2-user/Library/Application Support/Splash-M1/1.6.1-m1/python/bin/python3 -u /Users/ec2-user/Library/Application Support/Splash-M1/1.6.1-m1/install/launcher.py serve --model mlx-community/Qwen3.8-27B-4bit --host 127.0.0.1 --port 8151 --no-webui --max-context 64K --language-only --idle-release off
+20:14:48   ready=1 after 16 s, model id 'mlx-community/Qwen3.8-27B-4bit'
+20:14:48   quiet: load { 1.30 2.11 2.58 }
+20:15:46   warm:   sweep 8000: 8307 tok, TTFT 23.17s, 359 tok/s prefill, decode 57.09 tok/s
+20:17:14   rc=0   decode T=0: median 89.33 (min 86.34, max 90.62) over 3/3 valid|  sweep 700: 811 tok, TTFT 2.62s, 309 tok/s prefill, decode 56.74 tok/s|  sweep 1500: 1589 tok, TTFT 4.56s, 348 tok/s prefill, decode 71.49 tok/s|  sweep 16000: 16315 tok, TTFT 47.08s, 347 tok/s prefill, decode 61.40 tok/s|
+20:17:14   ane: 
+20:17:18 LEG pf16-s27v161-201718-4: /Users/ec2-user/Library/Application Support/Splash-M1/1.6.1-m1/python/bin/python3 -u /Users/ec2-user/Library/Application Support/Splash-M1/1.6.1-m1/install/launcher.py serve --model mlx-community/Qwen3.8-27B-4bit --host 127.0.0.1 --port 8151 --no-webui --max-context 64K --language-only --idle-release off
+20:17:34   ready=1 after 16 s, model id 'mlx-community/Qwen3.8-27B-4bit'
+20:17:34   quiet: load { 0.71 1.47 2.22 }
+20:18:31   warm:   sweep 8000: 8312 tok, TTFT 23.19s, 358 tok/s prefill, decode 65.56 tok/s
+20:20:00   rc=0   decode T=0: median 89.34 (min 88.19, max 90.43) over 3/3 valid|  sweep 700: 812 tok, TTFT 2.63s, 308 tok/s prefill, decode 60.69 tok/s|  sweep 1500: 1592 tok, TTFT 4.57s, 348 tok/s prefill, decode 63.24 tok/s|  sweep 16000: 16316 tok, TTFT 47.00s, 347 tok/s prefill, decode 60.88 tok/s|
+20:20:00   ane: 
+20:20:03 LEG pf16-k27pr-202003-5: /Users/ec2-user/k520/pr/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+20:20:08   ready=1 after 5 s, model id 'qwen3.8-27b'
+20:20:08   quiet: load { 1.02 1.30 2.02 }
+20:21:02   warm:   sweep 8000: 8311 tok, TTFT 23.54s, 353 tok/s prefill, decode 87.68 tok/s
+20:22:31   rc=0   decode T=0: median 106.36 (min 105.04, max 107.12) over 3/3 valid|  sweep 700: 814 tok, TTFT 3.65s, 223 tok/s prefill, decode 72.14 tok/s|  sweep 1500: 1591 tok, TTFT 4.57s, 348 tok/s prefill, decode 67.48 tok/s|  sweep 16000: 16316 tok, TTFT 48.47s, 337 tok/s prefill, decode 60.80 tok/s|
+20:22:31   ane: FFN split (wavefront): 20/34 units (10240 channels|
+20:22:34 LEG pf16-k27main-202234-6: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+20:22:39   ready=1 after 5 s, model id 'qwen3.8-27b'
+20:22:39   quiet: load { 0.82 1.14 1.84 }
+20:23:41   warm:   sweep 8000: 8311 tok, TTFT 30.22s, 275 tok/s prefill, decode 89.95 tok/s
+20:25:23   rc=0   decode T=0: median 105.76 (min 105.18, max 106.41) over 3/3 valid|  sweep 700: 812 tok, TTFT 3.03s, 268 tok/s prefill, decode 71.39 tok/s|  sweep 1500: 1588 tok, TTFT 5.67s, 280 tok/s prefill, decode 68.17 tok/s|  sweep 16000: 16315 tok, TTFT 61.25s, 266 tok/s prefill, decode 66.99 tok/s|
+20:25:23   ane: no calibration for Apple M1 Ultra (run ane_calib) and no default share|
+20:25:26 PASS pf16 done: k27main k27pr s27v161 s27v161 k27pr k27main
+20:25:26 packed
+20:25:26 CHAIN PR DONE
+20:25:37 == output check: main vs PR
+20:26:40 logit_dump main rc=0
+20:28:31 logit_dump pr rc=0
+[kapitsa] NI_ANE: no calibration for Apple M1 Ultra (run ane_calib) and no default share; GPU only
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 20/34 units (10240 channels; GPU 7168) from the default for this chip, chunks >= 512 rows; row scales 1 ms, program compiled 54618 ms + load 113 ms (13 functions, MI
+[kapitsa] NI_ANE: startup check 1.00% of the ANE's part from the GPU alone (2 functions, 587 ms)
+20:29:31 logit_compare rc=0
+  reference: 0.2.35, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35, prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  bitwise identical rows 0 of 8; max |logit diff| 0.4448
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 4.668e-05 median 2.566e-05 p99 1.538e-04 max 1.568e-04; top-2 margin change up to 0.2394
+  next-token NLL change -1.960e-03 nats per record (candidate minus reference)
+batch: 192 records (qwen3.8-27b-4bit)
+  reference: 0.2.35, batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35, batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 0.6197
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 8.299e-05 median 2.617e-06 p99 1.288e-03 max 3.880e-03; top-2 margin change up to 0.2174
+  next-token NLL change +4.910e-04 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+step: 192 records (qwen3.8-27b-4bit)
+  reference: 0.2.35, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35, prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 0.6154
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 7.969e-05 median 2.739e-06 p99 1.280e-03 max 3.352e-03; top-2 margin change up to 0.2366
+  next-token NLL change +4.627e-04 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+verify: 192 records (qwen3.8-27b-4bit)
+  reference: 0.2.35, verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35, verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 0.6162
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 8.240e-05 median 2.907e-06 p99 1.279e-03 max 3.622e-03; top-2 margin change up to 0.2394
+  next-token NLL change +5.485e-04 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+20:29:31 LOGIT DONE
+20:29:33 LEG dec32-k27main-202933-1: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+20:29:39   ready=1 after 6 s, model id 'qwen3.8-27b'
+20:29:39   quiet: load { 1.68 1.41 1.69 }
+20:30:40   warm:   sweep 8000: 8312 tok, TTFT 30.20s, 275 tok/s prefill, decode 90.00 tok/s
+20:36:22   rc=0 0k:66.1 120k:62.8 240k:84.1 360k:63.5 480k:92.6
+20:36:22   cycles: 3.80 tok/cycle 3.66 tok/cycle 4.59 tok/cycle 3.69 tok/cycle 4.94 tok/cycle 
+20:36:25 LEG dec32-k27pr-203625-2: /Users/ec2-user/k520/pr/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+20:36:30   ready=1 after 5 s, model id 'qwen3.8-27b'
+20:36:30   quiet: load { 1.01 1.66 1.81 }
+20:37:24   warm:   sweep 8000: 8310 tok, TTFT 23.56s, 353 tok/s prefill, decode 86.94 tok/s
+20:42:07   rc=0 0k:66.2 120k:59.5 240k:55.3 360k:63.8 480k:85.0
+20:42:07   cycles: 3.80 tok/cycle 3.44 tok/cycle 3.19 tok/cycle 3.66 tok/cycle 4.65 tok/cycle 
+20:42:11 LEG dec32-k27pr-204211-3: /Users/ec2-user/k520/pr/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+20:42:16   ready=1 after 5 s, model id 'qwen3.8-27b'
+20:42:16   quiet: load { 1.32 1.32 1.57 }
+20:43:10   warm:   sweep 8000: 8312 tok, TTFT 23.61s, 352 tok/s prefill, decode 86.72 tok/s
+20:47:47   rc=0 0k:63.5 120k:57.6 240k:71.3 360k:66.6 480k:85.1
+20:47:47   cycles: 3.69 tok/cycle 3.35 tok/cycle 4.05 tok/cycle 3.87 tok/cycle 4.65 tok/cycle 
+20:47:50 LEG dec32-k27main-204750-4: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+20:47:55   ready=1 after 5 s, model id 'qwen3.8-27b'
+20:47:55   quiet: load { 0.85 0.93 1.29 }
+20:48:57   warm:   sweep 8000: 8312 tok, TTFT 30.20s, 275 tok/s prefill, decode 90.07 tok/s
+20:54:46   rc=0 0k:61.5 120k:59.4 240k:55.3 360k:63.6 480k:75.1
+20:54:46   cycles: 3.56 tok/cycle 3.44 tok/cycle 3.17 tok/cycle 3.66 tok/cycle 4.62 tok/cycle 
+20:54:49 PASS dec32 done: k27main k27pr k27pr k27main
+20:54:49 packed
+20:54:49 LEG pf16-k27pr-205449-1: /Users/ec2-user/k520/pr/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+20:54:54   ready=1 after 5 s, model id 'qwen3.8-27b'
+20:54:54   quiet: load { 0.91 0.89 1.12 }
+20:55:48   warm:   sweep 8000: 8311 tok, TTFT 23.55s, 353 tok/s prefill, decode 86.76 tok/s
+20:56:27   rc=0   decode T=0: median 107.05 (min 106.48, max 107.58) over 3/3 valid|  sweep 850: 954 tok, TTFT 3.41s, 279 tok/s prefill, decode 86.80 tok/s|  sweep 1000: 1107 tok, TTFT 3.96s, 280 tok/s prefill, decode 110.39 tok/s|  sweep 1200: 1307 tok, TTFT 4.17s, 314 tok/s prefill, decode 80.41 tok/s|
+20:56:27   ane: FFN split (wavefront): 20/34 units (10240 channels|
+20:56:30 LEG pf16-k27main-205630-2: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+20:56:35   ready=1 after 5 s, model id 'qwen3.8-27b'
+20:56:35   quiet: load { 1.53 1.01 1.13 }
+20:57:37   warm:   sweep 8000: 8310 tok, TTFT 30.21s, 275 tok/s prefill, decode 89.97 tok/s
+20:58:18   rc=0   decode T=0: median 106.65 (min 104.4, max 106.76) over 3/3 valid|  sweep 850: 957 tok, TTFT 3.59s, 266 tok/s prefill, decode 85.94 tok/s|  sweep 1000: 1110 tok, TTFT 4.12s, 270 tok/s prefill, decode 78.02 tok/s|  sweep 1200: 1306 tok, TTFT 4.78s, 273 tok/s prefill, decode 79.54 tok/s|
+20:58:18   ane: no calibration for Apple M1 Ultra (run ane_calib) and no default share|
+20:58:21 LEG pf16-k27main-205821-3: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+20:58:27   ready=1 after 6 s, model id 'qwen3.8-27b'
+20:58:27   quiet: load { 0.92 0.92 1.08 }
+20:59:29   warm:   sweep 8000: 8313 tok, TTFT 30.29s, 274 tok/s prefill, decode 89.97 tok/s
+21:00:08   rc=0   decode T=0: median 106.47 (min 106.45, max 107.02) over 3/3 valid|  sweep 850: 954 tok, TTFT 3.60s, 265 tok/s prefill, decode 86.71 tok/s|  sweep 1000: 1107 tok, TTFT 4.04s, 274 tok/s prefill, decode 103.15 tok/s|  sweep 1200: 1305 tok, TTFT 4.91s, 266 tok/s prefill, decode 81.29 tok/s|
+21:00:08   ane: no calibration for Apple M1 Ultra (run ane_calib) and no default share|
+21:00:11 LEG pf16-k27pr-210011-4: /Users/ec2-user/k520/pr/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:00:17   ready=1 after 6 s, model id 'qwen3.8-27b'
+21:00:17   quiet: load { 1.59 1.12 1.13 }
+21:01:11   warm:   sweep 8000: 8312 tok, TTFT 23.55s, 353 tok/s prefill, decode 90.11 tok/s
+21:01:49   rc=0   decode T=0: median 106.38 (min 106.29, max 106.42) over 3/3 valid|  sweep 850: 954 tok, TTFT 3.41s, 279 tok/s prefill, decode 85.89 tok/s|  sweep 1000: 1107 tok, TTFT 3.97s, 279 tok/s prefill, decode 110.56 tok/s|  sweep 1200: 1303 tok, TTFT 4.19s, 311 tok/s prefill, decode 80.29 tok/s|
+21:01:49   ane: FFN split (wavefront): 20/34 units (10240 channels|
+21:01:53 PASS pf16 done: k27pr k27main k27main k27pr
+21:01:53 packed
+21:01:53 CHAIN2 DONE
+21:02:04 LEG pf16-k27main-210204-1: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:02:09   ready=1 after 5 s, model id 'qwen3.8-27b'
+21:02:09   quiet: load { 1.12 1.06 1.10 }
+21:03:11   warm:   sweep 8000: 8309 tok, TTFT 30.28s, 274 tok/s prefill, decode 90.04 tok/s
+21:04:05   rc=0   decode T=0: median 106.69 (min 106.63, max 106.86) over 3/3 valid|  sweep 500: 620 tok, TTFT 2.39s, 260 tok/s prefill, decode 72.59 tok/s|  sweep 600: 712 tok, TTFT 2.72s, 262 tok/s prefill, decode 99.53 tok/s|  sweep 700: 811 tok, TTFT 3.02s, 268 tok/s prefill, decode 72.29 tok/s|  sweep 800: 913 tok, TTFT 3.37s, 271 tok/s prefill, decode 75.95 tok/s|  sweep 900: 1010 tok, TTFT 3.72s, 271 tok/s prefill, decode 87.02 tok/s|
+21:04:05   ane: no calibration for Apple M1 Ultra (run ane_calib) and no default share|
+21:04:08 LEG pf16-k27pr-210408-2: /Users/ec2-user/k520/pr/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:04:14   ready=1 after 6 s, model id 'qwen3.8-27b'
+21:04:55   quiet: load { 2.47 1.63 1.31 }
+21:05:49   warm:   sweep 8000: 8310 tok, TTFT 23.52s, 353 tok/s prefill, decode 88.91 tok/s
+21:06:46   rc=0   decode T=0: median 106.94 (min 106.41, max 107.19) over 3/3 valid|  sweep 500: 620 tok, TTFT 3.22s, 193 tok/s prefill, decode 77.43 tok/s|  sweep 600: 709 tok, TTFT 3.48s, 204 tok/s prefill, decode 73.68 tok/s|  sweep 700: 812 tok, TTFT 3.63s, 224 tok/s prefill, decode 72.12 tok/s|  sweep 800: 914 tok, TTFT 3.17s, 289 tok/s prefill, decode 76.62 tok/s|  sweep 900: 1008 tok, TTFT 3.37s, 299 tok/s prefill, decode 83.19 tok/s|
+21:06:46   ane: FFN split (wavefront): 20/34 units (10240 channels|
+21:06:49 LEG pf16-k27pr-210649-3: /Users/ec2-user/k520/pr/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:06:54   ready=1 after 5 s, model id 'qwen3.8-27b'
+21:06:54   quiet: load { 1.13 1.37 1.25 }
+21:07:48   warm:   sweep 8000: 8312 tok, TTFT 23.60s, 352 tok/s prefill, decode 91.38 tok/s
+21:08:44   rc=0   decode T=0: median 106.74 (min 106.48, max 107.11) over 3/3 valid|  sweep 500: 621 tok, TTFT 3.23s, 193 tok/s prefill, decode 76.00 tok/s|  sweep 600: 712 tok, TTFT 3.48s, 205 tok/s prefill, decode 99.68 tok/s|  sweep 700: 813 tok, TTFT 3.64s, 223 tok/s prefill, decode 72.32 tok/s|  sweep 800: 913 tok, TTFT 3.14s, 290 tok/s prefill, decode 72.18 tok/s|  sweep 900: 1008 tok, TTFT 3.41s, 296 tok/s prefill, decode 86.69 tok/s|
+21:08:44   ane: FFN split (wavefront): 20/34 units (10240 channels|
+21:08:47 LEG pf16-k27main-210847-4: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:08:52   ready=1 after 5 s, model id 'qwen3.8-27b'
+21:08:52   quiet: load { 1.04 1.30 1.24 }
+21:09:54   warm:   sweep 8000: 8313 tok, TTFT 30.19s, 275 tok/s prefill, decode 86.79 tok/s
+21:10:47   rc=0   decode T=0: median 104.95 (min 104.92, max 105.09) over 3/3 valid|  sweep 500: 619 tok, TTFT 2.39s, 258 tok/s prefill, decode 78.36 tok/s|  sweep 600: 708 tok, TTFT 2.71s, 261 tok/s prefill, decode 108.99 tok/s|  sweep 700: 812 tok, TTFT 3.02s, 269 tok/s prefill, decode 71.43 tok/s|  sweep 800: 913 tok, TTFT 3.37s, 271 tok/s prefill, decode 81.48 tok/s|  sweep 900: 1010 tok, TTFT 3.70s, 273 tok/s prefill, decode 84.16 tok/s|
+21:10:47   ane: no calibration for Apple M1 Ultra (run ane_calib) and no default share|
+21:10:51 PASS pf16 done: k27main k27pr k27pr k27main
+21:10:51 packed
+21:10:51 SCAN DONE
+21:13:42 logit_dump main2 rc=0
+21:15:29 logit_dump pr3 rc=0
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 20/34 units (10240 channels; GPU 7168) from the default for this chip, chunks >= 1024 rows; row scales 1 ms, program compiled 42166 ms + load 94 ms (9 functions, MIL
+[kapitsa] NI_ANE: startup check 1.00% of the ANE's part from the GPU alone (2 functions, 619 ms)
+21:16:27 logit_compare pr3 rc=0
+prefill: 8 records (qwen3.8-27b-4bit)
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 1.127e-05 median 9.700e-06 p99 3.172e-05 max 3.226e-05; top-2 margin change up to 0.06854
+batch: 192 records (qwen3.8-27b-4bit)
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 5.904e-05 median 5.230e-07 p99 9.532e-04 max 2.377e-03; top-2 margin change up to 0.2174
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+step: 192 records (qwen3.8-27b-4bit)
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 5.876e-05 median 5.438e-07 p99 9.498e-04 max 2.368e-03; top-2 margin change up to 0.2366
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+verify: 192 records (qwen3.8-27b-4bit)
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 5.996e-05 median 5.405e-07 p99 9.235e-04 max 2.460e-03; top-2 margin change up to 0.2394
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+21:16:27 LEG pf16-k27main-211627-1: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:16:33   ready=1 after 6 s, model id 'qwen3.8-27b'
+21:17:25   quiet: load { 2.30 4.32 3.19 }
+21:18:27   warm:   sweep 8000: 8311 tok, TTFT 30.29s, 274 tok/s prefill, decode 90.37 tok/s
+21:20:12   rc=0   decode T=0: median 106.63 (min 104.87, max 107.29) over 3/3 valid|  sweep 600: 708 tok, TTFT 2.73s, 260 tok/s prefill, decode 99.44 tok/s|  sweep 850: 957 tok, TTFT 3.59s, 267 tok/s prefill, decode 85.88 tok/s|  sweep 1200: 1304 tok, TTFT 4.69s, 278 tok/s prefill, decode 81.17 tok/s|  sweep 16000: 16315 tok, TTFT 61.27s, 266 tok/s prefill, decode 67.59 tok/s|
+21:20:12   ane: no calibration for Apple M1 Ultra (run ane_calib) and no default share|
+21:20:15 LEG pf16-k27pr3-212015-2: /Users/ec2-user/k520/pr3/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:20:21   ready=1 after 6 s, model id 'qwen3.8-27b'
+21:21:07   quiet: load { 2.46 3.12 2.88 }
+21:22:01   warm:   sweep 8000: 8311 tok, TTFT 23.53s, 353 tok/s prefill, decode 89.97 tok/s
+21:23:37   rc=0   decode T=0: median 106.46 (min 106.42, max 106.8) over 3/3 valid|  sweep 600: 710 tok, TTFT 2.72s, 261 tok/s prefill, decode 74.06 tok/s|  sweep 850: 955 tok, TTFT 3.58s, 266 tok/s prefill, decode 85.97 tok/s|  sweep 1200: 1306 tok, TTFT 5.36s, 244 tok/s prefill, decode 83.13 tok/s|  sweep 16000: 16316 tok, TTFT 48.50s, 336 tok/s prefill, decode 56.16 tok/s|
+21:23:37   ane: FFN split (wavefront): 20/34 units (10240 channels|
+21:23:40 LEG pf16-k27pr3-212340-3: /Users/ec2-user/k520/pr3/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:23:45   ready=1 after 5 s, model id 'qwen3.8-27b'
+21:23:45   quiet: load { 0.96 2.18 2.53 }
+21:24:39   warm:   sweep 8000: 8310 tok, TTFT 23.53s, 353 tok/s prefill, decode 86.64 tok/s
+21:26:14   rc=0   decode T=0: median 106.4 (min 106.31, max 106.96) over 3/3 valid|  sweep 600: 710 tok, TTFT 2.72s, 261 tok/s prefill, decode 99.28 tok/s|  sweep 850: 955 tok, TTFT 3.64s, 262 tok/s prefill, decode 85.99 tok/s|  sweep 1200: 1305 tok, TTFT 5.37s, 243 tok/s prefill, decode 70.26 tok/s|  sweep 16000: 16316 tok, TTFT 48.42s, 337 tok/s prefill, decode 61.42 tok/s|
+21:26:14   ane: FFN split (wavefront): 20/34 units (10240 channels|
+21:26:17 LEG pf16-k27main-212617-4: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:26:23   ready=1 after 6 s, model id 'qwen3.8-27b'
+21:26:23   quiet: load { 1.04 1.69 2.27 }
+21:27:25   warm:   sweep 8000: 8312 tok, TTFT 30.27s, 275 tok/s prefill, decode 86.83 tok/s
+21:29:12   rc=0   decode T=0: median 105.3 (min 105.05, max 106.42) over 3/3 valid|  sweep 600: 710 tok, TTFT 2.73s, 260 tok/s prefill, decode 73.68 tok/s|  sweep 850: 957 tok, TTFT 3.59s, 267 tok/s prefill, decode 78.46 tok/s|  sweep 1200: 1305 tok, TTFT 4.77s, 273 tok/s prefill, decode 80.29 tok/s|  sweep 16000: 16317 tok, TTFT 61.19s, 267 tok/s prefill, decode 65.12 tok/s|
+21:29:12   ane: no calibration for Apple M1 Ultra (run ane_calib) and no default share|
+21:29:15 PASS pf16 done: k27main k27pr3 k27pr3 k27main
+21:29:15 packed
+21:29:15 CHAIN3 DONE
+21:31:14 27b logit_dump main rc=0
+21:32:09 27b logit_dump pr4 rc=0
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 20/34 units (10240 channels; GPU 7168) from the default for this chip, chunks >= 1024 rows; row scales 1 ms, program cached 2 ms + load 113 ms (13 functions, MIL 107
+[kapitsa] NI_ANE: startup check 1.00% of the ANE's part from the GPU alone (2 functions, 605 ms)
+21:33:08 27b logit_compare rc=0
+prefill: 8 records (qwen3.8-27b-4bit)
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 1.127e-05 median 9.700e-06 p99 3.172e-05 max 3.226e-05; top-2 margin change up to 0.06854
+batch: 192 records (qwen3.8-27b-4bit)
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 5.904e-05 median 5.230e-07 p99 9.532e-04 max 2.377e-03; top-2 margin change up to 0.2174
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+step: 192 records (qwen3.8-27b-4bit)
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 5.876e-05 median 5.438e-07 p99 9.498e-04 max 2.368e-03; top-2 margin change up to 0.2366
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+verify: 192 records (qwen3.8-27b-4bit)
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 5.996e-05 median 5.405e-07 p99 9.235e-04 max 2.460e-03; top-2 margin change up to 0.2394
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+21:33:08 LEG pf16-k27main-213308-1: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:33:13   ready=1 after 5 s, model id 'qwen3.8-27b'
+21:33:39   quiet: load { 2.37 4.14 3.44 }
+21:34:41   warm:   sweep 8000: 8313 tok, TTFT 30.20s, 275 tok/s prefill, decode 86.58 tok/s
+21:36:37   rc=0   decode T=0: median 106.62 (min 106.46, max 106.63) over 3/3 valid|  sweep 600: 709 tok, TTFT 2.72s, 260 tok/s prefill, decode 99.51 tok/s|  sweep 850: 956 tok, TTFT 3.60s, 265 tok/s prefill, decode 85.76 tok/s|  sweep 1100: 1206 tok, TTFT 4.35s, 277 tok/s prefill, decode 67.64 tok/s|  sweep 1300: 1400 tok, TTFT 5.03s, 278 tok/s prefill, decode 79.43 tok/s|  sweep 16000: 16314 tok, TTFT 61.22s, 266 tok/s prefill, decode 67.53 tok/s|
+21:36:37   ane: no calibration for Apple M1 Ultra (run ane_calib) and no default share|
+21:36:40 LEG pf16-k27pr4-213640-2: /Users/ec2-user/k520/pr4/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:36:46   ready=1 after 6 s, model id 'qwen3.8-27b'
+21:36:46   quiet: load { 1.10 2.68 2.95 }
+21:37:40   warm:   sweep 8000: 8311 tok, TTFT 23.56s, 353 tok/s prefill, decode 86.80 tok/s
+21:39:23   rc=0   decode T=0: median 106.71 (min 106.53, max 107.25) over 3/3 valid|  sweep 600: 709 tok, TTFT 2.73s, 259 tok/s prefill, decode 77.52 tok/s|  sweep 850: 953 tok, TTFT 3.59s, 266 tok/s prefill, decode 86.95 tok/s|  sweep 1100: 1209 tok, TTFT 4.00s, 302 tok/s prefill, decode 80.23 tok/s|  sweep 1300: 1401 tok, TTFT 4.65s, 301 tok/s prefill, decode 85.63 tok/s|  sweep 16000: 16315 tok, TTFT 48.67s, 335 tok/s prefill, decode 67.61 tok/s|
+21:39:23   ane: FFN split (wavefront): 20/34 units (10240 channels|
+21:39:26 LEG pf16-k27pr4-213926-3: /Users/ec2-user/k520/pr4/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:39:31   ready=1 after 5 s, model id 'qwen3.8-27b'
+21:39:31   quiet: load { 0.94 1.95 2.60 }
+21:40:25   warm:   sweep 8000: 8308 tok, TTFT 23.53s, 353 tok/s prefill, decode 87.76 tok/s
+21:42:08   rc=0   decode T=0: median 107.17 (min 106.4, max 107.56) over 3/3 valid|  sweep 600: 710 tok, TTFT 2.72s, 261 tok/s prefill, decode 99.32 tok/s|  sweep 850: 955 tok, TTFT 3.59s, 266 tok/s prefill, decode 85.72 tok/s|  sweep 1100: 1205 tok, TTFT 5.08s, 237 tok/s prefill, decode 84.04 tok/s|  sweep 1300: 1400 tok, TTFT 4.49s, 312 tok/s prefill, decode 78.62 tok/s|  sweep 16000: 16316 tok, TTFT 48.45s, 337 tok/s prefill, decode 65.52 tok/s|
+21:42:08   ane: FFN split (wavefront): 20/34 units (10240 channels|
+21:42:11 LEG pf16-k27main-214211-4: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:42:16   ready=1 after 5 s, model id 'qwen3.8-27b'
+21:42:17   quiet: load { 0.83 1.54 2.32 }
+21:43:19   warm:   sweep 8000: 8310 tok, TTFT 30.26s, 275 tok/s prefill, decode 66.70 tok/s
+21:45:16   rc=0   decode T=0: median 105.72 (min 104.94, max 106.2) over 3/3 valid|  sweep 600: 708 tok, TTFT 2.73s, 260 tok/s prefill, decode 99.46 tok/s|  sweep 850: 955 tok, TTFT 3.60s, 266 tok/s prefill, decode 86.90 tok/s|  sweep 1100: 1207 tok, TTFT 4.35s, 278 tok/s prefill, decode 84.03 tok/s|  sweep 1300: 1398 tok, TTFT 5.09s, 274 tok/s prefill, decode 66.98 tok/s|  sweep 16000: 16314 tok, TTFT 61.20s, 267 tok/s prefill, decode 60.91 tok/s|
+21:45:16   ane: no calibration for Apple M1 Ultra (run ane_calib) and no default share|
+21:45:19 PASS pf16 done: k27main k27pr4 k27pr4 k27main
+21:45:19 packed
+21:45:19 CHAIN5 27B DONE
+21:45:32 4b logit_dump main rc=0
+21:46:07 4b logit_dump pr4 rc=0
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 11/18 units (5632 channels; GPU 3584) from the default for this chip, chunks >= 1024 rows; row scales 25 ms, program compiled 22533 ms + load 100 ms (13 functions, M
+[kapitsa] NI_ANE: startup check 2.10% of the ANE's part from the GPU alone (2 functions, 208 ms)
+21:47:05 4b logit_compare rc=0
+prefill: 8 records (qwen3.5-4b-4bit)
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 6.384e-05 median 1.529e-05 p99 2.507e-04 max 2.569e-04; top-2 margin change up to 0.09598
+batch: 192 records (qwen3.5-4b-4bit)
+  KL mean 1.133e-04 median 2.689e-06 p99 2.060e-03 max 2.785e-03; top-2 margin change up to 0.1835
+  PASS (tools/logit_floors/qwen3.5-4b-4bit.json)
+step: 192 records (qwen3.5-4b-4bit)
+  KL mean 1.133e-04 median 2.370e-06 p99 2.036e-03 max 2.903e-03; top-2 margin change up to 0.1806
+  PASS (tools/logit_floors/qwen3.5-4b-4bit.json)
+verify: 192 records (qwen3.5-4b-4bit)
+  KL mean 1.136e-04 median 2.659e-06 p99 2.013e-03 max 2.965e-03; top-2 margin change up to 0.1823
+  PASS (tools/logit_floors/qwen3.5-4b-4bit.json)
+21:47:05 LEG pf16-k4main-214705-1: /Users/ec2-user/k520/main/build/kapitsa serve --model 4b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:47:10   ready=1 after 5 s, model id 'qwen3.5-4b'
+21:49:04   quiet: load { 2.47 2.65 2.52 }
+21:49:19   warm:   sweep 8000: 8312 tok, TTFT 4.94s, 1682 tok/s prefill, decode 225.90 tok/s
+21:49:41   rc=0   decode T=0: median 256.42 (min 252.05, max 259.67) over 3/3 valid|  sweep 600: 711 tok, TTFT 0.49s, 1463 tok/s prefill, decode 275.98 tok/s|  sweep 1300: 1401 tok, TTFT 0.84s, 1673 tok/s prefill, decode 266.45 tok/s|  sweep 16000: 16316 tok, TTFT 10.31s, 1582 tok/s prefill, decode 204.93 tok/s|
+21:49:41   ane: no calibration for Apple M1 Ultra (run ane_calib) and no default share|
+21:49:44 LEG pf16-k4pr4-214944-2: /Users/ec2-user/k520/pr4/build/kapitsa serve --model 4b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:49:50   ready=1 after 6 s, model id 'qwen3.5-4b'
+21:49:50   quiet: load { 2.22 2.57 2.50 }
+21:50:04   warm:   sweep 8000: 8312 tok, TTFT 4.99s, 1665 tok/s prefill, decode 221.03 tok/s
+21:50:26   rc=0   decode T=0: median 258.76 (min 250.38, max 259.5) over 3/3 valid|  sweep 600: 710 tok, TTFT 0.47s, 1512 tok/s prefill, decode 274.30 tok/s|  sweep 1300: 1401 tok, TTFT 0.81s, 1722 tok/s prefill, decode 239.49 tok/s|  sweep 16000: 16315 tok, TTFT 9.45s, 1726 tok/s prefill, decode 209.17 tok/s|
+21:50:26   ane: FFN split (wavefront): 11/18 units (5632 channels|
+21:50:29 LEG pf16-k4pr4-215029-3: /Users/ec2-user/k520/pr4/build/kapitsa serve --model 4b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:50:34   ready=1 after 5 s, model id 'qwen3.5-4b'
+21:50:34   quiet: load { 1.92 2.46 2.46 }
+21:50:49   warm:   sweep 8000: 8311 tok, TTFT 4.42s, 1881 tok/s prefill, decode 219.08 tok/s
+21:51:10   rc=0   decode T=0: median 253.66 (min 253.18, max 258.51) over 3/3 valid|  sweep 600: 712 tok, TTFT 0.47s, 1506 tok/s prefill, decode 277.08 tok/s|  sweep 1300: 1400 tok, TTFT 0.85s, 1654 tok/s prefill, decode 267.98 tok/s|  sweep 16000: 16313 tok, TTFT 9.45s, 1726 tok/s prefill, decode 210.41 tok/s|
+21:51:10   ane: FFN split (wavefront): 11/18 units (5632 channels|
+21:51:13 LEG pf16-k4main-215113-4: /Users/ec2-user/k520/main/build/kapitsa serve --model 4b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:51:19   ready=1 after 6 s, model id 'qwen3.5-4b'
+21:51:19   quiet: load { 1.90 2.43 2.45 }
+21:51:33   warm:   sweep 8000: 8308 tok, TTFT 4.95s, 1679 tok/s prefill, decode 213.71 tok/s
+21:51:56   rc=0   decode T=0: median 252.32 (min 245.37, max 256.32) over 3/3 valid|  sweep 600: 712 tok, TTFT 0.49s, 1459 tok/s prefill, decode 273.96 tok/s|  sweep 1300: 1402 tok, TTFT 0.84s, 1677 tok/s prefill, decode 264.58 tok/s|  sweep 16000: 16315 tok, TTFT 10.30s, 1584 tok/s prefill, decode 206.09 tok/s|
+21:51:56   ane: no calibration for Apple M1 Ultra (run ane_calib) and no default share|
+21:51:59 PASS pf16 done: k4main k4pr4 k4pr4 k4main
+21:51:59 packed
+21:51:59 CHAIN5 DONE
+21:52:17 LEG dec32-k27main-215217-1: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:52:22   ready=1 after 5 s, model id 'qwen3.8-27b'
+21:52:22   quiet: load { 1.61 2.21 2.37 }
+21:53:24   warm:   sweep 8000: 8312 tok, TTFT 30.25s, 275 tok/s prefill, decode 86.85 tok/s
+21:54:15   rc=0 0k:69.5 120k:86.5 240k:68.3 360k:85.5 480k:82.5
+21:54:15   cycles: 
+21:54:18 LEG dec32-k27pr4-215418-2: /Users/ec2-user/k520/pr4/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:54:23   ready=1 after 5 s, model id 'qwen3.8-27b'
+21:54:23   quiet: load { 1.30 1.90 2.22 }
+21:55:18   warm:   sweep 8000: 8308 tok, TTFT 23.57s, 353 tok/s prefill, decode 88.91 tok/s
+21:56:07   rc=0 0k:65.8 120k:86.3 240k:70.1 360k:87.1 480k:74.8
+21:56:07   cycles: 
+21:56:10 LEG dec32-k27pr4-215610-3: /Users/ec2-user/k520/pr4/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:56:15   ready=1 after 5 s, model id 'qwen3.8-27b'
+21:56:15   quiet: load { 0.89 1.59 2.06 }
+21:57:09   warm:   sweep 8000: 8312 tok, TTFT 23.57s, 353 tok/s prefill, decode 88.05 tok/s
+21:57:56   rc=0 0k:73.8 120k:86.4 240k:70.9 360k:87.4 480k:82.6
+21:57:56   cycles: 
+21:58:00 LEG dec32-k27main-215800-4: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+21:58:05   ready=1 after 5 s, model id 'qwen3.8-27b'
+21:58:05   quiet: load { 1.44 1.50 1.96 }
+21:59:07   warm:   sweep 8000: 8312 tok, TTFT 30.31s, 274 tok/s prefill, decode 90.00 tok/s
+21:59:56   rc=0 0k:83.8 120k:86.3 240k:67.5 360k:86.1 480k:81.6
+21:59:56   cycles: 
+22:00:00 PASS dec32 done: k27main k27pr4 k27pr4 k27main
+22:00:00 packed
+dec32-k27main-215800-4.json 1208:4.43 1532:5.56 1304:4.70 1207:4.36 1462:5.24
+dec32-k27pr4-215610-3.json 1209:4.08 1531:4.58 1305:4.39 1209:4.02 1463:4.52
+dec32-k27pr4-215418-2.json 1208:4.11 1531:4.57 1300:4.37 1207:5.09 1461:4.55
+dec32-k27main-215217-1.json 1208:4.43 1531:5.56 1305:4.78 1206:4.36 1463:5.23
+22:00:00 CHAIN6 DONE
+22:04:39 27b logit_dump main rc=0
+22:05:34 27b logit_dump pr5 rc=0
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 20/34 units (10240 channels; GPU 7168) from the default for this chip, chunks >= 1024 rows; row scales 1 ms, program cached 2 ms + load 112 ms (13 functions, MIL 107
+[kapitsa] NI_ANE: startup check 1.00% of the ANE's part from the GPU alone (2 functions, 592 ms)
+22:06:33 27b logit_compare rc=0
+prefill: 8 records (qwen3.8-27b-4bit)
+  candidate: 0.2.35, prefill_chunk 2048, ane {"chunks":7,"evals":896,"reruns":0}
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 1.127e-05 median 9.700e-06 p99 3.172e-05 max 3.226e-05; top-2 margin change up to 0.06854
+  next-token NLL change -2.131e-03 nats per record (candidate minus reference)
+batch: 192 records (qwen3.8-27b-4bit)
+  candidate: 0.2.35, batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":7,"evals":896,"reruns":0}
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 5.904e-05 median 5.230e-07 p99 9.532e-04 max 2.377e-03; top-2 margin change up to 0.2174
+  next-token NLL change +1.886e-05 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+step: 192 records (qwen3.8-27b-4bit)
+  candidate: 0.2.35, prefill_chunk 2048, ane {"chunks":7,"evals":896,"reruns":0}
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 5.876e-05 median 5.438e-07 p99 9.498e-04 max 2.368e-03; top-2 margin change up to 0.2366
+  next-token NLL change +6.568e-06 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+verify: 192 records (qwen3.8-27b-4bit)
+  candidate: 0.2.35, verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":7,"evals":896,"reruns":0}
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 5.996e-05 median 5.405e-07 p99 9.235e-04 max 2.460e-03; top-2 margin change up to 0.2394
+  next-token NLL change +8.097e-05 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+22:06:45 4b logit_dump main rc=0
+22:06:57 4b logit_dump pr5 rc=0
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 11/18 units (5632 channels; GPU 3584) from the default for this chip, chunks >= 1024 rows; row scales 0 ms, program cached 2 ms + load 99 ms (13 functions, MIL 80 KB
+[kapitsa] NI_ANE: startup check 2.10% of the ANE's part from the GPU alone (2 functions, 229 ms)
+22:07:55 4b logit_compare rc=0
+prefill: 8 records (qwen3.5-4b-4bit)
+  candidate: 0.2.35, prefill_chunk 2048, ane {"chunks":7,"evals":448,"reruns":0}
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 6.384e-05 median 1.529e-05 p99 2.507e-04 max 2.569e-04; top-2 margin change up to 0.09598
+  next-token NLL change -1.524e-03 nats per record (candidate minus reference)
+batch: 192 records (qwen3.5-4b-4bit)
+  candidate: 0.2.35, batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":7,"evals":448,"reruns":0}
+  KL mean 1.133e-04 median 2.689e-06 p99 2.060e-03 max 2.785e-03; top-2 margin change up to 0.1835
+  next-token NLL change +4.896e-05 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.5-4b-4bit.json)
+step: 192 records (qwen3.5-4b-4bit)
+  candidate: 0.2.35, prefill_chunk 2048, ane {"chunks":7,"evals":448,"reruns":0}
+  KL mean 1.133e-04 median 2.370e-06 p99 2.036e-03 max 2.903e-03; top-2 margin change up to 0.1806
+  next-token NLL change -6.246e-06 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.5-4b-4bit.json)
+verify: 192 records (qwen3.5-4b-4bit)
+  candidate: 0.2.35, verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":7,"evals":448,"reruns":0}
+  KL mean 1.136e-04 median 2.659e-06 p99 2.013e-03 max 2.965e-03; top-2 margin change up to 0.1823
+  next-token NLL change +9.691e-05 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.5-4b-4bit.json)
+22:07:55 LEG dec32-k27main-220755-1: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+22:08:00   ready=1 after 5 s, model id 'qwen3.8-27b'
+22:08:06   quiet: load { 2.31 4.41 3.58 }
+22:09:08   warm:   sweep 8000: 8313 tok, TTFT 30.30s, 274 tok/s prefill, decode 86.92 tok/s
+22:09:54   rc=0 0k:81.7 120k:81.8 240k:87.1 360k:84.5 480k:84.1
+22:09:54   cycles: 
+22:09:57 LEG dec32-k27pr5-220957-2: /Users/ec2-user/k520/pr5/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+22:10:02   ready=1 after 5 s, model id 'qwen3.8-27b'
+22:10:02   quiet: load { 2.02 3.57 3.35 }
+22:10:57   warm:   sweep 8000: 8311 tok, TTFT 23.59s, 352 tok/s prefill, decode 86.70 tok/s
+22:11:41   rc=0 0k:110.3 120k:90.5 240k:87.5 360k:85.6 480k:78.0
+22:11:41   cycles: 
+22:11:44 LEG dec32-k27pr5-221144-3: /Users/ec2-user/k520/pr5/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+22:11:49   ready=1 after 5 s, model id 'qwen3.8-27b'
+22:11:49   quiet: load { 1.05 2.74 3.04 }
+22:12:44   warm:   sweep 8000: 8310 tok, TTFT 23.58s, 352 tok/s prefill, decode 90.01 tok/s
+22:13:27   rc=0 0k:108.6 120k:90.6 240k:83.8 360k:91.4 480k:82.4
+22:13:27   cycles: 
+22:13:30 LEG dec32-k27main-221330-4: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+22:13:36   ready=1 after 6 s, model id 'qwen3.8-27b'
+22:13:36   quiet: load { 1.64 2.36 2.85 }
+22:14:38   warm:   sweep 8000: 8312 tok, TTFT 30.20s, 275 tok/s prefill, decode 90.00 tok/s
+22:15:20   rc=0 0k:83.5 120k:80.4 240k:88.6 360k:86.6 480k:125.6
+22:15:20   cycles: 
+22:15:23 PASS dec32 done: k27main k27pr5 k27pr5 k27main
+22:15:23 packed
+dec32-k27main-221330-4.json 1109:4.12 1412:5.13 1179:4.41 1106:4.05 1358:4.92
+dec32-k27pr5-221144-3.json 1106:4.06 1409:4.55 1180:4.01 1106:4.11 1359:4.37
+dec32-k27pr5-220957-2.json 1107:4.04 1411:4.53 1180:3.98 1104:3.98 1358:4.63
+dec32-k27main-220755-1.json 1108:4.12 1411:5.12 1181:4.35 1105:4.05 1359:4.93
+  12 (128 evaluations)
+   2 (512 evaluations)
+22:15:24 LEG dec32-k27main-221524-1: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+22:15:29   ready=1 after 5 s, model id 'qwen3.8-27b'
+22:15:29   quiet: load { 1.31 1.96 2.63 }
+22:16:31   warm:   sweep 8000: 8311 tok, TTFT 30.29s, 274 tok/s prefill, decode 90.00 tok/s
+22:17:21   rc=0 0k:65.8 120k:85.5 240k:68.8 360k:87.1 480k:75.0
+22:17:21   cycles: 
+22:17:25 LEG dec32-k27pr5-221725-2: /Users/ec2-user/k520/pr5/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+22:17:30   ready=1 after 5 s, model id 'qwen3.8-27b'
+22:17:30   quiet: load { 1.05 1.63 2.40 }
+22:18:24   warm:   sweep 8000: 8311 tok, TTFT 23.59s, 352 tok/s prefill, decode 89.07 tok/s
+22:19:12   rc=0 0k:74.7 120k:77.8 240k:67.3 360k:86.0 480k:81.5
+22:19:12   cycles: 
+22:19:15 LEG dec32-k27pr5-221915-3: /Users/ec2-user/k520/pr5/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+22:19:20   ready=1 after 5 s, model id 'qwen3.8-27b'
+22:19:20   quiet: load { 1.62 1.63 2.31 }
+22:20:15   warm:   sweep 8000: 8309 tok, TTFT 23.61s, 352 tok/s prefill, decode 87.75 tok/s
+22:21:01   rc=0 0k:80.0 120k:84.7 240k:70.2 360k:86.2 480k:80.3
+22:21:01   cycles: 
+22:21:04 LEG dec32-k27main-222104-4: /Users/ec2-user/k520/main/build/kapitsa serve --model 27b --ctx 65536 --slots 1 --private --port 8091 --idle-unload 0
+22:21:09   ready=1 after 5 s, model id 'qwen3.8-27b'
+22:21:09   quiet: load { 1.85 1.54 2.18 }
+22:22:12   warm:   sweep 8000: 8313 tok, TTFT 30.29s, 274 tok/s prefill, decode 86.66 tok/s
+22:23:00   rc=0 0k:80.0 120k:86.7 240k:72.0 360k:87.1 480k:82.4
+22:23:00   cycles: 
+22:23:04 PASS dec32 done: k27main k27pr5 k27pr5 k27main
+22:23:04 packed
+dec32-k27main-222104-4.json 1208:4.43 1530:5.56 1302:4.69 1208:4.36 1462:5.24
+dec32-k27pr5-221915-3.json 1208:4.06 1533:4.66 1301:4.31 1208:4.04 1464:4.51
+dec32-k27pr5-221725-2.json 1209:4.09 1533:4.57 1305:4.17 1207:4.00 1462:4.52
+dec32-k27main-221524-1.json 1208:4.43 1530:5.57 1304:4.70 1207:4.36 1464:5.23
+  12 (128 evaluations)
+   2 (512 evaluations)
+22:23:04 CHAIN7 DONE

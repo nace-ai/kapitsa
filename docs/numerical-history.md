@@ -208,3 +208,11 @@ Review 6698446394 selected the built-in-share class: the fast default now exclud
 calibration or `NI_ANE_UNITS`; `NI_ANE=1` remains an explicit diagnostic override. The shared built-in-share
 predicate is also used by `default_units`, with unchanged share values. The M4 path and arithmetic are unchanged.
 The stopped, still-queued M3 timing repeat did not start a GPU leg and is no longer relevant to the final default.
+
+## ANE prefill share on M1 and M2
+
+The M1 and M2 got a default Neural Engine share for the existing 2560/5120 inputs (Qwen 4B, 27B): the same W8A8
+split the M4 and M5 run, at 20 of 34 units on the M1 Ultra and 30 of 34 on the M2 Pro (27B). Against origin/main
+(GPU alone on both), every path passed its floor's gate with no top-1 flips: 27B M1 Ultra mean KL 5.9e-5 to 6.0e-5,
+27B M2 Pro 1.21e-4, 4B M1 Ultra 1.13e-4 (batch, step, verify; 192 rows each). The new widths of the fast profile
+are unchanged: M1/M2/M3 stay off there. [Results](../bench/results/2026-11-12-m1-m2-ane-share/README.md).
