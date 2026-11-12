@@ -44,7 +44,7 @@ check(list(cat) == ["qwen3.5-4b", "qwen3.5-9b", "qwen3.8-27b", "qwen3.6-35b-a3b"
                    "clover-35b-a3b"], "the catalog's models, in order",
       str(list(cat)))
 check(cat["qwen3.6-35b-a3b"]["variants"] == {"4bit": "4-bit", "5bit": "5-bit", "6bit": "6-bit", "8bit": "8-bit", "bf16": "bf16",
-                                                   "16gb": "2-bit experts"},
+                                                   "16gb": "2-bit experts", "kquant5": "KQuant Q5"},
       "the 35B's precisions", str(cat["qwen3.6-35b-a3b"]["variants"]))
 # every variant in catalog.cpp is found by the checker: a comment between a variant's `{.name` and its `.quant` hid the 4B's and the 9B's 4-bit
 # (and the 35B's) from it, and a result for them was refused (kapitsa#1149, 10 Nov 2026)
