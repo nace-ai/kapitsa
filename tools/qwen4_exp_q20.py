@@ -19,7 +19,7 @@ with no .biases, and config.json's quantization (and quantization_config) gets {
 "mode": "q2_0"} for the module. Only Kapitsa reads such a pack: MLX, mlx-vlm and oMLX have no q2_0 mode.
 Everything else keeps the source pack's files and names; model-000NN files hold the same tensors as the source's.
 --gguf takes one path: a GGUF file, or the folder a split set (name-0000k-of-0000n.gguf) sits in. A folder's parts are
-enumerated from the first one's own name (never "every .gguf", which would take a converted pack's ple.gguf), and each
+enumerated by their common stem and part count (never "every .gguf", which would take a converted pack's ple.gguf), and each
 tensor is read from the shard that holds it, so it does not matter which shard the experts are in (in ISTA-DASLab's Q2_0
 all 144 expert tensors are in shard 1 of 2; shard 2 holds the n-gram table). A tensor found in two shards is refused.
 --verify N: N expert rows of every converted tensor dequantized from both sources must correlate (> 0.6; ~0.9 for two
@@ -285,10 +285,16 @@ def gguf_paths(spec):
     files = [f for f in glob.glob(os.path.join(spec, "*.gguf")) if os.path.basename(f) != GTABLE]
     if not files:
         raise ValueError(f"{spec}: no .gguf files in this folder")
-    m = re.match(r"(.*)-(\d{5})-of-(\d{5})\.gguf$", os.path.basename(files[0]))
-    if m:
-        return [os.path.join(spec, f"{m.group(1)}-{k:05d}-of-{m.group(3)}.gguf")
-                for k in range(1, int(m.group(3)) + 1)]
+    sets = set()
+    for path in files:
+        part = re.fullmatch(r"(.*)-\d{5}-of-(\d{5})\.gguf", os.path.basename(path))
+        if part:
+            sets.add(part.groups())
+    if len(sets) > 1:
+        raise ValueError(f"{spec}: multiple split sets; put the intended set in its own folder")
+    if sets:
+        stem, count = sets.pop()
+        return [os.path.join(spec, f"{stem}-{k:05d}-of-{count}.gguf") for k in range(1, int(count) + 1)]
     if len(files) > 1:
         raise ValueError(f"{spec}: {len(files)} GGUF files and none is a name-0000k-of-0000n.gguf part; "
                          f"pass the model file itself")
