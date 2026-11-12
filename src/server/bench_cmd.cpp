@@ -64,7 +64,8 @@ using term::dim;
 namespace {
 
 const char* kHelp =
-    "kapitsa bench [--model MODEL] [--ctx TOKENS] [--prefill-chunk N] [--quick] [--json] [--submit] [--out FILE]\n\n"
+    "kapitsa bench [--model MODEL] [--ctx TOKENS] [--prefill-chunk N] [--dflash MODE] [--quick] [--json] [--submit]\n"
+    "              [--out FILE]\n\n"
     "Benchmarks Kapitsa on this Mac with the protocol of its published benchmarks (bench/harness): writing speed\n"
     "(512-token coding answers at temperature 0.6, Flint's at 1.0, and greedy, median of 5 runs each), reading a 4K-\n"
     "and a 16K-token prompt, the time to the first token of a follow-up in each conversation, peak memory and tool\n"
@@ -77,7 +78,8 @@ const char* kHelp =
     "  --ctx TOKENS    append a context test AFTER the standard benchmark (e.g. 64k; minimum 4k)\n"
     "                  TTFT, cache reuse, reading and writing; live token progress, 3 repetitions\n"
     "  --prefill-chunk N  prompt tokens per prefill pass (default: automatic)\n"
-    "  --dflash MODE      drafter for the server bench starts: auto (default), none, or a drafter dir\n"
+    "  --dflash MODE   the drafter this run's server uses: auto (default), none (plain decoding), or a drafter\n"
+    "                  folder. The server takes no NI_ variables, so the switch goes here.\n"
     "  --quick         3 standard writing runs per test and 4K reading; context stage still has 3 repetitions\n"
     "  --json          the result as JSON on stdout (progress on stderr)\n"
     "  --out FILE      where to save the result (default: %s/kapitsa-bench-<date>-<chip>-<model>.json)\n"
@@ -673,8 +675,7 @@ void print_summary(const ojson& r, const std::string& path) {
 // ---------------------------------------------------------------- the run
 
 struct Options {
-  std::string model, out;
-  std::string dflash;  // auto|none|<dir>, passed to the server bench starts (empty = server default)
+  std::string model, out, dflash;
   int context = 0;
   int prefill_chunk = 0;
   bool quick = false, json = false, submit = false, dry = false, yes = false;
@@ -828,8 +829,7 @@ int run(const Options& o) {
                                       "--port", std::to_string(srv.port), "--ctx", std::to_string(context), "--slots", "1",
                                       "--disk-cache", "0"};
     if (o.prefill_chunk) sargv.insert(sargv.end(), {"--prefill-chunk", std::to_string(o.prefill_chunk)});
-    // The server inherits no NI_* variable (the loop below clears them all), so --dflash cannot reach it
-    // through NI_DFLASH: an A/B that set NI_DFLASH=none measured two drafting arms (12 Nov 2026, #1201).
+    // The loop below drops every NI_ variable, so NI_DFLASH never reaches this server: the drafter goes as a flag.
     if (!o.dflash.empty()) sargv.insert(sargv.end(), {"--dflash", o.dflash});
     std::vector<std::string> senv, cleared;
     for (char** e = environ; *e; ++e) {
@@ -945,6 +945,14 @@ int run(const Options& o) {
       // what it decodes with: its "engine ready" line
       const std::string detail = decoding_detail(srv.log);
       mi.decoding_detail = detail;
+      // An A/B of the drafter reads this switch: a server that loaded something else would make both arms the same run
+      if (!o.dflash.empty() && o.dflash != "auto") {
+        const std::string served = decoding_of(detail);
+        const bool wants_off = o.dflash == "none";
+        if (served != "unknown" && wants_off == decoding_has_drafter(served))
+          throw std::runtime_error("--dflash " + o.dflash + " was asked for, but the server decodes with " + detail +
+                                   ": the numbers would describe another run");
+      }
       mi.decoding = decoding_of(detail);
       // which drafter decodes: its "drafter: " line (the catalog's drafter when it is the one in the model's folder)
       const DrafterLine dl = parse_drafter(read_file(srv.log));
@@ -1498,6 +1506,16 @@ int run_bench(int argc, char** argv, int first) {
     else if (a == "--prefill-chunk") {
       o.prefill_chunk = to_int(a, next(), help);
       if (o.prefill_chunk <= 0) usage_error("--prefill-chunk must be a positive integer", help);
+    }
+    else if (a == "--dflash") {
+      // serve's own three spellings (src/engine/engine.cpp): auto, none, or the drafter's folder
+      o.dflash = next();
+      if (o.dflash.empty()) usage_error("--dflash needs auto, none or a drafter folder", help);
+      if (o.dflash != "auto" && o.dflash != "none" && !gguf::is_gguf_file(expand_home(o.dflash))) {
+        struct stat st;
+        if (stat(expand_home(o.dflash).c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
+          usage_error("--dflash takes auto, none or a drafter folder; " + o.dflash + " is none of them", help);
+      }
     }
     else if (a == "--quick") o.quick = true;
     else if (a == "--json") o.json = true;

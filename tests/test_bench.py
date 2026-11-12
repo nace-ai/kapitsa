@@ -918,6 +918,15 @@ for value in ("0", "-1", "abc", "4096x", "99999999999999999"):
 bad = run([KAPITSA, "bench", "--prefill-chunk", "4096", "--submit"], env=xenv)
 check(bad.returncode != 0 and "standard community" in bad.stderr, "custom chunk submission rejected before loading")
 
+# --dflash carries the drafter to the server bench starts: that server takes no NI_ variables (#1201's A/B of the
+# drafter read the default in both arms). A name that is neither auto, none nor a folder is refused before loading.
+missing = run([KAPITSA, "bench", "--dflash"], env=xenv)
+check(missing.returncode != 0 and "needs a value" in missing.stderr, "dflash requires a value")
+for value in ("of", "0", "off", os.path.join(xhome, "no-such-drafter"), flint_file):
+    bad = run([KAPITSA, "bench", "--dflash", value], env=xenv)
+    check(bad.returncode != 0 and "--dflash takes auto, none or a drafter folder" in bad.stderr,
+          f"--dflash {value!r} refused before loading", bad.stderr[-200:])
+
 
 shutil.rmtree(xhome, ignore_errors=True)
 
