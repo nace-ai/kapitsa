@@ -201,5 +201,6 @@ struct QmtfLdParams {
 // The formats that dispatch them (src/model/qwen35.cpp's enc_qmm_large and enc_qmm_gu, qmtf_for); an absent line is
 // an absent kernel.
 NI_QMTF(3, 64)
+NI_QMTF(5, 64)
 NI_QMTF(8, 64)
 NI_QMTF(4, 32)

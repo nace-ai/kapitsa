@@ -1,9 +1,9 @@
 // The kernels the Neural Engine split's GPU part runs a dense FFN layer on (src/model/ffn_share.h: gpu_part), the one
 // rule plan() (from a pack's safetensors shapes), init_ane() and enc_mlp_gpu_part_qmt decide by:
 //  - from_shape: an MLX affine projection's bits and group size from its U32 words and scale groups per row, on the
-//    Qwen3.5-4B and Qwen3.8-27B FFN shapes (3-bit, 4-bit g64 / g32, 6-bit, 8-bit), and shapes that fit no format;
+//    Qwen3.5-4B and Qwen3.8-27B FFN shapes (3-bit, 4-bit g64 / g32, 5-bit, 6-bit, 8-bit), and shapes that fit no format;
 //  - gpu_part through plan()'s path (shapes -> formats): one format throughout takes the matrix units (4-bit g64: qmt;
-//    3-bit, 8-bit, 4-bit g32: qmtf); a GGUF Q4_K_M import's layer (Q4_K gate/up -> 4-bit g32, Q6_K down -> 8-bit g64,
+//    3-bit, 5-bit, 8-bit, 4-bit g32: qmtf); a GGUF Q4_K_M import's layer (Q4_K gate/up -> 4-bit g32, Q6_K down -> 8-bit g64,
 //    src/gguf/import.h) takes qmtf; 3-bit gate/up with a 4-bit g64 down (mlx-lm's mixed recipes), a 6-bit down, gate
 //    and up in different formats, or a format whose tile is off keep the generic kernels and the older share;
 //  - matrix_unit_share (plan()'s and init_ane()'s ffn_mma) over a whole model's layers: the 27B Q4_K_M's real mix
@@ -39,12 +39,12 @@ static Path plan_layer(int64_t H, int64_t I, Fmt gate, Fmt up, Fmt down, Qmtf q)
 }
 
 int main() {
-  const Fmt b3{3, 64}, b4{4, 64}, q4k{4, 32}, b6{6, 64}, b8{8, 64};  // q4k: a GGUF Q4_0 / Q4_K import; b8: Q8_0 / Q6_K
-  const Qmtf on{true, true, true}, off{};
+  const Fmt b3{3, 64}, b4{4, 64}, q4k{4, 32}, b5{5, 64}, b6{6, 64}, b8{8, 64};  // q4k: a GGUF Q4_0 / Q4_K import; b8: Q8_0 / Q6_K
+  const Qmtf on{true, true, true, true}, off{};
 
   // from_shape on the 4B (hidden 2560, FFN 9216) and the 27B (5120, 17408)
   for (int64_t K : {2560, 9216, 5120, 17408})
-    for (Fmt f : {b3, b4, q4k, b6, b8}) {
+    for (Fmt f : {b3, b4, q4k, b5, b6, b8}) {
       const Shape s = shape_of(K, f);
       CHECK(from_shape(K, s.words, s.groups) == f);
     }
@@ -62,6 +62,7 @@ int main() {
     CHECK(plan_layer(H, I, b3, b3, b3, on) == Path::qmtf);
     CHECK(plan_layer(H, I, b8, b8, b8, on) == Path::qmtf);
     CHECK(plan_layer(H, I, q4k, q4k, q4k, on) == Path::qmtf);
+    CHECK(plan_layer(H, I, b5, b5, b5, on) == Path::qmtf);  // mlx-lm's 5-bit packs
     // a GGUF Q4_K_M import: Q4_K gate/up, Q6_K down (and its Q4_K-down layers above)
     CHECK(plan_layer(H, I, q4k, q4k, b8, on) == Path::qmtf);
     CHECK(plan_layer(H, I, b3, b3, b8, on) == Path::qmtf);
@@ -70,6 +71,7 @@ int main() {
     CHECK(plan_layer(H, I, b3, b3, b6, on) == Path::generic);
     CHECK(plan_layer(H, I, b4, b4, b8, on) == Path::generic);
     CHECK(plan_layer(H, I, b4, b4, q4k, on) == Path::generic);
+    CHECK(plan_layer(H, I, b4, b4, b5, on) == Path::generic);  // the 9B KQuant Q4 pack: 4-bit g64 gate/up, 5-bit down
     CHECK(plan_layer(H, I, b3, b4, b3, on) == Path::generic);
     CHECK(plan_layer(H, I, q4k, b8, b8, on) == Path::generic);
     CHECK(plan_layer(H, I, b6, b6, b6, on) == Path::generic);
@@ -78,6 +80,7 @@ int main() {
     CHECK(plan_layer(H, I, b8, b8, b8, Qmtf{true, false, true}) == Path::generic);
     CHECK(plan_layer(H, I, q4k, q4k, b8, Qmtf{true, false, true}) == Path::generic);
     CHECK(plan_layer(H, I, q4k, q4k, q4k, Qmtf{true, true, false}) == Path::generic);
+    CHECK(plan_layer(H, I, b5, b5, b5, Qmtf{true, true, true, false}) == Path::generic);
   }
   // what init_ane passes for a projection that is not an affine pack (GGUF blocks, Q2_0, EXL3)
   CHECK(gpu_part(Fmt{}, Fmt{}, Fmt{}, on) == Path::generic);
@@ -87,6 +90,7 @@ int main() {
   CHECK(matrix_unit_share(model(64, {b4, b4, b4}), off));     // all 4-bit g64
   CHECK(matrix_unit_share(model(32, {b3, b3, b3}), on));      // all qmtf, gate/up alike
   CHECK(matrix_unit_share(model(32, {b8, b8, b8}), on));
+  CHECK(matrix_unit_share(model(64, {b5, b5, b5}), on));      // the 27B's 5-bit pack
   std::vector<LayerFmt> q4km;                                 // the 27B Q4_K_M's GGUF header, layer by layer
   for (int i = 0; i < 65; ++i) q4km.push_back(i % 2 ? LayerFmt{q4k, q4k, q4k} : LayerFmt{q4k, q4k, b8});
   CHECK(matrix_unit_share(q4km, on));

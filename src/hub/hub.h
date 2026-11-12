@@ -157,6 +157,13 @@ void set_drafter_declined(const std::string& dir, bool declined);
 bool is_complete(const std::string& dir);
 // Finished, and (catalog models) at the revisions this Kapitsa pins: ensure() needs no network.
 bool is_current(const ModelRef& ref);
+// Whether `dir` is a plan folder (plan_dir's: ~/.cache/kapitsa/plans/<model>-<variant>), and whether that plan holds
+// this Kapitsa's variant of the model: a plan's files are the model, so it is as present as a download, but it is not
+// in the store and has no manifest (a store copy does), so its `.complete` is its only record.
+bool is_plan(const std::string& dir);
+bool plan_is_current(const std::string& dir);
+// Whether a plan's model is on this Mac: planned and holding its weights, not only planned from its headers.
+bool plan_has_model(const std::string& dir);
 
 // What a memory plan reads for a model, without its weights: config.json and each safetensors file's header (the
 // 8-byte length and the JSON, no tensor data), the companions' too (the MTP head's, the drafter's in dflash2/). For a
@@ -174,8 +181,14 @@ struct ImportSize {
 bool import_size(const ModelRef& ref, ImportSize* out);
 // While set, plan_dir() fetches nothing: a plan not already on this Mac is "" (and counted). For answers that must
 // be instant and offline, like the help screen's best model for this Mac: exact when offline_misses() stays 0.
+// A visit nests, and it is per thread plus a process-wide count, so a worker thread started inside one is inside it
+// too; a nested visit's end leaves the outer one open (set_offline(false) and leave_offline).
 void set_offline(bool on);
+// Ends every visit open on this thread (a plan's own worker threads end with their plan).
+void leave_offline();
 int offline_misses();
+// Whether a fetch from the calling thread is refused now (what plan_dir asks before it fetches).
+bool fetch_refused();
 
 // A model in the store, for `kapitsa list`.
 struct Installed {

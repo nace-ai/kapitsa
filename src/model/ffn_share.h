@@ -23,9 +23,10 @@ inline Fmt from_shape(int64_t K, int64_t w_cols, int64_t s_cols) {
 
 // NI_QMTF's formats this process runs on the tensor tile (Qwen35::qmtf_formats)
 struct Qmtf {
-  bool f3g64 = false, f8g64 = false, f4g32 = false;
+  bool f3g64 = false, f8g64 = false, f4g32 = false, f5g64 = false;
   bool has(Fmt f) const {
-    return (f == Fmt{3, 64} && f3g64) || (f == Fmt{8, 64} && f8g64) || (f == Fmt{4, 32} && f4g32);
+    return (f == Fmt{3, 64} && f3g64) || (f == Fmt{8, 64} && f8g64) || (f == Fmt{4, 32} && f4g32) ||
+           (f == Fmt{5, 64} && f5g64);
   }
 };
 
