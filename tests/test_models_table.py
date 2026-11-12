@@ -52,7 +52,7 @@ def main():
             "a download size": lambda t: edit(t, r"\.download_gb = (\d+)", r".download_gb = 9\1"),
             "an MTP head's revision": lambda t: edit(t, r'(?s)(Companion mtp27\(\).*?\.revision = ")[0-9a-f]{40}', r"\g<1>" + "2" * 40),
             "a weights repo": lambda t: edit(t, r'(\.repo = "lmstudio-community/[^"]+)', r"\1-v2"),
-            "a KQuant tier slug": lambda t: edit(t, r'(\.repo = "nace-ai/[^"]+-MLX-Q)4(-KQuant")', r"\g<1>5\2"),
+            "a KQuant repo": lambda t: edit(t, r'(\.repo = "nace-ai/[^"]+-MLX)(-KQuant")', r"\g<1>-v2\2"),
             "the non-matrix 9B repo": lambda t: edit(t, r'(v\.repo = "[^"]+)', r"\1-v2"),
             "the non-matrix 9B revision": lambda t: edit(t, r'(v\.revision = ")[0-9a-f]{40}', r"\g<1>" + "3" * 40),
             "the non-matrix 9B size": lambda t: edit(t, r"(v\.download_gb = )(\d+)", r"\g<1>9\2"),
