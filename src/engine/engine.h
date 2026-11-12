@@ -752,6 +752,8 @@ class Engine {
   // Records `s`'s Seq::cap for view(), from the thread that just changed it
   void note_kv(const Slot& s) { slot_cap_[&s - slots_.data()].store(s.seq->cap, std::memory_order_relaxed); }
   long spec_cycles_ = 0, spec_accepted_ = 0;
+  // Written only in the constructor (and init_splash, which it calls): request_defaults() copies it from any thread, and
+  // sdk/c/kapitsa.h promises concurrent kapitsa_request_create on that basis. Keep it that way, or add a lock.
   ChatRequest defaults_;
   // Structured output: the vocabulary as grammars read it (built by the first request with a grammar, before its GPU
   // turn), and the event a pass's sampler waits on until the host has written the pass's masks (one value per pass,
