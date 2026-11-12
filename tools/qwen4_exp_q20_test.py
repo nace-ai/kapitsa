@@ -263,6 +263,14 @@ def main():
     check(sorted(os.path.basename(p) for p in Q.gguf_paths(split)) ==
           ["q2_0-00001-of-00002.gguf", "q2_0-00002-of-00002.gguf"],
           "a folder's parts are enumerated by the set's name, not every .gguf (ple.gguf is not one)")
+    other = os.path.join(split, "other-00001-of-00002.gguf")
+    shutil.copyfile(os.path.join(split, "q2_0-00001-of-00002.gguf"), other)
+    try:
+        Q.gguf_paths(split)
+        check(False, "a folder with two candidate split sets is refused")
+    except ValueError as e:
+        check("multiple split sets" in str(e), "two sets are refused before reading either model")
+    os.remove(other)
     dup = os.path.join(root, "dup")
     os.makedirs(dup, exist_ok=True)
     write_gguf(os.path.join(dup, "q2_0-00001-of-00002.gguf"), experts_only,

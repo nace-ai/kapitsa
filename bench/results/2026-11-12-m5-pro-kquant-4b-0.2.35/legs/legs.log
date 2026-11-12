@@ -1,0 +1,18 @@
+14:50:29 bin=/Users/alisheramantay/Documents/nace/k495/kapitsa-0.2.35/kapitsa sha=19737e9cd311 commit=30b18f9 model=/Users/alisheramantay/Documents/nace/k495/sp35/arms/lms-4b order=[A X X B B A] macos=26.5.2
+14:51:45 1-A rc=0 load 3.95->3.62 ok power=ac serve_rss_end=3.4G serve_peak=3.38G kflash_lines=43 drafter_lines=29
+14:51:50 2-X rc=2 load 3.62->3.49 rc2 power=ac serve_rss_end=G serve_peak=0G kflash_lines=0 drafter_lines=0
+14:51:56 3-X rc=2 load 3.49->3.61 rc2 power=ac serve_rss_end=G serve_peak=0G kflash_lines=0 drafter_lines=0
+14:54:24 4-B rc=0 load 3.61->3.90 ok power=ac serve_rss_end=3.4G serve_peak=3.38G kflash_lines=43 drafter_lines=29
+14:56:44 5-B rc=0 load 3.90->4.02 ok power=ac serve_rss_end=3.4G serve_peak=3.38G kflash_lines=43 drafter_lines=29
+14:56:44 waiting for load 4.02
+14:56:59 waiting for load 4.38
+14:57:14 waiting for load 4.37
+14:57:29 waiting for load 4.81
+14:57:44 waiting for load 4.24
+14:59:15 6-A rc=0 load 3.76->3.90 ok power=ac serve_rss_end=3.4G serve_peak=3.38G kflash_lines=43 drafter_lines=29
+14:59:15 top-up: X has 0 valid of 2, extra leg 1/2
+14:59:20 7-X rc=2 load 3.90->3.74 rc2 power=ac serve_rss_end=G serve_peak=0G kflash_lines=0 drafter_lines=0
+14:59:20 top-up: X has 0 valid of 2, extra leg 2/2
+14:59:25 8-X rc=2 load 3.74->3.76 rc2 power=ac serve_rss_end=G serve_peak=0G kflash_lines=0 drafter_lines=0
+14:59:25 SHORT: X has 0 valid legs (< 2): not publishable
+14:59:25 LEGSDONE
