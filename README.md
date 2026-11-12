@@ -27,7 +27,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ## 🔥 What's new
 
-- [2026/11] 🎯 **KQuant: the 4B, 9B, 27B and 35B-A3B packs are closer to the original model than the ones they replace, at the same size** ([numbers](#kquant)).
+- [2026/11] 🎯 **KQuant: the 4B, 9B and 35B-A3B downloads are closer to the original model than the packs they replace, at the same size; the 27B has `27b:kquant`** ([numbers](#kquant)).
 - [2026/11] ⚡ **Qwen3.8-Flash-Next 180B writes 6% faster on an M5 Max**, with the same tokens: greedy decode 107.3 → 113.9 tok/s after three verify-kernel changes ([numbers](bench/results/2026-11-04-m5-max-flash-next/README.md)).
 - [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 304 tok/s on an M5 Max**: `kapitsa serve --model clover` ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
 - [2026/10] 🗄️ **A 180B model runs on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
@@ -39,7 +39,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 - 🤖 **Runs your coding agent**: `kapitsa claude`, `codex`, `opencode`, `pi`, `hermes`, `aider`, `goose`
 - 🗄️ **Big models on small Macs**: 180B at 61 tok/s on a 48 GB M5 Pro
 - 💾 **No waiting after a restart**: a 16K follow-up starts in 0.16 s, not 17 s, on an M4 Pro ([numbers](docs/usage.md#ssd-prefix-cache))
-- 🎯 **Closer to the original**: KQuant for the Qwen 4B, 9B, 27B and 35B-A3B, closer than the packs it replaces at the same size ([numbers](#kquant))
+- 🎯 **Closer to the original**: KQuant for the Qwen 4B, 9B, 27B and 35B-A3B, closer than the 4-bit packs it is compared with at the same size ([numbers](#kquant))
 - 🔌 **OpenAI and Anthropic APIs**: plus a chat page, on `127.0.0.1:8000`
 - 🧠 **GPU and Neural Engine together**: prefill hands part of its work to the Neural Engine
 - 🖥️ **Several Macs, one model**: a Mac that can't hold a model uses one that can ([how](docs/usage.md#several-macs))
@@ -48,7 +48,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 **Downloads closer to the original model, at the same size.** KQuant is our quantization for MLX packs. `4b`, `9b` and `35b` already use it; for the 27B, ask for `27b:kquant`.
 
-| 4-bit | Pack it replaces | KL from bf16 (lower is closer) | GSM8K, 1,319 questions |
+| 4-bit | Compared with | KL from bf16 (lower is closer) | GSM8K, 1,319 questions |
 | --- | --- | --- | --- |
 | 4B | lmstudio-community | 0.070 → **0.048** | 0.914 → 0.923 |
 | 9B | lmstudio-community | 0.081 → **0.037** | 0.927 → **0.944** |
