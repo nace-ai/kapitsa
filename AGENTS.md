@@ -217,8 +217,9 @@ default change, with one exception: a default that only switches which published
 from the plain 4-bit pack to its KQuant pack). That changes which weights a catalog name loads, not the loader or the
 kernels. A pack whose tensors need a different kernel path (for example 6-bit group-64 dense weights on `NI_QMT6`) goes
 back to the floor gate. The floors in `tools/logit_floors/` cover code paths on one pack, so
-`tools/logit_compare.py` between two packs can only report "moved". It gates on KL to BF16 for both packs on the same token set (name the corpus and the tool), a task score
-(GSM8K or the like) and the interleaved A/B on the setups above. The switch passes when the new pack's mean KL to BF16
+`tools/logit_compare.py` between two packs can only report "moved". It gates on KL to BF16 for both packs on the
+same token set (name the corpus and the tool), a task score (GSM8K or the like) and the interleaved A/B on the setups
+above. The switch passes when the new pack's mean KL to BF16
 on those tokens is at most the old pack's, its task score is not below the old pack's by more than that score's
 run-to-run spread, and the interleaved speed A/B shows it no slower than the old pack beyond noise (3%). Otherwise it
 does not switch (precedent: #1228).
