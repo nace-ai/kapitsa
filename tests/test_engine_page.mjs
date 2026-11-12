@@ -45,8 +45,12 @@ async function standIn(port, extra = []) {
                                                                                         : `it is still running`}` +
                  (said.trim() ? `; its output: ${said.trim().split("\n").slice(-3).join(" | ")}` : "; it printed nothing"));
   }
+  // A child that a signal ended has exitCode null and signalCode set, and its exit event has already fired by the time
+  // the caller asks to stop it: waiting for another one never returns, and a test whose stand-in outlives a failed start
+  // then hangs instead of reporting that failure (#1213).
+  const gone = () => p.exitCode !== null || p.signalCode !== null;
   return {p, token: key, base: `http://127.0.0.1:${port}`,
-          stop: () => new Promise(r => { if (p.exitCode !== null) return r(); p.once("exit", r); p.kill(); })};
+          stop: () => new Promise(r => { if (gone()) return r(); p.once("exit", r); p.kill(); })};
 }
 
 // The page in a fresh vm: `hash` as its address's fragment; `storage` "ok" or "blocked" (every access throws)
