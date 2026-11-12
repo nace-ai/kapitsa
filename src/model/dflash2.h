@@ -19,7 +19,7 @@ namespace ni {
 
 struct DFlash2Config {
   int H = 0, NL = 0, I = 0, vocab = 0, mask_id = 0;
-  int nq = 32, nkv = 8, hd = 128, block = 8, window = 2048, conv_gs = 16, rank = 256, topk = 16;
+  int nq = 32, nkv = 8, hd = 128, block = 8, conv_gs = 16, rank = 256, topk = 16;
   float eps = 1e-6f, theta = 1e7f;
   std::vector<int> target_layers;  // target layer ids whose outputs feed fc, in slot order
   // the target's layer outputs reach the draft as their hyper-connection streams' mean (target_hidden_reduction
@@ -82,6 +82,9 @@ void dfl_attn_plan(int P, uint32_t max_splits, uint32_t min_chunk, uint32_t* lo,
 
 class DFlash2 {
  public:
+  // kWin is the context ring's slots, a compile-time size in the Metal kernels (kDflRing: slot = position mod
+  // kWin): a drafter trained with a longer window (jzinno's Ornith draft, 4096) drafts over these slots and its
+  // context past kCtxKeep tokens sees kCtxKeep positions, recorded in DFlash2Config::trained_window
   static constexpr int kB = 8, kWin = 2048, kTopK = 16, kRank = 256, kCtxKeep = 2047;
   // The drafting block's rows: kB (8, the tile), or 16 (the anchor + 15 mask rows, two 8-row tiles; KFlash tree cycles
   // only). NI_KFLASH_BLOCK picks it (8, 16, or `auto` for the default); where that says nothing it is 8, and Engine asks

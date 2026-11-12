@@ -44,6 +44,20 @@ int main(int argc, char** argv) {
   check(repo(2048, 40) == "incoai/Qwen3.6-35B-A3B-DFlash2", "35B-A3B shape (2048, 40): the 35B DFlash2 drafter");
   check(repo(2560, 32) == "z-lab/Qwen3.5-4B-DFlash", "4B shape (2560, 32): the 4B DFlash drafter");
   check(repo(4096, 32) == "z-lab/Qwen3.5-9B-DFlash", "9B shape (4096, 32): the 9B DFlash drafter");
+  // Ornith-1.5-35B-A3B is 2048-wide with 40 layers, exactly the 35B-A3B's shape: the by-shape table answers one repo
+  // for both, so what tells them apart is the catalog entry's own companion. Ornith's names its drafter; the 35B's row
+  // still names its own, so neither shape borrows the other's drafter.
+  {
+    check(repo(2048, 40) == "incoai/Qwen3.6-35B-A3B-DFlash2",
+          "the 35B shape keeps its own drafter, not the later entry's for the same shape");
+    const hub::CatalogModel* m = hub::find_model("ornith");
+    const hub::Variant* v = m ? m->variant() : nullptr;
+    std::string d;
+    if (v)
+      for (const hub::Companion& c : v->companions)
+        if (c.drafter()) d = c.repo;
+    check(d == "jzinno/Ornith-1.5-35B-A3B-DFlash2", "`--model ornith` names Ornith's DFlash2 drafter");
+  }
   check(repo(5120, 62).empty() && repo(1024, 24).empty(), "an unknown shape gets none");
 
   char tmpl[] = "/tmp/drafter_attach_XXXXXX";

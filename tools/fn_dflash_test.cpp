@@ -274,6 +274,38 @@ void run_cpu() {
   const auto inc = DFlash2::config_check(incoai, flash);
   check(inc.empty(), "incoai's Flash-Next DFlash2 config (rope theta 1e4): loads for Flash-Next" +
                          (inc.empty() ? std::string() : " (problems: " + inc[0] + ")"));
+  // jzinno/Ornith-1.5-35B-A3B-DFlash2 @ 9b4852c0 (Apache-2.0, Ornith-1.5-35B-A3B's drafter), its config.json's fields
+  // that a Kapitsa load reads: 6 draft layers over Ornith's feature layers 1, 6, 11, ... 37, a 16-row block, rope theta
+  // 1e7. It is trained with a 4096-position window (its README) and drafts over the ring's 2048 here
+  const std::string ornith = R"({"architectures": ["DFlash2DraftModel"], "is_causal": false,
+  "dflash_config": {"block_size": 16, "conv_group_size": 16, "conv_kernel_size": 2, "mask_token_id": 248077,
+    "selector_rank": 256, "selector_top_k": 16, "target_layer_ids": [1, 6, 11, 16, 22, 27, 32, 37]},
+  "head_dim": 128, "hidden_size": 2048, "intermediate_size": 6144, "num_attention_heads": 32, "num_hidden_layers": 6,
+  "num_key_value_heads": 8, "layer_types": ["sliding_attention", "sliding_attention", "sliding_attention",
+  "sliding_attention", "sliding_attention", "sliding_attention"], "sliding_window": 4096, "rms_norm_eps": 1e-06,
+  "rope_parameters": {"rope_theta": 10000000, "rope_type": "default"}, "tie_word_embeddings": false,
+  "vocab_size": 248320})";
+  // Ornith's drafter trained a 4096 window and drafts over this pipeline's 2048-position ring, as the v1 drafters do:
+  // its only cost is fewer context positions than it trained on past 2047 tokens, not a refusal
+  Qwen35Config ornith_target = plain;
+  ornith_target.hidden = 2048;  // Ornith's hidden (the fixtures above are 2560-wide, Flash-Next's)
+  const auto orn = DFlash2::config_check(ornith, ornith_target);
+  check(orn.empty(), "a drafter trained with a 4096-token window: loads over the 2048 ring" +
+                         (orn.empty() ? std::string() : " (problems: " + orn[0] + ")"));
+  check(DFlash2::kWin == 2048 && DFlash2::kCtxKeep == 2047,
+        "the ring is 2048 positions whatever window the drafter was trained with");
+  // narrower than the ring is a drafter this pipeline cannot serve, and no window at all is not a drafter
+  const std::string w4096 = "\"sliding_window\": 4096";
+  check(ornith.find(w4096) != std::string::npos, "the Ornith config names its 4096 window");
+  auto at_window = [&](const std::string& w) {
+    std::string c = ornith;
+    if (c.find(w4096) != std::string::npos) c.replace(c.find(w4096), w4096.size(), w);
+    return c;
+  };
+  check(has(DFlash2::config_check(at_window("\"sliding_window\": 1024"), ornith_target), "window of at least 2048"),
+        "a window narrower than the ring: refused");
+  check(has(DFlash2::config_check(at_window("\"sliding_window\": 0"), ornith_target), "window of at least 2048"),
+        "no window: refused");
   // the block a drafter was trained with: 8 or 16 load, any other block (or none stated) is refused
   auto with_block = [&](const std::string& b) {
     std::string c = draft_config("");

@@ -73,11 +73,12 @@ legacy 9B default.
 | `nemotron-3.5-bolt` | `bolt`, `nemotron-bolt` | NVIDIA Nemotron 3.5 Bolt 74B-A9B: hybrid Mamba-2 mixture of experts, 9B active, 2-bit experts; an agentic model | 25.1 GB | `24gb` |
 | `nemotron-3.5-super-vl` | `super-vl`, `super`, `nemotron-super` | NVIDIA Nemotron 3.5 Super-VL 120B-A12B: hybrid Mamba-2 mixture of experts, 12B active, 4-bit (NVFP4) experts; needs a 96 GB+ Mac | 76.4 GB | `nvfp4` |
 | `flint` | `recursive-flint`, `flint-40b` | Recursive Flint 40B-A2.5B: mixture of 256 experts, 2.5B active, sliding-window and full attention; a coding model that reasons before it answers; text only; 32 GB Macs and up | 22.6 GB | `4bit` (default), `16gb` (where `4bit` does not fit: 2-bit experts, 11.9 GB; [GGUF files](#gguf-files)) |
+| `ornith-1.5-35b-a3b` | `ornith`, `ornith-35b` | Ornith-1.5-35B-A3B: a Qwen3.5 mixture of 256 experts continued-pretrained for tool use and agent work, 3B active, 256K context, reasons by default; drafts with its own DFlash2 model; text only; 32 GB Macs and up | 20.6 GB | `4bit` |
 | `clover-35b-a3b` | `clover`, `clover-35b` | DiffuSpace Clover-35B-A3B-Preview: Qwen3.6-35B-A3B tuned into a block-diffusion model, mixture of 256 experts, 3B active; decodes with the 35B's draft model ([how](#other-models)); text only; 32 GB Macs and up | 20.6 GB | `4bit` |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
 27B (the 27B's is Nace AI's retrain with a 16-row block, [nace-ai/Qwen3.8-27B-DFlash2-Kapitsa](https://huggingface.co/nace-ai/Qwen3.8-27B-DFlash2-Kapitsa)), an MTP head and z-lab's DFlash draft model for the 4B and 9B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL, its DSpark draft model for Lightning, the 35B's DFlash2
-draft model for Clover; Flash-Next's
+draft model for Clover, jzinno's DFlash2 draft model for Ornith (its pack has no usable MTP head); Flash-Next's
 repo holds its MTP head. Dory and Flint have none: they decode without one, as does the 35B's `16gb` (its GGUF has no
 MTP head, and a draft model would not fit beside it).
 
