@@ -6,6 +6,8 @@ already exist locally; the library does not start HTTP servers or child processe
 
 The optional [Node.js / TypeScript SDK](node/README.md) wraps this ABI with asynchronous
 loading/generation, streaming callbacks, cancellation and explicit teardown.
+The [Python SDK](python/README.md) provides synchronous calls, streaming callbacks,
+thread-safe request cancellation and context managers using the standard library.
 
 ## Build and use
 
