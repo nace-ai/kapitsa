@@ -641,6 +641,8 @@ void print_summary(const ojson& r, const std::string& path) {
   row("Tool calls", res.value("tool_calls", std::string()) == "pass" ? accent("pass") : term::red("fail"));
   if (r["protocol"].contains("prefill_chunk"))
     row("Prefill chunk", thousands(r["protocol"]["prefill_chunk"].get<int>()) + " tokens (requested)");
+  if (r["protocol"].contains("dflash"))
+    row("Drafter asked for", r["protocol"]["dflash"].get<std::string>());
   row("Decoding", m.value("decoding_detail", m.value("decoding", std::string())));
   if (m.contains("drafter_kind") && m["drafter_kind"].is_string()) {
     std::string d = m["drafter_kind"].get<std::string>();
@@ -675,7 +677,7 @@ void print_summary(const ojson& r, const std::string& path) {
 // ---------------------------------------------------------------- the run
 
 struct Options {
-  std::string model, out, dflash;
+  std::string model, out, dflash;  // dflash: auto|none|<dir>, passed to the server bench starts
   int context = 0;
   int prefill_chunk = 0;
   bool quick = false, json = false, submit = false, dry = false, yes = false;
@@ -885,6 +887,7 @@ int run(const Options& o) {
   in.mac = mac;
   in.quick = o.quick;
   in.prefill_chunk = o.prefill_chunk;
+  in.dflash = o.dflash;
   in.version = KAPITSA_VERSION;
   in.commit = KAPITSA_GIT;
   in.time_utc = utc_now();
@@ -902,6 +905,11 @@ int run(const Options& o) {
     start_server(32768);
     // wait for it, showing what it does
     if (external) {
+      // --dflash only configures the server bench starts; against one it did not start it would be silently dropped,
+      // and the two arms of an A/B would measure the same server (12 Nov 2026, review of #1201)
+      if (!o.dflash.empty())
+        throw std::runtime_error("--dflash configures the server kapitsa bench starts, and it did not start this one: "
+                                 "unset KAPITSA_BENCH_SERVER, or start that server with its own --dflash");
       mi.decoding = "unknown";
       mi.decoding_detail = "a server kapitsa bench did not start (KAPITSA_BENCH_SERVER)";
       mi.drafter_kind = "unknown";
@@ -1527,6 +1535,8 @@ int run_bench(int argc, char** argv, int first) {
   }
   if (o.context && o.submit) usage_error("custom-context runs cannot be submitted as standard community benchmarks", help);
   if (o.prefill_chunk && o.submit) usage_error("custom prefill chunks cannot be submitted as standard community benchmarks", help);
+  if (!o.dflash.empty() && o.submit)
+    usage_error("runs with --dflash cannot be submitted as standard community benchmarks", help);
   if (o.dry && !o.submit) usage_error("--dry-run goes with --submit", help);
   g_tui = term::fancy() && !o.json;
   g_plain = !g_tui;

@@ -927,6 +927,16 @@ for value in ("of", "0", "off", os.path.join(xhome, "no-such-drafter"), flint_fi
     bad = run([KAPITSA, "bench", "--model", "4b", "--quick", "--dflash", value], env=xenv)
     check(bad.returncode != 0 and "--dflash takes auto, none or a drafter folder" in bad.stderr,
           f"--dflash {value!r} refused before loading", bad.stderr[-200:])
+# a run that picked its own drafter is not the published protocol, so it cannot go to the community results
+for value in ("none", "auto"):
+    bad = run([KAPITSA, "bench", "--model", "4b", "--quick", "--dflash", value, "--submit"], env=xenv)
+    check(bad.returncode != 0 and "cannot be submitted" in bad.stderr,
+          f"--dflash {value} refused with --submit", bad.stderr[-200:])
+# and --dflash configures only the server bench starts: against a KAPITSA_BENCH_SERVER one it would be dropped
+ext = dict(xenv, KAPITSA_BENCH_SERVER="9")
+bad = run([KAPITSA, "bench", "--model", "4b", "--quick", "--dflash", "none"], env=ext)
+check(bad.returncode != 0 and "KAPITSA_BENCH_SERVER" in bad.stderr,
+      "--dflash refused against a server it did not start", bad.stderr[-200:])
 
 
 shutil.rmtree(xhome, ignore_errors=True)
