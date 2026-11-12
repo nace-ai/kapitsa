@@ -271,6 +271,13 @@ re-run, so commit the new run under a new label, or say in the subject that the 
 value (README, docs/usage.md, docs/benchmarks.md, `tests/`, the catalog in `src/hub/catalog.cpp`) and update every copy. A catalog change also regenerates
 `docs/models.md` (`python3 tools/models_table.py`); CI fails on a stale one.
 
+**A test fix is proved by running the test's own file, not by a script that copies its logic.** A standalone repro of one
+`check()` plus one `stop()` showed the guard working, but the real `tests/test_engine_page.mjs` with a stand-in that never
+starts still stalls before its summary line (12 Nov 2026, #1214/#1215): the harness has a dozen sections and something in
+a later one does not return. State in the PR exactly which file you ran and what it printed at the end
+(`engine page: N failures`), and when a suite has branches you cannot drive from outside, say which ones you did not run
+rather than generalising from a script that mirrored them.
+
 ## Pull requests
 
 - One change per PR. Branch off the current `origin/main`; `main` takes squash merges only, and the title becomes the
