@@ -15,7 +15,7 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 | `kapitsa rm M...` | Deletes downloaded models and says how much space that gave back. Folders outside the store are left alone. |
 | `kapitsa import FILE.gguf [options]` | Converts a GGUF file into a model folder ([GGUF files](#gguf-files)). |
 | `kapitsa doctor [--model M]... [--json] [--print-profile]` | This Mac and which models fit it. `--print-profile` prints the chip class and the default table, and does not scan models ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
-| `kapitsa bench [--model M] [--prefill-chunk N] [--quick] [--submit]` | Benchmarks Kapitsa on this Mac with the published protocol, and adds the result to the community results when asked ([Benchmarking this Mac](#benchmarking-this-mac)). |
+| `kapitsa bench [--model M] [--prefill-chunk N] [--dflash MODE] [--quick] [--submit]` | Benchmarks Kapitsa on this Mac with the published protocol, and adds the result to the community results when asked ([Benchmarking this Mac](#benchmarking-this-mac)). |
 | `kapitsa update [--check] [--version X.Y.Z] [--rollback] [--auto on\|off]` | Updates Kapitsa to its latest release; it also updates itself ([Updating](#updating)). |
 | `kapitsa stage --model M [--layers A-B] [--port P] [--host H] [--mem-budget GB] [--prefill-chunk N]` | Holds a run of Flash-Next's layers for another Mac's `kapitsa serve --split` ([Flash-Next across Macs](#flash-next-across-macs)). |
 | `kapitsa --help`, `kapitsa COMMAND --help`, `kapitsa --version` | Help and version. |
@@ -88,11 +88,12 @@ checkpoint that no catalog entry names, and is refused. A folder or revision the
 | `nemotron-3.5-bolt` | `bolt`, `nemotron-bolt` | NVIDIA Nemotron 3.5 Bolt 74B-A9B: hybrid Mamba-2 mixture of experts, 9B active, 2-bit experts; an agentic model | 25.1 GB | `24gb` |
 | `nemotron-3.5-super-vl` | `super-vl`, `super`, `nemotron-super` | NVIDIA Nemotron 3.5 Super-VL 120B-A12B: hybrid Mamba-2 mixture of experts, 12B active, 4-bit (NVFP4) experts; needs a 96 GB+ Mac | 76.4 GB | `nvfp4` |
 | `flint` | `recursive-flint`, `flint-40b` | Recursive Flint 40B-A2.5B: mixture of 256 experts, 2.5B active, sliding-window and full attention; a coding model that reasons before it answers; text only; 32 GB Macs and up | 22.6 GB | `4bit` (default), `16gb` (where `4bit` does not fit: 2-bit experts, 11.9 GB; [GGUF files](#gguf-files)) |
+| `ornith-1.5-35b-a3b` | `ornith`, `ornith-35b` | Ornith-1.5-35B-A3B: a Qwen3.5 mixture of 256 experts continued-pretrained for tool use and agent work, 3B active, 256K context, reasons by default; drafts with its own DFlash2 model; text only; 32 GB Macs and up | 20.6 GB | `4bit` |
 | `clover-35b-a3b` | `clover`, `clover-35b` | DiffuSpace Clover-35B-A3B-Preview: Qwen3.6-35B-A3B tuned into a block-diffusion model, mixture of 256 experts, 3B active; decodes with the 35B's draft model ([how](#other-models)); text only; 32 GB Macs and up | 20.6 GB | `4bit` |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
 27B (the 27B's is Nace AI's retrain with a 16-row block, [nace-ai/Qwen3.8-27B-DFlash2-Kapitsa](https://huggingface.co/nace-ai/Qwen3.8-27B-DFlash2-Kapitsa)), an MTP head and z-lab's DFlash draft model for the 4B and 9B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL, its DSpark draft model for Lightning, the 35B's DFlash2
-draft model for Clover; Flash-Next's
+draft model for Clover, jzinno's DFlash2 draft model for Ornith (its pack has no usable MTP head); Flash-Next's
 repo holds its MTP head. Dory and Flint have none: they decode without one, as does the 35B's `16gb` (its GGUF has no
 MTP head, and a draft model would not fit beside it).
 
@@ -919,8 +920,9 @@ tools and MCP servers work as usual:
 ## Images
 
 Every catalog model except `nemotron-3.5-lightning`, `nemotron-labs-dory1.0-4b`, `nemotron-3-nano-4b`,
-`nemotron-nano-9b-v2` and `flint` (text-only models) reads images: `qwen3.5-4b`, `qwen3.5-9b`,
-`qwen3.6-35b-a3b`, `qwen3.8-27b`, `qwen3.8-flash-next`, `nemotron-3.5-bolt` and `nemotron-3.5-super-vl`. The 35B's
+`nemotron-nano-9b-v2`, `flint`, `clover-35b-a3b` and `ornith-1.5-35b-a3b` (text-only models) reads images:
+`qwen3.5-4b`, `qwen3.5-9b`, `qwen3.6-35b-a3b`, `qwen3.8-27b`, `qwen3.8-flash-next`, `nemotron-3.5-bolt` and
+`nemotron-3.5-super-vl`. The 35B's
 2-bit `16gb` build carries no vision tower and reads text only. Their vision towers come with the download and
 load with the first image: about 0.67 GB of GPU memory for the 4B's, 0.9 GB for the 9B's, the 35B's, the 27B's and
 Flash-Next's (bf16 in every precision), 1.7 GB for Bolt's and for Super-VL's. On a model
@@ -1129,12 +1131,18 @@ kapitsa bench                     # in a terminal it asks which model; elsewhere
 kapitsa bench --model 35b:6bit    # a given model and precision
 kapitsa bench --model 35b --prefill-chunk 4096  # override prompt tokens per prefill pass
 kapitsa bench --quick             # a shorter run: 3 runs per writing test, the 4K prompt only
+kapitsa bench --dflash none       # the same run with plain decoding, to compare against the drafter
 kapitsa bench --submit            # then add the result to the community results (it asks first)
 ```
 
 `--prefill-chunk N` passes a positive integer to the benchmark server. Omit it to keep automatic memory planning.
 The terminal, Markdown and JSON reports record the requested size; the model may balance actual pass sizes.
 Custom-chunk runs are labelled `prefill` or `prefill-quick` and cannot be submitted as standard community results.
+
+`--dflash auto|none|DIR` goes to the benchmark server as `kapitsa serve --dflash` does, because the server starts
+without `NI_*` variables: `NI_DFLASH=none kapitsa bench` measures the drafter in both arms. With `none` (or a folder)
+the run stops if the server reports other decoding, so an A/B cannot quietly become the same run twice. The result
+records the decoding it measured (`decoding`, `decoding_detail`).
 
 It runs the protocol of [bench/harness](../bench/harness/README.md) (`bench.py`), request for request, as a client
 of the local API: it starts the model's server (`kapitsa serve` with one conversation slot and a 32K context, `NI_*`
@@ -1286,7 +1294,7 @@ KFlash's knobs are `NI_KFLASH_<NAME>`; each was `NI_DFLASH_<NAME>` before #362 a
 | `NI_ANE_KEEP_S` | `300` | Seconds after the last prefill chunk (or model load) during which a background evaluation keeps the Neural Engine awake, so a short prompt after a pause skips its 70–120 ms wake. `0` turns it off. |
 | `NI_ANE_KEEP_MS` | `2000` | Period of that keepalive evaluation in milliseconds (floor 100). |
 | `NI_ANE_NONCAUSAL` | on | `kapitsa-systemone` only (Drex Max's noncausal pass, which runs a whole prompt at once). `0` keeps that pass's FFN on the GPU alone. On, the pass takes the plain split's default share (no wavefront: 16 of 34 units on the M5 Pro, where 16 against the wavefront's 24 measured latency x0.90 at 4K and 16K, three interleaved pairs each) unless a calibration or `NI_ANE_UNITS` sets one. The default splits each dense FFN with the Neural Engine in slabs of at most 2048 rows (`src/ane/slabs.h`), so a prompt longer than the split's largest function takes the split too. A split that fails reruns the whole pass on the GPU; `kapitsa-systemone --once` prints each run's split counters (`ane measured N: chunks .. evals .. reruns .. ane_ms ..`). M5 Pro, macOS 26.5.2, Drex Max, three interleaved pairs of 5 measured runs each, split at 24 units against the GPU alone: 4K latency x0.832 (median), 16K x0.865, top answer unchanged at both, probabilities within 1.4e-4 (one readout row per size, not bitwise; the floor gate is not run). `0` is bit-identical to the GPU-only pass. |
-| `NI_DFLASH` | `auto` | As `--dflash` when the option is absent: `auto`, `none` or a folder. |
+| `NI_DFLASH` | `auto` | As `--dflash` when the option is absent: `auto`, `none` or a folder. `kapitsa bench` starts its server without `NI_*` variables, so there it has no effect: pass `kapitsa bench --dflash` instead. |
 | `NI_KFLASH_TREE` | on | KFlash on the Qwen draft models: the draft model's guesses are checked as a best-first tree per pass (several continuations at once) instead of one chain; `0` checks a chain (overrides `NI_KFLASH` on these models). Greedy replies are plain decoding's up to near-ties; sampled ones follow the same distribution. The tree's shape follows the draft model's probabilities as calibrated against this Mac's own acceptances, and its size this Mac's measured cost per verified rows: 8 rows per pass (16 or 32 where `NI_KFLASH_ROWS` names them, on the 27B and the 4B) (whichever the drafter's confidence makes pay on this Mac; the costs are measured in the first passes and kept per model and chip), 1 to 8 rows per pass on the 35B (its pass routes experts for those rows alone). |
 | `NI_KFLASH_ROWS` | `8` | The tree sizes (verified rows) KFlash may pick on the dense Qwen models (27B, 4B), as a list of 8, 16 and 32. `8` keeps every pass at 8 rows (the cost this release is tuned for); `8,16,32` lets the budget measure 16- and 32-row verifies on this Mac and pick per cycle, where its cost table says they pay; alone, the 27B's measured tok/s gain is within noise (docs/kflash.md, "Eight rows"), and it is the 16-row drafting block that fills the wider rows with something worth verifying. That block is the default on a one-slot engine and sets the verify to 16 rows whatever this says (see `NI_KFLASH_BLOCK`), 32 included: a 16-row block drafts a 15-guess lattice, so a 32-row verify would check nothing the 16 does at twice the rows. The 35B-A3B and the Nemotron drafters always verify 1 to 8 rows. |
 | `NI_KFLASH_BLOCK` | `auto` | The DFlash2 drafter's block on the dense Qwen models: `8` (7 guesses, the tile the verify is tuned for), `16` (an anchor and 15 guesses, drafted as two 8-row tiles from one weight read by the pair kernel, verified in 16-row tree passes), or `auto` (16 on a one-slot engine that takes the 16-row paths, 8 on a server with more slots: a 16-row block has no batched cycle, so requests decoding together would take turns instead of sharing a pass). `16` needs KFlash trees and a target with the wide verify, drafts on the matrix units only (M5-class GPU, macOS 26, 4-bit group-64 projections, not the v1 drafter), which is checked when the model loads, and pins the verify at 16 rows. It measured 76.07 tok/s greedy on the 27B's harness corpus with `8` against 87.59 on the default (+15%, ten interleaved runs each), and 71.70 against 79.77 at temperature 0.6 (+11%) (docs/kflash.md, "Sixteen-row drafting blocks"). Read while a drafter loads, once per drafter: a server that switches models decides each one's block again, and the engine's memory plan reserves the rows it will verify. `auto` may be written out; it is the default. |

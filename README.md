@@ -12,7 +12,7 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Re
 
 **Requirements:** a Mac with Apple silicon (M1 or newer) and macOS 14 Sonoma or later.
 
-**Limits:** Apple silicon only: no Linux or Windows. Flint, the four text-only Nemotrons and the 35B's `16gb` build read text only, not images ([which models read images](docs/usage.md#images)).
+**Limits:** Apple silicon only: no Linux or Windows. Flint, the four text-only Nemotrons, Clover, Ornith and the 35B's `16gb` build read text only, not images ([which models read images](docs/usage.md#images)).
 
 ```bash
 brew install nace-ai/tap/kapitsa
@@ -294,7 +294,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 
 </details>
 
-<sub>Other precisions: `--model 35b:6bit` is five times closer to bf16 than the 4-bit default ([KL](docs/benchmarks.md#quality-qwen36-35b-a3b-against-bf16-2026-10-19)). All but Lightning, Dory, the two Nemotron Nanos, Flint, Clover and the 35B's `16gb` read images. What runs on a Mac of each size: [Models](#models). [Every model's variants and draft models](docs/usage.md#models-and-downloads)</sub>
+<sub>Other precisions: `--model 35b:6bit` is five times closer to bf16 than the 4-bit default ([KL](docs/benchmarks.md#quality-qwen36-35b-a3b-against-bf16-2026-10-19)). All but Lightning, Dory, the two Nemotron Nanos, Flint, Clover, Ornith and the 35B's `16gb` read images. What runs on a Mac of each size: [Models](#models). [Every model's variants and draft models](docs/usage.md#models-and-downloads)</sub>
 
 ## Get release notices
 

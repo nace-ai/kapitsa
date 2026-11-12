@@ -64,7 +64,8 @@ using term::dim;
 namespace {
 
 const char* kHelp =
-    "kapitsa bench [--model MODEL] [--ctx TOKENS] [--prefill-chunk N] [--quick] [--json] [--submit] [--out FILE]\n\n"
+    "kapitsa bench [--model MODEL] [--ctx TOKENS] [--prefill-chunk N] [--dflash MODE] [--quick] [--json] [--submit]\n"
+    "              [--out FILE]\n\n"
     "Benchmarks Kapitsa on this Mac with the protocol of its published benchmarks (bench/harness): writing speed\n"
     "(512-token coding answers at temperature 0.6, Flint's at 1.0, and greedy, median of 5 runs each), reading a 4K-\n"
     "and a 16K-token prompt, the time to the first token of a follow-up in each conversation, peak memory and tool\n"
@@ -77,6 +78,8 @@ const char* kHelp =
     "  --ctx TOKENS    append a context test AFTER the standard benchmark (e.g. 64k; minimum 4k)\n"
     "                  TTFT, cache reuse, reading and writing; live token progress, 3 repetitions\n"
     "  --prefill-chunk N  prompt tokens per prefill pass (default: automatic)\n"
+    "  --dflash MODE   the drafter this run's server uses: auto (default), none (plain decoding), or a drafter\n"
+    "                  folder. The server takes no NI_ variables, so the switch goes here.\n"
     "  --quick         3 standard writing runs per test and 4K reading; context stage still has 3 repetitions\n"
     "  --json          the result as JSON on stdout (progress on stderr)\n"
     "  --out FILE      where to save the result (default: %s/kapitsa-bench-<date>-<chip>-<model>.json)\n"
@@ -638,6 +641,8 @@ void print_summary(const ojson& r, const std::string& path) {
   row("Tool calls", res.value("tool_calls", std::string()) == "pass" ? accent("pass") : term::red("fail"));
   if (r["protocol"].contains("prefill_chunk"))
     row("Prefill chunk", thousands(r["protocol"]["prefill_chunk"].get<int>()) + " tokens (requested)");
+  if (r["protocol"].contains("dflash"))
+    row("Drafter asked for", r["protocol"]["dflash"].get<std::string>());
   row("Decoding", m.value("decoding_detail", m.value("decoding", std::string())));
   if (m.contains("drafter_kind") && m["drafter_kind"].is_string()) {
     std::string d = m["drafter_kind"].get<std::string>();
@@ -672,7 +677,7 @@ void print_summary(const ojson& r, const std::string& path) {
 // ---------------------------------------------------------------- the run
 
 struct Options {
-  std::string model, out;
+  std::string model, out, dflash;  // dflash: auto|none|<dir>, passed to the server bench starts
   int context = 0;
   int prefill_chunk = 0;
   bool quick = false, json = false, submit = false, dry = false, yes = false;
@@ -827,6 +832,8 @@ int run(const Options& o) {
                                       "--port", std::to_string(srv.port), "--ctx", std::to_string(context), "--slots", "1",
                                       "--disk-cache", "0"};
     if (o.prefill_chunk) sargv.insert(sargv.end(), {"--prefill-chunk", std::to_string(o.prefill_chunk)});
+    // The loop below drops every NI_ variable, so NI_DFLASH never reaches this server: the drafter goes as a flag.
+    if (!o.dflash.empty()) sargv.insert(sargv.end(), {"--dflash", o.dflash});
     std::vector<std::string> senv, cleared;
     for (char** e = environ; *e; ++e) {
       const std::string kv = *e;
@@ -884,6 +891,7 @@ int run(const Options& o) {
   in.mac = mac;
   in.quick = o.quick;
   in.prefill_chunk = o.prefill_chunk;
+  in.dflash = o.dflash;
   in.version = KAPITSA_VERSION;
   in.commit = KAPITSA_GIT;
   in.time_utc = utc_now();
@@ -902,6 +910,11 @@ int run(const Options& o) {
     start_server(32768);
     // wait for it, showing what it does
     if (external) {
+      // --dflash only configures the server bench starts; against one it did not start it would be silently dropped,
+      // and the two arms of an A/B would measure the same server (12 Nov 2026, review of #1201)
+      if (!o.dflash.empty())
+        throw std::runtime_error("--dflash configures the server kapitsa bench starts, and it did not start this one: "
+                                 "unset KAPITSA_BENCH_SERVER, or start that server with its own --dflash");
       mi.decoding = "unknown";
       mi.decoding_detail = "a server kapitsa bench did not start (KAPITSA_BENCH_SERVER)";
       mi.drafter_kind = "unknown";
@@ -946,6 +959,14 @@ int run(const Options& o) {
       // what it decodes with: its "engine ready" line
       const std::string detail = decoding_detail(srv.log);
       mi.decoding_detail = detail;
+      // An A/B of the drafter reads this switch: a server that loaded something else would make both arms the same run
+      if (!o.dflash.empty() && o.dflash != "auto") {
+        const std::string served = decoding_of(detail);
+        const bool wants_off = o.dflash == "none";
+        if (served != "unknown" && wants_off == decoding_has_drafter(served))
+          throw std::runtime_error("--dflash " + o.dflash + " was asked for, but the server decodes with " + detail +
+                                   ": the numbers would describe another run");
+      }
       mi.decoding = decoding_of(detail);
       // which drafter decodes: its "drafter: " line (the catalog's drafter when it is the one in the model's folder)
       const DrafterLine dl = parse_drafter(read_file(srv.log));
@@ -1494,6 +1515,18 @@ int run_bench(int argc, char** argv, int first) {
       o.prefill_chunk = to_int(a, next(), help);
       if (o.prefill_chunk <= 0) usage_error("--prefill-chunk must be a positive integer", help);
     }
+    else if (a == "--dflash") {
+      // serve's own three spellings (src/engine/engine.cpp): auto, none, or the drafter's folder
+      // Expanded here, once: the folder check and the server's argv both read this, and `kapitsa serve` does not
+      // expand a `~` in --dflash, so an unexpanded path here would pass the check and then fail to load.
+      o.dflash = expand_home(next());
+      if (o.dflash.empty()) usage_error("--dflash needs auto, none or a drafter folder", help);
+      if (o.dflash != "auto" && o.dflash != "none" && !gguf::is_gguf_file(o.dflash)) {
+        struct stat st;
+        if (stat(o.dflash.c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
+          usage_error("--dflash takes auto, none or a drafter folder; " + o.dflash + " is none of them", help);
+      }
+    }
     else if (a == "--quick") o.quick = true;
     else if (a == "--json") o.json = true;
     else if (a == "--submit") o.submit = true;
@@ -1504,6 +1537,8 @@ int run_bench(int argc, char** argv, int first) {
   }
   if (o.context && o.submit) usage_error("custom-context runs cannot be submitted as standard community benchmarks", help);
   if (o.prefill_chunk && o.submit) usage_error("custom prefill chunks cannot be submitted as standard community benchmarks", help);
+  if (!o.dflash.empty() && o.submit)
+    usage_error("runs with --dflash cannot be submitted as standard community benchmarks", help);
   if (o.dry && !o.submit) usage_error("--dry-run goes with --submit", help);
   g_tui = term::fancy() && !o.json;
   g_plain = !g_tui;

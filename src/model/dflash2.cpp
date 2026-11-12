@@ -163,7 +163,10 @@ static std::vector<std::string> config_problems(const json& c, const Qwen35Confi
   bool sliding = NL > 0 && c.contains("layer_types") && c["layer_types"].size() == size_t(NL);
   if (sliding)
     for (auto& lt : c["layer_types"]) sliding = sliding && lt == "sliding_attention";
-  check(sliding && window == DFlash2::kWin, "all layers sliding, window 2048");
+  // all layers sliding, over a window at least the ring's: a drafter trained past it (jzinno's Ornith draft has
+  // 4096) runs on the 2048-slot ring, as the v1 drafters do, and only its context past 2047 tokens sees fewer
+  // positions than it trained on (valid_lo keeps the attention from reading slots a gap left behind)
+  check(sliding && window >= DFlash2::kWin, "all layers sliding, a window of at least 2048");
   check(int(dc.value("conv_kernel_size", 0)) == 2, "conv taps 2");
   check(dc.value("conv_group_size", 0) == 16, "conv group 16");
   check(dc.value("selector_rank", 0) == DFlash2::kRank && dc.value("selector_top_k", 0) == DFlash2::kTopK,
@@ -226,13 +229,12 @@ void DFlash2::load_config(const std::string& dir) {
     cfg_.trained_block = dc.value("block_size", 16);
     cfg_.trained_window = c.value("sliding_window", 0);
     cfg_.block = kB;
-    cfg_.window = kWin;
   } else {
     cfg_.block = dc["block_size"];
     cfg_.conv_gs = dc["conv_group_size"];
     cfg_.rank = dc["selector_rank"];
     cfg_.topk = dc["selector_top_k"];
-    cfg_.window = c.value("sliding_window", 0);
+    cfg_.trained_window = c.value("sliding_window", 0);
   }
   if (c.contains("rope_parameters")) cfg_.theta = float(c["rope_parameters"].value("rope_theta", 0.0));
   else cfg_.theta = float(c.value("rope_theta", 0.0));
@@ -820,6 +822,8 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
   if (cfg_.v1)
     logi("DFlash drafter (v1) %s: blocks of %d rows (trained %d), context window %d positions (trained %d)",
          dir.c_str(), kB, cfg_.trained_block, kCtxKeep, cfg_.trained_window);
+  // a drafter trained past this pipeline's ring says so once, beside the v1 note above
+  if (cfg_.trained_window > kWin) logi("DFlash2 drafter %s: ring %d positions (trained %d)", dir.c_str(), kWin, cfg_.trained_window);
   logi("DFlash2 drafter %s: %d layers, hidden %d, %d-bit projections, %.2f GB resident (process footprint %+.2f GB), "
        "loaded in %.0f ms", dir.c_str(), cfg_.NL, cfg_.H, bits_, resident_ / 1e9, footprint_gb() - fp0, now_ms() - t0);
 }

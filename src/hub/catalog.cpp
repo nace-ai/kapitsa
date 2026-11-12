@@ -131,6 +131,18 @@ Companion dspark_lightning() {
           .subdir = "dflash"};
 }
 
+Companion dflash_ornith() {
+  // jzinno's DFlash2 drafter for Ornith-1.5-35B-A3B (Apache-2.0; 0.98 GB of bf16, 4-bit at load): six draft layers
+  // over Ornith's feature layers 1, 6, 11, ... 37, a 16-row block, a 4096-token window. Trained on projected features
+  // warm-started from z-lab's Qwen3.5-35B-A3B-DFlash. Its author's serving numbers (DGX Spark, concurrency 1: 4.02
+  // accepted tokens per cycle against 3.48 for the unadapted Qwen3.5 drafter) are a different backend, not Kapitsa's
+  return {.kind = "dflash2",
+          .repo = "jzinno/Ornith-1.5-35B-A3B-DFlash2",
+          .revision = "9b4852c05fd00b672b7434b1bb105bc03c8682b0",
+          .files = {"config.json", "model.safetensors", "LICENSE"},
+          .subdir = "dflash2"};
+}
+
 }  // namespace
 
 const Companion* drafter_for_shape(int hidden, int layers) {
@@ -139,7 +151,8 @@ const Companion* drafter_for_shape(int hidden, int layers) {
     const char* model;
     int hidden, layers;
   };
-  static const Shape shapes[] = {{"qwen3.8-27b", 5120, 64}, {"qwen3.6-35b-a3b", 2048, 40}, {"qwen3.5-4b", 2560, 32}, {"qwen3.5-9b", 4096, 32}};
+  static const Shape shapes[] = {{"qwen3.8-27b", 5120, 64}, {"qwen3.6-35b-a3b", 2048, 40}, {"qwen3.5-4b", 2560, 32},
+                                 {"qwen3.5-9b", 4096, 32}, {"ornith-1.5-35b-a3b", 2048, 40}};
   for (const Shape& sh : shapes) {
     if (sh.hidden != hidden || sh.layers != layers) continue;
     const CatalogModel* m = find_model(sh.model);
@@ -541,8 +554,27 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
             .companions = {},
             .download_gb = 11.86},
        }},
-      // DiffuSpace's block-diffusion MoE tuned from Qwen3.6-35B-A3B (src/model/clover.h), last in by_preference's
-      // order: picked by --model
+      // Ornith's 35B-A3B (ornith-ai; a Qwen3.5 MoE continued-pretrained, 256K context, reasoning by default):
+      // Ornith's own MLX 4-bit pack as it is, and jzinno's DFlash2 drafter for it (Apache-2.0, 0.98 GB of weights)
+      {.name = "ornith-1.5-35b-a3b",
+       .aliases = {"ornith", "ornith-35b"},
+       .title = "Ornith-1.5-35B-A3B",
+       .about = "Ornith's 35B MoE, 3B active: coding and agent work, reasons by default, DFlash2 drafts",
+       .brief = "Ornith MoE, 3B active, DFlash2 drafts",
+       // no MTP head in the pack (Ornith's NEXTN head is inherited from Qwen3.5 and untrained in its continued
+       // pretraining): the DFlash2 drafter is what drafts. No fallback either: no smaller precision of it is
+       // published. download_gb is the pack and its drafter, decimal: 19.531 GB of pack (18.19 GiB) +
+       // 1052526157 B of drafter = 20583460681 B, the sum a `pull` writes
+       .default_variant = "4bit",
+       .fallbacks = {},
+       .variants = {
+           {.name = "4bit",
+            .quant = "MLX affine 4-bit, group 64 (8-bit router and shared-expert gate)",
+            .repo = "ornith-ai/Ornith-1.5-35B-A3B-MLX-4bit",
+            .revision = "19504d912fa8fc7622bf6b1de3db5d5d890b1f02",
+            .companions = {dflash_ornith()},
+            .download_gb = 20.58},
+       }},
       {.name = "clover-35b-a3b",
        .aliases = {"clover", "clover-35b"},
        .title = "Clover-35B-A3B-Preview",
