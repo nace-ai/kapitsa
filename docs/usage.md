@@ -149,7 +149,7 @@ Each Qwen model comes in several precisions, its variants. Download sizes, compa
 | Variant | Weights | `4b` | `9b` | `27b` | `35b` |
 | --- | --- | ---: | ---: | ---: | ---: |
 | `4bit` (default; the 27B's is `kquant`) | MLX affine 4-bit, group 64; `9b` on M5 and newer uses mixed 4/5-bit KQuant Q4; `27b:4bit` is the plain pack `27b` took before #495 | 4.6 GB | 9.1-9.3 GB | 20.2 GB | 22.1 GB |
-| `kquant` | the 4-bit weights, searched per group on real text to sit closer to the original than the plain 4-bit pack (KL from bf16 0.035 against 0.054; GSM8K, all 1,319 questions, 0.953 against 0.950). The 27B's default since #495 (decode on an M5 Pro, Kapitsa 0.2.35, both packs with the nace-ai drafter and the same MTP head, T 0.6 and T 0 pooled: 87.9 against 84.5 tok/s). For the 9B, the released Q4 pack (mixed 4/5-bit): what `9b` uses on M5 and newer, opt-in on other Macs | - | 9.3 GB | 20.2 GB | - |
+| `kquant` | the 4-bit weights, searched per group on real text to sit closer to the original than the plain 4-bit pack (KL from bf16 0.035 against 0.054; GSM8K, all 1,319 questions, 0.953 against 0.950). The 27B's default since #495 (decode on one M5 Pro 48 GB, Kapitsa 0.2.35, both packs with the nace-ai drafter and the same MTP head, T 0.6 and T 0 pooled: 87.9 against 84.5 tok/s). For the 9B, the released Q4 pack (mixed 4/5-bit): what `9b` uses on M5 and newer, opt-in on other Macs | - | 9.3 GB | 20.2 GB | - |
 | `kquant5` | the released KQuant Q5 packs: mixed 5-, 6- and 8-bit weights on the 9B, mixed 4-, 6- and 8-bit on the 27B and 35B | - | 10.2 GB | 24.8 GB | 24.6 GB |
 | `5bit` | MLX affine 5-bit, group 64 | - | - | 23.5 GB | 26.4 GB |
 | `6bit` | MLX affine 6-bit, group 64: the quality choice | 5.6 GB | - | 26.9 GB | 30.7 GB |
