@@ -9,6 +9,9 @@
 //   bench_test precision               a folder's precision from its config and weight bytes (exit 1 on a failure)
 //   bench_test lock-held               GpuLock::held_by_caller() under each spelling of the variable (exit 1 if wrong)
 #include "bench/bench.h"
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #ifndef KAPITSA_VERSION
 #define KAPITSA_VERSION "0.0.0"
 #endif
@@ -186,6 +189,20 @@ int self_test() {
   const std::string r = nn.run(), h64 = nn.hex(64), h48 = nn.hex(48);
   check(r.size() == 8 && r.rfind("0.", 0) == 0, "decode nonce like 0.123456", r);
   check(h64.size() == 16 && h48.size() == 12 && h64.find_first_not_of("0123456789abcdef") == std::string::npos, "hex nonces", h64);
+  // KAPITSA_BENCH_SERVER's process: the one listening on the port, here this one on an ephemeral port
+  {
+    const int fd = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in a{};
+    a.sin_family = AF_INET;
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    socklen_t len = sizeof a;
+    const bool up = fd >= 0 && bind(fd, (sockaddr*)&a, sizeof a) == 0 && listen(fd, 1) == 0 && getsockname(fd, (sockaddr*)&a, &len) == 0;
+    const int port = ntohs(a.sin_port);
+    check(up && port > 0, "a listening socket on an ephemeral port", strerror(errno));
+    check(listening_pid(port) == getpid(), "listening_pid finds the process listening on the port", std::to_string(listening_pid(port)));
+    if (fd >= 0) close(fd);
+    check(listening_pid(port) == 0, "listening_pid finds none once the socket is closed", std::to_string(listening_pid(port)));
+  }
   printf("%s: %d checks, %d failed\n", fails ? "FAIL" : "ok", checks, fails);
   return fails ? 1 : 0;
 }

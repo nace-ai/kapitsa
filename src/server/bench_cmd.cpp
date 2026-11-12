@@ -747,13 +747,14 @@ int run(const Options& o) {
   }
   if (sha256_hex(corpus()) != kCorpusSha256)
     return fail("This build's prompt corpus is not the frozen one (bench/harness/corpus): its results would not compare.");
-  for (int p : other_kapitsas())
-    warn_line("Another Kapitsa is running (pid " + std::to_string(p) + "): its model's memory and any requests it serves skew the numbers.");
-
   // tests (tests/test_bench.py): KAPITSA_BENCH_SERVER=<port> measures a server already listening on 127.0.0.1:<port>
   // instead of starting one (no download, lock or quiet wait); its result is invalid, as nothing about that server is known
   const char* ext_env = getenv("KAPITSA_BENCH_SERVER");
   const int external = ext_env ? atoi(ext_env) : 0;
+  // its process, so that its GPU work is the bench's own and not another app's, and it is not "another Kapitsa"
+  const int ext_pid = external ? listening_pid(external) : 0;
+  for (int p : other_kapitsas(ext_pid))
+    warn_line("Another Kapitsa is running (pid " + std::to_string(p) + "): its model's memory and any requests it serves skew the numbers.");
 
   // ---- the download, before the GPU lock (it needs no GPU)
   try {
@@ -867,7 +868,10 @@ int run(const Options& o) {
     srv.pid = child;
     g_server = child;
   };
-  auto own = [&] { return srv.pid > 0 ? process_tree({int(srv.pid)}) : std::set<int>{}; };
+  auto own = [&] {
+    const int root = srv.pid > 0 ? int(srv.pid) : ext_pid;
+    return root > 0 ? process_tree({root}) : std::set<int>{};
+  };
   auto cleanup = [&] {
     stop_server(srv);
     lock.release();
@@ -884,6 +888,7 @@ int run(const Options& o) {
   in.commit = KAPITSA_GIT;
   in.time_utc = utc_now();
   in.external_server = external != 0;
+  in.external_server_pid = ext_pid;
   in.power_start = power();
   in.vm_start = vm();
   in.thermal_start = thermal_state();
