@@ -46,6 +46,11 @@ not ask for abstractions, interfaces or configuration the change does not need.
   Their floor is an older M4 Pro measurement, not a re-measurement of these M5 kernels. These historical results
   do not waive the output check for a new change or authorize another default. Do not report an unchanged default
   as a defect introduced by the PR; flag a new 35B comparison that uses the stale M4 Pro floor without saying so.
+- A default that only switches which published pack a catalog name downloads (the plain 4-bit pack to its KQuant pack)
+  changes weights, not a code path, and the floors cover code paths on one pack: `tools/logit_compare.py` between two
+  packs can only report "moved". It gates on KL to BF16 for both packs on the same token set (corpus and tool named)
+  plus a task score, and the interleaved A/B. Flag such a PR that lacks either number, or whose two KL figures come
+  from different token sets. Do not ask it for a `logit_dump` comparison between the two packs.
 - `tools/logit_floors/*.json` change only through `tools/logit_floor.py` (the file records its build, Mac and date), in
   a PR of their own: flag a floor or gate edited by hand, or loosened in the same PR as a change it lets pass.
 - A PR whose title or description says it was not verified on a GPU is fine; flag it only when the diff is a kernel or

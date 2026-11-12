@@ -213,7 +213,11 @@ sense.
 Here a feature means a kernel path, a decode, drafting or verify strategy, a cache or memory policy, or a new user-facing
 flag or environment variable. Three things are not features, so this rule does not apply to them: a kill switch for an
 existing default (`NI_X=0`), a debug or profiling switch, and a measuring tool. The output check still gates every
-default change.
+default change, with one exception: a default that only switches which published pack a catalog name downloads (`27b`
+from the plain 4-bit pack to its KQuant pack). That changes weights, not a code path, and the floors in
+`tools/logit_floors/` cover code paths on one pack, so `tools/logit_compare.py` between two packs can only report
+"moved". It gates on KL to BF16 for both packs on the same token set (name the corpus and the tool) plus a task score
+(GSM8K or the like), with the interleaved A/B on the setups above (precedent: #1228).
 
 **Changing speed or numerics.** One change per PR. Measure only on an idle GPU (nothing else running), interleave old
 and new builds (A B A B), report every run with the Mac, macOS version and commit. A default changes only after an
