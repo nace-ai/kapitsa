@@ -24,6 +24,8 @@ What `--model <alias>` downloads where it fits the Mac. Where the default varian
 | `flint`, `recursive-flint`, `flint-40b`<br><sub>Recursive Flint 40B-A2.5B: `flint`</sub> | [`RecursiveSI/flint-int4`](https://huggingface.co/RecursiveSI/flint-int4) | [`3b93f90`](https://huggingface.co/RecursiveSI/flint-int4/tree/3b93f9053b530488405ae9fca51d4900d6ce21f0) | none | none | 22.58 GB |
 | `clover`, `clover-35b`<br><sub>Clover-35B-A3B-Preview: `clover-35b-a3b`</sub> | [`kapitsaprime/Clover-35B-A3B-Preview-MLX-4bit`](https://huggingface.co/kapitsaprime/Clover-35B-A3B-Preview-MLX-4bit) | [`5eb7682`](https://huggingface.co/kapitsaprime/Clover-35B-A3B-Preview-MLX-4bit/tree/5eb76824edaad168c420621feb9c6cb6648e47bf) | [`incoai/Qwen3.6-35B-A3B-DFlash2`](https://huggingface.co/incoai/Qwen3.6-35B-A3B-DFlash2) @ [`51ef7b6`](https://huggingface.co/incoai/Qwen3.6-35B-A3B-DFlash2/tree/51ef7b6923ad6c14cb1bb41c37a9041446496ab6) | none | 20.58 GB |
 
+The 9B row applies to Macs with matrix units (M5 and newer). Other Macs, including M3 and M4, keep the legacy 4-bit KQuant pack at `867adaa1c6d84d1fd9b4f37f43836019c877ba59` from [`nace-ai/Qwen3.5-9B-MLX-4bit-KQuant`](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit-KQuant), a 9.05 GB download with the same companions. The device profile selects the pack; the alias stays `9b`.
+
 ## Other variants
 
 Another precision of the same model, or a smaller pack for a smaller Mac (`16gb`, `64gb`).

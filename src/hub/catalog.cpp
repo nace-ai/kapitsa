@@ -26,6 +26,7 @@
 //   from the variant's headers (a GGUF variant's: the import's plan of the file's header).
 // - The 4-bit variants' repos and revisions are the Nace Agent app's, so the app and the CLI download the same bytes.
 #include "hub/hub.h"
+#include "engine/device_profile.h"
 
 namespace ni::hub {
 
@@ -150,7 +151,7 @@ const Companion* drafter_for_shape(int hidden, int layers) {
   return nullptr;
 }
 
-const std::vector<CatalogModel>& catalog() {
+const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
   static const std::vector<CatalogModel> c = {
       {.name = "qwen3.5-4b",
        .aliases = {"4b"},
@@ -525,7 +526,21 @@ const std::vector<CatalogModel>& catalog() {
             .download_gb = 20.58},
        }},
   };
-  return c;
+  static const std::vector<CatalogModel> legacy = [] {
+    auto models = c;
+    for (auto& model : models) {
+      if (model.name != "qwen3.5-9b") continue;
+      auto& v = model.variants.front();
+      v.quant = "MLX affine 4-bit, group 64 (KQuant)";
+      v.repo = "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant";
+      v.revision = "867adaa1c6d84d1fd9b4f37f43836019c877ba59";
+      v.download_gb = 9.05;
+    }
+    return models;
+  }();
+  return ni::default_on(ni::Knob::kQwen9bQ4, device, {}) ? c : legacy;
 }
+
+const std::vector<CatalogModel>& catalog() { return catalog(ni::current_device()); }
 
 }  // namespace ni::hub

@@ -52,17 +52,19 @@ always take the best model.
 
 The Hugging Face repo, pinned revision, draft model, MTP head and download size of every alias and variant: [docs/models.md](models.md) (written from the catalog by `tools/models_table.py`).
 
-The 4B, 9B, 27B, 35B and Flash-Next KQuant catalog entries use `-MLX-Q4-KQuant` repository names.
-Their former `-MLX-4bit-KQuant` IDs intentionally no longer select catalog entries. An old ID is treated
+The 4B, 27B, 35B and Flash-Next KQuant catalog entries use `-MLX-Q4-KQuant` repository names.
+Their former `-MLX-4bit-KQuant` IDs intentionally no longer select catalog entries. An unselected ID is treated
 as a generic Hugging Face repository, without catalog companions or reuse of the catalog download folder.
 Use the current repository ID or `4b:4bit`, `9b:4bit`, `27b:kquant`, `35b:4bit` or `flash-next:kquant` to keep
-catalog resolution. The short names are unchanged. The 9B default uses Q4-KQuant at
-`ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4`; the other catalog pins are unchanged.
+catalog resolution. The short names are unchanged. On Macs with matrix units (M5 and newer), `9b` uses Q4-KQuant at
+`ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4`. Other Macs, including M3 and M4, keep
+`nace-ai/Qwen3.5-9B-MLX-4bit-KQuant` at `867adaa1c6d84d1fd9b4f37f43836019c877ba59`.
+The device profile selects the pack, with the same companions on both paths; other catalog pins are unchanged.
 
 | Name | Aliases | What it is | Download | Variants |
 | --- | --- | --- | ---: | --- |
 | `qwen3.5-4b` | `4b` | Qwen3.5, dense and small: for 16-24 GB Macs and simple tasks | 4.6 GB | `4bit` (default), `6bit`, `8bit`, `bf16` |
-| `qwen3.5-9b` | `9b` | Qwen3.5, dense: the 4B's bigger sibling, the most capable model for a 16 GB Mac | 9.3 GB | `4bit` (default) |
+| `qwen3.5-9b` | `9b` | Qwen3.5, dense: the 4B's bigger sibling, the most capable model for a 16 GB Mac | 9.1-9.3 GB | `4bit` (default) |
 | `qwen3.8-27b` | `27b` | Qwen3.8, dense: the strongest coder of the three Qwen models, slower to write | 20.2 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16`, `kquant` (opt-in) |
 | `qwen3.6-35b-a3b` | `35b`, `qwen3.6-35b`, `35b-a3b` | Qwen3.6, mixture of experts with 3B parameters active per token: quick to reply and to read | 22.1 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16`, `16gb` (where `4bit` does not fit: 2-bit experts, 10.8 GB; [GGUF files](#gguf-files)) |
 | `qwen3.8-flash-next` | `flash-next`, `flash` | Qwen3.8-Flash-Next 180B-A7B: mixture of 512 experts with 4-stream hyper-connections, an n-gram embedding and sparse attention past 2K tokens; for 128 GB Macs, 64 GB with `64gb` | 105.9 GB | `4bit` (default), `kquant`, `64gb` (where `4bit` does not fit: Sushi's EXL3 2-bit experts, 69.6 GB) |
@@ -133,7 +135,7 @@ Each Qwen model comes in several precisions, its variants. Download sizes, compa
 
 | Variant | Weights | `4b` | `9b` | `27b` | `35b` |
 | --- | --- | ---: | ---: | ---: | ---: |
-| `4bit` (default) | MLX affine 4-bit, group 64; `9b` uses mixed 4/5-bit KQuant Q4 | 4.6 GB | 9.3 GB | 20.2 GB | 22.1 GB |
+| `4bit` (default) | MLX affine 4-bit, group 64; `9b` on M5 and newer uses mixed 4/5-bit KQuant Q4 | 4.6 GB | 9.1-9.3 GB | 20.2 GB | 22.1 GB |
 | `kquant` | the 4-bit weights, searched per group on real text to sit closer to the original than the plain 4-bit pack (KL from bf16 0.035 against 0.054; GSM8K, all 1,319 questions, 0.953 against 0.950). Opt-in: `27b` stays the plain 4-bit pack (decode on an M5 Pro with incoai's DFlash2 drafter on Kapitsa 0.2.32, not the nace-ai retrain this entry downloads: sampled 72.5 against 80.0 tok/s, greedy 91.0 against 82.8) | - | - | 20.2 GB | - |
 | `5bit` | MLX affine 5-bit, group 64 | - | - | 23.5 GB | 26.4 GB |
 | `6bit` | MLX affine 6-bit, group 64: the quality choice | 5.6 GB | - | 26.9 GB | 30.7 GB |

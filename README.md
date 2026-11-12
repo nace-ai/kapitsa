@@ -50,7 +50,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 KQuant is our quantization framework for MLX packs. The measurements below compare the original KQuant releases with the packs Kapitsa served before: lmstudio-community's for the 4B and 9B, MTPLX's for the 35B-A3B. They sit closer to bf16 at the same weight size, score at least as high on GSM8K, and write faster on an M5 Pro. `kapitsa serve --model 4b` gets one; there is nothing to set.
 
-The 9B results in this section use the [legacy pack at `867adaa`](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit-KQuant/tree/867adaa1c6d84d1fd9b4f37f43836019c877ba59), not the Q4-KQuant default at `ff7b61b8`. Its GSM8K and decode results do not describe the default. The older 9B rows in the speed tables below also keep their measured pack and 9.0 GB download size.
+The 9B results in this section use the [legacy pack at `867adaa`](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit-KQuant/tree/867adaa1c6d84d1fd9b4f37f43836019c877ba59). Macs with matrix units (M5 and newer) default to Q4-KQuant at `ff7b61b8`; other Macs, including M3 and M4, keep the legacy pack. These GSM8K and decode results do not describe Q4-KQuant. The older 9B rows in the speed tables below also keep their measured pack and 9.0 GB download size.
 
 | 4-bit | KL from bf16, lower is closer | GSM8K, 1,319 questions | Decode on an M5 Pro, tok/s |
 | --- | --- | --- | --- |
@@ -162,7 +162,7 @@ The most precise variant of each catalog model that runs on a Mac of each size. 
 | Model | 16 GB | 24 GB | 32 GB | 36 GB | 48 GB | 64 GB | 128 GB |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | **Qwen3.5-4B** · `4b` | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 |
-| **Qwen3.5-9B** · `9b` | Q4 KQuant | Q4 KQuant | Q4 KQuant | Q4 KQuant | Q4 KQuant | Q4 KQuant | Q4 KQuant |
+| **Qwen3.5-9B** · `9b` | KQuant | KQuant | KQuant | KQuant | KQuant | KQuant | KQuant |
 | **Qwen3.8-27B** · `27b` | — | 4-bit† | 5-bit | 5-bit | 8-bit | 8-bit | BF16 |
 | **Qwen3.6-35B-A3B** · `35b` | 2-bit† | 2-bit | 4-bit | 4-bit | 6-bit | 8-bit | BF16 |
 | **Qwen3.8-Flash-Next 180B-A7B** · `flash-next` | — | — | — | — | 2-bit + SSD | 2-bit | 4-bit |
@@ -175,6 +175,8 @@ The most precise variant of each catalog model that runs on a Mac of each size. 
 | **Nemotron 3 Nano 4B** · `nano-4b` | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 |
 | **Nemotron Nano 9B v2** · `nano-9b` | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 |
 | **Drex 2.0** · `kapitsa-systemone` | — | — | — | Q4† | Q4 | Q8 | Q8 |
+
+The `9b` pack is mixed 4/5-bit Q4 KQuant on Macs with matrix units (M5 and newer), and legacy 4-bit KQuant on other Macs, including M3 and M4.
 
 <sub>Cells name the catalog's variant labels — `4bit`, `5bit`, `6bit`, `8bit`, `bf16` and `nvfp4`, with `16gb`, `24gb` and Flash-Next's `64gb` shown as 2-bit — that `kapitsa serve <name>:<variant>` takes, the most precise one that starts on that Mac at the bottom of its working-set range: weights, drafter, activations and 8K tokens of context. † needs the top of the range, about 80% of the RAM against 69% at the bottom; — nothing starts. Flash-Next's 48 GB cell is its Q2_0 pack with the experts the budget does not hold streamed from the SSD, and Drex 2.0's Q4 and Q8 are its release builds, served by `kapitsa-systemone` ([decisions](docs/systemone.md)). The 24, 32 and 64 GB columns are `kapitsa doctor`'s plan, and so is any cell in the 16, 36, 48 and 128 GB ones that differs from the default variant those [Macs](#speed-on-each-mac) ran, usually 4-bit; `kapitsa doctor` prints the plan for this Mac.</sub>
 

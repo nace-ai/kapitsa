@@ -302,6 +302,16 @@ def cli_checks(kapitsa):
     def plan(name):
         rc, out, err = run("pull", "--dry-run", "--json", name)
         return json.loads(out) if rc == 0 else {"rc": rc, "err": err}
+    # The profile owns device-dependent checkpoint defaults; this command scans no models.
+    rc, out, err = run("doctor", "--print-profile", "--json")
+    check("cli: device profile available before model scan", rc == 0, err)
+    profile = json.loads(out)
+    if profile["chip_class"] in ("matrix", "wide"):
+        q9 = ("nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")
+    else:
+        q9 = ("nace-ai/Qwen3.5-9B-MLX-4bit-KQuant", "867adaa1c6d84d1fd9b4f37f43836019c877ba59")
+    DEFAULTS["qwen3.5-9b"] = ("4bit", *q9)
+    PINNED["qwen3.5-9b"] = (*q9, PINNED["qwen3.5-9b"][2])
     models = os.path.join(home, "models")
     rc, out, _ = run("list", "--json")
     check("cli: list --json on an empty store", rc == 0 and json.loads(out) == [], out)
@@ -311,7 +321,7 @@ def cli_checks(kapitsa):
                                            "hf.co/nace-ai/Qwen3.8-27B-MLX-4bit"]),
                           ("qwen3.5-4b", ["4b:4bit", "qwen3.5-4b:4bit",
                                           "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant@9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"]),
-                          ("qwen3.5-9b", ["9b:4bit", "QWEN3.5-9B:4bit", "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant"])]:
+                          ("qwen3.5-9b", ["9b:4bit", "QWEN3.5-9B:4bit", q9[0], q9[0] + "@" + q9[1]])]:
         repo, rev, comps = PINNED[name]
         dv = DEFAULTS[name][0]
         for a in aliases:
