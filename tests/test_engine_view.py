@@ -4,8 +4,8 @@
 tools/engine_replay.py is what the view (src/server/engine.html) is built and checked against before `kapitsa serve`
 serves it, so its answers must be the real server's: status, events with Last-Event-ID resume and the three resets,
 errors, each checked against schema/control/, and the access contract of the HTTP mirror (a per-run bearer token, Host,
-Origin and proxy-header refusals, security headers, read-only /engine). The stand-in's own /_standin/stop and
-/_standin/model hooks drive a stop and a switch. tests/test_events_schema.py checks its events.
+Origin and proxy-header refusals, security headers, stop and switch only with the token and a JSON body), then a
+switch and a stop through POST /engine/model and /engine/stop. tests/test_events_schema.py checks its events.
 CPU only, no model. Needs: jsonschema (4.18 or later, for `referencing`).
 
     python3 tests/test_engine_view.py
@@ -198,8 +198,8 @@ def main():
             fails.append("status answer carries the page's CSP")
 
         # --- the token: every other /engine path and every hook
-        for path, method in (("/engine/status", "GET"), ("/engine/events", "GET"), ("/_standin/stop", "POST"),
-                             ("/_standin/model", "POST")):
+        for path, method in (("/engine/status", "GET"), ("/engine/events", "GET"), ("/engine/stop", "POST"),
+                             ("/engine/model", "POST"), ("/_standin/stop", "POST"), ("/_standin/model", "POST")):
             for why, t in (("no token", None), ("a wrong token", "x" * 32), ("a prefix of the token", tok[:-1])):
                 expect(f"{method} {path} with {why}", req(port, method, path, token=t, body={"run_id": run_a}), 403,
                        "forbidden_peer")
@@ -223,27 +223,34 @@ def main():
                 expect(f"{why} on {path} with the token", req(port, "GET", path, token=tok, headers=h), 403,
                        "forbidden_peer")
             expect(f"{why} without the token", req(port, "GET", "/engine/status", headers=h), 403, "forbidden_peer")
+            for path in ("/engine/stop", "/engine/model"):
+                expect(f"{why} on POST {path} with the token", req(port, "POST", path, token=tok, headers=h,
+                       body={"run_id": run_a, "model": "qwen3.5-4b"}), 403, "forbidden_peer")
         for why, h in (("the matching Origin", {"Origin": f"http://127.0.0.1:{port}"}),
                        ("Origin and Host localhost", {"Host": f"localhost:{port}", "Origin": f"http://localhost:{port}"})):
             expect(why, a.get("/engine/status", headers=h), 200)
             expect(why + " on the page", req(port, "GET", "/engine", headers=h), 200)
 
-        # --- /engine is read-only; unknown paths and wrong methods answer in the error shape
-        for path in ("/engine/stop", "/engine/model", "/engine/x"):
+        # --- unknown paths and wrong methods answer in the error shape
+        for path in ("/engine/x", "/engine/stop/"):
             for method in ("POST", "GET"):
                 expect(f"{method} {path}", req(port, method, path, token=tok, body={"run_id": run_a}), 404, "not_found")
         for path in ("/engine", "/engine/status", "/engine/events"):
             expect(f"POST {path}", a.post(path, {"run_id": run_a}), 405, "method_not_allowed")
-        expect("GET /_standin/stop", a.get("/_standin/stop"), 405, "method_not_allowed")
+        for path in ("/engine/stop", "/engine/model", "/_standin/stop"):
+            expect(f"GET {path}", a.get(path), 405, "method_not_allowed")
         expect("GET /nothing", req(port, "GET", "/nothing"), 404, "not_found")
 
-        # --- the stand-in's hooks: what a cross-site form or a stray click would send
+        # --- stop and switch: what a cross-site form or a stray click would send
         for why, kw in (("text/plain (a form's, no preflight)", {"ctype": "text/plain", "body": {"run_id": run_a}}),
+                        ("a form's urlencoded body", {"ctype": "application/x-www-form-urlencoded",
+                                                      "body": {"run_id": run_a}}),
                         ("no Content-Type value", {"ctype": "", "body": {"run_id": run_a}}),
                         ("no run_id", {"body": {}}), ("a JSON array", {"raw": b"[]"}), ("not JSON", {"raw": b"{"}),
                         ("an oversized Content-Length", {"headers": {"Content-Length": "70000"}})):
-            expect(f"stop with {why}", a.post("/_standin/stop", **kw), 400, "bad_request")
-        expect("charset parameter", a.post("/_standin/model", {"model": "nope", "run_id": run_a},
+            for path in ("/engine/stop", "/engine/model"):
+                expect(f"{path} with {why}", a.post(path, **kw), 400, "bad_request")
+        expect("charset parameter", a.post("/engine/model", {"model": "nope", "run_id": run_a},
                                            ctype="application/json; charset=utf-8"), 404, "model_not_found")
         if a.status().get("run_id") != run_a or a.status().get("state") == "stopping":
             fails.append("a refused POST stopped the run")
@@ -315,18 +322,18 @@ def main():
             c.close()
 
         # --- a switch (polled to ready first, not slept for), then a stop whose window reads `stopping`
-        expect("switch to a missing model", a.post("/_standin/model", {"model": "nope", "run_id": run}), 404,
+        expect("switch to a missing model", a.post("/engine/model", {"model": "nope", "run_id": run}), 404,
                "model_not_found")
-        expect("stop with an old run_id", a.post("/_standin/stop", {"run_id": "0000000000000000"}), 409,
+        expect("stop with an old run_id", a.post("/engine/stop", {"run_id": "0000000000000000"}), 409,
                "run_id_mismatch")
         a.ready()
-        code, _, raw = a.post("/_standin/model", {"model": "qwen3.5-4b", "run_id": run})
+        code, _, raw = a.post("/engine/model", {"model": "qwen3.5-4b", "run_id": run})
         check("switch", "model-switch-response", json.loads(raw))
         if code != 200 or json.loads(raw)["model"]["id"] != "qwen3.5-4b":
             fails.append(f"switch: {code} {raw[:200]!r}")
         a.ready()
         pre = a.status()["last_event_id"]
-        code, _, raw = a.post("/_standin/stop", {"run_id": run})
+        code, _, raw = a.post("/engine/stop", {"run_id": run})
         check("stop", "stop-response", json.loads(raw))
         if code != 202:
             fails.append(f"stop: {code}, want 202")

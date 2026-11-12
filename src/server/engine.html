@@ -48,17 +48,40 @@ th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;padding:4px
 td{padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 td.n,th.n{text-align:right}
 tr.done td{color:var(--muted)}
+tr.fin{cursor:pointer}tr.fin:hover td{background:var(--soft)}
+tr.detail td{padding-top:0;font-size:12.5px;color:var(--muted)}tr.detail .err{color:var(--err);white-space:pre-wrap;word-break:break-word}
 .phase{font-size:12px;padding:1px 7px;border-radius:5px;background:var(--soft)}
 .phase.writing{color:var(--ok)}.phase.prefill{color:var(--warn)}
 .prog{display:inline-block;width:90px;height:5px;border-radius:3px;background:var(--free);vertical-align:middle;overflow:hidden;margin-right:6px}
 .prog b{display:block;height:100%;background:var(--warn)}
 svg{display:block;width:100%;height:96px}
+button.mini{font-size:12px;padding:1px 8px;margin-left:10px;text-transform:none;letter-spacing:0;font-weight:500}
 #logs{height:190px;overflow:auto;margin:0;white-space:pre-wrap;color:var(--fg)}
 #logs .t{color:var(--muted)}#logs .warn{color:var(--warn)}#logs .error{color:var(--err)}
 .empty{color:var(--muted);font-size:13px;padding:6px 0;grid-column:1/-1}
 .bar:empty{display:none}
+.cache{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);display:grid;gap:8px}.cache:empty{display:none}
+.cache .ch{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.cache .cr{display:grid;grid-template-columns:92px 1fr;gap:2px 10px;align-items:baseline}
+.cache .cr b{font-weight:600}.cache .cr .sub{grid-column:2}.cache .cr .fill{grid-column:2;height:5px;border-radius:3px;background:var(--free);overflow:hidden}
+.cache .cr .fill b{display:block;height:100%;background:var(--kv)}
 #msg{font-size:12.5px;color:var(--err)}
-#theme{min-width:64px;flex:none}.end{display:flex;align-items:center;gap:14px;flex:1 1 auto;justify-content:flex-end;text-align:right}#acts{min-width:0}
+#theme{min-width:64px;flex:none}.end{display:flex;align-items:center;gap:10px;flex:1 1 auto;justify-content:flex-end;text-align:right}
+#sw{display:flex;gap:6px;flex:0 1 auto;min-width:0}#sw input{font:inherit;font-size:13px;padding:5px 9px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg);width:220px;min-width:90px}
+#sw{position:relative}
+#swlist{position:absolute;top:calc(100% + 8px);right:0;z-index:5;width:min(440px,92vw);max-height:62vh;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.22);padding:6px;text-align:left}
+#swlist[hidden]{display:none}
+#swlist .opt{display:grid;grid-template-columns:1fr auto;gap:1px 14px;width:100%;text-align:left;border:0;border-radius:7px;padding:8px 10px;background:none}
+#swlist .opt:hover:not(:disabled),#swlist .opt:focus-visible{background:var(--soft)}
+#swlist .opt:disabled{opacity:.55;cursor:default}
+.opt .nm{font-weight:600;min-width:0;overflow-wrap:anywhere}.opt .nm small{font-weight:400;color:var(--muted);margin-left:6px;font-size:12.5px}
+.opt .sz{color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.opt .ft{grid-column:1/-1;font-size:12.5px;color:var(--muted)}.opt .ft.warn{color:var(--warn)}.opt .ft.bad{color:var(--err)}
+.opt .ft b{color:var(--accent);font-weight:600}.opt .ft .upd{color:var(--warn)}
+#swlist .foot{color:var(--muted);font-size:12px;padding:6px 10px 2px;border-top:1px solid var(--line);margin-top:4px}
+#swlist .empty{padding:10px}
+button.danger{color:var(--err);border-color:color-mix(in srgb,var(--err) 40%,var(--line));flex:none}button.danger.arm{background:var(--err);color:#fff}
+#msg{min-width:0}
 </style>
 <script>
 // Site data may be blocked (a browser setting, a sandboxed frame): then even reading `localStorage` throws, so the
@@ -87,7 +110,11 @@ applyTheme();
   <span class="meta" id="ident"></span>
   <span class="sp"></span>
   <span class="end"><span id="msg"></span>
-  <span class="meta" id="acts">Stop or switch the model from Kapitan, or with Ctrl-C where kapitsa serve runs</span>
+  <form id="sw"><button type="button" id="swpick" disabled aria-haspopup="true" aria-expanded="false" aria-controls="swlist"
+    title="The models downloaded on this Mac">Downloaded ▾</button><input id="swto" placeholder="Model, folder or GGUF" title="A model name, folder or GGUF file" autocomplete="off" spellcheck="false"
+    aria-label="Model to switch to"><button id="swgo" disabled>Switch</button>
+    <div id="swlist" role="group" aria-label="Downloaded models" hidden></div></form>
+  <button id="stop" class="danger" disabled title="Stop kapitsa serve (it saves conversations first)">Stop</button>
   <button id="theme" title="Theme: follow the system, light or dark">Auto</button></span>
 </header>
 <main>
@@ -95,6 +122,7 @@ applyTheme();
     <div class="row"><div class="big num" id="memused">—</div></div>
     <div class="bar" id="membar"></div>
     <div class="legend" id="memlegend"></div>
+    <div class="cache" id="cache"></div>
   </section>
   <section class="c4"><h2>Writing speed <span id="ratenote">tokens/s, all requests</span></h2>
     <div class="big num" id="rate">—</div>
@@ -109,19 +137,19 @@ applyTheme();
   <section class="c12"><h2>Requests <span id="reqnote"></span></h2>
     <table><thead><tr><th>Request</th><th>Client</th><th>Phase</th><th class="n">Prompt</th><th class="n">Cached</th>
       <th class="n">Read</th><th class="n">Written</th><th class="n">tok/s</th><th class="n">Time</th></tr></thead>
-      <tbody id="reqs"></tbody></table>
+      <tbody id="reqs"></tbody><tbody id="done"></tbody></table>
   </section>
-  <section class="c12"><h2>Log <span id="lognote"></span></h2><pre id="logs" class="mono"></pre></section>
+  <section class="c12"><h2>Log <button id="logf" class="mini" title="Show every line, or only warnings and errors"></button> <span id="lognote"></span></h2><pre id="logs" class="mono"></pre></section>
 </main>
 <script>
 "use strict";
 // The engine view: what `kapitsa serve` holds and does, live, from its control API (modelled on docs/control-socket.md)
-// at /engine/status and /engine/events. It reads only: stop and switch go through the control socket, never the
-// inference port. Every request carries this run's key, which kapitsa serve prints in the page's link (#t=...) and keeps in a file only its
-// user can read; the page keeps it for this tab only and takes it out of the address bar.
+// at /engine/status and /engine/events, and its two actions, POST /engine/stop and POST /engine/model. Every request
+// carries this run's key, which kapitsa serve prints in the page's link (#t=...) and keeps in a file only its user can
+// read; the page keeps it for this tab only and takes it out of the address bar.
 const $ = id => document.getElementById(id);
 const S = {status: null, reqs: new Map(), done: [], logs: [], rates: [], drafts: [], tpc: null, share: null,
-           link: "connecting", noEngineAt: 0};
+           link: "connecting", noEngineAt: 0, replay: 0, warnOnly: store.get("kapitsa.engine.logs") === "warn", open: new Set(), doneHtml: ""};
 const GB = 1e9, RATE_MS = 60000, DRAFT_MS = 10000;
 const fmtB = b => b >= 10 * GB ? (b / GB).toFixed(1) + " GB" : b >= GB ? (b / GB).toFixed(2) + " GB" : (b / 1e6).toFixed(0) + " MB";
 const fmtN = n => Number(n).toLocaleString("en-US");
@@ -142,7 +170,7 @@ const key = (() => {
 const auth = () => key ? {Authorization: "Bearer " + key} : {};
 
 function apply(status, why) {  // a full status: at connect, or from a reset
-  if (why === "run_changed" || (S.status && S.status.run_id !== status.run_id)) { S.done = []; S.rates = []; }
+  if (why === "run_changed" || (S.status && S.status.run_id !== status.run_id)) { S.done = []; S.rates = []; S.open.clear(); }
   S.status = status;
   S.reqs = new Map(status.requests.map(r => [r.request_id, r]));
   S.drafts = []; S.tpc = S.share = null;
@@ -187,8 +215,8 @@ const handlers = {
   },
 };
 
-function log(d) {
-  S.logs.push({t: new Date().toLocaleTimeString([], {hour12: false}), ...d});
+function log(d, earlier) {  // a replayed line has no time: the bus does not stamp them
+  S.logs.push({t: earlier ? "earlier" : new Date().toLocaleTimeString([], {hour12: false}), ...d});
   if (S.logs.length > 400) S.logs.splice(0, S.logs.length - 400);
 }
 
@@ -224,6 +252,8 @@ async function stream(lastId, on) {
   }
 }
 
+const seq = id => Number(id.slice(id.lastIndexOf(".") + 1));
+
 // The status first, then the stream from its last_event_id (docs/control-socket.md, "Events"): the server replays
 // every event after it, or sends a reset. After a drop the stream resumes from the last event seen, retrying every few
 // seconds.
@@ -238,11 +268,21 @@ async function connect() {
         if (!r.ok) throw {status: r.status, error: j.error || {}};
         apply(j);
         last = j.last_event_id;
+        // the stream starts at the run's second event, so the bus replays the log lines it still keeps (the page then
+        // knows what the server said before it opened); events up to the status's are read for their log lines only
+        const until = seq(last);
+        if (until > 1) { S.replay = until; last = j.run_id + ".1"; }
         $("msg").textContent = "";
       } catch (e) { refused(e); }
     }
     if (last) {
       const on = (type, id, data) => {
+        if (S.replay && type === "reset") { apply(data.status, data.reason); S.replay = 0; last = data.status.last_event_id; return; }  // (the bus kept too little: the status is all there is)
+        if (S.replay && id && seq(id) <= S.replay) {  // (a state event's message, a failed switch's text, is a warning as it is live)
+          if (type === "log") log(data, true); else if (type === "state" && data.message) log({level: "warn", message: data.message}, true);
+          last = id; return;
+        }
+        S.replay = 0;
         handlers[type](data);
         last = type === "reset" ? data.status.last_event_id : id || last;
       };
@@ -268,10 +308,26 @@ function refused(e) {
 
 // ---------------------------------------------------------------- drawing, every half second
 
+// The Memory card's prefix caches (status.engine.cache). The RAM one's bytes are part of the memory above; the SSD one is
+// absent from an engine that has none (off, a model without it): it shows "off", not zeros. A server that sends no
+// cache block at all (an older one) shows nothing.
+function cacheHtml(c) {
+  if (!c) return "";
+  const hits = (n, t) => n > 0 ? `${plural(n, "hit")}, ${fmtN(t)} tokens not read again` : "no hits yet";
+  const r = c.ram, d = c.ssd;
+  let h = `<div class="ch">Prefix cache</div><div class="cr"><span class="meta">In memory</span><span><b>${plural(r.entries, "conversation")}</b>
+    · ${fmtB(r.bytes)} <span class="meta">(of the memory above)</span></span><span class="meta num sub">${hits(r.hits, r.hit_tokens)}</span></div>`;
+  h += d ? `<div class="cr"><span class="meta">On the SSD</span><span><b>${plural(d.entries, "conversation")}</b> · ${fmtB(d.bytes)}
+    <span class="meta">of ${fmtB(d.limit_bytes)} it may hold</span></span><span class="fill"><b style="width:${d.limit_bytes ? Math.min(100, 100 * d.bytes / d.limit_bytes) : 0}%"></b></span>
+    <span class="meta num sub">${hits(d.hits, d.hit_tokens)} · ${fmtB(d.read_bytes)} read, ${fmtB(d.written_bytes)} written</span></div>`
+    : `<div class="cr"><span class="meta">On the SSD</span><span class="meta">off for this model or setting</span></div>`;
+  return h;
+}
+
 function draw() {
   const st = S.status;
   const pill = $("state");
-  if (!st) { pill.className = "pill " + (S.link === "live" ? "starting" : "disconnected");
+  if (!st) { pill.className = "pill " + (S.link === "live" ? "starting" : "disconnected"); $("stop").disabled = $("swgo").disabled = true;
     pill.lastElementChild.textContent = S.link === "refused" ? "no access" : "connecting"; return; }
   const live = S.link === "live";
   const state = S.link === "gone" ? "gone" : live ? st.state : "disconnected";
@@ -281,6 +337,9 @@ function draw() {
     stopping: "stopping…", loading: "loading…", switching: "switching…", starting: "starting…"}[state] || state;
   $("model").textContent = st.model ? `${st.model.id} · ${fmtCtx(st.model.context_length)} context · ${plural(st.model.slots, "slot")}` : "no model loaded";
   $("ident").textContent = `${st.lifecycle} · v${st.version} · run ${st.run_id.slice(0, 8)} · pid ${st.pid}`;
+  $("stop").disabled = !live || state === "stopping";
+  $("swpick").disabled = !live;
+  $("swgo").disabled = !live || S.switching || (state !== "ready" && state !== "released");
 
   const e = live ? st.engine : null;
   if (e) {
@@ -291,6 +350,7 @@ function draw() {
     $("memlegend").innerHTML = parts.map(([n, b, c]) => `<span><i style="background:var(${c})"></i>${n} ${fmtB(b)}</span>`).join("") +
       `<span><i style="background:var(--free)"></i>Free ${fmtB(Math.max(0, m.budget_bytes - m.allocated_bytes))}</span>`;
     $("memnote").textContent = `${Math.round(100 * m.allocated_bytes / m.budget_bytes)}% used`;
+    $("cache").innerHTML = cacheHtml(e.cache);
     const ctx = st.model ? st.model.context_length : 1;
     $("slots").innerHTML = e.slots.map(s => `<div class="slot ${s.busy ? "busy" : ""}"><div><b>Slot ${Number(s.index)}</b>
       <span class="meta">${s.busy ? esc(s.request_id) : "idle"}</span></div><div class="meta num">${fmtN(s.tokens)} tokens</div>
@@ -312,7 +372,7 @@ function draw() {
     $("memused").innerHTML = `— <small>${esc(why)}</small>`;
     $("slots").innerHTML = `<div class="empty">${esc(why)}</div>`;
     $("tpc").textContent = "—"; $("draftnote").textContent = why; $("drafttot").textContent = "";
-    $("memnote").textContent = $("slotnote").textContent = "";
+    $("memnote").textContent = $("slotnote").textContent = $("cache").innerHTML = "";
   }
 
   const active = live ? [...S.reqs.values()] : [];
@@ -332,22 +392,111 @@ function draw() {
     const read = done ? "done" : r.phase === "prefill" ? `<span class="prog"><b style="width:${100 * r.prefilled_tokens / need}%"></b></span>${fmtN(r.prefilled_tokens)}/${fmtN(need)}`
       : r.phase === "waiting" ? "queued" : fmtN(need);
     const phase = esc(done ? r.finish_reason : r.phase);
-    return `<tr class="${done ? "done" : ""}"><td class="mono">${esc(r.request_id)}</td><td>${esc(r.client || r.api || "")}</td>
+    return `<tr class="${done ? "done fin" : ""}" data-id="${esc(r.request_id)}"${done ? ` title="Click for the times and the error"` : ""}><td class="mono">${esc(r.request_id)}</td><td>${esc(r.client || r.api || "")}</td>
       <td><span class="phase ${esc(phase)}">${esc(phase)}</span></td><td class="n">${fmtN(r.prompt_tokens)}</td><td class="n">${fmtN(r.cached_tokens)}</td>
       <td class="n">${read}</td><td class="n">${fmtN(r.completion_tokens)}</td><td class="n">${r.tokens_per_second ? r.tokens_per_second.toFixed(1) : "—"}</td>
-      <td class="n">${fmtMs(r.elapsed_ms || 0)}</td></tr>`;
+      <td class="n">${fmtMs(r.elapsed_ms || 0)}</td></tr>${done && (S.open.has(r.request_id) || r.error) ? detail(r) : ""}`;
   };
-  $("reqs").innerHTML = active.map(r => row(r, false)).join("") + S.done.map(r => row(r, true)).join("") ||
-    `<tr><td colspan="9" class="empty">No requests running</td></tr>`;
+  // A finished request's own numbers (request_finished): the waits, the prompt's rate, and what went wrong
+  const detail = r => {
+    const uncached = Math.max(r.prompt_tokens - r.cached_tokens, 0);
+    const read = !uncached ? "prompt read from the cache" : !r.prefill_ms && r.error && !r.completion_tokens ? `${fmtN(uncached)}-token prompt not read` : r.prefill_ms ? `read ${fmtN(uncached)} tokens in ${fmtMs(r.prefill_ms)}${r.prefill_tokens_per_second ? " (" + fmtN(Math.round(r.prefill_tokens_per_second)) + " tok/s)" : ""}` : `read ${fmtN(uncached)} tokens`;
+    return `<tr class="detail"><td></td><td colspan="8">waited ${fmtMs(r.queue_ms || 0)} · ${read} · wrote in ${fmtMs(r.decode_ms || 0)}${r.error ? `<div class="err">${esc(r.error)}</div>` : ""}</td></tr>`;
+  };
+  $("reqs").innerHTML = active.map(r => row(r, false)).join("") || (S.done.length ? "" :
+    `<tr><td colspan="9" class="empty">No requests running</td></tr>`);
+  // The finished rows have their own body, written only when they change: a redraw every 500 ms would drop a click
+  // between press and release and clear a selection of the error text
+  const finished = S.done.map(r => row(r, true)).join("");
+  if (finished !== S.doneHtml) $("done").innerHTML = S.doneHtml = finished;
   $("reqnote").textContent = `${active.length} running` + (S.done.length ? ` · last ${S.done.length} finished` : "");
 
   const box = $("logs"), atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
-  box.innerHTML = S.logs.length ? S.logs.slice(-200).map(l => `<span class="t">${esc(l.t)}</span> <span class="${esc(l.level)}">${esc(l.message)}</span>`).join("\n")
-    : `<span class="t">Nothing logged since this page opened.</span>`;
+  const shown = S.warnOnly ? S.logs.filter(l => l.level === "warn" || l.level === "error") : S.logs;
+  $("logf").textContent = S.warnOnly ? "Warnings and errors" : "All lines";
+  box.innerHTML = shown.length ? shown.slice(-200).map(l => `<span class="t">${esc(l.t)}</span> <span class="${esc(l.level)}">${esc(l.message)}</span>`).join("\n")
+    : `<span class="t">${S.logs.length ? "No warnings or errors." : "Nothing logged yet."}</span>`;
   if (atEnd) box.scrollTop = box.scrollHeight;
-  $("lognote").textContent = plural(S.logs.length, "line");
+  $("lognote").textContent = S.warnOnly ? `${shown.length} of ${plural(S.logs.length, "line")}` : plural(S.logs.length, "line");
 }
 
+// ---------------------------------------------------------------- actions: the socket's own answers, with this run's key
+async function post(path, body) {
+  const r = await fetch(path, {method: "POST", cache: "no-store", headers: {...auth(), "Content-Type": "application/json"},
+                               body: JSON.stringify({...body, run_id: S.status.run_id})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((j.error && j.error.message) || "HTTP " + r.status);
+  return j;
+}
+let armed = null;  // Stop asks once more for 3 s: a stray click does not end the server
+$("stop").onclick = async () => {
+  const b = $("stop");
+  const disarm = () => { clearTimeout(armed); armed = null; b.classList.remove("arm"); b.textContent = "Stop"; };
+  if (!armed) { b.classList.add("arm"); b.textContent = "Confirm stop"; armed = setTimeout(disarm, 3000); return; }
+  disarm();
+  try { await post("/engine/stop", {}); $("msg").textContent = ""; } catch (e) { $("msg").textContent = "stop: " + e.message; }
+};
+// The downloaded models (GET /engine/models: the socket's /models): picking one fills the box, and Switch sends it as
+// ever. A model that does not fit this Mac is listed but cannot be picked; a folder or GGUF is still typed.
+const FIT = {fits: ["Fits this Mac", ""], no_drafter: ["Fits without its drafter (slower)", "warn"],
+             too_big: ["Too big for this Mac", "bad"], unknown: ["", ""]};
+const FIT_RANK = {fits: 1, no_drafter: 2, unknown: 3, too_big: 4};
+let listed = [], listSeq = 0;
+const closeList = () => { listSeq++; $("swlist").hidden = true; $("swpick").setAttribute("aria-expanded", "false"); };
+function renderList(j) {
+  listed = [...j.models].sort((a, b) => (b.current - a.current) || (FIT_RANK[a.fits] - FIT_RANK[b.fits]));
+  const budget = j.memory_budget_bytes ? ` · fits planned for ${fmtB(j.memory_budget_bytes)} of GPU memory` : "";
+  $("swlist").innerHTML = (listed.length ? listed.map((m, i) => {
+    const [fit, cls] = FIT[m.fits] || FIT.unknown;
+    const what = (m.includes || []).join(" · ");
+    return `<button type="button" class="opt" data-i="${i}" ${m.current || m.fits === "too_big" ? "disabled" : ""} title="${esc(m.name)}">
+      <span class="nm">${esc(m.title || m.name)}${m.variant ? `<small>${esc(m.variant)}</small>` : ""}</span><span class="sz">${fmtB(m.bytes)}</span>
+      <span class="ft ${cls}">${m.current ? "<b>Loaded now</b>" + (fit ? " · " : "") : ""}${esc(fit)}${what ? `${fit || m.current ? " · " : ""}${esc(what)}` : ""}${m.up_to_date ? "" : ` · <span class="upd">Downloads an update first</span>`}</span></button>`;
+  }).join("") : `<div class="empty">No models downloaded yet.</div>`) +
+    `<div class="foot">${plural(listed.length, "model")} on this Mac${budget}</div>`;
+}
+async function toggleList() {
+  const box = $("swlist");
+  if (!box.hidden) return closeList();
+  const mine = ++listSeq;
+  box.hidden = false; $("swpick").setAttribute("aria-expanded", "true");
+  box.innerHTML = `<div class="empty">Looking…</div>`;
+  try {
+    const r = await fetch("/engine/models", {headers: auth(), cache: "no-store"});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error((j.error && j.error.message) || "HTTP " + r.status);
+    if (mine === listSeq) renderList(j);
+  } catch (e) { if (mine === listSeq) box.innerHTML = `<div class="empty">Cannot list the models: ${esc(e.message)}</div>`; }
+}
+$("swpick").onclick = toggleList;
+$("swlist").onclick = ev => {
+  const b = ev.target.closest("button.opt");
+  if (!b || b.disabled) return;
+  $("swto").value = listed[Number(b.dataset.i)].name;
+  closeList();
+  ($("swgo").disabled ? $("swto") : $("swgo")).focus();
+};
+document.addEventListener("click", ev => { if (!$("swlist").hidden && !$("sw").contains(ev.target)) closeList(); });
+document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !$("swlist").hidden) { closeList(); $("swpick").focus(); } });
+$("sw").onsubmit = async ev => {
+  ev.preventDefault();
+  closeList();
+  const to = $("swto").value.trim();
+  if (!to || S.switching) return;
+  S.switching = true; $("swgo").textContent = "Switching…"; $("msg").textContent = "";
+  try { await post("/engine/model", {model: to}); $("swto").value = ""; }
+  catch (e) { $("msg").textContent = "switch: " + e.message; }
+  finally { S.switching = false; $("swgo").textContent = "Switch"; }
+};
+
+$("logf").onclick = () => { S.warnOnly = !S.warnOnly; store.set("kapitsa.engine.logs", S.warnOnly ? "warn" : "all"); draw(); };
+$("done").onclick = ev => {  // a finished request's row opens and closes its detail
+  const tr = ev.target && ev.target.closest && ev.target.closest("tr.fin");
+  if (!tr) return;
+  const id = tr.dataset.id;
+  if (S.open.has(id)) S.open.delete(id); else S.open.add(id);
+  draw();
+};
 connect();
 draw();
 setInterval(draw, 500);

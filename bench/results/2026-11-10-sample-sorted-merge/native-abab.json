@@ -1,0 +1,478 @@
+{
+  "evidence_kind": "redacted derived evidence, not an original execution log",
+  "source_records": [
+    {
+      "record": "qwen-native-analysis.private.json",
+      "sha256": "b343929eafbd5719a348d41d9695eeb80e7dd768e5f904fc80cdb990a73dc3d4"
+    },
+    {
+      "record": "qwen-native-0-A.json",
+      "sha256": "66cd17b59d9cad4c70e0866e7f9c3fe7d304b023694f3bb98e6caed5402d5628"
+    },
+    {
+      "record": "qwen-native-1-B.json",
+      "sha256": "a4b832f1cfd232482f472616e8fbc00ebdbfb1a031934bbbbbeb6ac8c41ef204"
+    },
+    {
+      "record": "qwen-native-2-A.json",
+      "sha256": "22a048b9a84b0c4f67ba6e0be208528b5d2b58866ced249f81f8036d43e33d46"
+    },
+    {
+      "record": "qwen-native-3-B.json",
+      "sha256": "e82b84fbdb7124015803f6a3205efb806546f561347ed23624588fc7ae611bc8"
+    },
+    {
+      "record": "bolt-native-analysis.private.json",
+      "sha256": "b2752f56a33a1bf03120c6bc43ba951803d936dfe7d116f0d561bd732dfebc03"
+    },
+    {
+      "record": "bolt-native-0-A.json",
+      "sha256": "3e69b370d0345f1cc738a807c5aeed581a1fb3166cd6113de85736de6a7e5cba"
+    },
+    {
+      "record": "bolt-native-1-B.json",
+      "sha256": "ea140c9a15fa39d076bea0ad942f51c552a1990cecdddaf93a692b2f83438791"
+    },
+    {
+      "record": "bolt-native-2-A.json",
+      "sha256": "6ddb2e24cdf28de4aaff403a442aadc52190dfbaf62fe9605a2cb7425d20b085"
+    },
+    {
+      "record": "bolt-native-3-B.json",
+      "sha256": "c52e55fb24f15c4c482b241483fcece62978c764608a5215c18ef2f3b789f885"
+    }
+  ],
+  "data": {
+    "qwen": {
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "retained_native_flags": true,
+      "no_universal_no_regression_claim": true,
+      "results": [
+        {
+          "arm": "A",
+          "order": 0,
+          "decode": {
+            "median_tps": 178.91,
+            "runs_tps": [
+              178.91,
+              189.2,
+              173.93
+            ],
+            "median_accepted_draft_tps": 106.93,
+            "median_accepted_draft_share": 0.5977
+          },
+          "decode_greedy": {
+            "median_tps": 191.06,
+            "runs_tps": [
+              191.06,
+              188.7,
+              192.31
+            ],
+            "median_accepted_draft_tps": 117.17,
+            "median_accepted_draft_share": 0.6133
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4134,
+              "ttft_s": 0.9987,
+              "tps": 4139.2,
+              "followup_s": [
+                0.0482,
+                0.047,
+                0.0455
+              ],
+              "followup_median_s": 0.047,
+              "followup_suffix_tps": 456.8
+            }
+          ],
+          "tool_calls": "pass",
+          "flags": [
+            "decode: repetition loop (distinct-4-gram 0.4415)"
+          ],
+          "invalid": []
+        },
+        {
+          "arm": "B",
+          "order": 1,
+          "decode": {
+            "median_tps": 175.95,
+            "runs_tps": [
+              175.95,
+              167.39,
+              189.14
+            ],
+            "median_accepted_draft_tps": 104.13,
+            "median_accepted_draft_share": 0.5918
+          },
+          "decode_greedy": {
+            "median_tps": 190.76,
+            "runs_tps": [
+              207.37,
+              183.44,
+              190.76
+            ],
+            "median_accepted_draft_tps": 117.74,
+            "median_accepted_draft_share": 0.6172
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4132,
+              "ttft_s": 0.9968,
+              "tps": 4145.3,
+              "followup_s": [
+                0.0471,
+                0.0467,
+                0.0446
+              ],
+              "followup_median_s": 0.0467,
+              "followup_suffix_tps": 467.5
+            }
+          ],
+          "tool_calls": "pass",
+          "flags": [
+            "decode: repetition loop (distinct-4-gram 0.445)"
+          ],
+          "invalid": []
+        },
+        {
+          "arm": "A",
+          "order": 2,
+          "decode": {
+            "median_tps": 179.18,
+            "runs_tps": [
+              179.18,
+              193.67,
+              172.98
+            ],
+            "median_accepted_draft_tps": 108.14,
+            "median_accepted_draft_share": 0.6035
+          },
+          "decode_greedy": {
+            "median_tps": 189.58,
+            "runs_tps": [
+              189.58,
+              192.77,
+              186.68
+            ],
+            "median_accepted_draft_tps": 115.53,
+            "median_accepted_draft_share": 0.6094
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4133,
+              "ttft_s": 0.9953,
+              "tps": 4152.6,
+              "followup_s": [
+                0.0475,
+                0.0451,
+                0.0455
+              ],
+              "followup_median_s": 0.0455,
+              "followup_suffix_tps": 463.0
+            }
+          ],
+          "tool_calls": "pass",
+          "flags": [
+            "decode: repetition loop (distinct-4-gram 0.4873)"
+          ],
+          "invalid": []
+        },
+        {
+          "arm": "B",
+          "order": 3,
+          "decode": {
+            "median_tps": 177.8,
+            "runs_tps": [
+              176.94,
+              177.8,
+              194.53
+            ],
+            "median_accepted_draft_tps": 105.57,
+            "median_accepted_draft_share": 0.5957
+          },
+          "decode_greedy": {
+            "median_tps": 182.37,
+            "runs_tps": [
+              190.31,
+              182.37,
+              180.03
+            ],
+            "median_accepted_draft_tps": 110.07,
+            "median_accepted_draft_share": 0.6035
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4131,
+              "ttft_s": 0.9892,
+              "tps": 4176.2,
+              "followup_s": [
+                0.0465,
+                0.043,
+                0.0456
+              ],
+              "followup_median_s": 0.0456,
+              "followup_suffix_tps": 473.0
+            }
+          ],
+          "tool_calls": "pass",
+          "flags": [],
+          "invalid": []
+        }
+      ],
+      "summary": {
+        "decode": {
+          "A_median": 179.04500000000002,
+          "B_median": 176.875,
+          "delta_pct": -1.211985813622285
+        },
+        "decode_greedy": {
+          "A_median": 190.32,
+          "B_median": 186.565,
+          "delta_pct": -1.9729928541403874
+        }
+      },
+      "command_template": "$BUILD/kapitsa bench --model $MODEL --quick --json --out $RESULT",
+      "command_template_is_not_raw_log": true,
+      "model": {
+        "name": "qwen3.5-4b-4bit",
+        "title": "qwen3.5-4b-4bit",
+        "variant": null,
+        "precision": "4-bit",
+        "catalog": false,
+        "revision": null,
+        "decoding": "MTP",
+        "decoding_detail": "MTP speculative decoding depth 4, KFlash (MTP)",
+        "drafter": null,
+        "drafter_kind": "MTP",
+        "drafter_source": null,
+        "drafter_reason": "no matching drafter found, MTP head drafts depth 4"
+      }
+    },
+    "bolt": {
+      "at": "2026-11-10T20:05:08.391331+00:00",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "results": [
+        {
+          "arm": "A",
+          "order": 0,
+          "decode": {
+            "median_tps": 96.2,
+            "runs_tps": [
+              89.02,
+              100.79,
+              96.2
+            ],
+            "median_accepted_draft_tps": 74.97,
+            "median_accepted_draft_share": 0.7793
+          },
+          "decode_greedy": {
+            "median_tps": 96.97,
+            "runs_tps": [
+              96.97,
+              93.3,
+              98.82
+            ],
+            "median_accepted_draft_tps": 75.76,
+            "median_accepted_draft_share": 0.7812
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4181,
+              "ttft_s": 6.3444,
+              "tps": 659.0,
+              "followup_s": [
+                0.2086,
+                0.2378,
+                0.1974
+              ],
+              "followup_median_s": 0.2086,
+              "followup_suffix_tps": 105.4
+            }
+          ],
+          "tool_calls": "pass",
+          "flags": [],
+          "invalid": []
+        },
+        {
+          "arm": "B",
+          "order": 1,
+          "decode": {
+            "median_tps": 97.19,
+            "runs_tps": [
+              97.19,
+              103.63,
+              95.68
+            ],
+            "median_accepted_draft_tps": 76.12,
+            "median_accepted_draft_share": 0.7832
+          },
+          "decode_greedy": {
+            "median_tps": 102.09,
+            "runs_tps": [
+              98.55,
+              102.09,
+              105.6
+            ],
+            "median_accepted_draft_tps": 80.96,
+            "median_accepted_draft_share": 0.793
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4185,
+              "ttft_s": 6.3588,
+              "tps": 658.1,
+              "followup_s": [
+                0.2036,
+                0.2382,
+                0.1847
+              ],
+              "followup_median_s": 0.2036,
+              "followup_suffix_tps": 108.3
+            }
+          ],
+          "tool_calls": "pass",
+          "flags": [],
+          "invalid": []
+        },
+        {
+          "arm": "A",
+          "order": 2,
+          "decode": {
+            "median_tps": 97.61,
+            "runs_tps": [
+              90.31,
+              97.61,
+              97.86
+            ],
+            "median_accepted_draft_tps": 76.07,
+            "median_accepted_draft_share": 0.7793
+          },
+          "decode_greedy": {
+            "median_tps": 93.94,
+            "runs_tps": [
+              97.27,
+              88.45,
+              93.94
+            ],
+            "median_accepted_draft_tps": 72.66,
+            "median_accepted_draft_share": 0.7734
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4183,
+              "ttft_s": 6.3522,
+              "tps": 658.5,
+              "followup_s": [
+                0.2106,
+                0.2382,
+                0.1875
+              ],
+              "followup_median_s": 0.2106,
+              "followup_suffix_tps": 106.6
+            }
+          ],
+          "tool_calls": "pass",
+          "flags": [],
+          "invalid": []
+        },
+        {
+          "arm": "B",
+          "order": 3,
+          "decode": {
+            "median_tps": 97.98,
+            "runs_tps": [
+              102.03,
+              97.98,
+              88.86
+            ],
+            "median_accepted_draft_tps": 76.74,
+            "median_accepted_draft_share": 0.7832
+          },
+          "decode_greedy": {
+            "median_tps": 96.71,
+            "runs_tps": [
+              100.81,
+              92.86,
+              96.71
+            ],
+            "median_accepted_draft_tps": 75.36,
+            "median_accepted_draft_share": 0.7793
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4183,
+              "ttft_s": 6.3489,
+              "tps": 658.9,
+              "followup_s": [
+                0.2103,
+                0.2398,
+                0.184
+              ],
+              "followup_median_s": 0.2103,
+              "followup_suffix_tps": 108.7
+            }
+          ],
+          "tool_calls": "pass",
+          "flags": [],
+          "invalid": []
+        }
+      ],
+      "summary": {
+        "decode": {
+          "A_median": 96.905,
+          "B_median": 97.58500000000001,
+          "delta_pct": 0.701718177596633
+        },
+        "decode_greedy": {
+          "A_median": 95.455,
+          "B_median": 99.4,
+          "delta_pct": 4.132837462678762
+        }
+      },
+      "retained_all_flags_and_invalid": true,
+      "no_universal_no_regression_claim": true,
+      "command_template": "$BUILD/kapitsa bench --model $MODEL --quick --json --out $RESULT",
+      "command_template_is_not_raw_log": true,
+      "model": {
+        "name": "nemotron-3.5-bolt-24gb",
+        "title": "nemotron-3.5-bolt-24gb",
+        "variant": null,
+        "precision": "bf16",
+        "catalog": false,
+        "revision": null,
+        "decoding": "LiLiCorr",
+        "decoding_detail": "LiLiCorr speculative decoding (7-token blocks), KFlash (LiLiCorr)",
+        "drafter": "dflash",
+        "drafter_kind": "LiLiCorr",
+        "drafter_source": "dflash",
+        "drafter_reason": "found in the model's folder"
+      }
+    }
+  }
+}

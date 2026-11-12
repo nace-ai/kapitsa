@@ -101,9 +101,11 @@ bool parse_head(const std::string& text, Head* h) {
   return true;
 }
 
-bool known_path(const std::string& p) { return p == "/status" || p == "/events" || p == "/stop" || p == "/model"; }
+bool known_path(const std::string& p) {
+  return p == "/status" || p == "/events" || p == "/models" || p == "/stop" || p == "/model";
+}
 
-const char* method_of(const std::string& p) { return p == "/status" || p == "/events" ? "GET" : "POST"; }
+const char* method_of(const std::string& p) { return p == "/status" || p == "/events" || p == "/models" ? "GET" : "POST"; }
 
 }  // namespace
 
@@ -272,7 +274,7 @@ void ControlServer::serve(int fd) {
   if (h.path == "/events" && h.method == "GET") return stream_events(fd, h.last_event_id);
   const ControlReply r = handle(h.method, h.path, body);
   send_reply(fd, r);
-  if (r.status == 202 && h.path == "/stop" && !stop_asked_.exchange(true)) api_.after_stop();
+  if (r.status == 202 && h.path == "/stop") stop_answered();
 }
 
 ControlReply ControlServer::handle(const std::string& method, const std::string& path, const std::string& body) {
@@ -280,6 +282,7 @@ ControlReply ControlServer::handle(const std::string& method, const std::string&
   if (method != method_of(path)) return control_error(405, "method_not_allowed", path + " takes " + method_of(path));
   if (method == "GET") {
     if (path == "/status") return {200, api_.status()};
+    if (path == "/models") return api_.models();
     return control_error(400, "bad_request", "GET /events streams only over the socket");
   }
   if (body.size() > kMaxControlBody) return control_error(400, "bad_request", "the body is over 64 KiB");

@@ -41,6 +41,10 @@ bool model_class_matches(ModelClass c, const ModelFacts& m) {
 namespace {
 
 const DefaultRow kDefaults[] = {
+    // Mixed 4/5-bit 9B uses the matrix path. The SIMD packed-coefficient path accepts only 4-bit weights.
+    // #493 keeps the legacy pack on non-matrix Macs; this is a format policy, not an M3/M4 speed measurement.
+    {"qwen9b_q4", Knob::kQwen9bQ4, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 0, 0, false,
+     "#493: matrix mixed-format path; non-matrix keeps legacy 4-bit", true},
     // Dense Qwen 2048-channel inputs through hidden 8192: built-in ANE share, non-matrix GPUs (M4 today).
     // M4 Pro -61.94% loaded TTFT and all-path bar pass: bench/results/2026-11-07-pr775-rebase-3f3b.
     // Calibrated M3 prefill exceeds MLX (mean KL 1.846e-4 vs 1.472e-4); calibration-only chips stay off.

@@ -2,8 +2,9 @@
 
 Each running `kapitsa serve` instance has a control socket. Clients use it to see the instance's state and to stop
 it or switch its model. Clients are the Kapitan app, `kapitsa ps`, `stop` and `logs`, and any other UI. The
-inference port serves the OpenAI, Anthropic and Ollama APIs and a read-only view of this socket ("The engine view"
-below). Everything an administrator does goes through this socket.
+inference port serves the OpenAI, Anthropic and Ollama APIs and a page in front of this socket ("The engine view"
+below). Everything an administrator does goes through this socket, or through that page with the socket's own
+handlers and this run's key.
 
 This page specifies the wire format. The machine-readable form is [schema/control/](../schema/control/), JSON Schema
 2020-12, with one file per message. [schema/control/examples/](../schema/control/examples/) holds a valid example of
@@ -62,6 +63,7 @@ it.
 | --- | --- | --- |
 | `GET /status` | none | `200` [status](../schema/control/status.schema.json) |
 | `GET /events` | none; optional `Last-Event-ID` header | `200`, an SSE stream of [events](../schema/control/event.schema.json) |
+| `GET /models` | none | `200` [models](../schema/control/models.schema.json) |
 | `POST /stop` | [stop request](../schema/control/stop-request.schema.json) | `202` [stop response](../schema/control/stop-response.schema.json) |
 | `POST /model` | [model switch request](../schema/control/model-switch-request.schema.json) | `200` [model switch response](../schema/control/model-switch-response.schema.json) |
 
@@ -101,6 +103,8 @@ the old engine before the new one loads, so there is nothing to sample while `sw
 | `memory.weights_bytes` | Of that, what the engine held before its slots: the model's weights, the drafter's and the buffers they run in |
 | `memory.kv_bytes` | Of that, the slots' KV caches as allocated (each slot's capacity in positions times the bytes per position). The rest is the slots' recurrent state and buffers allocated later |
 | `slots[]` | One item per slot: `index`, `busy`, `tokens` in its live state, and `request_id` while busy |
+| `cache.ram` | The conversations the slots keep in memory for follow-ups: `entries` (slots that hold one), `bytes` (their KV capacity and their recurrent-state checkpoints, part of the GPU memory above), and since the load `hits` (requests that continued from a slot's state or a checkpoint) and `hit_tokens` (the prompt positions those did not read again) |
+| `cache.ssd` | The SSD prefix cache (`--disk-cache`): `entries` stored, `bytes` held and `limit_bytes` it may hold, `read_bytes` and `written_bytes` since it opened, and since the load `hits` (requests that resumed from a stored state) and `hit_tokens`. Absent, not zero, when the cache is off, the model has none, or its files are not open yet |
 | `drafts` | `cycles` that verified a draft and the `tokens` they wrote, counted since the model loaded. Absent when the model decodes without drafts. A counter that goes down means the model loaded again: start the baseline over |
 
 Each cycle writes one token of its own plus the draft tokens it accepts. A view gets tokens per cycle as
@@ -122,6 +126,18 @@ a model whose experts stream from disk included); the steps that read nothing (c
 kernels, the Neural Engine program) finish first.
 A model still downloading stops at once, its downloaded parts kept for the next start. Every lifecycle exits with status 0, a terminal's after clearing its status block. A second
 `POST /stop` answers `202` and changes nothing, and `POST /model` after a stop answers `503 stopping`.
+
+### Models
+
+`GET /models` lists the models downloaded on this Mac (complete ones; a download in progress is not there): `name` is
+what `POST /model` takes for the model (its catalog name, or its folder when no name finds it), with its `title`,
+`variant` (precision or file format), `bytes` on disk, `includes` (MTP head, drafters) and `current`. `up_to_date` is
+false for a catalog model whose files are older than the revisions this Kapitsa pins: a switch to it downloads the
+difference first, which can take minutes. `fits` is the
+engine's plan of the model's files against `memory_budget_bytes`, offline, for one conversation at the default
+context: `fits` beside its drafter, `no_drafter` (only without it, so slower), `too_big`, or `unknown` when its files
+cannot be planned (also every model before the first has loaded). The plan is kept per folder for the run. Listing never
+loads or downloads anything.
 
 ### Model switch
 
@@ -208,15 +224,20 @@ for them. The level is `info`, or `debug` when the server runs with `verbose`.
 ## The engine view
 
 A browser cannot open the socket, so `kapitsa serve` also serves a page of what the instance holds and does at
-`http://127.0.0.1:<port>/engine` (`src/server/engine.html`). The page reads two of the socket's endpoints over HTTP on
-the API port, with the same bodies: `GET /engine/status` and `GET /engine/events`. It only reads. Stop and switch
-stay on the socket, as everything an administrator does: in Kapitan, or Ctrl-C where `kapitsa serve` runs.
+`http://127.0.0.1:<port>/engine` (`src/server/engine.html`). The page reaches the socket's five endpoints over HTTP on
+the API port, with the same bodies and answers: `GET /engine/status`, `GET /engine/events`, `GET /engine/models`,
+`POST /engine/stop` and `POST /engine/model`. Its Stop button asks once more before it sends; its Switch box takes a
+model name, folder or GGUF file, as `POST /model` does, and the "Downloaded" list beside it offers the models from
+`GET /models` (size, precision, whether each fits this Mac): picking one fills the box, and Switch sends it. Its Memory
+card also shows the prefix caches (`engine.cache`): the conversations kept in memory and on the SSD, their size and
+what they saved.
 
 - **This run's key.** The socket admits its own user only, and the HTTP side keeps that. At start the server makes a
   key, 24 random bytes, and writes it to `$KAPITSA_HOME/run/<instance_id>.token` (`0600`, in the `0700` `run/`),
-  which it removes on exit. `GET /engine/status` and `GET /engine/events` need `Authorization: Bearer <key>`;
-  without it they answer `403 forbidden_peer`. The key replaces the API key on these two paths: a page holding the
-  key does not need the API key. A new run makes a new key.
+  which it removes on exit. Every path but the page needs `Authorization: Bearer <key>`; without it they answer
+  `403 forbidden_peer`. The key replaces the API key on these paths: a page holding the key does not need the API
+  key, and the API key opens none of them. So whoever can stop or switch over HTTP can read a file only the socket's
+  user can read, as on the socket. A new run makes a new key.
 - **The link.** On a terminal, `kapitsa serve` prints the page's link with the key in its fragment
   (`/engine#t=<key>`); without one it prints the key file's path instead. The key never goes into the log. A browser
   never sends a fragment to a server. The page keeps the key for its tab and takes it out of the address bar. Another
@@ -225,14 +246,25 @@ stay on the socket, as everything an administrator does: in Kapitan, or Ctrl-C w
   a `Host` other than `127.0.0.1`, `localhost` or `[::1]` (a page elsewhere that points its own name at `127.0.0.1`);
   an `Origin` other than `http://` plus that `Host`; a `Forwarded`, `X-Forwarded-For`, `X-Forwarded-Host` or `Via`
   header (a proxy on this Mac would otherwise bring other machines in); a body over 64 KiB.
-- **Read-only.** Another method on these three paths gets `405 method_not_allowed`. Any other path under `/engine/`,
-  `/engine/stop` and `/engine/model` among them, gets `404 not_found`. No CORS header is sent, and every answer
-  carries `Cache-Control: no-store`. The page's `Content-Security-Policy` lets it reach only its own server and
-  forbids framing it.
+- **Methods.** The page, status and events take `GET` and `HEAD`, stop and model take `POST`; another method gets
+  `405 method_not_allowed`, and any other path under `/engine/` gets `404 not_found`. A stop or a switch also needs
+  `Content-Type: application/json`, else `400 bad_request`: a form on another site can send only form or text bodies,
+  and no key. No CORS header is sent, so a fetch from another site with the key gets no further than its preflight.
+  Every answer carries `Cache-Control: no-store`. The page's `Content-Security-Policy` lets it reach only its own
+  server and forbids framing it.
+- **The log.** A page opened after the server started resumes the stream from the run's second event, so the bus
+  replays the log lines it still keeps (the last 1024 events, `kKeep`) and the page shows them, marked `earlier`:
+  events carry no time. Once more than 1024 events have passed since the run's second, the bus answers with the
+  `expired` reset instead, and the page shows only what the server logs from then on. A button above the log hides every
+  line below a warning.
+- **The socket's answers.** A stop or a switch runs the socket's own checks (fields, `run_id`) and handlers, and
+  answers as `POST /stop` and `POST /model` do. The page sends the `run_id` it shows, so a page left open on a run that
+  has since restarted gets `409 run_id_mismatch` instead of stopping the new one. A switch answers once the new model
+  is ready, as on the socket.
 - **At most 3 views.** Each open `GET /engine/events` holds one of the API server's threads, at least 8 in all and
   shared with requests, so at most 3 are open at once. A fourth gets `503 busy` with `Retry-After: 5`. These count
   toward the bus's 16 streams.
-- **No socket.** A server without a control socket answers the two endpoints with `503 internal`. That happens when
+- **No socket.** A server without a control socket answers the five endpoints with `503 internal`. That happens when
   another server holds its instance name or `run/` cannot be made. A server that routes to other Macs has its own
   socket and engine view, which show that server, not the Mac it forwards to.
 

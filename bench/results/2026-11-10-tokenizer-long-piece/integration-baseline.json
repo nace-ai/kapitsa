@@ -1,0 +1,27 @@
+{
+  "derivation": "Redacted derived summary; original logs retained privately.",
+  "reference_tokenizer_commit": "a283176326de221e9326e05b9f21e0759be75f99",
+  "shared_sources": "801527c8cd0c2cf55413c38a5a9a2f7ba6315802",
+  "binary_sha256": {
+    "reference_parser_test": "c780face61b1b16105bb0e9e6b2157482fe9b5b62ce47ffb19d99a92379c23b8",
+    "reference_grammar_test": "28e6cda3c5f29d8ed049811a71f8d1ba9f83b612d8eb08a3ea86d4f461ce9b89",
+    "candidate_parser_test": "4c3dc713650af22a2e77bfdb321faf573e0f7367b665b32d4121db4848edc624",
+    "candidate_grammar_test": "9b0c24176183a8cdc91c590291b6aa5d7eb1eafdfd6ac27a67e5104e47fe707c"
+  },
+  "families": {
+    "tekken": {
+      "identical_failure_lines": true,
+      "failure_lines": 160,
+      "reference_summary": "299 passed, 160 failed",
+      "candidate_summary": "299 passed, 160 failed"
+    },
+    "flint": {
+      "identical_failure_lines": true,
+      "failure_lines": 125,
+      "reference_summary": "308 passed, 125 failed",
+      "candidate_summary": "308 passed, 125 failed"
+    }
+  },
+  "tekken_parser": "Both versions exit 2 because the vocabulary lacks <think>.",
+  "scope": "CPU-only baseline investigation; no grammar or parser code changed."
+}

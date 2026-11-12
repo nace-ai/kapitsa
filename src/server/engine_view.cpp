@@ -7,7 +7,9 @@
 
 #include <atomic>
 #include <cerrno>
+#include <cctype>
 #include <cstring>
+#include <memory>
 
 namespace ni::server {
 
@@ -77,6 +79,15 @@ static bool same_key(const std::string& a, const std::string& b) {  // (in time 
   return d == 0;
 }
 
+// Content-Type application/json, parameters (charset) aside
+static bool json_body(const httplib::Request& req) {
+  std::string t = req.get_header_value("Content-Type");
+  t = t.substr(0, t.find(';'));
+  while (!t.empty() && t.back() == ' ') t.pop_back();
+  for (char& ch : t) ch = char(tolower(static_cast<unsigned char>(ch)));
+  return t == "application/json";
+}
+
 std::optional<httplib::Server::HandlerResponse> engine_gate(const httplib::Request& req, httplib::Response& res) {
   if (!is_engine_path(req.path)) return std::nullopt;
   const auto refuse = [&](const ControlReply& r) {
@@ -84,18 +95,21 @@ std::optional<httplib::Server::HandlerResponse> engine_gate(const httplib::Reque
     return httplib::Server::HandlerResponse::Handled;
   };
   if (const std::string why = engine_refusal(req); !why.empty()) return refuse(control_error(403, "forbidden_peer", why));
-  const bool page = req.path == "/engine";
-  if (!page && req.path != "/engine/status" && req.path != "/engine/events")
-    return refuse(control_error(404, "not_found", "the engine view has /engine, /engine/status and /engine/events; "
-                                                  "stop and switch go through the control socket"));
-  if (req.method != "GET" && req.method != "HEAD") {
-    res.set_header("Allow", "GET, HEAD");
-    return refuse(control_error(405, "method_not_allowed", "the engine view only reads: stop and switch go through "
-                                                           "the control socket (Kapitan)"));
+  const bool page = req.path == "/engine", action = req.path == "/engine/stop" || req.path == "/engine/model";
+  if (!page && !action && req.path != "/engine/status" && req.path != "/engine/events" &&
+      req.path != "/engine/models")
+    return refuse(control_error(404, "not_found", "the engine view has /engine, /engine/status, /engine/events, "
+                                                  "/engine/models, /engine/stop and /engine/model"));
+  if (action ? req.method != "POST" : req.method != "GET" && req.method != "HEAD") {
+    res.set_header("Allow", action ? "POST" : "GET, HEAD");
+    return refuse(control_error(405, "method_not_allowed",
+                                action ? req.path + " takes POST" : "the page, its status and its events only read"));
   }
   if (!page && !same_key(req.get_header_value("Authorization"), "Bearer " + engine_token()))
     return refuse(control_error(403, "forbidden_peer", "the engine view needs this run's key: open the link kapitsa "
                                                        "serve printed, or read it from run/<instance>.token"));
+  if (action && !json_body(req))  // (a form another page posts cannot send this, nor a key)
+    return refuse(control_error(400, "bad_request", "a stop or a switch is a JSON body: Content-Type: application/json"));
   return httplib::Server::HandlerResponse::Unhandled;
 }
 
@@ -116,6 +130,31 @@ void engine_routes(httplib::Server& srv, std::function<ControlServer*()> control
     ControlServer* c = control();
     if (!c) return no_socket(res);
     reply(res, c->handle("GET", "/status", ""));
+  });
+  srv.Get("/engine/models", [control, no_socket](const httplib::Request&, httplib::Response& res) {
+    ControlServer* c = control();
+    if (!c) return no_socket(res);
+    reply(res, c->handle("GET", "/models", ""));
+  });
+  // stop and switch: the socket's own checks and answers. A stop's after_stop() runs once its answer is sent, as on
+  // the socket: the content provider's releaser runs after the last byte, or when the client has gone.
+  srv.Post("/engine/stop", [control, no_socket](const httplib::Request& req, httplib::Response& res) {
+    ControlServer* c = control();
+    if (!c) return no_socket(res);
+    const ControlReply r = c->handle("POST", "/stop", req.body);
+    if (r.status != 202) return reply(res, r);
+    harden(res);
+    res.status = 202;
+    auto body = std::make_shared<const std::string>(r.body.dump());
+    res.set_content_provider(
+        body->size(), "application/json",
+        [body](size_t off, size_t n, httplib::DataSink& sink) { return sink.write(body->data() + off, n); },
+        [c](bool) { c->stop_answered(); });
+  });
+  srv.Post("/engine/model", [control, no_socket](const httplib::Request& req, httplib::Response& res) {
+    ControlServer* c = control();
+    if (!c) return no_socket(res);
+    reply(res, c->handle("POST", "/model", req.body));  // (holds this thread while the model loads, as on the socket)
   });
   static std::atomic<int> open{0};
   srv.Get("/engine/events", [control, no_socket](const httplib::Request& req, httplib::Response& res) {

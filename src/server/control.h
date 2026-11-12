@@ -1,5 +1,5 @@
 // The control socket (docs/control-socket.md): HTTP/1.1 over a Unix domain socket in $KAPITSA_HOME/run, answering
-// GET /status, GET /events, POST /stop and POST /model for the user who started the server. It is its own small HTTP
+// GET /status, GET /events, GET /models, POST /stop and POST /model for the user who started the server. It is its own small HTTP
 // server rather than httplib's: the peer check needs each accepted socket (getpeereid), which httplib keeps private.
 // One request per connection (`Connection: close`), so there is no keep-alive state to get wrong.
 #pragma once
@@ -36,6 +36,8 @@ class ControlApi {
   virtual ControlReply stop() = 0;  // 202: after_stop() runs once the first one's answer is sent, never again
   virtual void after_stop() {}
   virtual ControlReply model_switch(const nlohmann::json& request) = 0;
+  // GET /models: the downloaded models this instance could switch to (schema/control/models.schema.json)
+  virtual ControlReply models() = 0;
 };
 
 constexpr int kControlProtocol = 1;
@@ -103,7 +105,7 @@ class ControlServer {
   // One request's answer, everything but GET /events (tests call it without a socket)
   ControlReply handle(const std::string& method, const std::string& path, const std::string& body);
 
-  // GET /events for another transport (the engine view's HTTP mirror, src/server/main.cpp): the stream, or null with
+  // GET /events for another transport (the engine view's HTTP mirror, src/server/engine_view.h): the stream, or null with
   // the 503 to answer when 16 are open. pump_events() then sends its frames, a reset first when the cursor needs one,
   // and keepalives through `write` until `write` fails, `gone()` says the reader left, the stream falls behind, or the
   // server stops.
@@ -117,6 +119,10 @@ class ControlServer {
   void set_owner(uid_t uid) { owner_ = uid; }  // whose connections are served (tests); the server's user otherwise
   // A stop began (POST /stop, a signal): POST /model answers 503 stopping, a further POST /stop 202 and nothing more
   void mark_stopping() { stop_asked_ = true; }
+  // A 202 POST /stop's answer is sent (on the socket, or the engine view's HTTP mirror): after_stop() the first time
+  void stop_answered() {
+    if (!stop_asked_.exchange(true)) api_.after_stop();
+  }
   int connections() const { return connections_.load(); }  // open connections, event streams included
 
  private:

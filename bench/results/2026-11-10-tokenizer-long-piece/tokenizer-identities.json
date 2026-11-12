@@ -1,0 +1,44 @@
+[
+  {
+    "sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+    "vocab": 248044,
+    "merges": 247587,
+    "config.json": {
+      "model_type": "qwen3_5_moe",
+      "architectures": [
+        "Qwen3_5MoeForConditionalGeneration"
+      ]
+    },
+    "tokenizer_config.json": {
+      "tokenizer_class": "Qwen2Tokenizer"
+    }
+  },
+  {
+    "sha256": "3277c00fe5fb3963b3cb7c07b7f183722d2af4d775a4aea7cfb3684d7cccbc2f",
+    "vocab": 131072,
+    "merges": 269443,
+    "config.json": {
+      "model_type": "nemotron_h",
+      "architectures": [
+        "NemotronHForCausalLM"
+      ]
+    },
+    "tokenizer_config.json": {
+      "tokenizer_class": "PreTrainedTokenizer"
+    }
+  },
+  {
+    "sha256": "cbc69b4fd04328e2c637b28fed83af5afe4b9f3c4cecd03559c257351ff53f60",
+    "vocab": 150000,
+    "merges": 149744,
+    "config.json": {
+      "model_type": "flint",
+      "architectures": [
+        "FlintForCausalLM"
+      ]
+    },
+    "tokenizer_config.json": {
+      "tokenizer_class": "PreTrainedTokenizerFast"
+    }
+  }
+]

@@ -26,6 +26,7 @@
 //   from the variant's headers (a GGUF variant's: the import's plan of the file's header).
 // - The 4-bit variants' repos and revisions are the Nace Agent app's, so the app and the CLI download the same bytes.
 #include "hub/hub.h"
+#include "engine/device_profile.h"
 
 namespace ni::hub {
 
@@ -150,7 +151,7 @@ const Companion* drafter_for_shape(int hidden, int layers) {
   return nullptr;
 }
 
-const std::vector<CatalogModel>& catalog() {
+const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
   static const std::vector<CatalogModel> c = {
       {.name = "qwen3.5-4b",
        .aliases = {"4b"},
@@ -162,12 +163,12 @@ const std::vector<CatalogModel>& catalog() {
        .default_variant = "4bit",
        .fallbacks = {},
        .variants = {
+           // KQuant (#421): lmstudio-community's pack (c43ee1d) with its quantized weights rebuilt
+           // as KQuant, every other file the same content. KL from bf16 0.048 against 0.070,
+           // GSM8K (1319) 0.923 against 0.914, M5 Pro decode (T 0.6 and greedy, two runs each) 227 against 209 tok/s
            {.name = "4bit",
-            // KQuant (#421): lmstudio-community's pack (c43ee1d) with its quantized weights rebuilt by
-            // importance-weighted scale search, every other file the same content. KL from bf16 0.048 against 0.070,
-            // GSM8K (1319) 0.923 against 0.914, M5 Pro decode (T 0.6 and greedy, two runs each) 227 against 209 tok/s
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
-            .repo = "nace-ai/Qwen3.5-4B-MLX-4bit-KQuant",
+            .repo = "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant",
             .revision = "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89",
             .companions = {mtp4(), dflash4()},
             .download_gb = 4.57},
@@ -198,15 +199,30 @@ const std::vector<CatalogModel>& catalog() {
        .default_variant = "4bit",
        .fallbacks = {},
        .variants = {
+           // KQuant Q4: mixed 4/5-bit language weights with the packaged vision tower and tokenizer.
            {.name = "4bit",
-            // KQuant (#421): lmstudio-community's pack (b455506) with its quantized weights rebuilt by
-            // importance-weighted scale search, every other file the same content. KL from bf16 0.037 against 0.081,
-            // GSM8K (1319) 0.944 against 0.927, M5 Pro decode (T 0.6 and greedy, two runs each) 146 against 132 tok/s
-            .quant = "MLX affine 4-bit, group 64 (KQuant)",
-            .repo = "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant",
-            .revision = "867adaa1c6d84d1fd9b4f37f43836019c877ba59",
+            .quant = "MLX affine mixed 4/5-bit (KQuant Q4)",
+            .repo = "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant",
+            .revision = "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
             .companions = {mtp9(), dflash9()},
-            .download_gb = 9.05},
+            .download_gb = 9.30},
+           // The released KQuant packs (#495): no MTP head or drafter in the repos, so the 9B's companions come with
+           // them, by name or by repo id. `kquant` is the Q4 pack `4bit` is on a Mac with matrix units (the repo id
+           // then finds `4bit`, listed first); on a Mac that keeps the older 9B pack it is how to opt into Q4.
+           {.name = "kquant",
+            .quant = "MLX affine mixed 4/5-bit (KQuant Q4)",
+            .label = "KQuant Q4",
+            .repo = "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant",
+            .revision = "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
+            .companions = {mtp9(), dflash9()},
+            .download_gb = 9.30},
+           {.name = "kquant5",
+            .quant = "MLX affine mixed 5/6/8-bit (KQuant Q5)",
+            .label = "KQuant Q5",
+            .repo = "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant",
+            .revision = "bbddf39f41d3e0f682f2293351c67a9616d5941d",
+            .companions = {mtp9(), dflash9()},
+            .download_gb = 10.22},
        }},
       {.name = "qwen3.8-27b",
        .aliases = {"27b"},
@@ -218,10 +234,34 @@ const std::vector<CatalogModel>& catalog() {
        .variants = {
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64",
-            .repo = "lmstudio-community/Qwen3.8-27B-MLX-4bit",
-            .revision = "6067b15cf581666a4aecf6af3afaba4bb5efc20c",
+            // the lmstudio-community pack's weights (same shard hashes) with Qwen's own tokenizer files: lmstudio's
+            // tokenizer.json lost \p{M} from the pre-tokenizer regex, so Devanagari and Thai text got other ids in
+            // mlx-lm and LM Studio (#443). Kapitsa's tokenizer splits with \p{M} either way (tools/tokenizer_test.cpp), so
+            // the 5-bit, 6-bit and bf16 packs stay where they are. The repo has no MTP files (mtp27() brings the head)
+            .repo = "nace-ai/Qwen3.8-27B-MLX-4bit",
+            .revision = "d76e1f92eb8c16a3f3058d438cd6af30bce86557",
             .companions = {mtp27(), dflash27()},
             .download_gb = 20.17},
+           // Opt-in KQuant (#436): the 4-bit pack above with its quantized weights rebuilt
+           // as KQuant, MTP head and runtime file in the repo (so no mtp27()), base tokenizer files. KL from bf16
+           // 0.035 against 0.054, GSM8K (1319) 0.953 against 0.950; M5 Pro decode (3 legs each, Kapitsa 0.2.32 with
+           // incoai's DFlash2 drafter): sampled 72.5 against 80.0 tok/s, greedy 91.0 against 82.8. `27b` stays the plain
+           // 4-bit pack. Not measured with the nace-ai drafter this entry downloads.
+           {.name = "kquant",
+            .quant = "MLX affine 4-bit, group 64 (KQuant)",
+            .repo = "nace-ai/Qwen3.8-27B-MLX-Q4-KQuant",
+            .revision = "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364",
+            .companions = {dflash27()},
+            .download_gb = 20.17},
+           // The released KQuant Q5 pack (#495): its MTP head sits in optiq/, where the loader does not look, so it
+           // takes mtp27() as the plain packs do.
+           {.name = "kquant5",
+            .quant = "MLX affine mixed 4/6/8-bit (KQuant Q5)",
+            .label = "KQuant Q5",
+            .repo = "nace-ai/Qwen3.8-27B-MLX-Q5-KQuant",
+            .revision = "9f3187857e1940bf32fe7f23b4df0fb65631a874",
+            .companions = {mtp27(), dflash27()},
+            .download_gb = 24.77},
            {.name = "5bit",
             .quant = "MLX affine 5-bit, group 64",
             .repo = "lmstudio-community/Qwen3.8-27B-MLX-5bit",
@@ -236,8 +276,9 @@ const std::vector<CatalogModel>& catalog() {
             .download_gb = 26.90},
            {.name = "8bit",
             .quant = "MLX affine 8-bit, group 64",
-            .repo = "lmstudio-community/Qwen3.8-27B-MLX-8bit",
-            .revision = "241ebb5f1d60b122fd653da658836a55feb9e2b0",
+            // as the 4-bit pack
+            .repo = "nace-ai/Qwen3.8-27B-MLX-8bit",
+            .revision = "40f543676624c62cee5ada47443947e05da70331",
             .companions = {mtp27(), dflash27()},
             .download_gb = 33.62},
            {.name = "bf16",
@@ -257,13 +298,24 @@ const std::vector<CatalogModel>& catalog() {
        .default_variant = "4bit",
        .fallbacks = {"16gb"},
        .variants = {
+           // KQuant (#436): MTPLX's pack (Youssofal @ 9546051: mlx-community's 4-bit with its MTP head) with its
+           // quantized weights rebuilt as KQuant, every other file the same content, the
+           // MTP head included in the repo. KL from bf16 0.059 against 0.096, GSM8K (1319) 0.952 against 0.948,
+           // M5 Pro decode (T 0.6 and greedy, 3 KQuant and 2 standard legs each) 227 against 212 tok/s; text only
            {.name = "4bit",
-            .quant = "MLX affine 4-bit, group 64",
-            // mlx-community/Qwen3.6-35B-A3B-4bit with its MTP head
-            .repo = "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed",
-            .revision = "95460516fbfe34c48f577f67c9ed191f5d61fbaf",
+            .quant = "MLX affine 4-bit, group 64 (KQuant)",
+            .repo = "nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant",
+            .revision = "37e804f90e368a4de866bc34650b9dde67a78c8e",
             .companions = {dflash35()},
             .download_gb = 22.07},
+           // The released KQuant Q5 pack (#495): no MTP head in the repo, so it takes mtp35() as the plain packs do.
+           {.name = "kquant5",
+            .quant = "MLX affine mixed 4/6/8-bit (KQuant Q5)",
+            .label = "KQuant Q5",
+            .repo = "nace-ai/Qwen3.6-35B-A3B-MLX-Q5-KQuant",
+            .revision = "50b3b1c57e2c096e007de22997ff6824224fccde",
+            .companions = {mtp35(), dflash35()},
+            .download_gb = 24.62},
            {.name = "5bit",
             .quant = "MLX affine 5-bit, group 64",
             .repo = "mlx-community/Qwen3.6-35B-A3B-5bit",
@@ -320,6 +372,13 @@ const std::vector<CatalogModel>& catalog() {
                      "indexer / embedding, 4-bit n-gram table",
             .repo = "nace-ai/Qwen3.8-Flash-Next-MLX-4bit",
             .revision = "5d423f9f563c1f1b7ca7945b268e65c0b92b0eae",
+            .companions = {},
+            .download_gb = 105.86},
+           {.name = "kquant",
+            .quant = "MLX affine KQuant 4-bit mix",
+            .label = "4-bit KQuant",
+            .repo = "nace-ai/Qwen3.8-Flash-Next-MLX-Q4-KQuant",
+            .revision = "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd",
             .companions = {},
             .download_gb = 105.86},
            // Sushi's pack (beamster/Qwen3.8-Flash-Next-Sushi-2bpw): routed experts and the MTP head's in EXL3 at 2
@@ -501,7 +560,21 @@ const std::vector<CatalogModel>& catalog() {
             .download_gb = 20.58},
        }},
   };
-  return c;
+  static const std::vector<CatalogModel> legacy = [] {
+    auto models = c;
+    for (auto& model : models) {
+      if (model.name != "qwen3.5-9b") continue;
+      auto& v = model.variants.front();
+      v.quant = "MLX affine 4-bit, group 64 (KQuant)";
+      v.repo = "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant";
+      v.revision = "867adaa1c6d84d1fd9b4f37f43836019c877ba59";
+      v.download_gb = 9.05;
+    }
+    return models;
+  }();
+  return ni::default_on(ni::Knob::kQwen9bQ4, device, {}) ? c : legacy;
 }
+
+const std::vector<CatalogModel>& catalog() { return catalog(ni::catalog_device()); }
 
 }  // namespace ni::hub

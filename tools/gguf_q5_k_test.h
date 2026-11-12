@@ -2,6 +2,7 @@
 #pragma once
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
+#include "gguf_test_float.h"
 
 #include <array>
 #include <cfenv>
@@ -136,8 +137,10 @@ inline size_t oracle() {
         } else memcpy(want, expected, sizeof(want));
         feclearexcept(FE_ALL_EXCEPT);
         ni::gguf::dequantize(ni::gguf::kQ5_K, b, got, 256);
-        if (memcmp(got, want, sizeof(got))) printf("  Q5_K mode=%d half=%04x swap=%d\n", mode, h, swap);
-        require(memcmp(got, want, sizeof(got)) == 0, "Q5_K half-pattern bytes");
+        const bool equal = (h & 0x7c00) == 0x7c00 ? gguf_test::same_f32_or_nan(got, want, 256)
+                                                 : memcmp(got, want, sizeof(got)) == 0;
+        if (!equal) printf("  Q5_K mode=%d half=%04x swap=%d\n", mode, h, swap);
+        require(equal, "Q5_K half-pattern values (bytes except NaNs)");
         require(fetestexcept(FE_ALL_EXCEPT) == flags, "Q5_K half-pattern flags");
         ++cases;
       }

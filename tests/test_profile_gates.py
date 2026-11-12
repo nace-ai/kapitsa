@@ -24,7 +24,7 @@ EXEMPT = {
 }
 # The call form the model files use today. A comment after // does not count.
 PATTERNS = [
-    re.compile(r"apple_family\s*\("),
+    re.compile(r"\bapple_family\s*\("),
     re.compile(r"apple10\s*\("),
     re.compile(r"m4_base\s*\("),
     re.compile(r'name\(\)\s*==\s*"Apple'),
@@ -138,6 +138,9 @@ def baseline_rises(got: dict[str, int], want: dict[str, int], what: str) -> list
 
 def self_test() -> int:
     """The reviewer's case: a new file calling wide_cores, simd_gpu and matrix_units must fail."""
+    if hits("int probe_apple_family();") != 0 or hits("if (g.apple_family() >= 10) {}") != 1:
+        print("self-test: apple_family must match a complete identifier, not a metadata probe's suffix")
+        return 1
     probe = "bool x() { return wide_cores() || simd_gpu() || matrix_units(); }\n// wide_cores()\n"
     n = predicate_hits(probe)
     if n != 3:

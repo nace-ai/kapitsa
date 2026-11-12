@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "")
 project(nace_infer LANGUAGES C CXX OBJCXX)
 
-set(KAPITSA_VERSION "0.2.33")
+set(KAPITSA_VERSION "0.2.35")
 if(NOT DEFINED KAPITSA_GIT)  # packaging/release/build.sh passes the commit it exported
   execute_process(COMMAND git -C ${CMAKE_SOURCE_DIR} rev-parse --short HEAD OUTPUT_VARIABLE KAPITSA_GIT
                   OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
@@ -103,6 +103,8 @@ target_link_libraries(naceinfer PUBLIC "-framework Metal" "-framework Foundation
   "-framework IOKit" "-framework ImageIO" "-framework CoreGraphics" "-framework Security"
   "-framework SystemConfiguration" "-framework Accelerate")  # src/cluster: this Mac's computer name, the kind of each network link
 target_compile_definitions(naceinfer PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}")
+# the KFlash budget's cache names the build that wrote it (src/model/kflash_budget.cpp), as `kapitsa --version` does
+set_source_files_properties(${CMAKE_SOURCE_DIR}/src/model/kflash_budget.cpp PROPERTIES COMPILE_DEFINITIONS "KAPITSA_GIT=\"${KAPITSA_GIT}\"")
 
 file(GLOB NI_TOOLS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tools/*.cpp ${CMAKE_SOURCE_DIR}/tools/*.mm)
 # a library the Python converters build and load themselves (ctypes), not a command
@@ -122,6 +124,8 @@ add_executable(gemm_slices_test tests/gemm_slices_test.cpp)  # src/model/gemm_sl
 target_include_directories(gemm_slices_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(device_profile_test tests/device_profile_test.cpp src/engine/device_profile.cpp)
 target_include_directories(device_profile_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_executable(catalog_profile_test tests/catalog_profile_test.cpp src/hub/catalog.cpp src/hub/resolve.cpp src/engine/device_profile.cpp)
+target_include_directories(catalog_profile_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(execution_session_test tools/execution_session_test.cpp src/engine/execution_session.cpp)
 target_include_directories(execution_session_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(execution_session_test PRIVATE Threads::Threads)
@@ -130,6 +134,7 @@ add_test(NAME nh_quant_q8_test COMMAND nh_quant_q8_test)
 set_tests_properties(nh_quant_q8_test PROPERTIES TIMEOUT 30)
 add_test(NAME gemm_slices_test COMMAND gemm_slices_test)
 add_test(NAME device_profile_test COMMAND device_profile_test)
+add_test(NAME catalog_profile_test COMMAND catalog_profile_test)
 add_test(NAME load_error_test COMMAND load_error_test)
 set_tests_properties(load_error_test PROPERTIES TIMEOUT 30)
 add_test(NAME execution_session_test COMMAND execution_session_test)

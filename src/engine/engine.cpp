@@ -29,6 +29,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <thread>
+#include <tuple>
 
 namespace ni {
 
@@ -561,6 +562,11 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   slot_pos_ = std::make_unique<std::atomic<int>[]>(slots_.size());
   slot_cap_ = std::make_unique<std::atomic<int>[]>(slots_.size());
   for (const Slot& s : slots_) note_kv(s);
+  for (const TurnCheckpoint& c : slots_[0].ckpts) {
+    for (const Buffer& b : c.conv) ckpt_bytes_ += b.size;
+    for (const Buffer& b : c.rec) ckpt_bytes_ += b.size;
+    ckpt_bytes_ += c.pconv.size;
+  }
   Gpu& g = Gpu::get();
   const size_t used = g.allocated_bytes(), per = model_->kv_bytes_per_pos();
   const size_t room = budget_ > used ? budget_ - used : 0;
@@ -2222,9 +2228,12 @@ std::string flint_template(std::string src) {
 // must show the text and nothing of the part's markup. Cached per template.
 static bool string_content_template(const minja::chat_template& tmpl) {
   static std::mutex mu;
-  static std::map<const void*, bool> known;
+  using Key = std::tuple<std::string, std::string, std::string>;
+  static std::map<Key, bool> known;
+  const Key key{tmpl.source(), tmpl.bos_token(), tmpl.eos_token()};
   std::lock_guard<std::mutex> lk(mu);
-  if (auto it = known.find(&tmpl); it != known.end()) return it->second;
+  // A replacement template can occupy the same address after a model is unloaded.
+  if (auto it = known.find(key); it != known.end()) return it->second;
   static const std::string needle = "\x01kapitsa-typed-content\x01";
   bool str_only = false;
   try {
@@ -2239,7 +2248,7 @@ static bool string_content_template(const minja::chat_template& tmpl) {
   } catch (...) {
     str_only = true;  // (a template that cannot render a content array at all)
   }
-  known[&tmpl] = str_only;
+  known[key] = str_only;
   return str_only;
 }
 
@@ -2452,9 +2461,14 @@ Engine::View Engine::view() const {
   if (slot_pos_)
     for (size_t i = 0; i < slots_.size(); ++i) {
       v.slot_tokens.push_back(slot_pos_[i].load(std::memory_order_relaxed));
-      v.kv += size_t(std::max(slot_cap_[i].load(std::memory_order_relaxed), 0)) * per;
+      const size_t cap = size_t(std::max(slot_cap_[i].load(std::memory_order_relaxed), 0));
+      v.kv += cap * per;
+      if (v.slot_tokens.back() > 0) ++v.ram.entries, v.ram.bytes += cap * per + ckpt_bytes_;
     }
   v.kv = std::min(v.kv, v.allocated - v.weights);
+  v.ram.hits = ram_hits_.load(std::memory_order_relaxed);
+  v.ram.hit_tokens = ram_hit_tokens_.load(std::memory_order_relaxed);
+  disk_view(v);
   v.drafts = spec_ || dfl_ || lili_;
   return v;
 }
@@ -2765,10 +2779,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     return res;
   }
   double disk_ms = 0;  // (the SSD read: its own log line, not the template's time)
+  bool from_disk = false;
   if (disk_hit) {
     const double t_disk = now_ms();
-    if (disk_restore(slot, disk_hit)) common = slot.tokens.size();  // it is the live state now
-    else model_->reset(s);                                         // (no tokens: the prefill starts at 0)
+    if (disk_restore(slot, disk_hit)) common = slot.tokens.size(), from_disk = true;  // it is the live state now
+    else model_->reset(s);                                                           // (no tokens: the prefill starts at 0)
     disk_ms = now_ms() - t_disk;
   }
   int start = 0;
@@ -2834,6 +2849,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   for (auto& c : slot.ckpts)
     if (c.pos > start) c.pos = -1;
   res.cached_tokens = start;
+  if (start > 0) {  // (view(): which cache the reused positions came from)
+    (from_disk ? ssd_hits_ : ram_hits_).fetch_add(1, std::memory_order_relaxed);
+    (from_disk ? ssd_hit_tokens_ : ram_hit_tokens_).fetch_add(uint64_t(start), std::memory_order_relaxed);
+  }
   LiveDecode* const live = r.live.get();  // progress for a display: relaxed stores, between cycles only
   if (live) live->prompt.store(n, std::memory_order_relaxed), live->cached.store(start, std::memory_order_relaxed),
       live->read.store(start, std::memory_order_relaxed), live->phase.store(1, std::memory_order_relaxed);

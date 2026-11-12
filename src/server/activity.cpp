@@ -165,6 +165,12 @@ void Activity::tick_engine() {
                          {"kv_bytes", e.kv}}},
              {"slots", slots}};
   if (e.drafts) engine_["drafts"] = {{"cycles", cycles}, {"tokens", tokens}};
+  engine_["cache"] = {{"ram", {{"entries", e.ram_entries}, {"bytes", e.ram_bytes}, {"hits", e.ram_hits},
+                                {"hit_tokens", e.ram_hit_tokens}}}};
+  if (e.ssd)
+    engine_["cache"]["ssd"] = {{"entries", e.ssd_entries}, {"bytes", e.ssd_bytes}, {"limit_bytes", e.ssd_limit},
+                               {"read_bytes", e.ssd_read_bytes}, {"written_bytes", e.ssd_written_bytes},
+                               {"hits", e.ssd_hits}, {"hit_tokens", e.ssd_hit_tokens}};
   bus_.publish("engine", engine_);  // under mu_ (see start())
 }
 

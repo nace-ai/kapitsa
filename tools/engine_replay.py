@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """The engine view (src/server/engine.html) against a stand-in server: a recorded session, no model, no GPU.
 
-It serves the page and the control socket's read endpoints (docs/control-socket.md) over HTTP on 127.0.0.1, as
-`kapitsa serve` serves them at /engine for this Mac. GET /engine/status and GET /engine/events (SSE, Last-Event-ID
-replay and resets) answer from the recording. /engine is read-only: POST /_standin/stop, /_standin/drop and
-/_standin/model are this stand-in's test hooks (the real server has none; stop and switch go through its control
-socket). A stop ends the run and a new one starts (the view sees `run_changed`); a switch reads `switching`, then
-`ready` with the new model. At most 3 event streams at once, as on the real server: the next gets 503 busy.
+It serves the page and the control socket's endpoints (docs/control-socket.md) over HTTP on 127.0.0.1, as
+`kapitsa serve` serves them at /engine for this Mac. GET /engine/status, GET /engine/models (the downloaded models,
+made up) and GET /engine/events (SSE, Last-Event-ID replay and resets) answer from the recording; POST /engine/stop and POST /engine/model act on it. A stop ends the run
+and a new one starts (the view sees `run_changed`); a switch reads `switching`, then `ready` with the new model. POST
+/_standin/stop, /_standin/drop and /_standin/model are this stand-in's test hooks (the real server has none). At most 3
+event streams at once, as on the real server: the next gets 503 busy.
 
 Access as on the real server: every request but the page's needs this
 process's random token as `Authorization: Bearer` (the page reads it from the URL's #t=; `--token-file` also writes it,
@@ -39,12 +39,12 @@ MAX_BODY = 65536
 HOST_RE = re.compile(r"(127\.0\.0\.1|localhost|\[::1\])(:[0-9]{1,5})?", re.I)
 PROXY_HEADERS = ("X-Forwarded-For", "Forwarded", "Via")
 CURSOR_RE = re.compile(r"([0-9a-f]{16,64})\.([0-9]{1,19})")
-# /engine/* is read-only, as on the real server: stop and switch go through the control socket there (Kapitan, or
-# Ctrl-C where kapitsa serve runs). /_standin/* are this stand-in's own test hooks, so tests can drive a stop (and with
+# /engine/* as on the real server. /_standin/* are this stand-in's own test hooks, so tests can drive a stop (and with
 # {"then": "exit"} one that no new run follows), a drop (every event stream ends cleanly, the run goes on) and a
-# switch; the real server has no such routes over HTTP.
-ROUTES = {"/": "GET", "/engine": "GET", "/engine/status": "GET", "/engine/events": "GET",
-          "/_standin/stop": "POST", "/_standin/drop": "POST", "/_standin/model": "POST"}
+# switch; the real server has no such routes.
+ROUTES = {"/": "GET", "/engine": "GET", "/engine/status": "GET", "/engine/events": "GET", "/engine/models": "GET",
+          "/engine/stop": "POST",
+          "/engine/model": "POST", "/_standin/stop": "POST", "/_standin/drop": "POST", "/_standin/model": "POST"}
 MAX_VIEWS = 3  # event streams at once (kMaxEngineViews in src/server/engine_view.h)
 PAGE_CSP = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; "
             "img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
@@ -52,7 +52,19 @@ GB = 1_000_000_000
 MODELS = {  # id: (context_length, slots, weights_bytes, kv_bytes per slot, decode tokens per second)
     "qwen3.6-27b": (131072, 2, 17_400_000_000, 5_950_000_000, 41.0),
     "qwen3.5-4b": (65536, 4, 2_900_000_000, 1_100_000_000, 128.0),
+    "qwen3.5-9b": (65536, 3, 5_700_000_000, 1_200_000_000, 74.0),
 }
+# what GET /engine/models lists: (name POST /engine/model takes, title, variant, bytes on disk, includes, fits). The ones
+# in MODELS switch; the others answer model_not_found, as a model that would not load does. `fits` and `current` are
+# the stand-in's own: a made-up budget of 38.6 GB, the current model from the run; the 9B is out of date (a switch would
+# download first)
+DOWNLOADED = [
+    ("qwen3.5-4b:4bit", "Qwen3.5-4B", "4bit", 4_571_194_744, ["MTP head", "DFlash drafter"], "fits"),
+    ("qwen3.5-9b:4bit", "Qwen3.5-9B", "4bit", 9_047_481_758, ["MTP head", "DFlash drafter"], "fits"),
+    ("qwen3.6-27b:4bit", "Qwen3.6-27B", "4bit", 20_169_260_357, ["MTP head", "DFlash2 drafter"], "fits"),
+    ("clover-35b-a3b:4bit", "Clover-35B-A3B", "4bit", 20_583_323_055, ["DFlash2 drafter"], "no_drafter"),
+    ("/Users/me/.cache/kapitsa/models/drex-v2.0-q8", None, "gguf Q8_0", 36_861_413_976, [], "too_big"),
+]
 CLIENTS = [("openai", "Kapitan/0.9"), ("anthropic", "claude-cli/2.1.4"), ("openai", "opencode/0.15"),
            ("openai", "codex_cli_rs/0.58")]
 LOGS = ["SSD prefix cache: {cached} tokens of the conversation read back from disk",
@@ -118,12 +130,20 @@ class Run(Bus):
     def load(self, mid, state):
         # loading at start: no model yet; switching: the model that served before (docs/control-socket.md, Status)
         self.target, self.state, self.load_left = mid, state, 6
-        self.publish("state", {"state": state, "model": self.model()})
+        self.publish("state", {"state": state, "model": self.model(),
+                               "message": "a made-up state message, as a failed switch's: loading again after an error"})
+        self.publish("log", {"level": "info", "message": f"loading {mid}: {MODELS[mid][2] / GB:.1f} GB of weights"})
+        self.publish("log", {"level": "debug", "message": f"memory plan: {MODELS[mid][1]} slots of {MODELS[mid][0] // 1024}K context"})
+        self.publish("log", {"level": "warn", "message": "warning: a made-up warning, so the page's log filter has one to keep"})
+        self.publish("log", {"level": "error", "message": "a made-up error line, so the page's log filter keeps this level too"})
 
     def ready(self):
         self.model_id, self.state = self.target, "ready"
         self.slots = [{"index": i, "busy": False, "tokens": 0} for i in range(MODELS[self.model_id][1])]
         self.drafts = {"cycles": 0, "tokens": 0}  # counted since the model loaded
+        self.slots_seen = set()  # requests since the load: the stand-in's SSD entries grow with them
+        self.cache = {"ram_hits": 0, "ram_hit_tokens": 0, "ssd_hits": 0, "ssd_hit_tokens": 0, "ssd_read": 0,
+                      "ssd_written": 0}  # counted since the model loaded
         self.publish("state", {"state": "ready", "model": self.model()})
         self.publish("log", {"level": "info", "message": f"{self.model_id} ready: {self.model()['context_length']} "
                                                         f"tokens of context, {len(self.slots)} slots"})
@@ -133,7 +153,18 @@ class Run(Bus):
         kv = sum(min(kv_slot, kv_slot * max(s["tokens"], 4096) // ctx * 4) for s in self.slots)
         return {"memory": {"budget_bytes": 40 * GB, "allocated_bytes": weights + kv + 1_350_000_000,
                            "weights_bytes": weights, "kv_bytes": kv},
-                "slots": [dict(s) for s in self.slots], "drafts": dict(self.drafts)}
+                "slots": [dict(s) for s in self.slots], "cache": self.cache_block(kv_slot, ctx),
+                "drafts": dict(self.drafts)}
+
+    def cache_block(self, kv_slot, ctx):
+        c = self.cache
+        kept = [s for s in self.slots if s["tokens"] > 0]
+        ssd_bytes = 3 * GB + 600_000_000 * len(self.slots_seen)
+        return {"ram": {"entries": len(kept), "bytes": sum(kv_slot * s["tokens"] // ctx + 90_000_000 for s in kept),
+                        "hits": c["ram_hits"], "hit_tokens": c["ram_hit_tokens"]},
+                "ssd": {"entries": 3 + len(self.slots_seen), "bytes": ssd_bytes, "limit_bytes": 32 * GB,
+                        "read_bytes": c["ssd_read"], "written_bytes": c["ssd_written"] + ssd_bytes,
+                        "hits": c["ssd_hits"], "hit_tokens": c["ssd_hit_tokens"]}}
 
     def arrive(self):
         free = [s for s in self.slots if not s["busy"]]
@@ -146,6 +177,13 @@ class Run(Bus):
         cached = self.rng.choice([0, 0, 8192, 16384, 24576])
         prompt = cached + self.rng.randint(300, 9000)
         slot.update(busy=True, request_id=rid, tokens=cached)
+        if cached:  # (one in three comes back from the SSD)
+            ssd = self.next_req % 3 == 0
+            self.cache["ssd_hits" if ssd else "ram_hits"] += 1
+            self.cache["ssd_hit_tokens" if ssd else "ram_hit_tokens"] += cached
+            if ssd:
+                self.cache["ssd_read"] += cached * 24_000
+        self.slots_seen.add(rid)
         self.requests[rid] = {"request_id": rid, "api": api, "client": client, "phase": "prefill",
                               "prompt_tokens": prompt, "cached_tokens": cached, "prefilled_tokens": 0,
                               "completion_tokens": 0, "elapsed_ms": 0, "tokens_per_second": 0.0,
@@ -180,7 +218,7 @@ class Run(Bus):
     def busy(self):
         return sum(s["busy"] for s in self.slots) or 1
 
-    def finish(self, r, reason="stop"):
+    def finish(self, r, reason="stop", error=None):
         slot = self.slots[r["_slot"]]
         slot.update(busy=False)
         slot.pop("request_id", None)
@@ -188,10 +226,11 @@ class Run(Bus):
         prefill_ms = max(1, r["_prefill_ms"])
         self.publish("request_finished", {
             "request_id": r["request_id"], "finish_reason": reason, "prompt_tokens": r["prompt_tokens"],
-            "cached_tokens": r["cached_tokens"], "completion_tokens": r["completion_tokens"], "queue_ms": 0,
-            "prefill_ms": prefill_ms, "decode_ms": decode_ms,
+            "cached_tokens": r["cached_tokens"], "completion_tokens": r["completion_tokens"],
+            "queue_ms": 35 * int(r["request_id"][4:]), "prefill_ms": prefill_ms, "decode_ms": decode_ms,
             "tokens_per_second": round(r["completion_tokens"] * 1000 / decode_ms, 1),
-            "prefill_tokens_per_second": round(r["prefilled_tokens"] * 1000 / prefill_ms, 1)})
+            "prefill_tokens_per_second": round(r["prefilled_tokens"] * 1000 / prefill_ms, 1),
+            **({"error": error} if error else {})})
         del self.requests[r["request_id"]]
 
     def tick(self):
@@ -208,7 +247,9 @@ class Run(Bus):
                 self.arrive()
                 self.next_arrival = self.t + self.rng.uniform(3, 11)
             for r in list(self.requests.values()):
-                if self.step_request(r, dt):
+                if r["request_id"] == "req-4" and r["completion_tokens"] >= 40:  # (made up: one request fails)
+                    self.finish(r, "error", "a made-up error: the prompt and 4,096 tokens do not fit in the 128K context")
+                elif self.step_request(r, dt):
                     self.finish(r)
             for r in self.requests.values():
                 self.publish("request_progress", {k: v for k, v in r.items() if not k.startswith("_")})
@@ -270,12 +311,25 @@ class Instance:
             self.cond.notify_all()
             return {"run_id": r.run_id, "state": "stopping"}
 
+    def models(self):
+        with self.cond:
+            now = getattr(self.run, "model_id", "")
+            rows = []
+            for name, title, variant, size, includes, fits in DOWNLOADED:
+                row = {"name": name, "variant": variant, "bytes": size, "includes": includes, "fits": fits,
+                       "current": name.split(":")[0] == now, "up_to_date": not name.startswith("qwen3.5-9b")}
+                if title:
+                    row["title"] = title
+                rows.append(row)
+            return {"run_id": self.run.run_id, "memory_budget_bytes": 38_600_000_000, "models": rows}
+
     def switch(self, mid):
         with self.cond:
             r = self.run
             if not hasattr(r, "load"):
                 return 400, {"error": {"code": "invalid_value", "message": "a recording cannot switch",
                                        "details": {"field": "model"}}}
+            mid = mid.split(":")[0] if mid.split(":")[0] in MODELS else mid  # (a name carries its precision)
             if mid not in MODELS:
                 return 404, {"error": {"code": "model_not_found", "message": f"no model {mid} here (this "
                                        f"stand-in has {', '.join(MODELS)})", "details": {"model": mid}}}
@@ -363,6 +417,8 @@ def handler(inst):
             elif path == "/engine/status":
                 with inst.cond:
                     self.send_json(200, inst.run.status(inst))
+            elif path == "/engine/models":
+                self.send_json(200, inst.models())
             elif path == "/engine/events":
                 self.events()
             else:
@@ -402,14 +458,14 @@ def handler(inst):
             body = self.body()
             if body is None:
                 return
-            # The socket's schemas make run_id optional; these hooks require it, as a browser's click would carry the
+            # The socket's schemas make run_id optional; this stand-in requires it, as the page's click carries the
             # run it saw, and one that names no run must not act on whatever run holds the port.
             if "run_id" not in body:
                 return self.fail(400, "bad_request", "run_id is required")
             if body["run_id"] != inst.run.run_id:
                 return self.send_json(409, {"error": {"code": "run_id_mismatch", "message": "another run",
                                                       "details": {"run_id": inst.run.run_id}}})
-            if path == "/_standin/stop":
+            if path in ("/engine/stop", "/_standin/stop"):
                 inst.exit_on_stop = body.get("then") == "exit"
                 self.send_json(202, inst.stop())
             elif path == "/_standin/drop":

@@ -153,13 +153,17 @@ Trees of 7 nodes vs `main`, interleaved, M4 Pro 48 GB:
    - Not covered: the 35B at temperature > 0 (the sampled exactness check), other MoE targets, and Macs other than
      the M5 Pro and M4 Pro. `tools/moe_tree_check` and `kflash_invariance.py` are the tests to run after touching the verify
      attention or the GDN step.
-3. **`nh_tree_check` fails its planted-branch acceptance cases since `6cd6a11`** (the merge of `main`: chained DSpark
-   drafting alongside tree drafting).
-   - On the M4 Pro, greedy: 86 of 115 cycles accepted other than the planted branch; sampled: 83 of 112.
-   - Everything else in it passes, including the real loops: chain and tree, greedy and sampled, 0 tokens differ from
-     plain decoding.
-   - Most likely the test's planted-branch harness disagrees with the new chained DSpark drafting, but it needs
-     checking before Nemotron trees are trusted. It passed at `50a41f5`.
+3. **Fixed: `nh_tree_check`'s planted-branch acceptance cases** (failing since `6cd6a11`, the merge that brought the
+   Lightning verify's ring writes in the grouped norm, #152, into the tree branch).
+   - The cause was a real bug, not the test: after a tree cycle whose accepted path was not the tree's first rows, the
+     next verify's `nh_gnorm_half_ring` wrote the tree's rows 0 .. a into every Mamba layer's conv ring instead of the
+     path's rows (`pend_path`). Three positions per layer then held a sibling draft's input, and Bolt with LiLiCorr
+     answered other questions ([#1150](https://github.com/nace-ai/kapitsa/issues/1150)).
+   - `nh_tree_check`'s "pending tree path" case checks the ring after that commit against a separate flush.
+   - Still open on the M5 Pro (macOS 26.5.2): with the verify's GEMM rows (the default) a tree row's logits differ from the
+     chain verify of its path by up to 2.5e-4 of the largest logit, so the greedy cases there (`rows`, greedy
+     acceptance, the greedy loops) fail on the random synthetic model, where near-ties are common. With
+     `NI_NH_ROWS_GEMM=0` every case passes; the sampled cases pass either way.
 4. Nemotron speed: tree vs chain on Lightning. This needs the 23 GB model; the user said not to download it for now.
 5. 16/32-row verifies: **in PRs [#245](https://github.com/nace-ai/kapitsa/pull/245) (the kernels) and
    [#246](https://github.com/nace-ai/kapitsa/pull/246) (the budget chooses 8, 16 or 32 rows), opt-in:**
@@ -196,4 +200,8 @@ build/ni_run <model> @bench/prompts/code_27b.txt 512 0 --dflash auto --ignore-eo
 ```
 
 The KfBudget cache is at `~/.cache/kapitsa/kflash/<model>-<drafter>-b<bits>-<chip>.json`. Delete it to make the
-budget re-measure.
+budget re-measure. The file names the build that wrote it (`"build": "<version> (<commit>)"`), and a build loads only
+its own: after an update the budget starts fresh and the first save overwrites the old file. A calibration learned on
+a broken verify (#1150) kept a fixed build's trees shaped by it across restarts before this check. In a source build
+the commit in that tag is the one CMake configured at: after a `git pull`, re-run `cmake -S . -B build` (or delete
+`kflash/`) before building, or the new binary keeps loading the old build's file.

@@ -40,6 +40,7 @@
 #include <ctime>
 #include <deque>
 #include <filesystem>
+#include <regex>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -48,7 +49,7 @@
 #include <thread>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.2.33"
+#define KAPITSA_VERSION "0.2.35"
 #endif
 
 namespace ni::hub {
@@ -1178,6 +1179,52 @@ bool is_complete(const std::string& dir) {
   }
 }
 
+// What a plan's `.complete` holds: the variant's repo at its revision, a GGUF variant's conversion, its companions
+std::string plan_want(const Variant& m) {
+  std::string want = m.repo + "@" + m.revision;
+  // a GGUF variant's plan is the import's: planned again by another Kapitsa, whose conversion may differ
+  if (!m.gguf.path.empty()) want += "\ngguf " + m.gguf.path + " " + m.gguf.sha256 + "\nkapitsa " KAPITSA_VERSION;
+  for (const auto& c : m.companions) want += "\n" + c.kind + " " + c.repo + "@" + c.revision;
+  return want;
+}
+
+bool is_plan(const std::string& dir) { return dir.rfind(home_dir(), 0) == 0 && dir.find("/plans/") != std::string::npos; }
+
+bool plan_is_current(const std::string& dir) {
+  if (!is_plan(dir)) return false;
+  try {  // a plan has no manifest: its `.complete` holds what it was planned as
+    const ModelRef r = resolve(dir.substr(dir.find_last_of('/') + 1));
+    if (r.kind == ModelRef::kCatalog) return read_text(dir + "/.complete") == plan_want(*r.variant);
+  } catch (const std::exception&) {  // not a catalog name
+  }
+  return !read_text(dir + "/.complete").empty();  // a plan of a Hugging Face repo, or a folder of its own: complete
+}
+
+// The files a plan lists that hold a model: its shards (one, or "N-of-M"), its MTP head, or model.safetensors whole.
+// a name that ends in .safetensors: "model.safetensors" and its shards, and not the model.safetensors.index.json
+// beside them, which lists the shards and is a header's size
+static const std::regex kWeightsFile(R"((^|/)((model-)?\d+-of-\d+|model|weights)\.safetensors$)");
+// Bigger than any header in the catalog (a shard's is a few hundred KB, the MTP head's a few KB): the height of a header.
+static constexpr uint64_t kHeaderBytes = 1024 * 1024;
+
+// Whether a plan's model is on this Mac: planned, and its folder holding the weights. Planning writes none of them (the
+// files a plan lists are config.json and the safetensors headers), so a plan is only planned from its headers until
+// the model is downloaded into that folder; a GGUF variant's plan is its conversion, written where it is planned.
+bool plan_has_model(const std::string& dir) {
+  // planning writes the files the plan lists as their headers, a few hundred KB each: one file that is a weights file
+  // and is bigger than a header is the model, and it is here whether or not another file of the plan is still a header.
+  // So the first such file answers true, and the order the files come in does not decide the answer: a downloaded
+  // model.safetensors stays the model beside a header-sized file of another name, and one written shard of a split
+  // file is the model while the rest are still headers.
+  for (std::error_code ec; const auto& e : std::filesystem::directory_iterator(dir, ec)) {
+    const std::string f = e.path().filename().string();
+    if (!e.is_regular_file() || !std::regex_search(f, kWeightsFile)) continue;
+    uint64_t size = 0;
+    if (file_size(dir + "/" + f, size) && size >= kHeaderBytes) return true;
+  }
+  return false;
+}
+
 bool is_current(const ModelRef& ref) {
   if (ref.kind == ModelRef::kLocal) return true;
   if (!is_complete(ref.dir)) return false;
@@ -1359,12 +1406,12 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
   std::vector<std::pair<std::string, Target*>> reuse;
   uint64_t need = 0, total = 0, have = 0;
   int n_hf = 0, n_from = 0;
-  // A manifest that is no longer current (a file went missing, or this Kapitsa pins newer revisions): drop it now
-  // that the new file list is in, check the files that are here against it, and write it again at the end. The
-  // files of an adopted folder are checked the same way. The checks run in parallel (8 files at a time).
+  // A manifest that is no longer current is replaced once the files match the new listing. Check existing
+  // files on every incomplete pull: a failed adoption or update can leave .kapitsa/ without a manifest, so neither
+  // its presence nor a matching length proves the content. Checks run in parallel (8 files at a time).
   const bool recheck = unlink(manifest_path(ref.dir).c_str()) == 0;
   std::vector<char> matches(targets.size(), 1);
-  if (recheck || adopt) {
+  {
     std::vector<size_t> check;
     uint64_t check_bytes = 0;
     for (size_t i = 0; i < targets.size(); ++i) {
@@ -1628,12 +1675,45 @@ void build_mtp_sidecar(const std::string& src, const std::string& revision, cons
           double(p.size - p.head.size()) / 1e6, hidden.c_str());
 }
 
-static std::atomic<bool> g_offline{false};
+// Offline visits (hub.h): per thread a nesting count, and the number of threads with a visit open, which is what a
+// thread that was started inside a visit reads: a worker thread of plan_dir starts inside the caller's visit, and before
+// this every caller's plans fetched even with set_offline(true) set (issue #1187). Two threads count separately and
+// neither's end removes the other's count, so the count is the number of threads with a visit open, never negative.
+static thread_local int tl_visits = 0;
+
+// One locked step: every change of a thread's nesting count changes the count of threads with a visit open with it, so
+// two threads with a visit open count 2, one thread's end leaves 1, and the count is never negative.
+static std::mutex g_visits_mu;
+static std::atomic<int> g_visits{0};
+
+// Whether a fetch from this thread is refused: its own visits, or a visit open on another thread
+static bool no_fetch() { return tl_visits > 0 || g_visits.load() > 0; }
+
 static std::atomic<int> g_offline_misses{0};
 
+bool fetch_refused() { return no_fetch(); }
+
 void set_offline(bool on) {
-  g_offline = on;
-  g_offline_misses = 0;
+  {
+    const std::lock_guard<std::mutex> lock(g_visits_mu);
+    if (on) {
+      if (tl_visits++ == 0) ++g_visits;  // this thread's outermost visit: one more thread inside
+    } else if (tl_visits > 0 && --tl_visits == 0) {
+      --g_visits;  // its outermost visit's end: one thread fewer inside
+    }
+  }
+  if (g_visits.load() == 0) g_offline_misses = 0;
+}
+
+void leave_offline() {
+  {
+    const std::lock_guard<std::mutex> lock(g_visits_mu);
+    if (tl_visits > 0) {
+      tl_visits = 0;
+      --g_visits;  // every visit on this thread ends at once, and this thread is inside once, not tl_visits times
+    }
+  }
+  if (g_visits.load() == 0) g_offline_misses = 0;
 }
 
 int offline_misses() { return g_offline_misses; }
@@ -1728,12 +1808,9 @@ std::string plan_dir(const ModelRef& ref) {
   if (ref.kind != ModelRef::kCatalog) return "";
   const Variant& m = *ref.variant;
   const std::string dir = home_dir() + "/plans/" + ref.model->name + "-" + m.name, mark = dir + "/.complete";
-  std::string want = m.repo + "@" + m.revision;
-  // a GGUF variant's plan is the import's: planned again by another Kapitsa, whose conversion may differ
-  if (!m.gguf.path.empty()) want += "\ngguf " + m.gguf.path + " " + m.gguf.sha256 + "\nkapitsa " KAPITSA_VERSION;
-  for (const auto& c : m.companions) want += "\n" + c.kind + " " + c.repo + "@" + c.revision;
+  const std::string want = plan_want(m);
   if (read_text(mark) == want) return dir;
-  if (g_offline) {
+  if (no_fetch()) {
     ++g_offline_misses;
     return "";
   }

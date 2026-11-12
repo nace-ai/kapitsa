@@ -1,11 +1,15 @@
 // The engine view's HTTP side (src/server/engine_view.h) on a real httplib server on 127.0.0.1, in front of a real
 // control server and bus with a stand-in status, behind main.cpp's order (the gate, then an API key check): the page,
-// the run's key in place of the API key, read-only (404 and 405 as JSON), the Host, Origin, proxy and peer checks, the
-// key's file, the event stream and its cap, and the 503 without a control socket. CPU only.
+// the run's key in place of the API key, the methods (404 and 405 as JSON), stop and switch only with the key and a JSON
+// body, the Host, Origin, proxy and peer checks, the key's file, the event stream and its cap, and the 503 without a
+// control socket. CPU only.
 #include "server/activity.h"
 #include "server/engine_view.h"
 #include "server/pre_route.h"
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -32,14 +36,50 @@ struct Stub : ControlApi {
     id.config = {{"model", "27b"}, {"port", 8100}, {"private", true}};
   }
   json status() override { return instance_status(id, bus, act, last_state()); }
-  // the control socket stops and switches (#1125); nothing on the inference port may reach either
-  std::atomic<int> admin{0};
-  ControlReply stop() override { ++admin; return {202, {{"run_id", bus.run_id()}, {"state", "stopping"}}}; }
-  ControlReply model_switch(const json&) override { ++admin; return {202, json::object()}; }
+  // what reached the control API: a refused request must reach neither
+  std::atomic<int> stops{0}, stopped{0}, switches{0};
+  std::string switched_to;
+  ControlReply stop() override { ++stops; return {202, {{"run_id", bus.run_id()}, {"state", "stopping"}}}; }
+  void after_stop() override { ++stopped; }
+  ControlReply models() override {
+    return {200, {{"run_id", bus.run_id()}, {"memory_budget_bytes", 41448628224ULL},
+                  {"models", {{{"name", "qwen3.5-4b:4bit"}, {"title", "Qwen3.5-4B"}, {"variant", "4bit"},
+                               {"bytes", 4571194744ULL}, {"includes", {"MTP head", "DFlash drafter"}}, {"fits", "fits"},
+                               {"current", false}, {"up_to_date", true}},
+                              {{"name", "/models/big"}, {"bytes", 36861413976ULL}, {"includes", json::array()},
+                               {"fits", "too_big"}, {"current", false}, {"up_to_date", false}}}}}};
+  }
+  ControlReply model_switch(const json& r) override {
+    switched_to = r["model"];
+    ++switches;
+    return {200, {{"run_id", bus.run_id()}, {"model", {{"id", switched_to}}}}};
+  }
 };
 
 static std::string error_code(const httplib::Result& r) {
   return r ? json::parse(r->body, nullptr, false).value("error", json::object()).value("code", "") : "";
+}
+
+// One request on its own connection, sent as the bytes given, read to the end of the reply (the request asks for the
+// connection to close). A client library sends the whole body before it reads: for a body the server refuses from the
+// headers, the server answers and closes with that body unread, the close can reset the connection before the client
+// has read the answer, and the test was a race (kapitsa#1161's build-and-test, 10 Nov 2026).
+static std::string raw_exchange(int port, const std::string& request) {
+  const int fd = socket(AF_INET, SOCK_STREAM, 0);
+  CHECK(fd >= 0);
+  timeval tv{10, 0};
+  setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+  sockaddr_in a{};
+  a.sin_family = AF_INET;
+  a.sin_port = htons(uint16_t(port));
+  inet_pton(AF_INET, "127.0.0.1", &a.sin_addr);
+  CHECK(connect(fd, reinterpret_cast<sockaddr*>(&a), sizeof a) == 0);
+  CHECK(send(fd, request.data(), request.size(), 0) == ssize_t(request.size()));
+  std::string reply;
+  char buf[4096];
+  for (ssize_t n; (n = recv(fd, buf, sizeof buf, 0)) > 0;) reply.append(buf, size_t(n));
+  close(fd);
+  return reply;
 }
 
 int main() {
@@ -76,6 +116,8 @@ int main() {
     CHECK(r && r->status == 403 && error_code(r) == "forbidden_peer");
     r = cl.Get("/engine/events", h);
     CHECK(r && r->status == 403 && error_code(r) == "forbidden_peer");
+    r = cl.Get("/engine/models", h);
+    CHECK(r && r->status == 403 && error_code(r) == "forbidden_peer");
   }
   r = cl.Get("/engine/status", run_key);
   CHECK(r && r->status == 200 && r->get_header_value("Cache-Control") == "no-store" &&
@@ -83,6 +125,9 @@ int main() {
   const json st = json::parse(r->body);
   CHECK(st["state"] == "starting" && st["run_id"] == "7f3a9c2e5b1d4e60");
   cl.set_default_headers(run_key);
+  r = cl.Get("/engine/models");  // the socket's own answer: the downloaded models, behind the same key
+  CHECK(r && r->status == 200 && r->get_header_value("Cache-Control") == "no-store");
+  CHECK(json::parse(r->body)["models"][0]["name"] == "qwen3.5-4b:4bit" && json::parse(r->body)["run_id"] == st["run_id"]);
   // the API key still guards the rest of the port, and opens no /engine path (above)
   httplib::Client plain("127.0.0.1", port);  // (cl sends the run's key on every request from here on)
   r = plain.Get("/v1/models", httplib::Headers{{"Authorization", "Bearer k"}});
@@ -94,14 +139,14 @@ int main() {
         r->body == R"({"type":"error","error":{"type":"authentication_error","message":"invalid api key"}})");
   std::cout << "page, status and the run's key ok\n";
 
-  // read-only: no stop or switch over HTTP, and every other method or path is a JSON error, never the API key's 401
-  for (const char* path : {"/engine/stop", "/engine/model", "/engine/", "/engine/status/", "/engine/../v1/models"}) {
+  // the methods: every other method or path is a JSON error, never the API key's 401
+  for (const char* path : {"/engine/", "/engine/status/", "/engine/stop/", "/engine/../v1/models"}) {
     r = cl.Post(path, "{}", "application/json");
     CHECK(r && r->status == 404 && error_code(r) == "not_found");
     r = cl.Get(path);
     CHECK(r && r->status == 404 && error_code(r) == "not_found");
   }
-  for (const char* path : {"/engine", "/engine/status", "/engine/events"}) {
+  for (const char* path : {"/engine", "/engine/status", "/engine/events", "/engine/models"}) {
     r = cl.Post(path, "{}", "application/json");
     CHECK(r && r->status == 405 && error_code(r) == "method_not_allowed" && r->get_header_value("Allow") == "GET, HEAD");
     r = cl.Delete(path);
@@ -109,9 +154,36 @@ int main() {
     r = cl.Options(path);
     CHECK(r && r->status == 405 && r->get_header_value("Access-Control-Allow-Origin").empty());
   }
+  for (const char* path : {"/engine/stop", "/engine/model"}) {
+    r = cl.Get(path);
+    CHECK(r && r->status == 405 && error_code(r) == "method_not_allowed" && r->get_header_value("Allow") == "POST");
+    r = cl.Options(path);  // (a cross-site fetch's preflight: no CORS header, so the browser sends nothing after it)
+    CHECK(r && r->status == 405 && r->get_header_value("Access-Control-Allow-Origin").empty());
+  }
   r = cl.Head("/engine/status");
   CHECK(r && r->status == 200);
-  std::cout << "read-only ok\n";
+  // stop and switch need this run's key, the API key opens neither, and a body another page's form can send (not
+  // application/json) is refused even with the key
+  for (const char* path : {"/engine/stop", "/engine/model"}) {
+    for (const httplib::Headers& h : {httplib::Headers{}, httplib::Headers{{"Authorization", "Bearer k"}},
+                                      httplib::Headers{{"Authorization", "Bearer " + engine_token() + "x"}}}) {
+      r = plain.Post(path, h, R"({"model":"4b"})", "application/json");
+      CHECK(r && r->status == 403 && error_code(r) == "forbidden_peer");
+    }
+    for (const char* type : {"text/plain", "application/x-www-form-urlencoded", "multipart/form-data; boundary=x",
+                             "application/jsonx"}) {
+      r = cl.Post(path, R"({"model":"4b"})", type);
+      CHECK(r && r->status == 400 && error_code(r) == "bad_request");
+    }
+  }
+  {  // over 64 KiB: refused before it is read, so the request below carries the header and no body at all
+    const std::string reply = raw_exchange(port, "POST /engine/model HTTP/1.1\r\nHost: 127.0.0.1:" + std::to_string(port) +
+        "\r\nAuthorization: Bearer " + engine_token() + "\r\nContent-Type: application/json\r\n"
+        "Content-Length: " + std::to_string(70 * 1024) + "\r\nConnection: close\r\n\r\n");
+    CHECK(reply.rfind("HTTP/1.1 403", 0) == 0 && reply.find("\"forbidden_peer\"") != std::string::npos);
+  }
+  CHECK(stub.stops == 0 && stub.switches == 0);
+  std::cout << "methods, and stop and switch only with the run's key ok\n";
 
   // this Mac only: a name rebound to 127.0.0.1, another site's page, a proxy, a body; the page itself too
   const std::string here = "127.0.0.1:" + std::to_string(port);
@@ -131,7 +203,13 @@ int main() {
       r = cl.Get(path, with);
       CHECK(r && r->status == 403 && error_code(r) == "forbidden_peer");
     }
+    for (const char* path : {"/engine/stop", "/engine/model"}) {
+      if (h.count("Content-Length")) continue;  // (a real body's length: below, with the key)
+      r = cl.Post(path, h, R"({"model":"4b"})", "application/json");
+      CHECK(r && r->status == 403 && error_code(r) == "forbidden_peer");
+    }
   }
+  CHECK(stub.stops == 0 && stub.switches == 0);
   for (const char* h : {"localhost", "[::1]"}) {
     r = cl.Get("/engine/status", {{"Host", std::string(h) + ":" + std::to_string(port)}});
     CHECK(r && r->status == 200);
@@ -200,17 +278,23 @@ int main() {
         httplib::Client c("127.0.0.1", port);
         c.set_read_timeout(20, 0);
         c.set_default_headers(run_key);
-        bool streaming = false, counted = false;  // (only a 200's stream counts: a 503's body is not a view)
-        c.Get(
-            "/engine/events",
-            [&](const httplib::Response& head) {
-              streaming = head.status == 200;
-              return true;
-            },
-            [&](const char*, size_t) {
-              if (streaming && !counted) counted = true, ++open;
-              return hold.load();
-            });
+        // A viewer that left a moment ago (the checks above) may still hold its place on the server, so a 503 is
+        // retried, as the page does (#1162). Only a 200's stream counts: a 503's body is not a view.
+        for (int attempt = 0; attempt < 100 && hold.load(); ++attempt) {
+          bool streaming = false, counted = false;
+          c.Get(
+              "/engine/events",
+              [&](const httplib::Response& head) {
+                streaming = head.status == 200;
+                return true;
+              },
+              [&](const char*, size_t) {
+                if (streaming && !counted) counted = true, ++open;
+                return hold.load();
+              });
+          if (counted) break;
+          std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
       });
     bus.publish("log", {{"level", "info"}, {"message", "open"}});
     for (int i = 0; i < 100 && open < kMaxEngineViews; ++i) {
@@ -249,9 +333,38 @@ int main() {
   }
   std::cout << "stream cap ok\n";
 
+  // stop and switch with the key: the socket's answers and checks (run_id, the fields), then the control API
+  {
+    const std::string run = R"("run_id":"7f3a9c2e5b1d4e60")";
+    r = cl.Post("/engine/model", "{" + run + R"(,"model":"4b"})", "application/json; charset=utf-8");
+    CHECK(r && r->status == 200 && stub.switches == 1 && stub.switched_to == "4b");
+    CHECK(json::parse(r->body)["model"]["id"] == "4b" && r->get_header_value("Cache-Control") == "no-store");
+    r = cl.Post("/engine/model", R"({"run_id":"0000000000000000","model":"4b"})", "application/json");
+    CHECK(r && r->status == 409 && error_code(r) == "run_id_mismatch");
+    r = cl.Post("/engine/model", R"({"context":4096})", "application/json");
+    CHECK(r && r->status == 400 && error_code(r) == "invalid_value");
+    r = cl.Post("/engine/stop", R"({"force":true})", "application/json");
+    CHECK(r && r->status == 400 && error_code(r) == "unknown_field");
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    CHECK(stub.switches == 1 && stub.stops == 0 && stub.stopped == 0);  // a refused stop ends nothing
+    r = cl.Post("/engine/stop", "{" + run + "}", "application/json");
+    CHECK(r && r->status == 202 && json::parse(r->body)["state"] == "stopping" && stub.stops == 1);
+    for (int i = 0; i < 100 && stub.stopped == 0; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    CHECK(stub.stopped == 1);  // after_stop(), once the answer is sent
+    r = cl.Post("/engine/stop", "{}", "application/json");
+    CHECK(r && r->status == 202);
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    CHECK(stub.stopped == 1);  // once only
+    r = cl.Post("/engine/model", R"({"model":"9b"})", "application/json");
+    CHECK(r && r->status == 503 && error_code(r) == "stopping" && stub.switches == 1);
+  }
+  std::cout << "stop and switch ok\n";
+
   // no control socket (another server holds the instance name): 503
   socket_up = false;
   r = cl.Get("/engine/status");
+  CHECK(r && r->status == 503 && error_code(r) == "internal");
+  r = cl.Post("/engine/stop", "{}", "application/json");
   CHECK(r && r->status == 503 && error_code(r) == "internal");
   r = cl.Get("/engine");
   CHECK(r && r->status == 200);
@@ -260,6 +373,6 @@ int main() {
   srv.stop();
   serving.join();
   control.stop();
-  CHECK(stub.admin == 0);  // no HTTP request stopped or switched the model
+  CHECK(stub.stops == 2 && stub.stopped == 1 && stub.switches == 1);  // the allowed ones only
   std::cout << "engine_view_test ok\n";
 }

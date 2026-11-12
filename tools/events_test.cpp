@@ -240,8 +240,11 @@ static void engine_block() {
   int a = 0, b = 0;
   const void* which = &a;
   size_t budget = 40'000'000'000;
+  bool ssd_on = false;
   act.set_engine([&](Activity::EngineSample& e) {
-    e = {which, budget, 20'000'000'000, 17'000'000'000, 1'500'000'000, {0, 300}, true};
+    e = {which, budget, 20'000'000'000, 17'000'000'000, 1'500'000'000, {0, 300}, true, 1, 700'000'000, 4, 9000};
+    if (ssd_on) e.ssd = true, e.ssd_entries = 14, e.ssd_bytes = 9'100'000'000, e.ssd_limit = 32'000'000'000,
+                e.ssd_read_bytes = 2'800'000'000, e.ssd_written_bytes = 6'300'000'000, e.ssd_hits = 5, e.ssd_hit_tokens = 96400;
     return true;
   });
   auto r = act.start("openai", "");
@@ -254,22 +257,30 @@ static void engine_block() {
   CHECK(e["slots"][0] == json({{"index", 0}, {"busy", false}, {"tokens", 0}}));
   CHECK(e["slots"][1] == json({{"index", 1}, {"busy", true}, {"tokens", 105}, {"request_id", r->id}}));
   CHECK(e["drafts"] == json({{"cycles", 2}, {"tokens", 4}}));  // (the first token is the prefill's)
+  // the RAM cache's block, no SSD one while the engine has none (not zeros)
+  CHECK(e["cache"] == json({{"ram", {{"entries", 1}, {"bytes", 700'000'000}, {"hits", 4}, {"hit_tokens", 9000}}}}));
   act.finish(r, ChatResult{});
   act.tick(steady_ms());
   e = act.engine();
   CHECK(e["slots"][1] == json({{"index", 1}, {"busy", false}, {"tokens", 300}}) && e["drafts"]["cycles"] == 2);
+  ssd_on = true;
+  act.tick(steady_ms());
+  CHECK(act.engine()["cache"]["ssd"] == json({{"entries", 14}, {"bytes", 9'100'000'000}, {"limit_bytes", 32'000'000'000},
+                                              {"read_bytes", 2'800'000'000}, {"written_bytes", 6'300'000'000},
+                                              {"hits", 5}, {"hit_tokens", 96400}}));
+  ssd_on = false;
   which = &b;  // another model loaded: its counters start at 0
   act.tick(steady_ms());
   CHECK(act.engine()["drafts"] == json({{"cycles", 0}, {"tokens", 0}}));
   count_engine();
-  CHECK(engine_events == 3);
+  CHECK(engine_events == 4);
   budget = 0;  // nothing to show
   act.tick(steady_ms());
   CHECK(act.engine().is_null());
   act.set_engine([](Activity::EngineSample&) { return false; });
   act.tick(steady_ms());
   count_engine();
-  CHECK(act.engine().is_null() && engine_events == 3);
+  CHECK(act.engine().is_null() && engine_events == 4);
   // unloaded, then loaded again at the same address (a reload often gets the freed block back): the counters still
   // start at 0, and a request that finished while nothing was loaded does not count
   bool loaded = true;
@@ -321,7 +332,8 @@ static int print_frames() {
   auto r3 = act.start("anthropic", "");
   r3->live->slot = 1, r3->live->phase = 2, r3->live->read = 80, r3->live->tokens = 9, r3->live->spec = 2, r3->live->cycles = 3;
   act.set_engine([](Activity::EngineSample& e) {
-    e = {&e, 40'000'000'000, 20'000'000'000, 17'000'000'000, 1'500'000'000, {120, 0}, true};
+    e = {&e, 40'000'000'000, 20'000'000'000, 17'000'000'000, 1'500'000'000, {120, 0}, true, 1, 700'000'000, 4, 9000,
+         true, 14, 9'100'000'000, 32'000'000'000, 2'800'000'000, 6'300'000'000, 5, 96400};
     return true;
   });
   act.tick(r->t0 + 1000);

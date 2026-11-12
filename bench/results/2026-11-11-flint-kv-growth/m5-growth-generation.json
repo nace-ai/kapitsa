@@ -1,0 +1,552 @@
+{
+  "provenance": "Explicitly redacted derived evidence, not original execution logs. Full original records remain private. Paths use relative names or placeholders. Resource usage and host identifiers are omitted; numerical samples, flags and invalid results are preserved.",
+  "hardware": {
+    "chip": "Apple M5 Pro",
+    "gpu_cores": 20,
+    "memory_gib": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "source_and_binary_identity": {
+    "A": {
+      "head": "4a8265d1aa656e8e523c10c23d5dd4cd0b82c532",
+      "flint_cpp_sha256": "7838d290383347db82ca5c5f1589fdd79f89072555a0437d3f18b8a1d9fd5823",
+      "growth_driver_sha256": "08378f293b5f0ad66c8afa9b11951dc4b248543130bebad0f7992146f0806638",
+      "binary_sha256": {
+        "kapitsa": "01fbf43abde79ea09dbcbcfee77b7edb1df69b4e0e6877a966111e3591f2980b",
+        "logit_dump": "deb1b6ade6eec440d7f02a42746cfe6c1c57afbc905897353683c2a01d19c1b7",
+        "flint_kv_growth_check": "5969a95eb05b6ec7d586409a349be09b58cd7e889e7126cb855fcf948e0aab04"
+      },
+      "growth_binary_sha256": "be3c8beae7ed983edf578ba42806c5fe498cd213c8854f52735769ccb9ecb46b"
+    },
+    "B": {
+      "head": "ae599dd1342b7d699f62e0a5dadb06a2ecb91d30",
+      "flint_cpp_sha256": "1c4c34eafd01ceafa2cccc8dc0864a16c648ad6f47fd354cae8262357228896a",
+      "growth_driver_sha256": "08378f293b5f0ad66c8afa9b11951dc4b248543130bebad0f7992146f0806638",
+      "binary_sha256": {
+        "kapitsa": "33f65d020d90a2975637a7ecbf7cda7713cb64632e02530e382bd2369cada612",
+        "logit_dump": "7874b188a6da6280e78389b423d3707df66aa817eda9bc5c6b14b8cefe65bdfa",
+        "flint_kv_growth_check": "9e87c0170c5d72788dac531f8dd9f288b8b694578678c36579acf802708d1cab"
+      },
+      "growth_binary_sha256": "5dddffa82ea7abcb73a658b80484dbeaceba763ab7b4eb92c96f4e1f9e2e859a"
+    }
+  },
+  "started_at": "2026-11-11T02:22:37.054391+00:00",
+  "finished_at": "2026-11-11T02:29:24.218660+00:00",
+  "gpu_lock": "exclusive, NI_LOCK_HELD=1 and NACE_GPU_LOCK_HELD=1; released after worker completion",
+  "configuration": {
+    "cmake": "Release (-O3), explicit configure with KAPITSA_GIT set to each full source commit",
+    "model": "unsloth/flint-GGUF / flint-UD-IQ2_XXS, existing import shared unchanged by both builds",
+    "model_files": {
+      ".kapitsa/manifest.json": {
+        "bytes": 1459,
+        "sha256": "052f7d3370388b2c84e94b8002ac4d0c9a78bb526e09b546eb132ec3a442b5c6"
+      },
+      "config.json": {
+        "bytes": 37187,
+        "sha256": "14fb7887edfbbf3a5a9ccdde550e8a774887837485c25acfc1c1d4b52e9c2cd4"
+      },
+      "experts.safetensors": {
+        "bytes": 11855541696,
+        "sha256": "cccdf388ce07687844fd4f949bf6f3d2cfd65d2e5a24f4082bae771a59d47a84"
+      },
+      "generation_config.json": {
+        "bytes": 129,
+        "sha256": "745132f7a56e9ff429f4bf4409a588d28a89942a3efe390710d064ceef89de46"
+      },
+      "model.safetensors": {
+        "bytes": 1163262656,
+        "sha256": "431fda6a6f44233053e31fecc74aa050219ed1f03d3cbbc4b35fa19c909341ba"
+      },
+      "model.safetensors.index.json": {
+        "bytes": 105174,
+        "sha256": "003bb87e318dd21a6555bcb0053b8fd926a3337d81319c9d5ef7d469ee5079dc"
+      },
+      "tokenizer.json": {
+        "bytes": 4278400,
+        "sha256": "cbc69b4fd04328e2c637b28fed83af5afe4b9f3c4cecd03559c257351ff53f60"
+      },
+      "tokenizer_config.json": {
+        "bytes": 20882,
+        "sha256": "d5b94880b30e4fa7df11b2b84d91941f3f40130bcc73d3045ad7b9f5c0b6782e"
+      }
+    },
+    "model_imports_this_run": 0,
+    "gpu_debug_layers": "Off for full-model runs; both flags were on for the separately recorded small cache-copy checks. No Metal kernel changed."
+  },
+  "method": {
+    "driver": "growth-model-driver.cpp (identical source in both arms)",
+    "compiler_flags": [
+      "-O3",
+      "-std=c++20",
+      "-arch",
+      "arm64",
+      "-mmacosx-version-min=14.0"
+    ],
+    "sequence": "A1 B1 A2 B2",
+    "prompts": [
+      1008,
+      4064
+    ],
+    "prefill_chunk": 512,
+    "generated_tokens_per_prompt": 65,
+    "rows_per_prompt": 65,
+    "vocab": 150144,
+    "new_sequence_context": 8192,
+    "reserve_hint": 0,
+    "sampling": "default SamplingParams, greedy",
+    "synchronization": "Each prefill/step commits and waits before the next reserve. This driver is not native pipelined server throughput.",
+    "input": "Tokenized bench/corpus.txt repeated to length; exact inputs stored and compared.",
+    "limitations": "A1 includes first-use shader compilation in prefill time. All original timings retained; no overall speedup inferred. Not free MTP validation."
+  },
+  "runs": {
+    "A1": {
+      "exit_code": 0,
+      "measurements": [
+        {
+          "prompt": 1008,
+          "growth": true,
+          "old": 0,
+          "capacity": 1024,
+          "populated": 0,
+          "ms": 3.412125
+        },
+        {
+          "prompt": 1008,
+          "growth": true,
+          "old": 1024,
+          "capacity": 2048,
+          "populated": 1024,
+          "ms": 8.214333
+        },
+        {
+          "prompt": 1008,
+          "generated_tokens": 65,
+          "vocab": 150144,
+          "growths": 2,
+          "populated_growths": 1,
+          "growth_ms": 11.626458,
+          "prefill_ms": 7233.949,
+          "decode_ms": 460.034333,
+          "all_logits_finite": true
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 0,
+          "capacity": 1024,
+          "populated": 0,
+          "ms": 4.598417
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 1024,
+          "capacity": 2048,
+          "populated": 1024,
+          "ms": 8.181583
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 2048,
+          "capacity": 3072,
+          "populated": 2048,
+          "ms": 9.811042
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 3072,
+          "capacity": 4096,
+          "populated": 3072,
+          "ms": 15.303208
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 4096,
+          "capacity": 5120,
+          "populated": 4096,
+          "ms": 14.29175
+        },
+        {
+          "prompt": 4064,
+          "generated_tokens": 65,
+          "vocab": 150144,
+          "growths": 5,
+          "populated_growths": 4,
+          "growth_ms": 52.186,
+          "prefill_ms": 2331.959417,
+          "decode_ms": 503.625208,
+          "all_logits_finite": true
+        }
+      ]
+    },
+    "B1": {
+      "exit_code": 0,
+      "measurements": [
+        {
+          "prompt": 1008,
+          "growth": true,
+          "old": 0,
+          "capacity": 1024,
+          "populated": 0,
+          "ms": 2.908042
+        },
+        {
+          "prompt": 1008,
+          "growth": true,
+          "old": 1024,
+          "capacity": 2048,
+          "populated": 1024,
+          "ms": 3.329125
+        },
+        {
+          "prompt": 1008,
+          "generated_tokens": 65,
+          "vocab": 150144,
+          "growths": 2,
+          "populated_growths": 1,
+          "growth_ms": 6.237167,
+          "prefill_ms": 582.50325,
+          "decode_ms": 465.314625,
+          "all_logits_finite": true
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 0,
+          "capacity": 1024,
+          "populated": 0,
+          "ms": 3.847542
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 1024,
+          "capacity": 2048,
+          "populated": 1024,
+          "ms": 4.61225
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 2048,
+          "capacity": 3072,
+          "populated": 2048,
+          "ms": 5.512917
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 3072,
+          "capacity": 4096,
+          "populated": 3072,
+          "ms": 7.353542
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 4096,
+          "capacity": 5120,
+          "populated": 4096,
+          "ms": 8.293083
+        },
+        {
+          "prompt": 4064,
+          "generated_tokens": 65,
+          "vocab": 150144,
+          "growths": 5,
+          "populated_growths": 4,
+          "growth_ms": 29.619333,
+          "prefill_ms": 2315.72175,
+          "decode_ms": 489.640042,
+          "all_logits_finite": true
+        }
+      ]
+    },
+    "A2": {
+      "exit_code": 0,
+      "measurements": [
+        {
+          "prompt": 1008,
+          "growth": true,
+          "old": 0,
+          "capacity": 1024,
+          "populated": 0,
+          "ms": 3.047208
+        },
+        {
+          "prompt": 1008,
+          "growth": true,
+          "old": 1024,
+          "capacity": 2048,
+          "populated": 1024,
+          "ms": 8.243167
+        },
+        {
+          "prompt": 1008,
+          "generated_tokens": 65,
+          "vocab": 150144,
+          "growths": 2,
+          "populated_growths": 1,
+          "growth_ms": 11.290375,
+          "prefill_ms": 582.830958,
+          "decode_ms": 461.307917,
+          "all_logits_finite": true
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 0,
+          "capacity": 1024,
+          "populated": 0,
+          "ms": 3.2015
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 1024,
+          "capacity": 2048,
+          "populated": 1024,
+          "ms": 8.273583
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 2048,
+          "capacity": 3072,
+          "populated": 2048,
+          "ms": 10.001958
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 3072,
+          "capacity": 4096,
+          "populated": 3072,
+          "ms": 11.115042
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 4096,
+          "capacity": 5120,
+          "populated": 4096,
+          "ms": 14.099917
+        },
+        {
+          "prompt": 4064,
+          "generated_tokens": 65,
+          "vocab": 150144,
+          "growths": 5,
+          "populated_growths": 4,
+          "growth_ms": 46.692,
+          "prefill_ms": 2318.570958,
+          "decode_ms": 502.482958,
+          "all_logits_finite": true
+        }
+      ]
+    },
+    "B2": {
+      "exit_code": 0,
+      "measurements": [
+        {
+          "prompt": 1008,
+          "growth": true,
+          "old": 0,
+          "capacity": 1024,
+          "populated": 0,
+          "ms": 3.073792
+        },
+        {
+          "prompt": 1008,
+          "growth": true,
+          "old": 1024,
+          "capacity": 2048,
+          "populated": 1024,
+          "ms": 4.279833
+        },
+        {
+          "prompt": 1008,
+          "generated_tokens": 65,
+          "vocab": 150144,
+          "growths": 2,
+          "populated_growths": 1,
+          "growth_ms": 7.353625,
+          "prefill_ms": 580.528083,
+          "decode_ms": 457.328792,
+          "all_logits_finite": true
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 0,
+          "capacity": 1024,
+          "populated": 0,
+          "ms": 4.22725
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 1024,
+          "capacity": 2048,
+          "populated": 1024,
+          "ms": 4.294542
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 2048,
+          "capacity": 3072,
+          "populated": 2048,
+          "ms": 5.785292
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 3072,
+          "capacity": 4096,
+          "populated": 3072,
+          "ms": 6.28125
+        },
+        {
+          "prompt": 4064,
+          "growth": true,
+          "old": 4096,
+          "capacity": 5120,
+          "populated": 4096,
+          "ms": 8.994708
+        },
+        {
+          "prompt": 4064,
+          "generated_tokens": 65,
+          "vocab": 150144,
+          "growths": 5,
+          "populated_growths": 4,
+          "growth_ms": 29.583042,
+          "prefill_ms": 2307.055458,
+          "decode_ms": 484.366583,
+          "all_logits_finite": true
+        }
+      ]
+    }
+  },
+  "complete_file_byte_comparisons_against_A1": {
+    "B1": {
+      "p1008.input.i32": {
+        "bytes": 4032,
+        "equal": true,
+        "reference_sha256": "8ba8177d62a9f4d4838be0318b54a481e7a8751e29a141fbb9142494f284f892",
+        "candidate_sha256": "8ba8177d62a9f4d4838be0318b54a481e7a8751e29a141fbb9142494f284f892"
+      },
+      "p1008.logits.f32": {
+        "bytes": 39037440,
+        "equal": true,
+        "reference_sha256": "6d030f3bd7fc17ca6e3a88dbbf4f2b56ba08cc43754a3df4d79f0d30533ae73a",
+        "candidate_sha256": "6d030f3bd7fc17ca6e3a88dbbf4f2b56ba08cc43754a3df4d79f0d30533ae73a"
+      },
+      "p1008.tokens.i32": {
+        "bytes": 260,
+        "equal": true,
+        "reference_sha256": "f1eefcf0bb7262f0adc915853f73ef4e36d80ff0d3f7abebf616d998a0e5d784",
+        "candidate_sha256": "f1eefcf0bb7262f0adc915853f73ef4e36d80ff0d3f7abebf616d998a0e5d784"
+      },
+      "p4064.input.i32": {
+        "bytes": 16256,
+        "equal": true,
+        "reference_sha256": "83015d6bed9e85f32abb916dead38f697b73e33794eb1468a9319cf0077db6c5",
+        "candidate_sha256": "83015d6bed9e85f32abb916dead38f697b73e33794eb1468a9319cf0077db6c5"
+      },
+      "p4064.logits.f32": {
+        "bytes": 39037440,
+        "equal": true,
+        "reference_sha256": "74e207841c0c0d3bdd443b8bd8363636917ec0e7e654db4ff9e210dc07e45096",
+        "candidate_sha256": "74e207841c0c0d3bdd443b8bd8363636917ec0e7e654db4ff9e210dc07e45096"
+      },
+      "p4064.tokens.i32": {
+        "bytes": 260,
+        "equal": true,
+        "reference_sha256": "d7d67fbf5b03c3ed4bb86f6f9130c7e7942d3a1c26c29d2d2d4c4db462d14b89",
+        "candidate_sha256": "d7d67fbf5b03c3ed4bb86f6f9130c7e7942d3a1c26c29d2d2d4c4db462d14b89"
+      }
+    },
+    "A2": {
+      "p1008.input.i32": {
+        "bytes": 4032,
+        "equal": true,
+        "reference_sha256": "8ba8177d62a9f4d4838be0318b54a481e7a8751e29a141fbb9142494f284f892",
+        "candidate_sha256": "8ba8177d62a9f4d4838be0318b54a481e7a8751e29a141fbb9142494f284f892"
+      },
+      "p1008.logits.f32": {
+        "bytes": 39037440,
+        "equal": true,
+        "reference_sha256": "6d030f3bd7fc17ca6e3a88dbbf4f2b56ba08cc43754a3df4d79f0d30533ae73a",
+        "candidate_sha256": "6d030f3bd7fc17ca6e3a88dbbf4f2b56ba08cc43754a3df4d79f0d30533ae73a"
+      },
+      "p1008.tokens.i32": {
+        "bytes": 260,
+        "equal": true,
+        "reference_sha256": "f1eefcf0bb7262f0adc915853f73ef4e36d80ff0d3f7abebf616d998a0e5d784",
+        "candidate_sha256": "f1eefcf0bb7262f0adc915853f73ef4e36d80ff0d3f7abebf616d998a0e5d784"
+      },
+      "p4064.input.i32": {
+        "bytes": 16256,
+        "equal": true,
+        "reference_sha256": "83015d6bed9e85f32abb916dead38f697b73e33794eb1468a9319cf0077db6c5",
+        "candidate_sha256": "83015d6bed9e85f32abb916dead38f697b73e33794eb1468a9319cf0077db6c5"
+      },
+      "p4064.logits.f32": {
+        "bytes": 39037440,
+        "equal": true,
+        "reference_sha256": "74e207841c0c0d3bdd443b8bd8363636917ec0e7e654db4ff9e210dc07e45096",
+        "candidate_sha256": "74e207841c0c0d3bdd443b8bd8363636917ec0e7e654db4ff9e210dc07e45096"
+      },
+      "p4064.tokens.i32": {
+        "bytes": 260,
+        "equal": true,
+        "reference_sha256": "d7d67fbf5b03c3ed4bb86f6f9130c7e7942d3a1c26c29d2d2d4c4db462d14b89",
+        "candidate_sha256": "d7d67fbf5b03c3ed4bb86f6f9130c7e7942d3a1c26c29d2d2d4c4db462d14b89"
+      }
+    },
+    "B2": {
+      "p1008.input.i32": {
+        "bytes": 4032,
+        "equal": true,
+        "reference_sha256": "8ba8177d62a9f4d4838be0318b54a481e7a8751e29a141fbb9142494f284f892",
+        "candidate_sha256": "8ba8177d62a9f4d4838be0318b54a481e7a8751e29a141fbb9142494f284f892"
+      },
+      "p1008.logits.f32": {
+        "bytes": 39037440,
+        "equal": true,
+        "reference_sha256": "6d030f3bd7fc17ca6e3a88dbbf4f2b56ba08cc43754a3df4d79f0d30533ae73a",
+        "candidate_sha256": "6d030f3bd7fc17ca6e3a88dbbf4f2b56ba08cc43754a3df4d79f0d30533ae73a"
+      },
+      "p1008.tokens.i32": {
+        "bytes": 260,
+        "equal": true,
+        "reference_sha256": "f1eefcf0bb7262f0adc915853f73ef4e36d80ff0d3f7abebf616d998a0e5d784",
+        "candidate_sha256": "f1eefcf0bb7262f0adc915853f73ef4e36d80ff0d3f7abebf616d998a0e5d784"
+      },
+      "p4064.input.i32": {
+        "bytes": 16256,
+        "equal": true,
+        "reference_sha256": "83015d6bed9e85f32abb916dead38f697b73e33794eb1468a9319cf0077db6c5",
+        "candidate_sha256": "83015d6bed9e85f32abb916dead38f697b73e33794eb1468a9319cf0077db6c5"
+      },
+      "p4064.logits.f32": {
+        "bytes": 39037440,
+        "equal": true,
+        "reference_sha256": "74e207841c0c0d3bdd443b8bd8363636917ec0e7e654db4ff9e210dc07e45096",
+        "candidate_sha256": "74e207841c0c0d3bdd443b8bd8363636917ec0e7e654db4ff9e210dc07e45096"
+      },
+      "p4064.tokens.i32": {
+        "bytes": 260,
+        "equal": true,
+        "reference_sha256": "d7d67fbf5b03c3ed4bb86f6f9130c7e7942d3a1c26c29d2d2d4c4db462d14b89",
+        "candidate_sha256": "d7d67fbf5b03c3ed4bb86f6f9130c7e7942d3a1c26c29d2d2d4c4db462d14b89"
+      }
+    }
+  }
+}
