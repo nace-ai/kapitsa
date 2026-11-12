@@ -716,6 +716,7 @@ class Engine {
   std::atomic<uint64_t> requests_{0};  // requests started (prefill_history waits for an idle server)
   ReasoningMemory reasoning_;  // remember_reasoning / restore_reasoning
   bool preserve_thinking_default_ = false;  // the template has a preserve_thinking switch: on unless the request says
+  bool reasoning_effort_template_ = false;  // chat_template has reasoning_effort parameter (e.g. Qwen3.8 default xhigh)
   int think_open_ = -1, think_close_ = -1, tc_open_ = -1, tc_close_ = -1;
   TextTags text_tags_;        // the tags written as text (no such tokens; Nemotron Nano 9B v2)
   bool think_flags_ = false;  // the template switches thinking by "/think" / "/no_think" in a message (Nano 9B v2)
@@ -768,6 +769,10 @@ class Engine {
   // Looped models: the loop count a request runs (its "loops", else its effort or thinking budget mapped, else the
   // server's default); 0 for other models
   int request_loops(const ChatRequest& r) const;
+  // Resolved thinking level / effort ("low", "medium", "high", "xhigh", "on", "off", "budget N")
+  static std::string thinking_level(const ChatRequest& r, bool think, bool reasoning_effort_template = false,
+                                    bool has_thinking = true);
+  std::string request_thinking_level(const ChatRequest& r, bool think) const;
   // The SSD store's per-slot refused-version bookkeeping, built with the slot count exactly as disk_start builds it:
   // refuse() must be read back by refused(), and a slot outside the store must read 0. A store is not built without a
   // model, so its wiring is checked here (api_test, no model loaded) rather than through the helpers alone (#467).

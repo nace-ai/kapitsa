@@ -128,6 +128,7 @@ void Engine::init_splash() {
   const std::string src = chat_template_source(tdir);
   if (src.empty()) throw std::runtime_error("no chat template in " + tdir);
   tmpl_ = std::make_unique<minja::chat_template>(src, "", "<|im_end|>");
+  reasoning_effort_template_ = src.find("reasoning_effort") != std::string::npos;
   think_open_ = tok_.find("<think>");
   think_close_ = tok_.find("</think>");
   tc_open_ = tok_.find("<tool_call>");
@@ -234,6 +235,7 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   // reasoning is on when the generation prompt opens the think block (as Engine::chat decides it)
   static const std::string kOpen = "<think>\n";
   const bool think = text.size() >= kOpen.size() && text.compare(text.size() - kOpen.size(), kOpen.size(), kOpen) == 0;
+  res.thinking_level = request_thinking_level(r, think);
 
   const int want = std::max(1, r.max_tokens);
   const int room = ctx - n;  // positions left: Splash would clamp to it, and a length ending there is the context's

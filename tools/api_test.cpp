@@ -1693,6 +1693,66 @@ void preserve_thinking_default_unit() {
   check(dis.template_kwargs == J(R"({"enable_thinking": true})"), "preserve_thinking: with the default off the request is untouched", dis.template_kwargs.dump());
 }
 
+void thinking_level_unit() {
+  ChatRequest r;
+  // Non-thinking model
+  check(Engine::thinking_level(r, true, false, false).empty(), "thinking level: non-thinking model returns empty");
+
+  // Thinking off cases
+  r = ChatRequest{};
+  r.effort = "none";
+  check(Engine::thinking_level(r, false) == "none", "thinking level: effort none");
+  r.effort = "minimal";
+  check(Engine::thinking_level(r, false) == "minimal", "thinking level: effort minimal");
+
+  r = ChatRequest{};
+  check(Engine::thinking_level(r, false) == "off", "thinking level: think false returns off");
+  r.thinking_budget = 0;
+  check(Engine::thinking_level(r, false) == "off", "thinking level: budget 0 returns off");
+
+  // Anthropic budget
+  r = ChatRequest{};
+  r.thinking_budget = 4096;
+  check(Engine::thinking_level(r, true) == "budget 4096", "thinking level: Anthropic budget 4096");
+
+  // Template WITH reasoning_effort (e.g. Qwen3.8): low and medium pass through; high, xhigh, max resolve to xhigh
+  r = ChatRequest{};
+  r.effort = "low";
+  check(Engine::thinking_level(r, true, true) == "low", "thinking level: effort template low -> low");
+  r.effort = "medium";
+  check(Engine::thinking_level(r, true, true) == "medium", "thinking level: effort template medium -> medium");
+  for (const char* eff : {"high", "xhigh", "max"}) {
+    r.effort = eff;
+    check(Engine::thinking_level(r, true, true) == "xhigh", std::string("thinking level: effort template ") + eff + " -> xhigh");
+  }
+  // Default on template with reasoning_effort is xhigh
+  r = ChatRequest{};
+  check(Engine::thinking_level(r, true, true) == "xhigh", "thinking level: default reasoning_effort template returns xhigh");
+
+  // template_kwargs reasoning_effort on template with reasoning_effort
+  r = ChatRequest{};
+  r.template_kwargs["reasoning_effort"] = "low";
+  check(Engine::thinking_level(r, true, true) == "low", "thinking level: template_kwargs reasoning_effort low");
+  r.template_kwargs["reasoning_effort"] = "medium";
+  check(Engine::thinking_level(r, true, true) == "medium", "thinking level: template_kwargs reasoning_effort medium");
+  r.template_kwargs["reasoning_effort"] = "max";
+  check(Engine::thinking_level(r, true, true) == "xhigh", "thinking level: template_kwargs reasoning_effort max -> xhigh");
+
+  // Template WITHOUT reasoning_effort (binary thinking, e.g. Qwen3.6): any effort resolves to on
+  for (const char* eff : {"low", "medium", "high", "xhigh", "max"}) {
+    r = ChatRequest{};
+    r.effort = eff;
+    check(Engine::thinking_level(r, true, false) == "on", std::string("thinking level: binary template ") + eff + " -> on");
+  }
+  r = ChatRequest{};
+  check(Engine::thinking_level(r, true, false) == "on", "thinking level: default binary thinking returns on");
+
+  // ChatResult struct
+  ChatResult res;
+  res.thinking_level = "low";
+  check(res.thinking_level == "low", "ChatResult holds thinking_level");
+}
+
 // Tool arguments keep each value's spelling (src/engine/tool_args.h) through the Qwen3.5 / Nemotron templates' `| string`
 // (a minimal template with their argument line, no model folder, so CI runs it): what the model wrote (`true`, `null`,
 // `2.50`, `[1,2]`, non-ASCII text) is what the next prompt holds, from an OpenAI client that sends the arguments text
@@ -2779,6 +2839,7 @@ int main(int argc, char** argv) {
   float_arguments_text();
   tool_arguments_spelling();
   preserve_thinking_default_unit();
+  thinking_level_unit();
   disk_wait_unit();
   disk_saved_unit();
   disk_retry_wiring_unit();
