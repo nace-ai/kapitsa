@@ -592,7 +592,7 @@ Nemotron Dory1.0 4B's NVFP4 checkpoint is a KL of 0.020 from its BF16 checkpoint
 
 KQuant is our quantization framework for MLX packs. These are the measurements behind the README's KQuant section: the
 KQuant releases against the packs Kapitsa served before (lmstudio-community's for the 4B and 9B, MTPLX's for the
-35B-A3B, the plain 4-bit pack for the 27B, which `27b` still serves). They sit closer to bf16 at the same weight size and score at least as high
+35B-A3B, the plain 4-bit pack for the 27B, which `27b` served before and `27b:4bit` keeps). They sit closer to bf16 at the same weight size and score at least as high
 on GSM8K.
 
 The 9B results in this section use the [legacy pack at `867adaa`](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit-KQuant/tree/867adaa1c6d84d1fd9b4f37f43836019c877ba59). Macs with matrix units (M5 and newer) default to Q4-KQuant at `ff7b61b8`; other Macs, including M3 and M4, keep the legacy pack. These GSM8K and decode results do not describe Q4-KQuant. The older 9B rows in the speed tables below also keep their measured pack and 9.0 GB download size.
@@ -606,7 +606,7 @@ The 9B results in this section use the [legacy pack at `867adaa`](https://huggin
 | 35B-A3B MTPLX | 0.096 | 0.948 | 212 |
 | 35B-A3B KQuant | **0.059** | 0.952 | 227 |
 
-The legacy 9B pack is less than half as far from the original as lmstudio-community's (KL 0.037 against 0.081). The Qwen3.8 27B MLX pack (`27b:kquant`, opt-in) is closer too: KL 0.035 against 0.054, GSM8K 0.953 against 0.950. Its decode is mixed on this Mac (sampled slower, greedy faster), so it stays opt-in and we claim no speed for it.
+The legacy 9B pack is less than half as far from the original as lmstudio-community's (KL 0.037 against 0.081). `27b` downloads the Qwen3.8 27B KQuant pack, which is closer too: KL 0.035 against 0.054, GSM8K 0.953 against 0.950. On one M5 Pro 48 GB it writes no slower than the plain pack: Kapitsa 0.2.35 (`30b18f9`), bench starting its own server, the same drafter and MTP head on both packs, valid legs in the order A B B A plus one A top-up, 87.9 against 84.5 tok/s pooled (T 0.6: 82.9 against 80.6, T 0: 93.0 against 88.4); the plain pack's own T 0.6 legs span 75.6 to 85.7, so the gap is within its spread.
 
 **How we checked.**
 

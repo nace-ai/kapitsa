@@ -230,7 +230,8 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
        .title = "Qwen3.8-27B",
        .about = "dense: the strongest coder of the three, slower to write",
        .brief = "dense: the strongest coder, slower",
-       .default_variant = "4bit",
+       // KQuant (#495): `27b:4bit` keeps the plain pack
+       .default_variant = "kquant",
        .fallbacks = {},
        .variants = {
            {.name = "4bit",
@@ -243,11 +244,10 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
             .revision = "d76e1f92eb8c16a3f3058d438cd6af30bce86557",
             .companions = {mtp27(), dflash27()},
             .download_gb = 20.17},
-           // Opt-in KQuant (#436): the 4-bit pack above with its quantized weights rebuilt
+           // KQuant (#436), the default since #495: the 4-bit pack above with its quantized weights rebuilt
            // as KQuant, MTP head and runtime file in the repo (so no mtp27()), base tokenizer files. KL from bf16
-           // 0.035 against 0.054, GSM8K (1319) 0.953 against 0.950; M5 Pro decode (3 legs each, Kapitsa 0.2.32 with
-           // incoai's DFlash2 drafter): sampled 72.5 against 80.0 tok/s, greedy 91.0 against 82.8. `27b` stays the plain
-           // 4-bit pack. Not measured with the nace-ai drafter this entry downloads.
+           // 0.035 against 0.054, GSM8K (1319) 0.953 against 0.950; M5 Pro decode (Kapitsa 0.2.35, both packs with
+           // the nace-ai drafter and the same MTP head, T 0.6 and T 0): pooled 87.9 against 84.5 tok/s, +4.0%
            {.name = "kquant",
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
             .repo = "nace-ai/Qwen3.8-27B-MLX-Q4-KQuant",

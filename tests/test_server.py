@@ -138,10 +138,10 @@ def check(name, ok, detail=""):
     if not ok:
         fails += 1
 
-# The app and the CLI download the same pinned files for the 4-bit variants (src/hub/catalog.cpp), which are the
-# defaults.
+# The app and the CLI download the same pinned files for the 4-bit variants (PINNED) and the defaults (DEFAULTS:
+# the 4-bit variants, except the 27B's KQuant pack, #495) of src/hub/catalog.cpp.
 DEFAULTS = {"qwen3.6-35b-a3b": ("4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant", "37e804f90e368a4de866bc34650b9dde67a78c8e"),
-            "qwen3.8-27b": ("4bit", "nace-ai/Qwen3.8-27B-MLX-4bit", "d76e1f92eb8c16a3f3058d438cd6af30bce86557"),
+            "qwen3.8-27b": ("kquant", "nace-ai/Qwen3.8-27B-MLX-Q4-KQuant", "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364"),
             "qwen3.5-4b": ("4bit", "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"),
             "qwen3.5-9b": ("4bit", "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")}
 PINNED = {
@@ -332,13 +332,15 @@ def cli_checks(kapitsa):
                   j.get("kind") == "catalog" and j.get("variant") == "4bit" and
                   j.get("dir") == os.path.join(models, name + "-4bit") and j.get("repo") == repo and
                   j.get("revision") == rev and got == comps and j.get("downloaded") is False, json.dumps(j))
-    # the 27B's opt-in KQuant variant: its own repo and drafter (the MTP head is in the repo), by name or by repo id; the default stays 4bit
-    KQ27 = ("nace-ai/Qwen3.8-27B-MLX-Q4-KQuant", "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364")
-    for a in ["27b:kquant", "27B:KQUANT", "qwen3.8-27b:kquant", KQ27[0], KQ27[0] + "@" + KQ27[1]]:
+    # the 27B's KQuant variant, its default since #495: its own repo and drafter (the MTP head is in the repo), by
+    # name, by repo id or with no variant; `27b:4bit` above is the plain pack with mtp27 and dflash27
+    KQ27 = DEFAULTS["qwen3.8-27b"][1:]
+    for a in ["27b", "qwen3.8-27b", "27b:kquant", "27B:KQUANT", "qwen3.8-27b:kquant", KQ27[0], KQ27[0] + "@" + KQ27[1],
+              "nace-ai/Qwen3.8-27B-MLX-KQuant"]:
         j = plan(a)
         got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
         check(f"cli: {a} -> qwen3.8-27b:kquant with the nace-ai drafter",
-              j.get("model") == "qwen3.8-27b:kquant" and j.get("id") == "qwen3.8-27b:kquant" and j.get("kind") == "catalog" and
+              j.get("model") == "qwen3.8-27b:kquant" and j.get("id") == "qwen3.8-27b" and j.get("kind") == "catalog" and
               j.get("variant") == "kquant" and j.get("repo") == KQ27[0] and j.get("revision") == KQ27[1] and
               j.get("dir") == os.path.join(models, "qwen3.8-27b-kquant") and got == [PINNED["qwen3.8-27b"][2][1]] and
               j.get("downloaded") is False, json.dumps(j))
@@ -363,7 +365,7 @@ def cli_checks(kapitsa):
                   j.get("dir") == os.path.join(models, name + "-" + v) and got == comps and
                   j.get("downloaded") is False, json.dumps(j))
     # a name without a variant: the default (offline nothing can be planned, so no fallback for a smaller Mac)
-    for name, aliases in [("qwen3.6-35b-a3b", ["35b", "qwen3.6-35b", "QWEN3.6-35B-A3B"]), ("qwen3.8-27b", ["27b"]),
+    for name, aliases in [("qwen3.6-35b-a3b", ["35b", "qwen3.6-35b", "QWEN3.6-35B-A3B"]), ("qwen3.8-27b", ["27b", "qwen3.8-27b"]),
                           ("qwen3.5-4b", ["4b", "qwen3.5-4b"]), ("qwen3.5-9b", ["9b", "qwen3.5-9b"])]:
         dv, repo, rev = DEFAULTS[name]
         for a in aliases:
