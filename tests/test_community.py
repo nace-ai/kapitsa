@@ -106,6 +106,18 @@ for name, r in (("KFlash decoding with its drafter", kflash), ("prompt-lookup de
     e = cc.check_result(r, cat, macs, versions)[0]
     check(not errs and not any("decoding" in x or "drafter" in x for x in e), f"{name} passes", str(errs + e)[:300])
 refused(lambda r: r["model"].update(decoding="KFlash", drafter=None), "KFlash decoding without its drafter", "drafter")
+# The engine writes this shape for Flint self-speculation, and at its own defaults (engine.h: 4096, 180000) it runs to 145-158
+# characters; the schema's 120 cap refused every such result, including kapitsa#1203's M5 Pro Flint result. The cap is 200, and
+# the string below is that result's own, so this case would fail at 120 and passes at 200.
+selfspec = copy.deepcopy(full)
+_detail = ("plain decoding, self-speculative from 180000-token prompts (2 drafts per cycle, their full attention over the last "
+           "4096 positions), KFlash (none)")
+selfspec["model"].update(decoding="plain", decoding_detail=_detail, drafter=None)
+check(len(_detail) > 120, "the Flint self-speculative detail is longer than the old 120 cap", str(len(_detail)))
+errs = [x.message for x in jsonschema.Draft202012Validator(schema).iter_errors(selfspec)]
+e = cc.check_result(selfspec, cat, macs, versions)[0]
+check(not errs and not any("decoding" in x or "drafter" in x for x in e),
+      "a Flint result whose detail is 145 characters passes (kapitsa#1203)", str(errs + e)[:300])
 refused(lambda r: r["model"].update(decoding="KFlash (DFlash2)"), "a decoding name outside the schema's", "", schema_only=True)
 for detail, want in (("KFlash speculative decoding (DFlash2 lattice, tree verify)", "KFlash"),
                      ("KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)", "KFlash"),
