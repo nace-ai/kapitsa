@@ -313,3 +313,36 @@ impl Request {
         text.ok_or_else(|| Error::new(ErrorKind::Contract, "native success without a result"))
     }
 }
+
+#[cfg(all(test, not(feature = "fixture")))]
+mod native_tests {
+    use super::*;
+
+    #[test]
+    fn null_request_contract() {
+        let json = CString::new("{}").unwrap();
+        let mut request = ptr::null_mut();
+        let mut error = NativeString::empty();
+        let code = unsafe {
+            ffi::kapitsa_request_create(ptr::null_mut(), json.as_ptr(), &mut request, &mut error.0)
+        };
+        assert_eq!(code, 1);
+        assert!(request.is_null());
+        assert!(error.text().is_some_and(|s| !s.is_empty()));
+
+        let mut result = NativeString::empty();
+        let mut error = NativeString::empty();
+        let code = unsafe {
+            ffi::kapitsa_generate(request, None, ptr::null_mut(), &mut result.0, &mut error.0)
+        };
+        assert_eq!(code, 1);
+        assert!(result.0.is_null());
+        assert!(error.text().is_some_and(|s| !s.is_empty()));
+        unsafe {
+            ffi::kapitsa_request_cancel(request);
+            ffi::kapitsa_request_destroy(request);
+            ffi::kapitsa_engine_destroy(ptr::null_mut());
+            ffi::kapitsa_string_free(ptr::null_mut());
+        }
+    }
+}
