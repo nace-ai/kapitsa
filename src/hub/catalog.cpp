@@ -302,7 +302,8 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
            // KQuant (#436): MTPLX's pack (Youssofal @ 9546051: mlx-community's 4-bit with its MTP head) with its
            // quantized weights rebuilt as KQuant, every other file the same content, the
            // MTP head included in the repo. KL from bf16 0.059 against 0.096, GSM8K (1319) 0.952 against 0.948,
-           // M5 Pro decode (T 0.6 and greedy, 3 KQuant and 2 standard legs each) 227 against 212 tok/s; text only
+           // M5 Pro decode on 0.2.35 (T 0.6 and greedy, 2 legs each, the same drafter and MTP head on both) 235
+           // against 213 tok/s (bench/results/2026-11-12-m5-pro-kquant-35b-0.2.35); text only
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64 (KQuant)",
             .repo = "nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant",

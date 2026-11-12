@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "quick",
+  "time_utc": "2026-11-12T15:19:40Z",
+  "kapitsa": {
+    "version": "0.2.35",
+    "commit": "30b18f9"
+  },
+  "mac": {
+    "identifier": "Mac17,8",
+    "name": "MacBook Pro (16-inch, M5 Pro or M5 Max)",
+    "year": 2026,
+    "chip": "Apple M5 Pro",
+    "cpu_cores": 18,
+    "gpu_cores": 20,
+    "memory_gb": 48,
+    "macos": "26.5.2",
+    "macos_build": "25F84"
+  },
+  "model": {
+    "name": "kq-35b",
+    "title": "kq-35b",
+    "variant": null,
+    "precision": "4-bit (mixed)",
+    "catalog": false,
+    "revision": null,
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "dflash2",
+    "drafter_kind": "DFlash2",
+    "drafter_source": "dflash2",
+    "drafter_reason": "found in the model's folder"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 3,
+    "greedy_runs": 3,
+    "sizes": [
+      4000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 212.06,
+      "runs_tps": [
+        212.06,
+        210.34,
+        244.4
+      ],
+      "median_accepted_draft_tps": 158.22,
+      "median_accepted_draft_share": 0.7461
+    },
+    "decode_greedy": {
+      "median_tps": 258.29,
+      "runs_tps": [
+        227.06,
+        258.29,
+        270.05
+      ],
+      "median_accepted_draft_tps": 202.29,
+      "median_accepted_draft_share": 0.7832
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4134,
+        "ttft_s": 1.2665,
+        "tps": 3264.2,
+        "followup_s": [
+          0.0579,
+          0.0696,
+          0.0622
+        ],
+        "followup_median_s": 0.0622,
+        "followup_suffix_tps": 397.3
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 23.09
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "high",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 120.3,
+    "gpu_other_mean_pct": 4.35,
+    "gpu_other_max_pct": 8.8,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [
+      "Microsoft Edge"
+    ],
+    "contention": [
+      "prefill_4000"
+    ]
+  },
+  "flags": [
+    "CONTENTION: sustained foreign GPU load > 5% in ['prefill_4000'] (mean 4.35%, top ['Microsoft Edge'])"
+  ],
+  "invalid": []
+}
