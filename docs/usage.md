@@ -53,19 +53,24 @@ always take the best model.
 The Hugging Face repo, pinned revision, draft model, MTP head and download size of every alias and variant: [docs/models.md](models.md) (written from the catalog by `tools/models_table.py`).
 
 The 4B, 27B, 35B and Flash-Next KQuant catalog entries use `-MLX-Q4-KQuant` repository names.
-Their former `-MLX-4bit-KQuant` IDs intentionally no longer select catalog entries. An old ID is treated
+Their former `-MLX-4bit-KQuant` IDs intentionally no longer select catalog entries. An unselected ID is treated
 as a generic Hugging Face repository, without catalog companions or reuse of the catalog download folder.
-Use the current repository ID or `4b:4bit`, `27b:kquant`, `35b:4bit` or `flash-next:kquant` to keep catalog
-resolution. These short names and their pinned revisions are unchanged. This rename does not affect the
-legacy 9B default.
+Use the current repository ID or `4b:4bit`, `9b:4bit`, `27b:kquant`, `35b:4bit` or `flash-next:kquant` to keep
+catalog resolution. The short names are unchanged. On Macs with matrix units (M5 and newer), `9b` uses Q4-KQuant at
+`ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4`. Other Macs, including M3 and M4, keep
+`nace-ai/Qwen3.5-9B-MLX-4bit-KQuant` at `867adaa1c6d84d1fd9b4f37f43836019c877ba59`.
+The device profile selects the pack, with the same companions on both paths; other catalog pins are unchanged.
+Cluster peers can advertise the same `qwen3.5-9b:4bit` name while using different packs. Match the repository and
+revision across peers when they need the same weights.
 Every released nace-ai Qwen KQuant pack has a catalog entry, so its repository ID gets the base model's DFlash2
 drafter and MTP head: the 9B's Q4 and Q5 packs are `9b:kquant` and `9b:kquant5`, the 27B's and 35B's Q5 packs
-`27b:kquant5` and `35b:kquant5`. The defaults are unchanged.
+`27b:kquant5` and `35b:kquant5`. These entries change no default. `9b:kquant` is the same Q4 pack `9b` uses on
+M5 and newer, so on other Macs it is how to opt into it.
 
 | Name | Aliases | What it is | Download | Variants |
 | --- | --- | --- | ---: | --- |
 | `qwen3.5-4b` | `4b` | Qwen3.5, dense and small: for 16-24 GB Macs and simple tasks | 4.6 GB | `4bit` (default), `6bit`, `8bit`, `bf16` |
-| `qwen3.5-9b` | `9b` | Qwen3.5, dense: the 4B's bigger sibling, the most capable model for a 16 GB Mac | 9.0 GB | `4bit` (default), `kquant`, `kquant5` |
+| `qwen3.5-9b` | `9b` | Qwen3.5, dense: the 4B's bigger sibling, the most capable model for a 16 GB Mac | 9.1-9.3 GB | `4bit` (default), `kquant`, `kquant5` |
 | `qwen3.8-27b` | `27b` | Qwen3.8, dense: the strongest coder of the three Qwen models, slower to write | 20.2 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16`, `kquant` (opt-in), `kquant5` |
 | `qwen3.6-35b-a3b` | `35b`, `qwen3.6-35b`, `35b-a3b` | Qwen3.6, mixture of experts with 3B parameters active per token: quick to reply and to read | 22.1 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16`, `kquant5`, `16gb` (where `4bit` does not fit: 2-bit experts, 10.8 GB; [GGUF files](#gguf-files)) |
 | `qwen3.8-flash-next` | `flash-next`, `flash` | Qwen3.8-Flash-Next 180B-A7B: mixture of 512 experts with 4-stream hyper-connections, an n-gram embedding and sparse attention past 2K tokens; for 128 GB Macs, 64 GB with `64gb` | 105.9 GB | `4bit` (default), `kquant`, `64gb` (where `4bit` does not fit: Sushi's EXL3 2-bit experts, 69.6 GB) |
@@ -136,8 +141,8 @@ Each Qwen model comes in several precisions, its variants. Download sizes, compa
 
 | Variant | Weights | `4b` | `9b` | `27b` | `35b` |
 | --- | --- | ---: | ---: | ---: | ---: |
-| `4bit` (default) | MLX affine 4-bit, group 64: the fastest | 4.6 GB | 9.0 GB | 20.2 GB | 22.1 GB |
-| `kquant` | the 4-bit weights, searched per group on real text to sit closer to the original than the plain 4-bit pack (KL from bf16 0.035 against 0.054; GSM8K, all 1,319 questions, 0.953 against 0.950). Opt-in: `27b` stays the plain 4-bit pack (decode on an M5 Pro with incoai's DFlash2 drafter on Kapitsa 0.2.32, not the nace-ai retrain this entry downloads: sampled 72.5 against 80.0 tok/s, greedy 91.0 against 82.8). For the 9B, the released Q4 pack (mixed 4/5-bit), opt-in as well | - | 9.3 GB | 20.2 GB | - |
+| `4bit` (default) | MLX affine 4-bit, group 64; `9b` on M5 and newer uses mixed 4/5-bit KQuant Q4 | 4.6 GB | 9.1-9.3 GB | 20.2 GB | 22.1 GB |
+| `kquant` | the 4-bit weights, searched per group on real text to sit closer to the original than the plain 4-bit pack (KL from bf16 0.035 against 0.054; GSM8K, all 1,319 questions, 0.953 against 0.950). Opt-in: `27b` stays the plain 4-bit pack (decode on an M5 Pro with incoai's DFlash2 drafter on Kapitsa 0.2.32, not the nace-ai retrain this entry downloads: sampled 72.5 against 80.0 tok/s, greedy 91.0 against 82.8). For the 9B, the released Q4 pack (mixed 4/5-bit): what `9b` uses on M5 and newer, opt-in on other Macs | - | 9.3 GB | 20.2 GB | - |
 | `kquant5` | the released KQuant Q5 packs: mixed 5-, 6- and 8-bit weights on the 9B, mixed 4-, 6- and 8-bit on the 27B and 35B | - | 10.2 GB | 24.8 GB | 24.6 GB |
 | `5bit` | MLX affine 5-bit, group 64 | - | - | 23.5 GB | 26.4 GB |
 | `6bit` | MLX affine 6-bit, group 64: the quality choice | 5.6 GB | - | 26.9 GB | 30.7 GB |
@@ -1238,7 +1243,7 @@ KFlash's knobs are `NI_KFLASH_<NAME>`; each was `NI_DFLASH_<NAME>` before #362 a
 | `HF_HOME`, `HF_HUB_CACHE` | `~/.cache/huggingface`, `$HF_HOME/hub` | The Hugging Face cache, whose files downloads reuse. |
 | `NI_LOG` | `1` | `0` quiet, `1` a line per request with its timings, `2` debug. |
 | `NI_QWEN_SAMPLE_SG` | on for Apple10 (M5); off on M1–M4 | Qwen35 ordinary sampling: SIMD stage-1 top-k selection when K >= 8. Read at model load; `1` explicitly enables it on older Macs, `0` keeps the original selection on any Mac. Greedy, smaller K, stage 2 and speculative verification are unchanged. The M4 Pro measurements used the new path; reproducing them on M4 now requires `1`. |
-| `NI_V8_PACKED_COEFF_NF1` | on for Qwen3.5 4B and 9B on M3 and M4 Macs (apple_family == 9) with ≥ 24 GiB RAM | Prepacked 4-bit/group-64 verify and local v1 DFlash2 projections with lossless BF16 coefficient encoding. The 4B adds about 2.44 GiB with its default drafter; 8/16 GB M3/M4 Macs don't pay that by default. The 9B packs only target and local v1 drafter down projections, adding 977.2 MiB. `0` disables packing. Other shapes/formats keep their existing kernels. Widened from M4 10-core/M4 Pro 20-core to M3/M4 (family 9) with a 24 GiB RAM floor (#393); 9B not verified on M3 (not available on M3 Pro). |
+| `NI_V8_PACKED_COEFF_NF1` | on for Qwen3.5 4B and 9B on M3 and M4 Macs (apple_family == 9) with ≥ 24 GiB RAM | Prepacked 4-bit/group-64 verify and local v1 DFlash2 projections with lossless BF16 coefficient encoding. The 4B adds about 2.44 GiB with its default drafter; 8/16 GB M3/M4 Macs don't pay that by default. For 9B, only 4-bit/group-64 down projections are eligible. The legacy 4-bit target plus local v1 drafter adds 977.2 MiB. The catalog's mixed 4/5-bit Q4 KQuant target has 5-bit down projections, so it packs zero static target projections. `0` disables packing. Other shapes/formats keep their existing kernels. Widened from M4 10-core/M4 Pro 20-core to M3/M4 (family 9) with a 24 GiB RAM floor (#393); 9B not verified on M3 (not available on M3 Pro). |
 | `NI_V8_PC_PLAN` | on with `NI_V8_PACKED_COEFF_NF1` | The packed GEMMs with K = 2560 (40 groups a row: GDN in_proj, q\|k\|v, gate\|up, the LM heads) as 2 k-slices x 2 column blocks a threadgroup instead of 4 x 2. The k-slices' partial sums add in another order (a reassociation, not bitwise). `0` keeps 4 x 2. |
 | `NI_V8_PC_RG` | `8` | With `NI_V8_PC_ILV`: the records of this many consecutive 16-row blocks interleave too, so the threadgroups running side by side read one contiguous span each step (the same sums). `1` interleaves within a block only. |
 | `NI_V8_PC_ILV` | on with `NI_V8_PACKED_COEFF_NF1` | The packed images' records in k-slice-interleaved order (the 8 or 4 k-slices of a 16-row block read adjacent records each step; the same sums). `0` keeps the records in pair order. |

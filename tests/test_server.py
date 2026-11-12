@@ -143,7 +143,7 @@ def check(name, ok, detail=""):
 DEFAULTS = {"qwen3.6-35b-a3b": ("4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant", "37e804f90e368a4de866bc34650b9dde67a78c8e"),
             "qwen3.8-27b": ("4bit", "nace-ai/Qwen3.8-27B-MLX-4bit", "d76e1f92eb8c16a3f3058d438cd6af30bce86557"),
             "qwen3.5-4b": ("4bit", "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"),
-            "qwen3.5-9b": ("4bit", "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant", "867adaa1c6d84d1fd9b4f37f43836019c877ba59")}
+            "qwen3.5-9b": ("4bit", "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")}
 PINNED = {
     "qwen3.6-35b-a3b": ("nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant", "37e804f90e368a4de866bc34650b9dde67a78c8e",
                         [("dflash2", "incoai/Qwen3.6-35B-A3B-DFlash2", "51ef7b6923ad6c14cb1bb41c37a9041446496ab6", "dflash2")]),
@@ -153,7 +153,7 @@ PINNED = {
     "qwen3.5-4b": ("nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89",
                    [("mtp-sidecar", "Qwen/Qwen3.5-4B", "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a", "."),
                     ("dflash", "z-lab/Qwen3.5-4B-DFlash", "9a1996ccf887b79ab3af4fcbf8c1d1f4b5658bcf", "dflash2")]),
-    "qwen3.5-9b": ("nace-ai/Qwen3.5-9B-MLX-4bit-KQuant", "867adaa1c6d84d1fd9b4f37f43836019c877ba59",
+    "qwen3.5-9b": ("nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
                    [("mtp-sidecar", "Qwen/Qwen3.5-9B", "c202236235762e1c871ad0ccb60c8ee5ba337b9a", "."),
                     ("dflash", "z-lab/Qwen3.5-9B-DFlash", "5fc3b3d474760f18c516db87d84c37edbfd3ede6", "dflash2")]),
 }
@@ -302,6 +302,16 @@ def cli_checks(kapitsa):
     def plan(name):
         rc, out, err = run("pull", "--dry-run", "--json", name)
         return json.loads(out) if rc == 0 else {"rc": rc, "err": err}
+    # The profile owns device-dependent checkpoint defaults; this command scans no models.
+    rc, out, err = run("doctor", "--print-profile", "--json")
+    check("cli: device profile available before model scan", rc == 0, err)
+    profile = json.loads(out)
+    if profile["chip_class"] in ("matrix", "wide"):
+        q9 = ("nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")
+    else:
+        q9 = ("nace-ai/Qwen3.5-9B-MLX-4bit-KQuant", "867adaa1c6d84d1fd9b4f37f43836019c877ba59")
+    DEFAULTS["qwen3.5-9b"] = ("4bit", *q9)
+    PINNED["qwen3.5-9b"] = (*q9, PINNED["qwen3.5-9b"][2])
     models = os.path.join(home, "models")
     rc, out, _ = run("list", "--json")
     check("cli: list --json on an empty store", rc == 0 and json.loads(out) == [], out)
@@ -311,7 +321,7 @@ def cli_checks(kapitsa):
                                            "hf.co/nace-ai/Qwen3.8-27B-MLX-4bit"]),
                           ("qwen3.5-4b", ["4b:4bit", "qwen3.5-4b:4bit",
                                           "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant@9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"]),
-                          ("qwen3.5-9b", ["9b:4bit", "QWEN3.5-9B:4bit", "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant"])]:
+                          ("qwen3.5-9b", ["9b:4bit", "QWEN3.5-9B:4bit", q9[0], q9[0] + "@" + q9[1]])]:
         repo, rev, comps = PINNED[name]
         dv = DEFAULTS[name][0]
         for a in aliases:
@@ -345,10 +355,12 @@ def cli_checks(kapitsa):
         for a in [name + ":" + var, repo, "hf.co/" + repo, repo + "@" + rev]:
             j = plan(a)
             got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
-            check(f"cli: {a} -> {name}:{var} with its base's drafter",
-                  j.get("model") == name + ":" + var and j.get("kind") == "catalog" and j.get("variant") == var and
+            # a Mac with matrix units has the 9B's Q4 pack as `4bit`, listed before `kquant`: its repo id finds `4bit`
+            v = "4bit" if (name, var) == ("qwen3.5-9b", "kquant") and a != name + ":" + var and q9[0] == repo else var
+            check(f"cli: {a} -> {name}:{v} with its base's drafter",
+                  j.get("model") == name + ":" + v and j.get("kind") == "catalog" and j.get("variant") == v and
                   j.get("repo") == repo and j.get("revision") == rev and
-                  j.get("dir") == os.path.join(models, name + "-" + var) and got == comps and
+                  j.get("dir") == os.path.join(models, name + "-" + v) and got == comps and
                   j.get("downloaded") is False, json.dumps(j))
     # a name without a variant: the default (offline nothing can be planned, so no fallback for a smaller Mac)
     for name, aliases in [("qwen3.6-35b-a3b", ["35b", "qwen3.6-35b", "QWEN3.6-35B-A3B"]), ("qwen3.8-27b", ["27b"]),

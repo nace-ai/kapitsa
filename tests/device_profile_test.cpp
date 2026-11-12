@@ -83,7 +83,7 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 16);  // +1 from m1_max_32 guard row kept (#393)
+  CHECK(ni::default_count() == 17);  // +1: 9B mixed-format catalog policy (#493)
   const auto* segmented = row("ane_segmented_fast");
   CHECK(segmented && segmented->scope == ni::DefaultScope::kAneBuiltinNonMatrix && !segmented->exclusive);
   for (const auto& facts : {mac(7, 8, "Apple M1", g48), mac(8, 10, "Apple M2", g48),

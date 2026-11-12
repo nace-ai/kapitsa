@@ -26,6 +26,7 @@
 //   from the variant's headers (a GGUF variant's: the import's plan of the file's header).
 // - The 4-bit variants' repos and revisions are the Nace Agent app's, so the app and the CLI download the same bytes.
 #include "hub/hub.h"
+#include "engine/device_profile.h"
 
 namespace ni::hub {
 
@@ -150,7 +151,7 @@ const Companion* drafter_for_shape(int hidden, int layers) {
   return nullptr;
 }
 
-const std::vector<CatalogModel>& catalog() {
+const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
   static const std::vector<CatalogModel> c = {
       {.name = "qwen3.5-4b",
        .aliases = {"4b"},
@@ -198,17 +199,16 @@ const std::vector<CatalogModel>& catalog() {
        .default_variant = "4bit",
        .fallbacks = {},
        .variants = {
-           // KQuant (#421): lmstudio-community's pack (b455506) with its quantized weights rebuilt
-           // as KQuant, every other file the same content. KL from bf16 0.037 against 0.081,
-           // GSM8K (1319) 0.944 against 0.927, M5 Pro decode (T 0.6 and greedy, two runs each) 146 against 132 tok/s
+           // KQuant Q4: mixed 4/5-bit language weights with the packaged vision tower and tokenizer.
            {.name = "4bit",
-            .quant = "MLX affine 4-bit, group 64 (KQuant)",
-            .repo = "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant",
-            .revision = "867adaa1c6d84d1fd9b4f37f43836019c877ba59",
+            .quant = "MLX affine mixed 4/5-bit (KQuant Q4)",
+            .repo = "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant",
+            .revision = "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
             .companions = {mtp9(), dflash9()},
-            .download_gb = 9.05},
+            .download_gb = 9.30},
            // The released KQuant packs (#495): no MTP head or drafter in the repos, so the 9B's companions come with
-           // them, by name or by repo id. `9b` keeps `4bit` as its default.
+           // them, by name or by repo id. `kquant` is the Q4 pack `4bit` is on a Mac with matrix units (the repo id
+           // then finds `4bit`, listed first); on a Mac that keeps the older 9B pack it is how to opt into Q4.
            {.name = "kquant",
             .quant = "MLX affine mixed 4/5-bit (KQuant Q4)",
             .label = "KQuant Q4",
@@ -560,7 +560,21 @@ const std::vector<CatalogModel>& catalog() {
             .download_gb = 20.58},
        }},
   };
-  return c;
+  static const std::vector<CatalogModel> legacy = [] {
+    auto models = c;
+    for (auto& model : models) {
+      if (model.name != "qwen3.5-9b") continue;
+      auto& v = model.variants.front();
+      v.quant = "MLX affine 4-bit, group 64 (KQuant)";
+      v.repo = "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant";
+      v.revision = "867adaa1c6d84d1fd9b4f37f43836019c877ba59";
+      v.download_gb = 9.05;
+    }
+    return models;
+  }();
+  return ni::default_on(ni::Knob::kQwen9bQ4, device, {}) ? c : legacy;
 }
+
+const std::vector<CatalogModel>& catalog() { return catalog(ni::catalog_device()); }
 
 }  // namespace ni::hub

@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+namespace ni { struct DeviceProfile; }
+
 namespace ni::hub {
 
 // A failure to report to the user as is (offline, not found, out of disk ...): what() is one or two sentences.
@@ -80,6 +82,8 @@ struct CatalogModel {
 };
 
 const std::vector<CatalogModel>& catalog();
+// Pure device selection; the no-argument form uses the current device profile.
+const std::vector<CatalogModel>& catalog(const ni::DeviceProfile&);
 const CatalogModel* find_model(const std::string& name_or_alias);  // case-insensitive; nullptr if unknown
 // The catalog variant whose weights are `repo` (case-insensitive) at `revision` ("" = any), or nullptr.
 const Variant* find_variant_by_repo(const std::string& repo, const std::string& revision, const CatalogModel** model);
