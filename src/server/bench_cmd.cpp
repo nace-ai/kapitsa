@@ -77,6 +77,7 @@ const char* kHelp =
     "  --ctx TOKENS    append a context test AFTER the standard benchmark (e.g. 64k; minimum 4k)\n"
     "                  TTFT, cache reuse, reading and writing; live token progress, 3 repetitions\n"
     "  --prefill-chunk N  prompt tokens per prefill pass (default: automatic)\n"
+    "  --dflash MODE      drafter for the server bench starts: auto (default), none, or a drafter dir\n"
     "  --quick         3 standard writing runs per test and 4K reading; context stage still has 3 repetitions\n"
     "  --json          the result as JSON on stdout (progress on stderr)\n"
     "  --out FILE      where to save the result (default: %s/kapitsa-bench-<date>-<chip>-<model>.json)\n"
@@ -673,6 +674,7 @@ void print_summary(const ojson& r, const std::string& path) {
 
 struct Options {
   std::string model, out;
+  std::string dflash;  // auto|none|<dir>, passed to the server bench starts (empty = server default)
   int context = 0;
   int prefill_chunk = 0;
   bool quick = false, json = false, submit = false, dry = false, yes = false;
@@ -826,6 +828,9 @@ int run(const Options& o) {
                                       "--port", std::to_string(srv.port), "--ctx", std::to_string(context), "--slots", "1",
                                       "--disk-cache", "0"};
     if (o.prefill_chunk) sargv.insert(sargv.end(), {"--prefill-chunk", std::to_string(o.prefill_chunk)});
+    // The server inherits no NI_* variable (the loop below clears them all), so --dflash cannot reach it
+    // through NI_DFLASH: an A/B that set NI_DFLASH=none measured two drafting arms (12 Nov 2026, #1201).
+    if (!o.dflash.empty()) sargv.insert(sargv.end(), {"--dflash", o.dflash});
     std::vector<std::string> senv, cleared;
     for (char** e = environ; *e; ++e) {
       const std::string kv = *e;
@@ -1483,6 +1488,12 @@ int run_bench(int argc, char** argv, int first) {
       std::string why;
       o.context = parse_context(next(), &why);
       if (o.context < 4096) usage_error(why.empty() ? "--ctx needs an explicit context of at least 4k (e.g. 64k)" : why, help);
+    }
+    else if (a == "--dflash") {
+      o.dflash = next();
+      if (o.dflash != "auto" && o.dflash != "none" && o.dflash.empty())
+        usage_error("--dflash takes auto, none, or a drafter directory", help);
+      if (o.dflash != "auto" && o.dflash != "none") o.dflash = expand_home(o.dflash);
     }
     else if (a == "--prefill-chunk") {
       o.prefill_chunk = to_int(a, next(), help);
