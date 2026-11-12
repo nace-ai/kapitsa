@@ -232,6 +232,13 @@ jobs:
           npm ci --prefix sdk/node
           KAPITSA_LIBRARY="$PWD/build/libkapitsa_sdk.dylib" npm test --prefix sdk/node
           npm run typecheck --prefix sdk/node
+      - name: Rust SDK contract
+        if: steps.changes.outputs.code == 'true'
+        env:
+          RUSTUP_TOOLCHAIN: '1.95.0'
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt,clippy
+          python3 sdk/rust/test.py build
       - name: Python environment
         if: steps.changes.outputs.code == 'true'
         run: |

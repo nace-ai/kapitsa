@@ -8,6 +8,8 @@ The optional [Node.js / TypeScript SDK](node/README.md) wraps this ABI with asyn
 loading/generation, streaming callbacks, cancellation and explicit teardown.
 The [Python SDK](python/README.md) provides synchronous calls, streaming callbacks,
 thread-safe request cancellation and context managers using the standard library.
+The optional [Rust SDK](rust/README.md) provides owning engine/request handles, streaming
+callbacks and thread-safe cancellation over the same ABI.
 
 ## Build and use
 
