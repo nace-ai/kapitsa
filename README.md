@@ -36,7 +36,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 ## Features
 
 - 🏆 **Fastest decode in 33 of 38 Mac and model pairs**: 351 tok/s on Qwen3.6 35B (M5 Max) ([numbers](docs/benchmarks.md), [how](docs/kflash.md))
-- 🤖 **Runs your coding agent**: `kapitsa claude`, `codex`, `opencode`, `pi`, `hermes`, `aider`, `goose`
+- 🤖 **Runs your coding agent**: `kapitsa claude`, `codex`, `opencode`, `pi`, `hermes`, `aider`, `goose`, `copilot`
 - 🗄️ **Big models on small Macs**: 180B at 61 tok/s on a 48 GB M5 Pro
 - 💾 **No waiting after a restart**: a 16K follow-up starts in 0.16 s, not 17 s, on an M4 Pro ([numbers](docs/usage.md#ssd-prefix-cache))
 - 🎯 **Closer to the original**: KQuant for the Qwen 4B, 9B, 27B and 35B-A3B, closer than the 4-bit packs it is compared with at the same size ([numbers](#kquant))

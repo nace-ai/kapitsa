@@ -893,6 +893,15 @@ void clients() {
             std::count(h3.argv.begin(), h3.argv.end(), "-m") == 1,
         "hermes: user's --provider and -m are not duplicated");
 
+  AgentLaunch cp = agent_launch("copilot", "copilot", small, {"-p", "hi"},
+                                {{"COPILOT_PROVIDERS_CONFIG", "other.json"}, {"COPILOT_PROVIDER_BEARER_TOKEN", "other"}}, -1);
+  check(known_agent("copilot") && cp.argv == std::vector<std::string>{"copilot", "-p", "hi"} &&
+            has(cp, "COPILOT_MODEL", "m") && has(cp, "COPILOT_PROVIDER_API_KEY", "k") &&
+            has(cp, "COPILOT_PROVIDER_BASE_URL", small.base_url + "/v1") && has(cp, "COPILOT_OFFLINE", "true") &&
+            has(cp, "COPILOT_PROVIDER_MAX_PROMPT_TOKENS", "36864") && has(cp, "COPILOT_PROVIDER_MAX_OUTPUT_TOKENS", "12288") &&
+            cp.unset == std::vector<std::string>{"COPILOT_PROVIDERS_CONFIG", "COPILOT_PROVIDER_BEARER_TOKEN"},
+        "copilot: local provider, credentials, context and arguments");
+
   // aider
   AgentLaunch a = agent_launch("aider", "/bin/aider", s, {"--no-git"}, {}, -1);
   check(has(a, "OPENAI_API_BASE", "http://127.0.0.1:8000/v1") && has(a, "OPENAI_API_KEY", "kapitsa"),

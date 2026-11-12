@@ -8,7 +8,7 @@
 //                 the network (src/cluster/), and sends its requests to one that runs the model whole when this Mac
 //                 would not (route.h)
 //   kapitsa cluster [--json] [--watch]   the Macs on this network that run Kapitsa (cluster_cmd.cpp; alias: macs)
-//   kapitsa claude|codex|opencode|hermes|aider|goose [--model M] [--port P] [--ctx N] [--api-key K] [client args]   (launch.cpp)
+//   kapitsa claude|codex|opencode|hermes|aider|goose|copilot [--model M] [--port P] [--ctx N] [--api-key K] [client args]   (launch.cpp)
 //   kapitsa doctor [--model MODEL]... [--ctx N] [--slots N] [--dflash auto|none|<dir>] [--json]   this Mac, what fits
 //   kapitsa pull MODEL... [--from DIR]... [--dry-run [--json]]
 //   kapitsa list [--json]
@@ -20,6 +20,7 @@
 //   kapitsa update [--check] [--version X.Y.Z] [--rollback] [--auto on|off]   (update_cmd.cpp; and once a day, in the
 //                 background, the automatic update)
 // ("serve" is optional for options-only command lines; build/nace-infer-server is a symlink kept for old scripts.)
+#include "api/clients.h"
 #include <cstring>
 #include "api/anthropic.h"
 #include "api/chat_completions.h"
@@ -340,13 +341,14 @@ static void print_help() {
          "  kapitsa pi                    Pi\n"
          "  kapitsa hermes                Hermes (Nous Research)\n"
          "  kapitsa aider                 aider\n"
-         "  kapitsa goose                 Goose (Block)\n\n"
+         "  kapitsa goose                 Goose (Block)\n"
+         "  kapitsa copilot               GitHub Copilot CLI\n\n"
          "Models (with the files that speed them up; <model>:<variant> picks another precision):\n%s"
          "  or a Hugging Face repo of a Qwen3.5-family model in MLX format, bf16 or 3-8-bit (org/name[@revision]),\n"
          "  or a model folder, or a .gguf file (converted once into a model folder).\n\n"
          "Commands:\n"
          "  serve        start the server: chat page at /, OpenAI and Anthropic APIs at /v1 (kapitsa serve --help)\n"
-         "  claude, codex, opencode, pi, hermes, aider, goose [--model M] [--port P] [--ctx N] [--api-key K] [agent args]\n"
+         "  claude, codex, opencode, pi, hermes, aider, goose, copilot [--model M] [--port P] [--ctx N] [--api-key K] [agent args]\n"
          "               start that coding agent on Kapitsa: on the server already running on the port, else on one\n"
          "               started for it (with a context sized for agents; kapitsa claude --help)\n"
          "  pull MODEL   download a model without starting it (kapitsa pull --help)\n"
@@ -2531,8 +2533,7 @@ int main(int argc, char** argv) {
   if (cmd == "mtp-sidecar") return mtp_sidecar(argc, argv);
   if (cmd == "import") return gguf::run_import(argc, argv);
   if (cmd == "doctor") return ni::run_doctor(argc - 2, argv + 2);
-  if (cmd == "claude" || cmd == "codex" || cmd == "opencode" || cmd == "pi" || cmd == "hermes" || cmd == "aider" ||
-      cmd == "goose") return launch_agent(cmd, argc, argv, 2);
+  if (ni::api::known_agent(cmd)) return launch_agent(cmd, argc, argv, 2);
   if (cmd == "bench") return run_bench(argc, argv, 2);
   if (cmd == "update") return run_update(argc, argv, 2);
   if (cmd == "cluster" || cmd == "macs") return run_cluster(argc, argv, 2);
