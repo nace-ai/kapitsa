@@ -216,8 +216,11 @@ existing default (`NI_X=0`), a debug or profiling switch, and a measuring tool. 
 default change, with one exception: a default that only switches which published pack a catalog name downloads (`27b`
 from the plain 4-bit pack to its KQuant pack). That changes weights, not a code path, and the floors in
 `tools/logit_floors/` cover code paths on one pack, so `tools/logit_compare.py` between two packs can only report
-"moved". It gates on KL to BF16 for both packs on the same token set (name the corpus and the tool) plus a task score
-(GSM8K or the like), with the interleaved A/B on the setups above (precedent: #1228).
+"moved". It gates on KL to BF16 for both packs on the same token set (name the corpus and the tool), a task score
+(GSM8K or the like) and the interleaved A/B on the setups above. The switch passes when the new pack's mean KL to BF16
+on those tokens is at most the old pack's, its task score is not below the old pack's by more than that score's
+run-to-run spread, and the interleaved speed A/B shows it no slower than the old pack beyond noise (3%). Otherwise it
+does not switch (precedent: #1228).
 
 **Changing speed or numerics.** One change per PR. Measure only on an idle GPU (nothing else running), interleave old
 and new builds (A B A B), report every run with the Mac, macOS version and commit. A default changes only after an
