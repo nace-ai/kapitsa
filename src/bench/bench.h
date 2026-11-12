@@ -199,6 +199,8 @@ GpuSnap gpu_snapshot();
 int64_t gpu_memory_in_use();
 // The processes of the trees under `roots` (roots included even when gone)
 std::set<int> process_tree(const std::vector<int>& roots);
+// The process holding a TCP socket that listens on `port` (libproc, this user's processes), 0 when none is found
+int listening_pid(int port);
 // This process's ancestors (the terminal that runs it, among them)
 std::set<int> ancestors();
 // A process's app for messages: the outermost .app of its executable ("Google Chrome" for Chrome's GPU helper), else
@@ -348,6 +350,7 @@ struct RunInputs {
   bool quiet = true;
   std::vector<Busy> quiet_busy;
   bool external_server = false;  // tests: a server kapitsa bench did not start (its result is invalid)
+  int external_server_pid = 0;   // the process listening on its port (listening_pid), 0 when none was found
 };
 // The decoding method a server's "engine ready" line names, by the prefix of its decoding part ("KFlash speculative
 // decoding (DFlash2 lattice, tree verify)" -> "KFlash"): "KFlash", "prompt-lookup", "DFlash2", "LiLiCorr", "DSpark",

@@ -708,6 +708,10 @@ check(len(Script.log) == 18, "the quick protocol's 18 requests (warm-up 2, writi
 res = json.load(open(saved[0])) if saved else {}
 check(res.get("invalid") == ["server: a server kapitsa bench did not start (KAPITSA_BENCH_SERVER), so its settings are unknown"],
       "its result is invalid (an external server), so it can't be submitted", str(res.get("invalid")))
+# the scripted server listens in this process: bench finds it as the server's process, so its GPU work is bench's own
+check(f"(KAPITSA_BENCH_SERVER, pid {os.getpid()})" in r.stderr and
+      not any("no process found" in f for f in res.get("flags", [])),
+      "the external server's process is found (this test's), and no flag says it was not", (r.stderr[-400:], res.get("flags")))
 check(res.get("mode") == "quick" and res.get("model", {}).get("name") == "qwen3.5-4b" and res["model"]["variant"] == "4bit" and
       res["model"]["precision"] == "4-bit", "the model and the mode", str(res.get("model")))
 check(res["protocol"]["sizes"] == [4000] and res["protocol"]["decode_runs"] == 3 and len(res["results"]["decode"]["runs_tps"]) == 3,
