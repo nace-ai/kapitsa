@@ -332,6 +332,24 @@ def cli_checks(kapitsa):
               j.get("variant") == "kquant" and j.get("repo") == KQ27[0] and j.get("revision") == KQ27[1] and
               j.get("dir") == os.path.join(models, "qwen3.8-27b-kquant") and got == [PINNED["qwen3.8-27b"][2][1]] and
               j.get("downloaded") is False, json.dumps(j))
+    # the released KQuant packs without a drafter of their own (#495): by name or by repo id each gets its base's
+    # drafter, and the MTP head when the repo has none where the loader looks; the defaults stay as they are
+    D9, D27, D35 = PINNED["qwen3.5-9b"][2], PINNED["qwen3.8-27b"][2], PINNED["qwen3.6-35b-a3b"][2]
+    MTP35 = ("mtp", "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed", "95460516fbfe34c48f577f67c9ed191f5d61fbaf", ".")
+    for name, var, repo, rev, comps in [
+            ("qwen3.5-9b", "kquant", "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4", D9),
+            ("qwen3.5-9b", "kquant5", "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant", "bbddf39f41d3e0f682f2293351c67a9616d5941d", D9),
+            ("qwen3.8-27b", "kquant5", "nace-ai/Qwen3.8-27B-MLX-Q5-KQuant", "9f3187857e1940bf32fe7f23b4df0fb65631a874", D27),
+            ("qwen3.6-35b-a3b", "kquant5", "nace-ai/Qwen3.6-35B-A3B-MLX-Q5-KQuant", "50b3b1c57e2c096e007de22997ff6824224fccde",
+             [MTP35] + D35)]:
+        for a in [name + ":" + var, repo, "hf.co/" + repo, repo + "@" + rev]:
+            j = plan(a)
+            got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
+            check(f"cli: {a} -> {name}:{var} with its base's drafter",
+                  j.get("model") == name + ":" + var and j.get("kind") == "catalog" and j.get("variant") == var and
+                  j.get("repo") == repo and j.get("revision") == rev and
+                  j.get("dir") == os.path.join(models, name + "-" + var) and got == comps and
+                  j.get("downloaded") is False, json.dumps(j))
     # a name without a variant: the default (offline nothing can be planned, so no fallback for a smaller Mac)
     for name, aliases in [("qwen3.6-35b-a3b", ["35b", "qwen3.6-35b", "QWEN3.6-35B-A3B"]), ("qwen3.8-27b", ["27b"]),
                           ("qwen3.5-4b", ["4b", "qwen3.5-4b"]), ("qwen3.5-9b", ["9b", "qwen3.5-9b"])]:
