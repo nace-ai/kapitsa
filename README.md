@@ -48,7 +48,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ### KQuant
 
-KQuant is our quantization framework for MLX packs. The measurements below compare the original KQuant releases with the packs Kapitsa served before: lmstudio-community's for the 4B and 9B, MTPLX's for the 35B-A3B. They sit closer to bf16 at the same weight size and score at least as high on GSM8K. On an M5 Pro the 35B-A3B and the legacy 9B write faster, and the 4B about as fast. `kapitsa serve --model 4b` gets one; there is nothing to set.
+KQuant is our quantization framework for MLX packs. The measurements below compare the original KQuant releases with the packs Kapitsa served before: lmstudio-community's for the 4B and 9B, MTPLX's for the 35B-A3B. They sit closer to bf16 at the same weight size and score at least as high on GSM8K. On an M5 Pro the 35B-A3B writes faster and the 4B about as fast. `kapitsa serve --model 4b` gets one; there is nothing to set.
 
 The 9B results in this section use the [legacy pack at `867adaa`](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit-KQuant/tree/867adaa1c6d84d1fd9b4f37f43836019c877ba59). Macs with matrix units (M5 and newer) default to Q4-KQuant at `ff7b61b8`; other Macs, including M3 and M4, keep the legacy pack. These GSM8K and decode results do not describe Q4-KQuant. The older 9B rows in the speed tables below also keep their measured pack and 9.0 GB download size.
 
@@ -57,7 +57,7 @@ The 9B results in this section use the [legacy pack at `867adaa`](https://huggin
 | 4B lmstudio-community | 0.070 | 0.914 | 218 |
 | 4B KQuant | **0.048** | 0.923 | 223 |
 | 9B lmstudio-community | 0.081 | 0.927 | 132 |
-| 9B KQuant, legacy `867adaa` | **0.037** | **0.944** | **146** |
+| 9B KQuant, legacy `867adaa` | **0.037** | **0.944** | 146 |
 | 35B-A3B MTPLX | 0.096 | 0.948 | 212 |
 | 35B-A3B KQuant | **0.059** | 0.952 | **227** |
 
@@ -75,7 +75,7 @@ The legacy 9B pack is less than half as far from the original as lmstudio-commun
 - **A search per group of weights.** Every group gets its own best fit, instead of being rounded the same way as every other.
 - **The same formats.** Same files, same size, nothing new to install: any MLX reader loads the packs.
 
-<sub>Baselines: lmstudio-community's packs for the 4B and 9B, MTPLX's pack (Youssofal, `9546051`) for the 35B-A3B, which the catalog served before. KL: mean over 32,704 to 32,768 tokens of WikiText-2, GSM8K chats and HumanEval code against the bf16 model; GSM8K zero-shot, greedy, thinking off. Decode: Kapitsa 0.2.33 (`7c51122`) with its default drafting, a 512-token answer, the mean of two interleaved runs per pack at T 0.6 and two at T 0, MacBook Pro M5 Pro 48 GB, macOS 26.5.2, on AC; the 4B rows: Kapitsa 0.2.35 (`30b18f9`), two legs per pack in the order A B B A, both packs with the drafter and MTP head Kapitsa ships for the 4B (T 0.6: 222 against 207 tok/s, T 0: 225 against 228; the table pools both); the 35B-A3B row: Kapitsa 0.2.32 (`e728524`), three KQuant and two standard valid legs per setting (T 0.6: 219 against 200 tok/s, T 0: 234 against 224; the table pools both). Quality and speed were measured on text workloads; the 35B-A3B pack includes the vision tower, which was not evaluated. Every run, including the voided legs: the [4B and 9B record](bench/results/2026-11-10-m5-pro-kquant/README.md), the [4B record on 0.2.35](bench/results/2026-11-12-m5-pro-kquant-4b-0.2.35/README.md) and the [35B-A3B record](bench/results/2026-11-10-m5-pro-kquant-35b/README.md).</sub>
+<sub>Baselines: lmstudio-community's packs for the 4B and 9B, MTPLX's pack (Youssofal, `9546051`) for the 35B-A3B, which the catalog served before. KL: mean over 32,704 to 32,768 tokens of WikiText-2, GSM8K chats and HumanEval code against the bf16 model; GSM8K zero-shot, greedy, thinking off. Decode: Kapitsa 0.2.33 (`7c51122`) with its default drafting, a 512-token answer, the mean of two interleaved runs per pack at T 0.6 and two at T 0, MacBook Pro M5 Pro 48 GB, macOS 26.5.2, on AC; the 4B rows: Kapitsa 0.2.35 (`30b18f9`), two legs per pack in the order A B B A, both packs with the drafter and MTP head Kapitsa ships for the 4B (T 0.6: 222 against 207 tok/s, T 0: 225 against 228; the table pools both); the 9B rows ran with the drafting each pack had then (different drafters), so they make no 9B speed claim; the 35B-A3B row: Kapitsa 0.2.32 (`e728524`), three KQuant and two standard valid legs per setting (T 0.6: 219 against 200 tok/s, T 0: 234 against 224; the table pools both). Quality and speed were measured on text workloads; the 35B-A3B pack includes the vision tower, which was not evaluated. Every run, including the voided legs: the [4B and 9B record](bench/results/2026-11-10-m5-pro-kquant/README.md), the [4B record on 0.2.35](bench/results/2026-11-12-m5-pro-kquant-4b-0.2.35/README.md) and the [35B-A3B record](bench/results/2026-11-10-m5-pro-kquant-35b/README.md).</sub>
 
 ### Drex decision models
 

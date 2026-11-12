@@ -31,9 +31,12 @@ was void.
 
 At T 0.6 the KQuant pack writes 222 against 207 tok/s; at T 0 225 against 228. The README's decode column pools both.
 
-What the leg files flag: every JSON carries `CONTENTION` (mean foreign GPU load 82-87%, the only user `kapitsa`) and
-an `invalid` note that bench did not start the server; both are the leg's own `kapitsa serve`, as in the 2026-11-10
-record. No 4B leg flags a repetition loop.
+What the leg files flag: every JSON carries `CONTENTION` (mean foreign GPU load 82-87%, top process `kapitsa`) and
+an `invalid` note that bench did not start the server. Bench counts a server it did not start as foreign load (with
+`KAPITSA_BENCH_SERVER` its own-process set is empty), so the `kapitsa` share is the leg's own `kapitsa serve`, as in the
+2026-11-10 record. The files also list foreground apps above 0.5% of the GPU: `com.apple.WebKit.GPU` on every leg,
+Slack on 1-A, Microsoft Edge on 5-B and 6-A. Both packs ran with them present, and the 2.7% gap is inside the 3% band,
+so the result stays "about as fast". No 4B leg flags a repetition loop.
 
 [sp35.json](sp35.json) holds the legs; [rows.py](rows.py) prints the README's 4B cells and the table above from it,
 and `python3 rows.py --check` checks it against the leg files in [legs/](legs).
