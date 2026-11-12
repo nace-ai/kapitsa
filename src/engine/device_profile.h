@@ -51,7 +51,6 @@ struct ModelFacts {
   int moe_i = 0;
   int shared_i = 0;
   bool clover = false;  // DiffuSpace's Clover: the 35B-A3B shape; kQwen35A3b leaves it out (slower at temperature 0.6 on the M5 Pro, #1094)
-  bool ornith = false;  // ornith-ai's Ornith-1.5-35B-A3B: the same shape; kQwen35A3b leaves it out (the lanes' A/B was the 35B-A3B's, nothing measured Ornith's; #1201)
 };
 
 struct DeviceProfile {

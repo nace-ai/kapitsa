@@ -15,10 +15,8 @@ bool qwen35_shape(const ModelFacts& m) { return m.moe && m.hidden == 2048 && m.l
 // The 35B-A3B shape the KFlash lanes were run on. Clover has the same numbers and is left out by the caller
 // (config.json model_type): with the history lane and the selector update, Clover's sampled decode is slower
 // (M5 Pro, interleaved, 6 of 6 pairs slower at temperature 0.6 (-4%), faster at 0 (+5%; #1094)), so this gate is narrower than the shape on a measured miss.
-// Ornith-1.5-35B-A3B has the same numbers too, and is left out for the opposite reason: nothing measured it, and a
-// default earned on one checkpoint does not carry to another family's on the strength of its shape (#1201).
 bool qwen35_a3b(const ModelFacts& m) {
-  return qwen35_shape(m) && !m.clover && !m.ornith && m.experts == 256 && m.top_k == 8 && m.moe_i == 512 && m.shared_i == 512;
+  return qwen35_shape(m) && !m.clover && m.experts == 256 && m.top_k == 8 && m.moe_i == 512 && m.shared_i == 512;
 }
 
 }  // namespace

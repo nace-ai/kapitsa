@@ -45,17 +45,8 @@ using json = nlohmann::json;
 static constexpr bool kSelUpdDefault = true;
 static constexpr float kSelUpdLr = 0.003f;
 // The kflash_hist row of the device profile table is the default; the shape fill is the config plus whether this is
-// Clover (its instance type, or the config's model_type before it loads) or Ornith. Ornith's config is the 35B-A3B's
-// in every field that identifies a model (same architectures, the same 2048/40/256/8/512 shape), so it is named by the
-// catalog row the folder was downloaded as (the manifest's repo), never by a guess at the config (#1201).
-static bool is_ornith_dir(const std::string& dir) {
-  std::ifstream f(dir + "/.kapitsa/manifest.json");
-  if (!f) return false;
-  const json r = json::parse(f, nullptr, false);
-  const std::string repo = r.is_object() ? r.value("repo", std::string()) : std::string();
-  return repo.rfind("ornith-ai/", 0) == 0;
-}
-static ModelFacts dfl_lanes_facts(const Qwen35Config& c, bool clover, bool ornith) {
+// Clover (its instance type, or the config's model_type before it loads).
+static ModelFacts dfl_lanes_facts(const Qwen35Config& c, bool clover) {
   ModelFacts f;
   f.moe = c.moe;
   f.hidden = c.hidden;
@@ -65,15 +56,13 @@ static ModelFacts dfl_lanes_facts(const Qwen35Config& c, bool clover, bool ornit
   f.moe_i = c.moe_I;
   f.shared_i = c.shared_I;
   f.clover = clover;
-  f.ornith = ornith;
   return f;
 }
 static bool dfl_lanes_default(const Qwen35& t) {
-  return default_on(Knob::kKflashHist,
-                    dfl_lanes_facts(t.config(), dynamic_cast<const Clover*>(&t) != nullptr, is_ornith_dir(t.model_dir())));
+  return default_on(Knob::kKflashHist, dfl_lanes_facts(t.config(), dynamic_cast<const Clover*>(&t) != nullptr));
 }
 bool DFlash2::lanes_default(const std::string& model_dir, const Qwen35Config& c) {
-  return default_on(Knob::kKflashHist, dfl_lanes_facts(c, Clover::is_model(model_dir), is_ornith_dir(model_dir)));
+  return default_on(Knob::kKflashHist, dfl_lanes_facts(c, Clover::is_model(model_dir)));
 }
 
 static int lowrank_request() {
