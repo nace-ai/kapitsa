@@ -31,10 +31,26 @@ async function standIn(port, extra = []) {
   const dir = mkdtempSync(join(tmpdir(), "engine-page-")), tokenFile = join(dir, "token");
   const p = spawn("python3", [join(root, "tools/engine_replay.py"), "--port", String(port), "--speed", "4",
                               "--token-file", tokenFile, ...extra], {stdio: ["ignore", "pipe", "inherit"]});
-  await until(() => { try { return readFileSync(tokenFile, "utf8").trim(); } catch { return ""; } }, 15000, "the stand-in starts");
-  const token = readFileSync(tokenFile, "utf8").trim();
-  return {p, token, base: `http://127.0.0.1:${port}`,
-          stop: () => new Promise(r => { if (p.exitCode !== null) return r(); p.once("exit", r); p.kill(); })};
+  // engine_replay.py writes the token file after it has bound its port, so a stand-in that exits early (a port still
+  // held by the previous one, a python that failed) writes none. An empty key is that failure, reported with the
+  // stand-in's status and output. Reading the file again unguarded died on the missing file with a bare ENOENT, which
+  // said nothing about the stand-in and read as a broken test (12 Nov 2026, #1213).
+  let said = "";                       // stderr is inherited; the stand-in's own progress line goes to stdout
+  p.stdout.on("data", b => { said += b; });
+  const key = await until(() => { try { return readFileSync(tokenFile, "utf8").trim(); } catch { return ""; } },
+                          15000, "the stand-in starts");
+  if (!key) {
+    if (p.exitCode === null && p.signalCode === null) p.kill();
+    check(false, `the stand-in on port ${port} never wrote its key: ${p.exitCode !== null ? `it exited with ${p.exitCode}`
+                                                                                        : `it is still running`}` +
+                 (said.trim() ? `; its output: ${said.trim().split("\n").slice(-3).join(" | ")}` : "; it printed nothing"));
+  }
+  // A child that a signal ended has exitCode null and signalCode set, and its exit event has already fired by the time
+  // the caller asks to stop it: waiting for another one never returns, and a test whose stand-in outlives a failed start
+  // then hangs instead of reporting that failure (#1213).
+  const gone = () => p.exitCode !== null || p.signalCode !== null;
+  return {p, token: key, base: `http://127.0.0.1:${port}`,
+          stop: () => new Promise(r => { if (gone()) return r(); p.once("exit", r); p.kill(); })};
 }
 
 // The page in a fresh vm: `hash` as its address's fragment; `storage` "ok" or "blocked" (every access throws)
