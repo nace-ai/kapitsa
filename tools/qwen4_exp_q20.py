@@ -555,7 +555,8 @@ def write_sparse_table(pack, out_path, rows, add=False, stream=False, piece=16 <
         jobs = []  # (a, b, tensor offset, row bytes, rows in [a, b))
         for k, js in sorted(want.items()):
             f0, nr, wo, wb, so, gb, bo = layout[k]
-            for base, width in ((wo, wb), (so, gb), (bo, gb)):
+            # A retry treats nonzero scales as a completed row. Write its weights and biases first.
+            for base, width in ((wo, wb), (bo, gb), (so, gb)):
                 if not stream:
                     jobs += [(base + j * width, base + (j + 1) * width, base, width, [j]) for j in js]
                     continue
