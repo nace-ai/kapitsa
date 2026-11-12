@@ -577,4 +577,21 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
 
 const std::vector<CatalogModel>& catalog() { return catalog(ni::catalog_device()); }
 
+// The pinned standalone packs in the combined repos (12 Nov 2026: every folder's safetensors have the LFS sha256 of the
+// pinned standalone revision's). Flash-Next's row is the combined repo's root at the revision `kquant` pins; its Q4/
+// folder is a later checkpoint that no catalog entry names.
+const std::vector<CombinedPack>& combined_packs() {
+  static const std::vector<CombinedPack> packs = {
+      {"nace-ai/Qwen3.5-4B-MLX-KQuant", "Q4", "84168d4d60c807a3c8372ee60f9d2034d5166964", "nace-ai/Qwen3.5-4B-MLX-Q4-KQuant"},
+      {"nace-ai/Qwen3.5-9B-MLX-KQuant", "Q4", "02b8c7669c8dee02a5efa475a478bcca966a24d1", "nace-ai/Qwen3.5-9B-MLX-Q4-KQuant"},
+      {"nace-ai/Qwen3.5-9B-MLX-KQuant", "Q5", "02b8c7669c8dee02a5efa475a478bcca966a24d1", "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant"},
+      {"nace-ai/Qwen3.8-27B-MLX-KQuant", "Q4", "105530e56743ac3515a34b274b3865965dc83bc6", "nace-ai/Qwen3.8-27B-MLX-Q4-KQuant"},
+      {"nace-ai/Qwen3.8-27B-MLX-KQuant", "Q5", "105530e56743ac3515a34b274b3865965dc83bc6", "nace-ai/Qwen3.8-27B-MLX-Q5-KQuant"},
+      {"nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", "Q4", "f82ecb7f83f578e2d599e36e27177cc97d02c1f1", "nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant"},
+      {"nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", "Q5", "f82ecb7f83f578e2d599e36e27177cc97d02c1f1", "nace-ai/Qwen3.6-35B-A3B-MLX-Q5-KQuant"},
+      {"nace-ai/Qwen3.8-Flash-Next-MLX-KQuant", "", "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd", "nace-ai/Qwen3.8-Flash-Next-MLX-Q4-KQuant"},
+  };
+  return packs;
+}
+
 }  // namespace ni::hub
