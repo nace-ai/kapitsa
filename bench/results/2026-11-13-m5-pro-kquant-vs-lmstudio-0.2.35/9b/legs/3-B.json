@@ -1,0 +1,101 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "quick",
+  "time_utc": "2026-11-13T00:20:19Z",
+  "kapitsa": {
+    "version": "0.2.35",
+    "commit": "30b18f9"
+  },
+  "mac": {
+    "identifier": "Mac17,8",
+    "name": "MacBook Pro (16-inch, M5 Pro or M5 Max)",
+    "year": 2026,
+    "chip": "Apple M5 Pro",
+    "cpu_cores": 18,
+    "gpu_cores": 20,
+    "memory_gb": 48,
+    "macos": "26.5.2",
+    "macos_build": "25F84"
+  },
+  "model": {
+    "name": "kq-9b",
+    "title": "kq-9b",
+    "variant": null,
+    "precision": "4-bit (mixed)",
+    "catalog": false,
+    "revision": null,
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "dflash2",
+    "drafter_kind": "DFlash",
+    "drafter_source": "dflash2",
+    "drafter_reason": "found in the model's folder"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 3,
+    "greedy_runs": 3,
+    "sizes": [
+      4000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 130.25,
+      "runs_tps": [
+        150.63,
+        130.25,
+        110.15
+      ],
+      "median_accepted_draft_tps": 93.36,
+      "median_accepted_draft_share": 0.7168
+    },
+    "decode_greedy": {
+      "median_tps": 163.27,
+      "runs_tps": [
+        163.27,
+        162.93,
+        170.03
+      ],
+      "median_accepted_draft_tps": 125.64,
+      "median_accepted_draft_share": 0.7695
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4133,
+        "ttft_s": 2.3881,
+        "tps": 1730.7,
+        "followup_s": [
+          0.0689,
+          0.0743,
+          0.0674
+        ],
+        "followup_median_s": 0.0689,
+        "followup_suffix_tps": 319.4
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 8.48
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "high",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.0,
+    "gpu_other_max_pct": 0.0,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [
+    "decode: repetition loop (distinct-4-gram 0.4296)"
+  ],
+  "invalid": []
+}
