@@ -145,6 +145,28 @@ int main() {
     KfBatch kb(bkey);
     check(kb.cost(2, 2) != c2 && kb.cycles() == 0, "a KfBatch file another build wrote is not loaded");
   }
+  // Fixed-point formatting of a finite double can take over 300 characters per row.
+  {
+    nlohmann::json j;
+    j["build"] = KfBudget::build();
+    j["alpha"] = j["beta"] = std::vector<float>(9, 1.0f);
+    const std::vector<double> costs(9, 1e300);
+    j["cost_of"] = "cycle GPU ms";
+    j["cost"] = costs;
+    std::ofstream(dir + "/kflash/" + key + ".json") << j.dump();
+    KfBudget single(key);
+    single.set_rows(0xff, 8);
+    check(single.summary().ends_with(" (1.00, 1.00)"), "large row costs retain the single budget calibration summary");
+
+    j["cost_of"] = "batched cycle GPU ms";
+    j["cost"] = std::vector<std::vector<double>>(KfBatch::kMembers + 1, costs);
+    std::ofstream(dir + "/kflash/long-batch.json") << j.dump();
+    KfBatch batch("long-batch");
+    KfBatch::Member members[2]{};
+    const int zeros[2]{};
+    batch.observe(members, 2, zeros, zeros, 1e300, nullptr);
+    check(batch.summary().ends_with(" (1.00, 1.00)"), "large row costs retain the batch calibration summary");
+  }
   std::string rm = "rm -rf '" + dir + "'";
   if (system(rm.c_str()) != 0) fprintf(stderr, "could not remove %s\n", dir.c_str());
   printf("%s\n", fails ? "kflash_cache_test: FAILED" : "kflash_cache_test: all passed");
