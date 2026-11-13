@@ -1,0 +1,34 @@
+# build/ane_calib ~/.cache/kapitsa/models/qwen3.8-27b-kquant --wave --units 22,24,26,28,29,30,31,32,33,34 --reps 3
+ane_calib --wave: Apple M6, macOS 26B131, 2048-row prefill chunks, 3 reps (median)
+GPU alone: 8108 ms per chunk (252.6 tok/s)
+22 units: 4902 ms per chunk (417.8 tok/s, 1.65x the GPU alone); build 4.4 s
+24 units: 4829 ms per chunk (424.1 tok/s, 1.68x the GPU alone); build 4.9 s
+26 units: 4663 ms per chunk (439.2 tok/s, 1.74x the GPU alone); build 5.6 s
+28 units: 4488 ms per chunk (456.3 tok/s, 1.81x the GPU alone); build 6.1 s
+29 units: 4387 ms per chunk (466.8 tok/s, 1.85x the GPU alone); build 6.3 s
+30 units: 4325 ms per chunk (473.5 tok/s, 1.87x the GPU alone); build 6.4 s
+31 units: 4188 ms per chunk (489.0 tok/s, 1.94x the GPU alone); build 7.1 s
+32 units: 4239 ms per chunk (483.1 tok/s, 1.91x the GPU alone); build 7.9 s
+33 units: 4205 ms per chunk (487.0 tok/s, 1.93x the GPU alone); build 8.5 s
+34 units: 4202 ms per chunk (487.4 tok/s, 1.93x the GPU alone); build 8.2 s
+best: 31 units, 4188 ms per 2048-row chunk vs 8108 GPU alone (1.94x)
+
+
+# --units 34,33,31,29 --reps 5
+GPU alone: 8761 ms per chunk (233.8 tok/s)
+34 units: 4229 ms per chunk (484.3 tok/s, 2.07x the GPU alone); build 0.1 s
+33 units: 4345 ms per chunk (471.3 tok/s, 2.02x the GPU alone); build 0.1 s
+31 units: 4365 ms per chunk (469.2 tok/s, 2.01x the GPU alone); build 0.0 s
+29 units: 4417 ms per chunk (463.6 tok/s, 1.98x the GPU alone); build 0.0 s
+best: 34 units, 4229 ms per 2048-row chunk vs 8761 GPU alone (2.07x)
+
+# --units 29,31,33,34 --reps 5
+GPU alone: 8309 ms per chunk (246.5 tok/s)
+29 units: 4201 ms per chunk (487.5 tok/s, 1.98x the GPU alone); build 0.0 s
+31 units: 4113 ms per chunk (498.0 tok/s, 2.02x the GPU alone); build 0.0 s
+33 units: 4224 ms per chunk (484.8 tok/s, 1.97x the GPU alone); build 0.0 s
+34 units: 4229 ms per chunk (484.3 tok/s, 1.96x the GPU alone); build 0.0 s
+best: 31 units, 4113 ms per 2048-row chunk vs 8309 GPU alone (2.02x)
+
+# --units 31 --reps 3 --write
+31 units: 4102 ms per chunk (499.2 tok/s, 2.06x the GPU alone); build 0.0 s

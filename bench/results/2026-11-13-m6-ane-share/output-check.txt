@@ -1,0 +1,83 @@
+# tools/logit_compare.py output, copied from the terminal. Dumps: build/logit_dump MODEL REF (reference) and
+# build/logit_dump MODEL NEW --from REF (candidate), 8 windows of bench/corpus.txt, 24 scored rows each.
+# The dumps themselves (~550 MB each) were not kept.
+
+## 1. Qwen3.5 4B: origin/main (no share on the M6: GPU alone) against this branch (default share, 15 of 18 units)
+# python3 tools/logit_compare.py ref new
+prefill: 8 records (qwen3.5-4b-4bit)
+  reference: 0.2.35 (9e3159c4), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35 (9e3159c4), prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}
+  bitwise identical rows 0 of 8; max |logit diff| 0.8588
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 1.377e-03 median 1.586e-04 p99 7.940e-03 max 8.388e-03; top-2 margin change up to 0.4392
+  next-token NLL change -3.309e-02 nats per record (candidate minus reference)
+batch: 192 records (qwen3.5-4b-4bit)
+  reference: 0.2.35 (9e3159c4), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35 (9e3159c4), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 0.6563
+  top-1 agreement 0.9948 (1 flip, 1 of them near-ties (reference margin under 1.52))
+  KL mean 2.923e-04 median 2.044e-05 p99 2.769e-03 max 1.236e-02; top-2 margin change up to 0.5793
+  next-token NLL change +3.388e-03 nats per record (candidate minus reference)
+    flip at sequence 0 prefix 3209: top-1 8102 -> 2270, reference margin 0.09926
+  PASS (tools/logit_floors/qwen3.5-4b-4bit.json)
+step: 192 records (qwen3.5-4b-4bit)
+  reference: 0.2.35 (9e3159c4), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35 (9e3159c4), prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 0.6551
+  top-1 agreement 0.9948 (1 flip, 1 of them near-ties (reference margin under 1.52))
+  KL mean 2.888e-04 median 2.057e-05 p99 2.739e-03 max 1.236e-02; top-2 margin change up to 0.5733
+  next-token NLL change +3.369e-03 nats per record (candidate minus reference)
+    flip at sequence 0 prefix 3209: top-1 8102 -> 2270, reference margin 0.09567
+  PASS (tools/logit_floors/qwen3.5-4b-4bit.json)
+verify: 192 records (qwen3.5-4b-4bit)
+  reference: 0.2.35 (9e3159c4), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35 (9e3159c4), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 0.6558
+  top-1 agreement 0.9948 (1 flip, 1 of them near-ties (reference margin under 1.52))
+  KL mean 2.886e-04 median 1.791e-05 p99 2.744e-03 max 1.236e-02; top-2 margin change up to 0.5705
+  next-token NLL change +3.376e-03 nats per record (candidate minus reference)
+    flip at sequence 0 prefix 3209: top-1 8102 -> 2270, reference margin 0.09282
+  PASS (tools/logit_floors/qwen3.5-4b-4bit.json)
+
+## 2. Qwen3.8 27B KQuant (qwen3.8-27b:kquant): origin/main with NI_ANE=0 (GPU alone, what main runs on the M6)
+##    against this branch (default share, 29 of 34 units). Gated at the plain 4-bit 27B's floor: no floor file exists
+##    for the KQuant pack, which runs the same 4-bit group-64 kernels.
+# python3 tools/logit_compare.py --floor tools/logit_floors/qwen3.8-27b-4bit.json ref27 def27   (summary lines)
+prefill: 8 records (qwen3.8-27b-kquant)
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 1.342e-04 median 3.949e-05 p99 5.396e-04 max 5.632e-04; top-2 margin change up to 0.1383
+batch: 192 records (qwen3.8-27b-kquant)
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 5.787e-05 median 1.301e-06 p99 6.641e-04 max 1.783e-03; top-2 margin change up to 1.011
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+step: 192 records (qwen3.8-27b-kquant)
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 5.839e-05 median 1.321e-06 p99 6.689e-04 max 1.997e-03; top-2 margin change up to 0.9941
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+verify: 192 records (qwen3.8-27b-kquant)
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 5.859e-05 median 1.450e-06 p99 6.855e-04 max 1.824e-03; top-2 margin change up to 0.9837
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+
+## 3. Qwen3.5 4B, the calibrated share (18 of 18 units, from ane_calib --write) against origin/main with NI_ANE=0
+# python3 tools/logit_compare.py ref cal   (summary lines)
+prefill: 8 records (qwen3.5-4b-4bit)
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 4.715e-04 median 3.559e-04 p99 1.621e-03 max 1.689e-03; top-2 margin change up to 0.1773
+batch: 192 records (qwen3.5-4b-4bit)
+  top-1 agreement 0.9896 (2 flips, 2 of them near-ties (reference margin under 1.52))
+  KL mean 4.167e-04 median 2.693e-05 p99 5.315e-03 max 9.344e-03; top-2 margin change up to 0.3299
+    flip at sequence 3 prefix 2049: top-1 6411 -> 553, reference margin 0.252
+    flip at sequence 3 prefix 2059: top-1 696 -> 4487, reference margin 0.04521
+  PASS (tools/logit_floors/qwen3.5-4b-4bit.json)
+step: 192 records (qwen3.5-4b-4bit)
+  top-1 agreement 0.9896 (2 flips, 2 of them near-ties (reference margin under 1.52))
+  KL mean 4.092e-04 median 2.682e-05 p99 5.092e-03 max 9.053e-03; top-2 margin change up to 0.3358
+    flip at sequence 3 prefix 2049: top-1 6411 -> 553, reference margin 0.2503
+    flip at sequence 3 prefix 2059: top-1 696 -> 4487, reference margin 0.04611
+  PASS (tools/logit_floors/qwen3.5-4b-4bit.json)
+verify: 192 records (qwen3.5-4b-4bit)
+  top-1 agreement 0.9948 (1 flip, 1 of them near-ties (reference margin under 1.52))
+  KL mean 4.100e-04 median 2.715e-05 p99 5.281e-03 max 8.953e-03; top-2 margin change up to 0.3366
+    flip at sequence 3 prefix 2049: top-1 6411 -> 553, reference margin 0.25
+  PASS (tools/logit_floors/qwen3.5-4b-4bit.json)

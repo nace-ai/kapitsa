@@ -102,6 +102,14 @@ int main() {
     // M1 and M2 get default_units()'s own share; it stays apart from the built-in share and the segmented default
     CHECK(ni::ane_pre_m3_share(facts.name) == (facts.apple_family < 9 ? facts.apple_family - 6 : 0));
   }
+  // The built-in share is the M4 and every later generation, by the name's generation number, not a substring.
+  CHECK(ni::ane_builtin_share("Apple M6") && ni::ane_builtin_share("Apple M6 Pro") && ni::ane_builtin_share("Apple M7 Max"));
+  CHECK(ni::ane_builtin_share("Apple M10") && ni::ane_builtin_share("Apple M5 Ultra"));
+  CHECK(!ni::ane_builtin_share("Apple M3 Max") && !ni::ane_builtin_share("Apple M1") && !ni::ane_builtin_share("Apple M2 Ultra"));
+  CHECK(!ni::ane_builtin_share("Apple M") && !ni::ane_builtin_share("Apple M6X") && !ni::ane_builtin_share("Paravirtual M5"));
+  // An M6 is matrix class: the share's gpu_mma branch applies, and the fast profile's segmented inputs stay off.
+  CHECK(!ni::ane_segmented_default(mac(11, 12, "Apple M6", 32L << 30)));
+  CHECK(ni::ane::default_units("Apple M6", 12, 34, true, true) > 0);
   CHECK(ni::ane_pre_m3_share("Apple M1 Ultra") == 1 && ni::ane_pre_m3_share("Apple M2 Pro") == 2);
   CHECK(ni::ane_pre_m3_share("Apple M2 Max") == 2 && ni::ane_pre_m3_share("Apple M3 Max") == 0);
   CHECK(ni::ane_pre_m3_share("Apple M10") == 0 && ni::ane_pre_m3_share("Apple M20 Pro") == 0);

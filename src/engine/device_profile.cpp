@@ -21,8 +21,17 @@ bool qwen35_a3b(const ModelFacts& m) {
 
 }  // namespace
 
+// The M4 and every later generation ("Apple M4", "Apple M5 Pro", "Apple M6", "Apple M10 Max"). A substring test on
+// "M4"/"M5" left the M6 and later with no default share, so their Neural Engine prefill split stayed off without a
+// calibration, while the GPU half (matrix units, apple_family >= 10) already treats them as M5-class.
 bool ane_builtin_share(const std::string& chip) {
-  return chip.find("M4") != std::string::npos || chip.find("M5") != std::string::npos;
+  const std::string prefix = "Apple M";
+  if (chip.compare(0, prefix.size(), prefix) != 0) return false;
+  size_t i = prefix.size();
+  int gen = 0;
+  while (i < chip.size() && chip[i] >= '0' && chip[i] <= '9' && gen < 1000) gen = gen * 10 + (chip[i++] - '0');
+  if (i == prefix.size() || (i < chip.size() && chip[i] != ' ')) return false;
+  return gen >= 4;
 }
 
 int ane_pre_m3_share(const std::string& chip) {
