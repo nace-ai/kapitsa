@@ -296,7 +296,15 @@ void Gpu::drain() noexcept {
   }
 }
 
+// macOS ends a process's GPU work with kIOGPUCommandBufferCallbackErrorImpactingInteractivity (0xe) when it keeps the
+// GPU from the window server for too long: most cold 128K prompts on an M2 Pro died that way (#1194), with command
+// buffers of 0.8 s and of 11 s alike. The AGX driver reads this variable when it opens the device, so it is set here,
+// at load, before any Metal call; a value the user set (0 included) is kept. llama.cpp sets it too, at Metal init
+// (ggml-org/llama.cpp#22216).
+static const bool kRelaxedWatchdog = setenv("AGX_RELAX_CDM_CTXSTORE_TIMEOUT", "1", 0) == 0;
+
 Gpu::Gpu() : impl_(nullptr) {
+  (void)kRelaxedWatchdog;
   auto pending = std::make_unique<Impl>();
   id<MTLDevice> d = MTLCreateSystemDefaultDevice();
   if (!d) fatal("no Metal device");
@@ -1216,16 +1224,26 @@ void Encoder::commit() {
   }
   commit_cb((__bridge id<MTLCommandBuffer>)cb_);
 }
+[[noreturn]] static void gpu_fatal(id<MTLCommandBuffer> b) {
+  const char* desc = [[b.error description] UTF8String];
+  const std::string what = desc ? desc : "no error description";
+  if (what.find("ImpactingInteractivity") == std::string::npos) fatal("GPU error: %s", what.c_str());
+  const char* relax = getenv("AGX_RELAX_CDM_CTXSTORE_TIMEOUT");
+  fatal("GPU error: %s. macOS stopped this work because it kept the GPU from the display too long; a long prompt on a "
+        "Mac with its display on can do that (AGX_RELAX_CDM_CTXSTORE_TIMEOUT=%s here, which Kapitsa sets to 1 unless "
+        "you set it). Please report it with the prompt length and your Mac.",
+        what.c_str(), relax ? relax : "unset");
+}
+
 void Encoder::wait() {
   id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
   [cb waitUntilCompleted];
   for (void* p : prev_) {
     id<MTLCommandBuffer> b = (__bridge id<MTLCommandBuffer>)p;
     [b waitUntilCompleted];
-    if (b.status == MTLCommandBufferStatusError) fatal("GPU error: %s", [[b.error description] UTF8String]);
+    if (b.status == MTLCommandBufferStatusError) gpu_fatal(b);
   }
-  if (cb.status == MTLCommandBufferStatusError)
-    fatal("GPU error: %s", [[cb.error description] UTF8String]);
+  if (cb.status == MTLCommandBufferStatusError) gpu_fatal(cb);
   static const bool cbt = getenv("NI_CB_TRACE") && atoi(getenv("NI_CB_TRACE"));
   if (cbt && prev_.size() > 4) {
     // debug: GPU time of each command buffer of this encoder, the idle gaps between them
