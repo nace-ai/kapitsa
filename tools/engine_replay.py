@@ -25,7 +25,6 @@ import os
 import random
 import re
 import secrets
-import socket
 import sys
 import threading
 import time
@@ -562,13 +561,15 @@ def main():
     inst = Instance(args)
     threading.Thread(target=inst.clock, daemon=True).start()
     stage("instance ready")
-    if args.timing:  # HTTPServer.server_bind does this lookup; done here first it is timed on its own
-        stage("getfqdn(127.0.0.1) begins")
-        socket.getfqdn("127.0.0.1")
-        stage("getfqdn(127.0.0.1) done")
-    srv = ThreadingHTTPServer(("127.0.0.1", args.port), handler(inst))
+
+    class Server(ThreadingHTTPServer):
+        def server_bind(self):  # the stdlib's own bind, then its getfqdn lookup; timed, not repeated
+            stage("server_bind begins (bind, then getfqdn(127.0.0.1))")
+            super().server_bind()
+            stage("server_bind done")
+
+    srv = Server(("127.0.0.1", args.port), handler(inst))
     srv.daemon_threads = True
-    stage("bound")
     if args.token_file:
         fd = os.open(args.token_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         os.fchmod(fd, 0o600)  # also when the file was there with another mode
