@@ -25,6 +25,7 @@ import os
 import random
 import re
 import secrets
+import socket
 import sys
 import threading
 import time
@@ -541,7 +542,16 @@ def main():
     ap.add_argument("--stop-seconds", type=float, default=2, help="how long a stopped run reads `stopping`, on its clock")
     ap.add_argument("--print", action="store_true", help="print the default recording's frames and exit")
     ap.add_argument("--seconds", type=float, default=90, help="with --print: this much of the recording")
+    ap.add_argument("--timing", action="store_true",
+                    help="debug: print each start-up stage and its time to stderr, so a slow start names where")
     args = ap.parse_args()
+    t0 = time.monotonic()
+
+    def stage(what):
+        if args.timing:
+            print(f"engine_replay: +{(time.monotonic() - t0) * 1000:.0f} ms {what}", file=sys.stderr, flush=True)
+
+    stage("started")
     if args.print:
         r = Run("5c1e0a7d93b24f18")
         while r.t < args.seconds:
@@ -551,13 +561,20 @@ def main():
         return 0
     inst = Instance(args)
     threading.Thread(target=inst.clock, daemon=True).start()
+    stage("instance ready")
+    if args.timing:  # HTTPServer.server_bind does this lookup; done here first it is timed on its own
+        stage("getfqdn(127.0.0.1) begins")
+        socket.getfqdn("127.0.0.1")
+        stage("getfqdn(127.0.0.1) done")
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), handler(inst))
     srv.daemon_threads = True
+    stage("bound")
     if args.token_file:
         fd = os.open(args.token_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         os.fchmod(fd, 0o600)  # also when the file was there with another mode
         with os.fdopen(fd, "w") as f:
             f.write(inst.token)
+    stage("key written")
     print(f"engine view: http://127.0.0.1:{args.port}/engine#t={inst.token}", flush=True)
     srv.serve_forever()
 
