@@ -5,7 +5,8 @@
 #   vk build [TARGET...]       configure build/ (Release) and build the CLI plus the CPU test targets (or TARGETs)
 #   vk cli ARGS...             run build/kapitsa ARGS in a scratch KAPITSA_HOME; the Hub and the update server point
 #                              at a closed port, so nothing is downloaded and ~/.cache/kapitsa is never touched
-#   vk cpu-tests               the CPU test list of AGENTS.md ("Build and test"), one log per test
+#   vk cpu-tests               the CPU test list of AGENTS.md ("Build and test"), one log per test; test_server_cli takes
+#                              the GPU lock itself, so it needs the lock free (it fails at once if another run holds it)
 #   vk checks [BASE]           what a PR's changed files require (BASE...HEAD, default origin/main)
 #   vk ref [BASE] [TARGET...]  build BASE (default origin/main) once per commit, outside this checkout, for the output
 #                              check and speed A/B (default targets: kapitsa logit_dump); prints its build dir
@@ -41,6 +42,10 @@ CPU_TARGETS=(kapitsa api_test bench_test update_test prefix_cache_test grammar_t
 
 mkdir -p "$EVID" "$STATE"
 say() { printf '%s\n' "$*" >&2; }
+# pid of a process holding the GPU lock file open (empty when free); lockf and every tool that takes the lock keep it open
+lock_holder() { lsof -t "$LOCK" 2>/dev/null | head -1 || true; }
+# whether the caller says it holds the lock (lockf -k ... env NI_LOCK_HELD=1 vk cpu-tests): same rule as GpuLock::held_by_caller
+lock_held_by_caller() { local v; for v in "${NI_LOCK_HELD:-}" "${NACE_GPU_LOCK_HELD:-}"; do [[ -n "$v" && "$v" != 0 ]] && return 0; done; return 1; }
 # no background self-update, no first-run model question, quiet engine log
 export KAPITSA_NO_AUTO_UPDATE=1 KAPITSA_NO_PROMPT=1
 
@@ -60,7 +65,7 @@ cmd_doctor() {
     echo "binary:    missing ($BIN); run: vk build"; ok=0
   fi
   echo "mac:       $(sysctl -n machdep.cpu.brand_string), macOS $(sw_vers -productVersion) ($(sw_vers -buildVersion))"
-  local holder; holder="$(lsof -t "$LOCK" 2>/dev/null | head -1 || true)"
+  local holder; holder="$(lock_holder)"
   if [[ -n "$holder" ]]; then
     echo "gpu lock:  $LOCK held by pid $holder: $(ps -o command= -p "$holder" 2>/dev/null | cut -c1-120)"
   else
@@ -110,7 +115,7 @@ cmd_cli() {
 
 cmd_cpu_tests() {
   cmd_build >/dev/null
-  mkdir -p "$EVID/cpu-tests"; local fails=0 line name
+  mkdir -p "$EVID/cpu-tests"; local fails=0 line name holder
   local tests=(
     "api_test|build/api_test" "prefix_cache_test|build/prefix_cache_test" "fn_store_test|build/fn_store_test"
     "fn_dflash_test|build/fn_dflash_test" "tokenizer_test|build/tokenizer_test" "iq_layout_test|build/iq_layout_test"
@@ -124,6 +129,12 @@ cmd_cpu_tests() {
     "test_structured_cli|python3 tests/test_structured.py --cli build")
   for line in "${tests[@]}"; do
     name="${line%%|*}"
+    # test_server.py --cli takes the GPU lock and waits for it, with no bound: with `vk serve` up that is until `vk stop`.
+    # Fail at once, the way vk serve does (lockf -t 0), unless the caller holds the lock itself.
+    if [[ "$name" == test_server_cli ]] && ! lock_held_by_caller && holder="$(lock_holder)" && [[ -n "$holder" ]]; then
+      echo "$name needs the GPU lock free: $LOCK is held by pid $holder ($(ps -o command= -p "$holder" 2>/dev/null | cut -c1-80)); vk stop, or run it when the lock is free" | tee "$EVID/cpu-tests/$name.log" >&2
+      echo "FAIL $name (not run: GPU lock held, $EVID/cpu-tests/$name.log)"; fails=$((fails + 1)); continue
+    fi
     if (cd "$ROOT" && bash -c "${line#*|}") >"$EVID/cpu-tests/$name.log" 2>&1; then echo "PASS $name"
     else echo "FAIL $name ($EVID/cpu-tests/$name.log)"; fails=$((fails + 1)); fi
   done

@@ -46,12 +46,14 @@ jobs:
       - run: python3 tests/test_pr_size.py
 
   server-test-lock:
-    # tests/test_server.py --cli takes the GPU lock itself and waits for it; this is that behavior, on a throwaway lock file
+    # tests/test_server.py --cli takes the GPU lock itself and waits for it; this is that behavior, on a throwaway lock file,
+    # and `vk cpu-tests` failing at once on that entry when someone else holds the lock
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
       - run: python3 tests/test_server_lock.py
+      - run: python3 tests/test_vk_cpu_tests_lock.py
 
   profile-gates:
     # A new inline chip, core or RAM check outside src/engine/device_profile.cpp fails this, and so does a comment or doc line
