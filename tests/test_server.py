@@ -901,7 +901,7 @@ def cli_checks(kapitsa):
     with open(os.path.join(old27, "mtp.safetensors"), "wb") as f:
         f.write(b"x" * 10)
     with open(os.path.join(old27, ".kapitsa", "manifest.json"), "w") as f:
-        json.dump({"name": "qwen3.8-27b:kquant", "variant": "kquant", "repo": "nace-ai/Qwen3.8-27B-MLX-KQuant",
+        json.dump({"name": "qwen3.8-27b:kquant", "variant": "kquant", "repo": "nace-ai/Qwen3.8-27B-MLX-KQuant",  # redirected old id: what 0.2.35 wrote
                    "revision": KQ27[1], "commit": KQ27[1],
                    "files": [{"path": "config.json", "size": 2}, {"path": "mtp.safetensors", "size": 10}],
                    "companions": [{"kind": k, "repo": r, "revision": v, "files": ["mtp.safetensors"]}

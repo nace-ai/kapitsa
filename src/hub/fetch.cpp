@@ -1961,7 +1961,7 @@ std::vector<Installed> installed() {
       const json j = json::parse(read_text(manifest_path(m.dir)));
       m.name = j.value("name", n);
       m.variant = j.value("variant", "");
-      // a pack pulled before the rename says `<model>:kquant`: it is the catalog's `<model>:q4` now, so it lists once
+      // a pack pulled before the rename names its old variant: it is the catalog's current one, so it lists once
       const std::string now_variant = current_variant_name(m.variant);
       if (now_variant != m.variant) {
         const std::string tail = ":" + m.variant;
