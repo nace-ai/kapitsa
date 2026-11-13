@@ -139,6 +139,8 @@ add_test(NAME load_error_test COMMAND load_error_test)
 set_tests_properties(load_error_test PROPERTIES TIMEOUT 30)
 add_test(NAME execution_session_test COMMAND execution_session_test)
 set_tests_properties(execution_session_test PROPERTIES TIMEOUT 30)
+add_test(NAME think_control_test COMMAND think_control_test)
+set_tests_properties(think_control_test PROPERTIES TIMEOUT 30)
 
 # kapitsa serve's one validator (src/server/service_config.cpp): flags and --config's JSON, against the schema in docs/
 add_executable(serve_options_test tests/serve_options_test.cpp src/server/service_config.cpp)

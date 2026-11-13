@@ -7,6 +7,7 @@
 #include "engine/grammar.h"
 #include "engine/output_parser.h"
 #include "engine/stop_filter.h"
+#include "engine/think_control.h"
 #include "model/expert_store.h"
 #include "splash/plan.h"
 #include "splash/runtime.h"
@@ -212,9 +213,17 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
 
   ChatResult res;
   std::string text, base;
+  // a thinking budget of 0 is thinking turned off, as in Kapitsa's own engine (src/engine/think_control.h)
+  ChatRequest r_off;
+  const bool cap0 = think_cap_of(r.think_cap, r.thinking_budget) == 0;
+  if (cap0) {
+    r_off = r;
+    r_off.template_kwargs["enable_thinking"] = false;
+  }
+  const ChatRequest& rq = cap0 ? r_off : r;
   try {
-    text = render(r, true);
-    base = render(r, false);
+    text = render(rq, true);
+    base = render(rq, false);
   } catch (const std::exception& ex) {
     res.finish_reason = "error";
     res.error = std::string("chat template: ") + ex.what();
@@ -276,11 +285,18 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   // Splash's rule (server/frontend.py:1153-1162): absent or -1 is random, any other integer is its 64 bits, 0 included
   q.seed = r.splash_seed ? *r.splash_seed : (uint64_t(std::random_device{}()) << 32 | std::random_device{}());
   if (boundary > 0 && boundary < n) q.generation_prompt_tokens = uint32_t(n - boundary);
-  if (think && r.thinking_budget > 0 && r.thinking_budget < max_new && think_close_ >= 0) {
+  // the thinking budget, as Kapitsa's own engine reads it (src/engine/think_control.h): thinking_control's hard cap, else
+  // a positive budget_tokens; its closing text goes before </think> in what Splash forces
+  const int cap = think_cap_of(r.think_cap, r.thinking_budget);
+  if (think && cap >= 0 && cap < max_new && think_close_ >= 0) {
+    // the cap counts the forced close too (think_close_for): Splash forces `end` after `tokens` reasoning tokens
+    ThinkClose c = think_close_for(cap, r.think_close_text.empty() ? std::vector<int>() : tok_.encode(r.think_close_text),
+                                   think_close_);
     splash::ThinkingBudget tb;
-    tb.tokens = uint32_t(r.thinking_budget);
-    tb.end = {uint32_t(think_close_)};
-    tb.also_ends = uint32_t(!r.tools.empty() && tc_open_ >= 0 ? tc_open_ : think_close_);
+    tb.tokens = uint32_t(c.at);
+    for (int t : c.tokens) tb.end.push_back(uint32_t(t));
+    const bool on_call = r.think_end_on_tool_call >= 0 ? r.think_end_on_tool_call > 0 : !r.tools.empty();
+    tb.also_ends = uint32_t(on_call && tc_open_ >= 0 ? tc_open_ : think_close_);
     q.thinking = tb;
   }
 
