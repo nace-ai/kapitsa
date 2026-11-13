@@ -571,12 +571,14 @@ static size_t qwen4_act_bytes(const Qwen35Config& c, const Qwen4ExpConfig& c4, i
                               int group = 1) {
   const size_t D = size_t(c.hidden), SD = size_t(c4.hc) * D, Tz = size_t(T), V = size_t(maxv), R = size_t(c4.hc_rank);
   const size_t IQ = size_t(c4.ix_heads + 1) * c4.ix_dim;
+  const size_t qidx_ld = size_t((c4.ix_budget + c4.ix_ratio + 3) / 4) * 4;
+  const size_t parts = (SD / 1024 + 1) * V;
   return Tz * SD * 4 - Tz * D * 4  // x_ grows from [T, D] to [T, S*D]
          + Tz * D * 4 + 2 * Tz * c4.hc * 4 + V * SD * 4 + Tz * SD * 2 + Tz * R * 4 + Tz * R * 2 + Tz * SD * 4 +
          Tz * IQ * 4 + Tz * c4.ix_heads * c4.ix_dim * 4 + Tz * SD * 4 + Tz * D * 4 + 2 * Tz * D * 2 + 4 * V * D * 4 +
          (mtp ? Tz * SD * 4 + V * SD * 4 - V * D * 4 : 0)  // the MTP head's state; mtp_post_ widened
-         + Tz * size_t(c4.ix_budget + c4.ix_ratio + 3) / 4 * 4 * 4 + Tz * 4  // sparse attention's key lists
-         + SD * 4 + 64 + (SD / 1024 + 1) * V * R * 4  // the one-row gated residual's row, hc_down_sk's partials
+         + Tz * qidx_ld * 4 + Tz * 4 + 16  // sparse attention's key lists
+         + SD * 4 + 64 + parts * R * 2 * 4 + V * SD * 4 + parts * 10 * 4  // hc_row, hc_inv, hc_part, hc_rows, hc_stat
          + q20::group_slot_bytes(group, Tz, D, size_t(c4.hc));  // the chunks' slots, staging (NI_PREFILL_GROUP)
 }
 
