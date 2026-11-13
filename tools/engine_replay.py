@@ -541,7 +541,16 @@ def main():
     ap.add_argument("--stop-seconds", type=float, default=2, help="how long a stopped run reads `stopping`, on its clock")
     ap.add_argument("--print", action="store_true", help="print the default recording's frames and exit")
     ap.add_argument("--seconds", type=float, default=90, help="with --print: this much of the recording")
+    ap.add_argument("--timing", action="store_true",
+                    help="debug: print each start-up stage and its time to stderr, so a slow start names where")
     args = ap.parse_args()
+    t0 = time.monotonic()
+
+    def stage(what):
+        if args.timing:
+            print(f"engine_replay: +{(time.monotonic() - t0) * 1000:.0f} ms {what}", file=sys.stderr, flush=True)
+
+    stage("started")
     if args.print:
         r = Run("5c1e0a7d93b24f18")
         while r.t < args.seconds:
@@ -551,13 +560,22 @@ def main():
         return 0
     inst = Instance(args)
     threading.Thread(target=inst.clock, daemon=True).start()
-    srv = ThreadingHTTPServer(("127.0.0.1", args.port), handler(inst))
+    stage("instance ready")
+
+    class Server(ThreadingHTTPServer):
+        def server_bind(self):  # the stdlib's own bind, then its getfqdn lookup; timed, not repeated
+            stage("server_bind begins (bind, then getfqdn(127.0.0.1))")
+            super().server_bind()
+            stage("server_bind done")
+
+    srv = Server(("127.0.0.1", args.port), handler(inst))
     srv.daemon_threads = True
     if args.token_file:
         fd = os.open(args.token_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         os.fchmod(fd, 0o600)  # also when the file was there with another mode
         with os.fdopen(fd, "w") as f:
             f.write(inst.token)
+    stage("key written")
     print(f"engine view: http://127.0.0.1:{args.port}/engine#t={inst.token}", flush=True)
     srv.serve_forever()
 

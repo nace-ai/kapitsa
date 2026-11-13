@@ -35,9 +35,12 @@ function finish() {
 async function standIn(port, extra = []) {
   const dir = mkdtempSync(join(tmpdir(), "engine-page-")), tokenFile = join(dir, "token");
   const p = spawn("python3", [join(root, "tools/engine_replay.py"), "--port", String(port), "--speed", "4",
-                              "--token-file", tokenFile, ...extra], {stdio: ["ignore", "pipe", "inherit"]});
-  let said = "";                       // stderr is inherited; the stand-in's own progress line goes to stdout
+                              "--token-file", tokenFile, "--timing", ...extra],
+                             {stdio: ["ignore", "pipe", "pipe"]});
+  const startedAt = Date.now();
+  let said = "", err = "";             // stdout holds the stand-in's progress line, stderr its --timing stages
   p.stdout.on("data", b => { said += b; });
+  p.stderr.on("data", b => { err += b; process.stderr.write(b); });
   const terminate = () => p.kill();
   process.once("exit", terminate);
   p.once("close", () => process.off("exit", terminate));
@@ -55,8 +58,9 @@ async function standIn(port, extra = []) {
   if (!token) {
     const reason = spawnError?.message || (p.signalCode ? `signal ${p.signalCode}` :
       p.exitCode !== null ? `it exited with ${p.exitCode}` : "it is still running");
-    check(false, `the stand-in on port ${port} never wrote its key: ${reason}` +
-                 (said.trim() ? `; its output: ${said.trim().split("\n").slice(-3).join(" | ")}` : "; it printed nothing"));
+    check(false, `the stand-in on port ${port} never wrote its key after ${Date.now() - startedAt} ms: ${reason}` +
+                 (said.trim() ? `; its output: ${said.trim().split("\n").slice(-3).join(" | ")}` : "; it printed nothing") +
+                 (err.trim() ? `; its stderr: ${err.trim().split("\n").slice(-6).join(" | ")}` : "; it wrote nothing to stderr"));
     finish();
   }
   // A child that a signal ended has exitCode null and signalCode set, and its exit event has already fired by the time
