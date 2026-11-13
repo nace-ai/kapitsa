@@ -214,5 +214,6 @@ The stopped, still-queued M3 timing repeat did not start a GPU leg and is no lon
 The M1 and M2 got a default Neural Engine share for the existing 2560/5120 inputs (Qwen 4B, 27B): the same W8A8
 split the M4 and M5 run, at 20 of 34 units on the M1 Ultra and 30 of 34 on the M2 Pro (27B). Against origin/main
 (GPU alone on both), every path passed its floor's gate with no top-1 flips: 27B M1 Ultra mean KL 5.9e-5 to 6.0e-5,
-27B M2 Pro 1.21e-4, 4B M1 Ultra 1.13e-4 (batch, step, verify; 192 rows each). The new widths of the fast profile
+27B M2 Pro 1.21e-4, 4B M1 Ultra 1.13e-4, 4B M2 Pro 2.6e-4 (batch, step, verify; 192 rows each). The KQuant 27B
+(no floor file) moved 4.1e-5 to 4.2e-5 on the M1 Ultra and 1.0e-4 on the M2 Pro, also with no flips. The new widths of the fast profile
 are unchanged: M1/M2/M3 stay off there. [Results](../bench/results/2026-11-12-m1-m2-ane-share/README.md).

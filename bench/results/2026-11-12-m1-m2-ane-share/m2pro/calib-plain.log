@@ -1,0 +1,20 @@
+[kapitsa] read 15.13 GB of weights in 15512 ms (1.0 GB/s)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 11 ms
+[kapitsa] prewarmed 93 prefill pipelines in 14 ms
+[kapitsa] loaded /Users/ec2-user/.cache/kapitsa/models/qwen3.8-27b-4bit: 64 layers, dense, 15.1 GB mapped in 15725 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: no calibration for Apple M2 Pro (run ane_calib) and no default share; GPU only
+ane_calib: Apple M2 Pro, macOS 25G332, layers 8..15, 2 reps (median), staging on
+units  rows |  gpu_only  gpu_part       ane     split    ane_in | split vs gpu_only
+    8  2048 |    261.61    215.33     44.32    217.34     44.54 | 1.20x
+    8   512 |     66.32     55.43     12.43     55.56     13.11 | 1.19x
+      (build 3.1 s: row scales 0 ms, program compiled 3013 ms + load 25 ms (2 functions, MIL 13 KB))
+   12  2048 |    261.62    183.00     66.96    185.96     66.50 | 1.41x
+   12   512 |     66.37     48.04     18.75     48.10     19.09 | 1.38x
+      (build 4.4 s: row scales 1 ms, program compiled 4268 ms + load 26 ms (2 functions, MIL 15 KB))
+   16  2048 |    261.62    150.94     89.74    153.44     88.81 | 1.70x
+   16   512 |     66.33     40.48     24.91     41.66     25.16 | 1.59x
+      (build 5.6 s: row scales 1 ms, program compiled 5463 ms + load 27 ms (2 functions, MIL 16 KB))
+best: 16 units (split layer 153.44 ms vs 261.62 GPU alone at 2048 rows, 1.70x); 512 rows: 41.66 vs 66.33 -> chunks >= 512 rows; fit: ANE 5.576 ms/unit, GPU part 8.329 ms/GPU unit (2048 rows)
+rc=0

@@ -43,22 +43,40 @@ The defaults land on the measured optima: 20 units on the M1 Ultra, 30 on the M2
 
 | Prompt tokens | M1 Ultra main | M1 Ultra PR | Splash-M1 | M2 Pro main | M2 Pro PR | Splash-M1 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| ~710 | 2.72 s | 2.72 s | | | | |
+| ~710 | 2.72 s | 2.72 s | | 8.56-8.57 s | 7.22-7.24 s | |
 | ~812 | 3.02 s | not run | 2.62 s | 9.6 s | 8.0 s | 5.9 s |
 | ~955 | 3.59-3.60 s | 3.58-3.59 s | | | | |
 | ~1210 | 4.36-4.43 s | 4.00-4.09 s | | | | |
+| ~1400 | 5.02-5.08 s | 4.48-4.64 s | | 16.07-16.48 s | 8.91-8.92 s | |
 | ~1460 | 5.23-5.24 s | 4.51-4.52 s | | | | |
 | ~1590 | 5.67 s | 4.56 s | 4.56 s | 18.3-18.6 s | 9.04 s | 10.9 s |
-| 16,315 | 61.2 s (266 tok/s) | 48.4-48.7 s (336) | 47.0 s (347) | 204.2 s (80) | 104.2 s (157) | 119.2 s (137) |
+| 16,315 | 61.2 s (266 tok/s) | 48.4-48.7 s (336) | 47.0 s (347) | 204.2-204.3 s (80) | 104.2-104.3 s (157) | 119.2 s (137) |
 
-Short-prompt decode is unchanged (M1 Ultra 106.5 tok/s both, M2 Pro 40.8 both). Decode after a 16K prompt, M1
-Ultra, 10 requests each side (5 offsets x 2 legs): mean 68.4 tok/s main, 67.4 PR; tokens per draft cycle 3.91 and
-3.84. The W8A8 prefill changes the greedy text, and per-request rates spread 55-93 tok/s on both sides.
+Short-prompt decode (greedy, 400 tokens, median of 3 per leg): M1 Ultra 104.9-106.7 tok/s main, 106.4-107.2 PR;
+M2 Pro 40.75-41.41 main, 40.75-40.77 PR, 40.24-40.76 PR with `NI_ANE=0` (`m2pro/legs.log`, the last pass). Decode after a
+16K prompt, M1 Ultra, 10 requests each side (5 offsets x 2 legs): mean 68.4 tok/s main, 67.4 PR; tokens per draft
+cycle 3.91 and 3.84. The W8A8 prefill changes the greedy text, and per-request rates spread 55-93 tok/s on both sides.
 
-## Prompt reading, 4B (M1 Ultra, 11 of 18 units)
+## Prompt reading, the KQuant 27B (`27b` since #1228)
 
-16,315 tokens: 10.25 s main, 9.40 s PR (8% less). 1,400 tokens: 0.83 s both. ~710 tokens: 0.48 s main, 0.47 s PR
-(GPU alone on both).
+Rebased on origin/main eb73e056, where `27b` is the KQuant pack (`main6` against `pr6`, ABBA):
+
+| Prompt tokens | M1 Ultra main | M1 Ultra PR | M2 Pro main | M2 Pro PR |
+| ---: | ---: | ---: | ---: | ---: |
+| ~1400 | 5.02-5.12 s | 4.39-4.41 s | 16.49 s | 8.83-8.84 s |
+| 16,315 | 61.21-61.24 s | 48.40-48.47 s | 204.32 s | 104.15-104.37 s |
+
+Short decode: M1 Ultra 108.4-110.3 tok/s main, 108.7-110.3 PR; M2 Pro 40.7 main, 40.6 PR.
+
+## Prompt reading, 4B
+
+| Prompt tokens | M1 Ultra main | M1 Ultra PR (11 of 18 units) | M2 Pro main | M2 Pro PR (16 of 18) |
+| ---: | ---: | ---: | ---: | ---: |
+| ~710 | 0.48 s | 0.47 s (GPU) | 1.35 s | 1.28 s |
+| 1,400 | 0.83 s | 0.81-0.84 s | 2.52 s | 1.53-1.54 s |
+| 16,315 | 10.25 s | 9.40 s | 34.76-34.79 s | 21.55-21.57 s |
+
+Short decode: M1 Ultra 252-256 tok/s main, 254-259 PR; M2 Pro 124.3-124.7 main, 124.7-124.9 PR.
 
 ## Output check (logit_dump, origin/main vs PR)
 
@@ -67,9 +85,14 @@ Ultra, 10 requests each side (5 offsets x 2 legs): mean 68.4 tok/s main, 67.4 PR
 | 27B, M1 Ultra | batch / step / verify | 0 / 0 / 0 of 192 | 5.9e-5 / 5.9e-5 / 6.0e-5 | 9.2-9.5e-4 | PASS |
 | 27B, M2 Pro | batch / step / verify | 0 / 0 / 0 of 192 | 1.21e-4 each | 1.06-1.13e-3 | PASS |
 | 4B, M1 Ultra | batch / step / verify | 0 / 0 / 0 of 192 | 1.13e-4 each | 2.0e-3 | PASS |
+| 4B, M2 Pro | batch / step / verify | 0 / 0 / 0 of 192 | 2.6e-4 each | 3.8e-3 | PASS |
+| 27B KQuant, M1 Ultra | batch / step / verify | 0 / 0 / 0 of 192 | 4.2e-5 / 4.1e-5 / 4.1e-5 | 5.9-6.1e-4 | no floor |
+| 27B KQuant, M2 Pro | batch / step / verify | 0 / 0 / 0 of 192 | 1.0e-4 each | 1.5-1.6e-3 | no floor |
 
-Gates: `tools/logit_floors/qwen3.8-27b-4bit.json`, `tools/logit_floors/qwen3.5-4b-4bit.json`. Raw:
-`m1ultra/ld5-27b-compare.txt`, `m1ultra/ld5-4b-compare.txt`, `m2pro/ld-compare.txt`. The main build ran the
+Gates: `tools/logit_floors/qwen3.8-27b-4bit.json`, `tools/logit_floors/qwen3.5-4b-4bit.json`. The KQuant pack has
+no floor file; its numbers sit inside the 4-bit pack's gate (mean KL 3.84e-4, p99 1.4e-2, no flips). Raw:
+`m1ultra/ld5-27b-compare.txt`, `m1ultra/ld5-4b-compare.txt`, `m1ultra/ld6-27b-kquant-compare.txt`,
+`m2pro/ld-27b-compare.txt`, `m2pro/ld-4b-compare.txt`, `m2pro/ld6-27b-kquant-compare.txt`. The main build ran the
 GPU alone on both Macs (`NI_ANE: no calibration for Apple M1 Ultra (run ane_calib) and no default share`).
 
 ## How the defaults were set
