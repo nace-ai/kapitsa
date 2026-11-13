@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -13,6 +14,7 @@
 #include <fstream>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <utility>
 
 namespace ni {
 
@@ -41,6 +43,20 @@ bool same_build(const nlohmann::json& j, const std::string& key) {
   logi("KFlash: not loading the budget cache %s (written by %s; this is %s)", key.c_str(),
        b.empty() ? "an earlier build" : b.c_str(), kBuild);
   return false;
+}
+
+// Convert both coefficients for every stored depth before exposing any of them to the budget.
+template <size_t N>
+void load_calibration(const nlohmann::json& j, float (&alpha)[N], float (&beta)[N]) {
+  const auto& a = j.at("alpha");
+  const auto& b = j.at("beta");
+  const size_t end = std::min({N, a.size(), b.size()});
+  std::array<std::pair<float, float>, N> depths;
+  for (size_t d = 1; d < end; ++d) depths[d] = {a.at(d).get<float>(), b.at(d).get<float>()};
+  for (size_t d = 1; d < end; ++d) {
+    alpha[d] = depths[d].first;
+    beta[d] = depths[d].second;
+  }
 }
 
 // A cache file written whole beside its place, then renamed over it: a process ended mid-write (kill -9 after a stop
@@ -469,21 +485,22 @@ void KfBudget::load() {
     const nlohmann::json j = nlohmann::json::parse(f);
     if (!same_build(j, key_)) return;
     const auto& c = j.at("cost");
-    const auto& a = j.at("alpha");
-    const auto& bb = j.at("beta");
+    KfCosts costs;
+    bool wide = false, pays = true;
+    double narrow8 = 0.0;
     if (j.value("cost_of", "") == kCostOf) {
-      c_.load(c.get<std::vector<double>>(), kExplore);
-      // wide verifies' extras (a cache a run without them wrote: its 8 rows are the 8-row verify's cost, set_wide)
-      wide_saved_ = j.value("wide", false);
-      if (wide_saved_) {
-        if (j.value("cost_narrow8", 0.0) > 0) cost8n_ = j["cost_narrow8"].get<double>(), ncost8n_ = 2;
-        wide_pays_ = j.value("wide_pays", true);  // the last decision, until this process's trees decide again
+      costs.load(c.get<std::vector<double>>(), kExplore);
+      wide = j.value("wide", false);
+      if (wide) {
+        narrow8 = j.value("cost_narrow8", 0.0);
+        pays = j.value("wide_pays", true);
       }
     }
-    for (int d = 1; d < kD && d < int(a.size()) && d < int(bb.size()); ++d) {
-      alpha_[d] = a[size_t(d)].get<float>();
-      beta_[d] = bb[size_t(d)].get<float>();
-    }
+    load_calibration(j, alpha_, beta_);
+    c_ = costs;
+    wide_saved_ = wide;
+    wide_pays_ = pays;
+    if (narrow8 > 0) cost8n_ = narrow8, ncost8n_ = 2;
   } catch (...) {
     logi("KFlash: ignoring an unreadable cache %s", key_.c_str());
   }
@@ -766,16 +783,13 @@ void KfBatch::load() {
   try {
     const nlohmann::json j = nlohmann::json::parse(f);
     if (!same_build(j, key_)) return;
+    std::array<KfCosts, kMembers + 1> costs;
     if (j.value("cost_of", "") == kBatchCostOf) {
       const auto& c = j.at("cost");
-      for (int M = 2; M <= kMembers && M < int(c.size()); ++M) c_[M].load(c[size_t(M)].get<std::vector<double>>(), kExplore);
+      for (int M = 2; M <= kMembers && M < int(c.size()); ++M) costs[M].load(c.at(M).get<std::vector<double>>(), kExplore);
     }
-    const auto& a = j.at("alpha");
-    const auto& bb = j.at("beta");
-    for (int d = 1; d <= kDrafts && d < int(a.size()) && d < int(bb.size()); ++d) {
-      alpha_[d] = a[size_t(d)].get<float>();
-      beta_[d] = bb[size_t(d)].get<float>();
-    }
+    load_calibration(j, alpha_, beta_);
+    std::copy(costs.begin(), costs.end(), c_);
   } catch (...) {
     logi("KFlash: ignoring an unreadable cache %s", key_.c_str());
   }

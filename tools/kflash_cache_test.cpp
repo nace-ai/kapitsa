@@ -55,6 +55,17 @@ int main() {
     KfBudget b(key);
     check(b.alpha(1) == 2.5f && b.beta(1) == 1.5f, "a cache this build wrote is loaded");
   }
+  {
+    const std::string path = dir + "/kflash/" + key + ".json";
+    auto j = nlohmann::json::parse(std::ifstream(path));
+    j["wide"] = true;
+    j["cost_narrow8"] = 12.0;
+    j["beta"][2] = "damaged";
+    std::ofstream(path) << j.dump();
+    KfBudget b(key);
+    check(b.alpha(1) == 0.0f && b.beta(1) == 1.0f, "a bad later depth discards the earlier calibration");
+    check(b.cost(1) == 0.0 && b.cost_narrow() == 0.0, "a bad depth discards the cached row and narrow costs");
+  }
   write_cache(dir, key, "0.2.33 (f55b55b5)", 2.5f);
   {
     KfBudget b(key);
@@ -114,6 +125,21 @@ int main() {
     }
     const std::string bf = dir + "/kflash/" + bkey + ".json";
     nlohmann::json j = nlohmann::json::parse(std::ifstream(bf));
+    auto bad = j;
+    bad["alpha"][1] = 2.5f;
+    bad["beta"][2] = "damaged";
+    std::ofstream(bf) << bad.dump();
+    {
+      KfBatch kb(bkey);
+      float alpha[2], beta[2];
+      kb.calibration(alpha, beta, 2);
+      check(alpha[1] == 0.0f && beta[1] == 1.0f && kb.cost(2, 2) == 0.0,
+            "a bad batch depth discards the calibration and member costs together");
+    }
+    bad = j;
+    bad["cost"][3] = "damaged";
+    std::ofstream(bf) << bad.dump();
+    check(KfBatch(bkey).cost(2, 2) == 0.0, "a bad member cost row discards earlier rows");
     j["build"] = "0.2.33 (f55b55b5)";
     std::ofstream(bf) << j.dump() << "\n";
     KfBatch kb(bkey);
