@@ -27,7 +27,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ## 🔥 What's new
 
-- [2026/11] 🎯 **KQuant: the 4B, 9B, 27B and 35B-A3B downloads are closer to the original model than the packs they replace, at the same size** ([numbers](#kquant)).
+- [2026/11] 🎯 **Nace quants: the 4B, 9B, 27B and 35B-A3B downloads are closer to the original model than the packs they replace, at the same size** ([numbers](#nace-quants)).
 - [2026/11] ⚡ **Qwen3.8-Flash-Next 180B writes 6% faster on an M5 Max**, with the same tokens: greedy decode 107.3 → 113.9 tok/s after three verify-kernel changes ([numbers](bench/results/2026-11-04-m5-max-flash-next/README.md)).
 - [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 304 tok/s on an M5 Max**: `kapitsa serve --model clover` ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
 - [2026/10] 🗄️ **A 180B model runs on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
@@ -39,14 +39,14 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 - 🤖 **Runs your coding agent**: `kapitsa claude`, `codex`, `opencode`, `pi`, `hermes`, `aider`, `goose`, `copilot`
 - 🗄️ **Big models on small Macs**: 180B at 61 tok/s on a 48 GB M5 Pro
 - 💾 **No waiting after a restart**: a 16K follow-up starts in 0.16 s, not 17 s, on an M4 Pro ([numbers](docs/usage.md#ssd-prefix-cache))
-- 🎯 **Closer to the original**: KQuant for the Qwen 4B, 9B, 27B and 35B-A3B, closer than the 4-bit packs it is compared with at the same size ([numbers](#kquant))
+- 🎯 **Closer to the original**: Nace quants for the Qwen 4B, 9B, 27B and 35B-A3B, closer than the 4-bit packs they are compared with at the same size ([numbers](#nace-quants))
 - 🔌 **OpenAI and Anthropic APIs**: plus a chat page, on `127.0.0.1:8000`
 - 🧠 **GPU and Neural Engine together**: prefill hands part of its work to the Neural Engine
 - 🖥️ **Several Macs, one model**: a Mac that can't hold a model uses one that can ([how](docs/usage.md#several-macs))
 
-### KQuant
+### Nace quants
 
-**Downloads closer to the original model, at the same size.** KQuant is our quantization for MLX packs. `4b`, `9b`, `27b` and `35b` use it.
+**Downloads closer to the original model, at the same size.** Nace quants are our quantization for MLX packs. `4b`, `9b`, `27b` and `35b` use them.
 
 | 4-bit | Compared with | KL from bf16 (lower is closer) | GSM8K, 1,319 questions |
 | --- | --- | --- | --- |
@@ -55,7 +55,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 | 27B | the plain 4-bit pack (`27b:4bit`) | 0.054 → **0.035** | 0.950 → 0.953 |
 | 35B-A3B | MTPLX | 0.096 → **0.059** | 0.948 → 0.952 |
 
-The 9B row is the legacy pack (`9b` on M3 and M4); on M5 and newer `9b` is Q4-KQuant, which these numbers do not cover. [How it was measured](docs/benchmarks.md#kquant-against-the-packs-it-replaces) · [every run](bench/results/2026-11-10-m5-pro-kquant/README.md)
+The 9B row is the legacy pack (`9b` on M3 and M4); on M5 and newer `9b` is Nace Q4, which these numbers do not cover. [How it was measured](docs/benchmarks.md#nace-quants-against-the-packs-they-replace) · [every run](bench/results/2026-11-10-m5-pro-kquant/README.md)
 
 ### Drex decision models
 
@@ -156,7 +156,7 @@ The most precise variant of each catalog model that runs on a Mac of each size. 
 | **Nemotron Nano 9B v2** · `nano-9b` | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 |
 | **Drex 2.0** · `kapitsa-systemone` | — | — | — | Q4† | Q4 | Q8 | Q8 |
 
-The `9b` pack is mixed 4/5-bit Q4 KQuant on Macs with matrix units (M5 and newer), and legacy 4-bit KQuant on other Macs, including M3 and M4.
+The `9b` pack is mixed 4/5-bit Nace Q4 on Macs with matrix units (M5 and newer), and legacy 4-bit Nace on other Macs, including M3 and M4.
 
 <sub>Cells name the catalog's variant labels — `4bit`, `5bit`, `6bit`, `8bit`, `bf16` and `nvfp4`, with `16gb`, `24gb` and Flash-Next's `64gb` shown as 2-bit — that `kapitsa serve <name>:<variant>` takes, the most precise one that starts on that Mac at the bottom of its working-set range: weights, drafter, activations and 8K tokens of context. † needs the top of the range, about 80% of the RAM against 69% at the bottom; — nothing starts. Flash-Next's 48 GB cell is its Q2_0 pack with the experts the budget does not hold streamed from the SSD, and Drex 2.0's Q4 and Q8 are its release builds, served by `kapitsa-systemone` ([decisions](docs/systemone.md)). The 24, 32 and 64 GB columns are `kapitsa doctor`'s plan, and so is any cell in the 16, 36, 48 and 128 GB ones that differs from the default variant those [Macs](#speed-on-each-mac) ran, usually 4-bit; `kapitsa doctor` prints the plan for this Mac.</sub>
 

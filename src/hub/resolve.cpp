@@ -18,8 +18,23 @@ static std::string lower(std::string s) {
   return s;
 }
 
+// Variants renamed on 13 Nov 2026 (#530): the old names still select them, in saved configs and scripts. Not listed.
+static const char* const kRenamed[][2] = {{"kquant", "q4"}, {"kquant5", "q5"}};
+
+std::string current_variant_name(const std::string& v) {
+  for (const auto& r : kRenamed)
+    if (v == r[0]) return r[1];
+  return v;
+}
+
+std::string legacy_dir_name(const CatalogModel& m, const Variant& v) {
+  for (const auto& r : kRenamed)
+    if (v.name == r[1]) return m.name + "-" + r[0];
+  return "";
+}
+
 const Variant* CatalogModel::variant(const std::string& v) const {
-  const std::string want = v.empty() ? default_variant : lower(v);
+  const std::string want = current_variant_name(v.empty() ? default_variant : lower(v));
   for (const auto& x : variants)
     if (x.name == want) return &x;
   return nullptr;
@@ -143,10 +158,13 @@ static ModelRef catalog_ref(const CatalogModel& m, const Variant& v) {
   r.name = full_name(m, v);
   r.id = v.name == m.default_variant ? m.name : full_name(m, v);
   r.dir = models_dir() + "/" + m.name + "-" + v.name;
+  // a pack downloaded under the old variant name is read where it is (never renamed or moved), so it is not downloaded again
+  const std::string was = legacy_dir_name(m, v);
+  if (!was.empty() && !is_dir(r.dir) && is_dir(models_dir() + "/" + was)) r.dir = models_dir() + "/" + was;
   return r;
 }
 
-// A combined KQuant repo, `org/name[/folder][@revision]` (Hugging Face URL prefixes too): the catalog variant pinning
+// A combined Nace repo, `org/name[/folder][@revision]` (Hugging Face URL prefixes too): the catalog variant pinning
 // the same pack, or nullptr when `arg` names no combined repo. A folder or revision it does not pin is refused, so the
 // id never becomes a plain download without the variant's drafter and MTP head (#1210).
 static const Variant* combined_variant(std::string s, const CatalogModel** model) {

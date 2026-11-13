@@ -176,13 +176,13 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
        .default_variant = "4bit",
        .fallbacks = {},
        .variants = {
-           // KQuant (#421): lmstudio-community's pack (c43ee1d) with its quantized weights rebuilt
-           // as KQuant, every other file the same content. KL from bf16 0.048 against 0.070,
+           // Nace quant (#421): lmstudio-community's pack (c43ee1d) with its quantized weights rebuilt
+           // as a Nace quant, every other file the same content. KL from bf16 0.048 against 0.070,
            // GSM8K (1319) 0.923 against 0.914, M5 Pro decode (T 0.6 and greedy, two legs each, Kapitsa 0.2.35,
            // both packs with the drafter and MTP head `4b` ships) 223 against 218 tok/s, inside the 3% tie band
            {.name = "4bit",
-            .quant = "MLX affine 4-bit, group 64 (KQuant)",
-            .repo = "nace-ai/Qwen3.5-4B-MLX-KQuant",
+            .quant = "MLX affine 4-bit, group 64 (Nace)",
+            .repo = "nace-ai/Qwen3.5-4B-MLX",
             .revision = "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89",
             .companions = {mtp4(), dflash4()},
             .download_gb = 4.57},
@@ -213,27 +213,27 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
        .default_variant = "4bit",
        .fallbacks = {},
        .variants = {
-           // KQuant Q4: mixed 4/5-bit language weights with the packaged vision tower and tokenizer.
+           // Nace Q4: mixed 4/5-bit language weights with the packaged vision tower and tokenizer.
            {.name = "4bit",
-            .quant = "MLX affine mixed 4/5-bit (KQuant Q4)",
-            .repo = "nace-ai/Qwen3.5-9B-MLX-KQuant",
+            .quant = "MLX affine mixed 4/5-bit (Nace Q4)",
+            .repo = "nace-ai/Qwen3.5-9B-MLX",
             .revision = "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
             .companions = {mtp9(), dflash9()},
             .download_gb = 9.30},
-           // The released KQuant packs (#495): no MTP head or drafter in the repos, so the 9B's companions come with
-           // them, by name or by repo id. `kquant` is the Q4 pack `4bit` is on a Mac with matrix units (the repo id
+           // The released Nace packs (#495): no MTP head or drafter in the repos, so the 9B's companions come with
+           // them, by name or by repo id. `q4` is the Q4 pack `4bit` is on a Mac with matrix units (the repo id
            // then finds `4bit`, listed first); on a Mac that keeps the older 9B pack it is how to opt into Q4.
-           {.name = "kquant",
-            .quant = "MLX affine mixed 4/5-bit (KQuant Q4)",
-            .label = "KQuant Q4",
-            .repo = "nace-ai/Qwen3.5-9B-MLX-KQuant",
+           {.name = "q4",
+            .quant = "MLX affine mixed 4/5-bit (Nace Q4)",
+            .label = "Nace Q4",
+            .repo = "nace-ai/Qwen3.5-9B-MLX",
             .revision = "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
             .companions = {mtp9(), dflash9()},
             .download_gb = 9.30},
-           {.name = "kquant5",
-            .quant = "MLX affine mixed 5/6/8-bit (KQuant Q5)",
-            .label = "KQuant Q5",
-            .repo = "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant",
+           {.name = "q5",
+            .quant = "MLX affine mixed 5/6/8-bit (Nace Q5)",
+            .label = "Nace Q5",
+            .repo = "nace-ai/Qwen3.5-9B-MLX-Q5",
             .revision = "bbddf39f41d3e0f682f2293351c67a9616d5941d",
             .companions = {mtp9(), dflash9()},
             .download_gb = 10.22},
@@ -243,8 +243,8 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
        .title = "Qwen3.8-27B",
        .about = "dense: the strongest coder of the three, slower to write",
        .brief = "dense: the strongest coder, slower",
-       // KQuant (#495): `27b:4bit` keeps the plain pack
-       .default_variant = "kquant",
+       // Nace quant (#495): `27b:4bit` keeps the plain pack
+       .default_variant = "q4",
        .fallbacks = {},
        .variants = {
            {.name = "4bit",
@@ -257,23 +257,24 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
             .revision = "d76e1f92eb8c16a3f3058d438cd6af30bce86557",
             .companions = {mtp27(), dflash27()},
             .download_gb = 20.17},
-           // KQuant (#436), the default since #495: the 4-bit pack above with its quantized weights rebuilt
-           // as KQuant, MTP head and runtime file in the repo (so no mtp27()), base tokenizer files. KL from bf16
+           // Nace quant (#436), the default since #495: the 4-bit pack above with its quantized weights rebuilt
+           // as a Nace quant, MTP head and runtime file in the repo (so no mtp27()), base tokenizer files. KL from bf16
            // 0.035 against 0.054, GSM8K (1319) 0.953 against 0.950; M5 Pro decode (Kapitsa 0.2.35, both packs with
            // the nace-ai drafter and the same MTP head, T 0.6 and T 0): pooled 87.9 against 84.5 tok/s, +4.0%;
            // M4 Pro 67.2 against 66.8, +0.6% (bench/results/2026-11-12-kquant-27b-0.2.35)
-           {.name = "kquant",
-            .quant = "MLX affine 4-bit, group 64 (KQuant)",
-            .repo = "nace-ai/Qwen3.8-27B-MLX-KQuant",
+           {.name = "q4",
+            .quant = "MLX affine 4-bit, group 64 (Nace)",
+            .label = "Nace Q4",
+            .repo = "nace-ai/Qwen3.8-27B-MLX",
             .revision = "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364",
             .companions = {dflash27()},
             .download_gb = 20.17},
-           // The released KQuant Q5 pack (#495): its MTP head sits in optiq/, where the loader does not look, so it
+           // The released Nace Q5 pack (#495): its MTP head sits in optiq/, where the loader does not look, so it
            // takes mtp27() as the plain packs do.
-           {.name = "kquant5",
-            .quant = "MLX affine mixed 4/6/8-bit (KQuant Q5)",
-            .label = "KQuant Q5",
-            .repo = "nace-ai/Qwen3.8-27B-MLX-Q5-KQuant",
+           {.name = "q5",
+            .quant = "MLX affine mixed 4/6/8-bit (Nace Q5)",
+            .label = "Nace Q5",
+            .repo = "nace-ai/Qwen3.8-27B-MLX-Q5",
             .revision = "9f3187857e1940bf32fe7f23b4df0fb65631a874",
             .companions = {mtp27(), dflash27()},
             .download_gb = 24.77},
@@ -313,22 +314,22 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
        .default_variant = "4bit",
        .fallbacks = {"16gb"},
        .variants = {
-           // KQuant (#436): MTPLX's pack (Youssofal @ 9546051: mlx-community's 4-bit with its MTP head) with its
-           // quantized weights rebuilt as KQuant, every other file the same content, the
+           // Nace quant (#436): MTPLX's pack (Youssofal @ 9546051: mlx-community's 4-bit with its MTP head) with its
+           // quantized weights rebuilt as a Nace quant, every other file the same content, the
            // MTP head included in the repo. KL from bf16 0.059 against 0.096, GSM8K (1319) 0.952 against 0.948,
            // M5 Pro decode on 0.2.35 (T 0.6 and greedy, 2 legs each, the same drafter and MTP head on both) 235
            // against 213 tok/s (bench/results/2026-11-12-m5-pro-kquant-35b-0.2.35); text only
            {.name = "4bit",
-            .quant = "MLX affine 4-bit, group 64 (KQuant)",
-            .repo = "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant",
+            .quant = "MLX affine 4-bit, group 64 (Nace)",
+            .repo = "nace-ai/Qwen3.6-35B-A3B-MLX",
             .revision = "37e804f90e368a4de866bc34650b9dde67a78c8e",
             .companions = {dflash35()},
             .download_gb = 22.07},
-           // The released KQuant Q5 pack (#495): no MTP head in the repo, so it takes mtp35() as the plain packs do.
-           {.name = "kquant5",
-            .quant = "MLX affine mixed 4/6/8-bit (KQuant Q5)",
-            .label = "KQuant Q5",
-            .repo = "nace-ai/Qwen3.6-35B-A3B-MLX-Q5-KQuant",
+           // The released Nace Q5 pack (#495): no MTP head in the repo, so it takes mtp35() as the plain packs do.
+           {.name = "q5",
+            .quant = "MLX affine mixed 4/6/8-bit (Nace Q5)",
+            .label = "Nace Q5",
+            .repo = "nace-ai/Qwen3.6-35B-A3B-MLX-Q5",
             .revision = "50b3b1c57e2c096e007de22997ff6824224fccde",
             .companions = {mtp35(), dflash35()},
             .download_gb = 24.62},
@@ -390,10 +391,10 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
             .revision = "5d423f9f563c1f1b7ca7945b268e65c0b92b0eae",
             .companions = {},
             .download_gb = 105.86},
-           {.name = "kquant",
-            .quant = "MLX affine KQuant 4-bit mix",
-            .label = "4-bit KQuant",
-            .repo = "nace-ai/Qwen3.8-Flash-Next-MLX-KQuant",
+           {.name = "q4",
+            .quant = "MLX affine Nace 4-bit mix",
+            .label = "4-bit Nace",
+            .repo = "nace-ai/Qwen3.8-Flash-Next-MLX",
             .revision = "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd",
             .companions = {},
             .download_gb = 105.86},
@@ -600,8 +601,8 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
     for (auto& model : models) {
       if (model.name != "qwen3.5-9b") continue;
       auto& v = model.variants.front();
-      v.quant = "MLX affine 4-bit, group 64 (KQuant)";
-      v.repo = "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant";
+      v.quant = "MLX affine 4-bit, group 64 (Nace)";
+      v.repo = "nace-ai/Qwen3.5-9B-MLX-4bit";
       v.revision = "867adaa1c6d84d1fd9b4f37f43836019c877ba59";
       v.download_gb = 9.05;
     }
@@ -615,23 +616,35 @@ const std::vector<CatalogModel>& catalog() { return catalog(ni::catalog_device()
 // The pinned packs in the combined repos (12 Nov 2026: every folder's safetensors have the LFS sha256 of the pinned
 // standalone revision's). The Q4 standalone repos were renamed into the combined ones (#500), so the catalog pins those
 // Q4 packs at the combined repo's root, at the revision the standalone repo had; the Q5 packs still have their own
-// repos. Flash-Next's row is the combined repo's root at the revision `kquant` pins; its Q4/ folder is a later
-// checkpoint that no catalog entry names. The last rows are the old Q4 ids, which the Hub redirects: still accepted.
+// repos. Flash-Next's row is the combined repo's root at the revision `q4` pins; its Q4/ folder is a later
+// checkpoint that no catalog entry names. These repos were renamed on 13 Nov 2026 (#530); the Hub redirects the old
+// ids, so the rows marked "redirected old id" keep them accepted, pointing at the new ids.
 const std::vector<CombinedPack>& combined_packs() {
   static const std::vector<CombinedPack> packs = {
-      {"nace-ai/Qwen3.5-4B-MLX-KQuant", "Q4", "84168d4d60c807a3c8372ee60f9d2034d5166964", "nace-ai/Qwen3.5-4B-MLX-KQuant"},
-      {"nace-ai/Qwen3.5-9B-MLX-KQuant", "Q4", "02b8c7669c8dee02a5efa475a478bcca966a24d1", "nace-ai/Qwen3.5-9B-MLX-KQuant"},
-      {"nace-ai/Qwen3.5-9B-MLX-KQuant", "Q5", "02b8c7669c8dee02a5efa475a478bcca966a24d1", "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant"},
-      {"nace-ai/Qwen3.8-27B-MLX-KQuant", "Q4", "105530e56743ac3515a34b274b3865965dc83bc6", "nace-ai/Qwen3.8-27B-MLX-KQuant"},
-      {"nace-ai/Qwen3.8-27B-MLX-KQuant", "Q5", "105530e56743ac3515a34b274b3865965dc83bc6", "nace-ai/Qwen3.8-27B-MLX-Q5-KQuant"},
-      {"nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", "Q4", "f82ecb7f83f578e2d599e36e27177cc97d02c1f1", "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant"},
-      {"nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", "Q5", "f82ecb7f83f578e2d599e36e27177cc97d02c1f1", "nace-ai/Qwen3.6-35B-A3B-MLX-Q5-KQuant"},
-      {"nace-ai/Qwen3.8-Flash-Next-MLX-KQuant", "", "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd", "nace-ai/Qwen3.8-Flash-Next-MLX-KQuant"},
-      {"nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", "", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89", "nace-ai/Qwen3.5-4B-MLX-KQuant"},  // redirected old id
-      {"nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4", "nace-ai/Qwen3.5-9B-MLX-KQuant"},  // redirected old id
-      {"nace-ai/Qwen3.8-27B-MLX-Q4-KQuant", "", "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364", "nace-ai/Qwen3.8-27B-MLX-KQuant"},  // redirected old id
-      {"nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant", "", "37e804f90e368a4de866bc34650b9dde67a78c8e", "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant"},  // redirected old id
-      {"nace-ai/Qwen3.8-Flash-Next-MLX-Q4-KQuant", "", "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd", "nace-ai/Qwen3.8-Flash-Next-MLX-KQuant"},  // redirected old id
+      {"nace-ai/Qwen3.5-4B-MLX", "Q4", "84168d4d60c807a3c8372ee60f9d2034d5166964", "nace-ai/Qwen3.5-4B-MLX"},
+      {"nace-ai/Qwen3.5-9B-MLX", "Q4", "02b8c7669c8dee02a5efa475a478bcca966a24d1", "nace-ai/Qwen3.5-9B-MLX"},
+      {"nace-ai/Qwen3.5-9B-MLX", "Q5", "02b8c7669c8dee02a5efa475a478bcca966a24d1", "nace-ai/Qwen3.5-9B-MLX-Q5"},
+      {"nace-ai/Qwen3.8-27B-MLX", "Q4", "105530e56743ac3515a34b274b3865965dc83bc6", "nace-ai/Qwen3.8-27B-MLX"},
+      {"nace-ai/Qwen3.8-27B-MLX", "Q5", "105530e56743ac3515a34b274b3865965dc83bc6", "nace-ai/Qwen3.8-27B-MLX-Q5"},
+      {"nace-ai/Qwen3.6-35B-A3B-MLX", "Q4", "f82ecb7f83f578e2d599e36e27177cc97d02c1f1", "nace-ai/Qwen3.6-35B-A3B-MLX"},
+      {"nace-ai/Qwen3.6-35B-A3B-MLX", "Q5", "f82ecb7f83f578e2d599e36e27177cc97d02c1f1", "nace-ai/Qwen3.6-35B-A3B-MLX-Q5"},
+      {"nace-ai/Qwen3.8-Flash-Next-MLX", "", "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd", "nace-ai/Qwen3.8-Flash-Next-MLX"},
+      {"nace-ai/Qwen3.5-4B-MLX-KQuant", "Q4", "84168d4d60c807a3c8372ee60f9d2034d5166964", "nace-ai/Qwen3.5-4B-MLX"},  // redirected old id
+      {"nace-ai/Qwen3.5-9B-MLX-KQuant", "Q4", "02b8c7669c8dee02a5efa475a478bcca966a24d1", "nace-ai/Qwen3.5-9B-MLX"},  // redirected old id
+      {"nace-ai/Qwen3.5-9B-MLX-KQuant", "Q5", "02b8c7669c8dee02a5efa475a478bcca966a24d1", "nace-ai/Qwen3.5-9B-MLX-Q5"},  // redirected old id
+      {"nace-ai/Qwen3.8-27B-MLX-KQuant", "Q4", "105530e56743ac3515a34b274b3865965dc83bc6", "nace-ai/Qwen3.8-27B-MLX"},  // redirected old id
+      {"nace-ai/Qwen3.8-27B-MLX-KQuant", "Q5", "105530e56743ac3515a34b274b3865965dc83bc6", "nace-ai/Qwen3.8-27B-MLX-Q5"},  // redirected old id
+      {"nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", "Q4", "f82ecb7f83f578e2d599e36e27177cc97d02c1f1", "nace-ai/Qwen3.6-35B-A3B-MLX"},  // redirected old id
+      {"nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", "Q5", "f82ecb7f83f578e2d599e36e27177cc97d02c1f1", "nace-ai/Qwen3.6-35B-A3B-MLX-Q5"},  // redirected old id
+      {"nace-ai/Qwen3.8-Flash-Next-MLX-KQuant", "", "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd", "nace-ai/Qwen3.8-Flash-Next-MLX"},  // redirected old id
+      {"nace-ai/Qwen3.5-4B-MLX-Q4-KQuant", "", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89", "nace-ai/Qwen3.5-4B-MLX"},  // redirected old id
+      {"nace-ai/Qwen3.5-9B-MLX-Q4-KQuant", "", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4", "nace-ai/Qwen3.5-9B-MLX"},  // redirected old id
+      {"nace-ai/Qwen3.8-27B-MLX-Q4-KQuant", "", "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364", "nace-ai/Qwen3.8-27B-MLX"},  // redirected old id
+      {"nace-ai/Qwen3.6-35B-A3B-MLX-Q4-KQuant", "", "37e804f90e368a4de866bc34650b9dde67a78c8e", "nace-ai/Qwen3.6-35B-A3B-MLX"},  // redirected old id
+      {"nace-ai/Qwen3.8-Flash-Next-MLX-Q4-KQuant", "", "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd", "nace-ai/Qwen3.8-Flash-Next-MLX"},  // redirected old id
+      {"nace-ai/Qwen3.5-9B-MLX-Q5-KQuant", "", "bbddf39f41d3e0f682f2293351c67a9616d5941d", "nace-ai/Qwen3.5-9B-MLX-Q5"},  // redirected old id
+      {"nace-ai/Qwen3.8-27B-MLX-Q5-KQuant", "", "9f3187857e1940bf32fe7f23b4df0fb65631a874", "nace-ai/Qwen3.8-27B-MLX-Q5"},  // redirected old id
+      {"nace-ai/Qwen3.6-35B-A3B-MLX-Q5-KQuant", "", "50b3b1c57e2c096e007de22997ff6824224fccde", "nace-ai/Qwen3.6-35B-A3B-MLX-Q5"},  // redirected old id
   };
   return packs;
 }

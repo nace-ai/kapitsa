@@ -44,6 +44,12 @@ LABELS = {"benchmark": ("0E8A16", "A kapitsa bench result"), "quick": ("C5DEF5",
 FORMER_TITLES = {"nemotron-labs-dory1.0-4b": ("Nemotron-Labs Dory1.0 4B",)}  # until 0.1.35
 
 
+# Variant names and precisions the 0.2.35 release wrote into the results it made. The catalog now calls those packs
+# q4 and q5; a published result keeps the names it was made with and is never rewritten, so the check maps them.
+LEGACY_VARIANTS = {"kquant": "q4", "kquant5": "q5"}
+FORMER_PRECISIONS = {"q4": ("kquant", "KQuant Q4", "4-bit KQuant"), "q5": ("KQuant Q5",)}
+
+
 def catalog(repo=REPO):
     """{name: {"title", "variants": {variant: precision}}} from src/hub/catalog.cpp"""
     src = open(os.path.join(repo, "src", "hub", "catalog.cpp"), encoding="utf-8").read()
@@ -111,10 +117,12 @@ def check_result(r, cat, macs, versions, existing=(), now=None):
         c = cat[m["name"]]
         if m["title"] != c["title"] and m["title"] not in FORMER_TITLES.get(m["name"], ()):
             errs.append(f"model title {m['title']!r} is not the catalog's {c['title']!r}")
-        if m["variant"] not in c["variants"]:
+        legacy = m["variant"] in LEGACY_VARIANTS
+        variant = LEGACY_VARIANTS.get(m["variant"], m["variant"])
+        if variant not in c["variants"]:
             errs.append(f"{m['name']} has no variant {m['variant']!r} ({', '.join(c['variants'])})")
-        elif m["precision"] != c["variants"][m["variant"]]:
-            errs.append(f"precision {m['precision']!r} is not {m['name']}:{m['variant']}'s ({c['variants'][m['variant']]!r})")
+        elif m["precision"] != c["variants"][variant] and not (legacy and m["precision"] in FORMER_PRECISIONS[variant]):
+            errs.append(f"precision {m['precision']!r} is not {m['name']}:{m['variant']}'s ({c['variants'][variant]!r})")
     if m["decoding"] in ("KFlash", "DFlash2", "LiLiCorr", "DSpark") and not m["drafter"]:
         errs.append(f"{m['decoding']} decoding without its drafter")
     # the Mac

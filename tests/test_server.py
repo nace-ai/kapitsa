@@ -173,21 +173,21 @@ def check(name, ok, detail=""):
         fails += 1
 
 # The app and the CLI download the same pinned files for the 4-bit variants (PINNED) and the defaults (DEFAULTS:
-# the 4-bit variants, except the 27B's KQuant pack, #495) of src/hub/catalog.cpp.
-DEFAULTS = {"qwen3.6-35b-a3b": ("4bit", "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", "37e804f90e368a4de866bc34650b9dde67a78c8e"),
-            "qwen3.8-27b": ("kquant", "nace-ai/Qwen3.8-27B-MLX-KQuant", "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364"),
-            "qwen3.5-4b": ("4bit", "nace-ai/Qwen3.5-4B-MLX-KQuant", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"),
-            "qwen3.5-9b": ("4bit", "nace-ai/Qwen3.5-9B-MLX-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")}
+# the 4-bit variants, except the 27B's Nace Q4 pack, #495) of src/hub/catalog.cpp.
+DEFAULTS = {"qwen3.6-35b-a3b": ("4bit", "nace-ai/Qwen3.6-35B-A3B-MLX", "37e804f90e368a4de866bc34650b9dde67a78c8e"),
+            "qwen3.8-27b": ("q4", "nace-ai/Qwen3.8-27B-MLX", "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364"),
+            "qwen3.5-4b": ("4bit", "nace-ai/Qwen3.5-4B-MLX", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"),
+            "qwen3.5-9b": ("4bit", "nace-ai/Qwen3.5-9B-MLX", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")}
 PINNED = {
-    "qwen3.6-35b-a3b": ("nace-ai/Qwen3.6-35B-A3B-MLX-KQuant", "37e804f90e368a4de866bc34650b9dde67a78c8e",
+    "qwen3.6-35b-a3b": ("nace-ai/Qwen3.6-35B-A3B-MLX", "37e804f90e368a4de866bc34650b9dde67a78c8e",
                         [("dflash2", "incoai/Qwen3.6-35B-A3B-DFlash2", "51ef7b6923ad6c14cb1bb41c37a9041446496ab6", "dflash2")]),
     "qwen3.8-27b": ("nace-ai/Qwen3.8-27B-MLX-4bit", "d76e1f92eb8c16a3f3058d438cd6af30bce86557",
                     [("mtp", "Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed", "1d5087d2062c02b279180a53e4016cf9cd7a3d7e", "."),
                      ("dflash2", "nace-ai/Qwen3.8-27B-DFlash2-Kapitsa", "4f950469095a4c799ca2297b1f444b349e672b71", "dflash2")]),
-    "qwen3.5-4b": ("nace-ai/Qwen3.5-4B-MLX-KQuant", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89",
+    "qwen3.5-4b": ("nace-ai/Qwen3.5-4B-MLX", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89",
                    [("mtp-sidecar", "Qwen/Qwen3.5-4B", "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a", "."),
                     ("dflash", "z-lab/Qwen3.5-4B-DFlash", "9a1996ccf887b79ab3af4fcbf8c1d1f4b5658bcf", "dflash2")]),
-    "qwen3.5-9b": ("nace-ai/Qwen3.5-9B-MLX-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
+    "qwen3.5-9b": ("nace-ai/Qwen3.5-9B-MLX", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
                    [("mtp-sidecar", "Qwen/Qwen3.5-9B", "c202236235762e1c871ad0ccb60c8ee5ba337b9a", "."),
                     ("dflash", "z-lab/Qwen3.5-9B-DFlash", "5fc3b3d474760f18c516db87d84c37edbfd3ede6", "dflash2")]),
 }
@@ -341,20 +341,20 @@ def cli_checks(kapitsa):
     check("cli: device profile available before model scan", rc == 0, err)
     profile = json.loads(out)
     if profile["chip_class"] in ("matrix", "wide"):
-        q9 = ("nace-ai/Qwen3.5-9B-MLX-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")
+        q9 = ("nace-ai/Qwen3.5-9B-MLX", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")
     else:
-        q9 = ("nace-ai/Qwen3.5-9B-MLX-4bit-KQuant", "867adaa1c6d84d1fd9b4f37f43836019c877ba59")
+        q9 = ("nace-ai/Qwen3.5-9B-MLX-4bit", "867adaa1c6d84d1fd9b4f37f43836019c877ba59")
     DEFAULTS["qwen3.5-9b"] = ("4bit", *q9)
     PINNED["qwen3.5-9b"] = (*q9, PINNED["qwen3.5-9b"][2])
     models = os.path.join(home, "models")
     rc, out, _ = run("list", "--json")
     check("cli: list --json on an empty store", rc == 0 and json.loads(out) == [], out)
     for name, aliases in [("qwen3.6-35b-a3b", ["35b:4bit", "QWEN3.6-35B-A3B:4bit",
-                                               "nace-ai/Qwen3.6-35B-A3B-MLX-KQuant@37e804f90e368a4de866bc34650b9dde67a78c8e"]),
+                                               "nace-ai/Qwen3.6-35B-A3B-MLX@37e804f90e368a4de866bc34650b9dde67a78c8e"]),
                           ("qwen3.8-27b", ["27b:4bit", "27B:4BIT", "nace-ai/Qwen3.8-27B-MLX-4bit",
                                            "hf.co/nace-ai/Qwen3.8-27B-MLX-4bit"]),
                           ("qwen3.5-4b", ["4b:4bit", "qwen3.5-4b:4bit",
-                                          "nace-ai/Qwen3.5-4B-MLX-KQuant@9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"]),
+                                          "nace-ai/Qwen3.5-4B-MLX@9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"]),
                           ("qwen3.5-9b", ["9b:4bit", "QWEN3.5-9B:4bit", q9[0], q9[0] + "@" + q9[1]])]:
         repo, rev, comps = PINNED[name]
         dv = DEFAULTS[name][0]
@@ -366,33 +366,33 @@ def cli_checks(kapitsa):
                   j.get("kind") == "catalog" and j.get("variant") == "4bit" and
                   j.get("dir") == os.path.join(models, name + "-4bit") and j.get("repo") == repo and
                   j.get("revision") == rev and got == comps and j.get("downloaded") is False, json.dumps(j))
-    # the 27B's KQuant variant, its default since #495: its own repo and drafter (the MTP head is in the repo), by
+    # the 27B's Nace Q4 variant, its default since #495: its own repo and drafter (the MTP head is in the repo), by
     # name, by repo id or with no variant; `27b:4bit` above is the plain pack with mtp27 and dflash27
     KQ27 = DEFAULTS["qwen3.8-27b"][1:]
-    for a in ["27b", "qwen3.8-27b", "27b:kquant", "27B:KQUANT", "qwen3.8-27b:kquant", KQ27[0], KQ27[0] + "@" + KQ27[1],
-              "nace-ai/Qwen3.8-27B-MLX-KQuant"]:
+    for a in ["27b", "qwen3.8-27b", "27b:q4", "27B:KQUANT", "qwen3.8-27b:q4", KQ27[0], KQ27[0] + "@" + KQ27[1],
+              "nace-ai/Qwen3.8-27B-MLX"]:
         j = plan(a)
         got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
-        check(f"cli: {a} -> qwen3.8-27b:kquant with the nace-ai drafter",
-              j.get("model") == "qwen3.8-27b:kquant" and j.get("id") == "qwen3.8-27b" and j.get("kind") == "catalog" and
-              j.get("variant") == "kquant" and j.get("repo") == KQ27[0] and j.get("revision") == KQ27[1] and
-              j.get("dir") == os.path.join(models, "qwen3.8-27b-kquant") and got == [PINNED["qwen3.8-27b"][2][1]] and
+        check(f"cli: {a} -> qwen3.8-27b:q4 with the nace-ai drafter",
+              j.get("model") == "qwen3.8-27b:q4" and j.get("id") == "qwen3.8-27b" and j.get("kind") == "catalog" and
+              j.get("variant") == "q4" and j.get("repo") == KQ27[0] and j.get("revision") == KQ27[1] and
+              j.get("dir") == os.path.join(models, "qwen3.8-27b-q4") and got == [PINNED["qwen3.8-27b"][2][1]] and
               j.get("downloaded") is False, json.dumps(j))
-    # the released KQuant packs without a drafter of their own (#495): by name or by repo id each gets its base's
+    # the released Nace packs without a drafter of their own (#495): by name or by repo id each gets its base's
     # drafter, and the MTP head when the repo has none where the loader looks; the defaults stay as they are
     D9, D27, D35 = PINNED["qwen3.5-9b"][2], PINNED["qwen3.8-27b"][2], PINNED["qwen3.6-35b-a3b"][2]
     MTP35 = ("mtp", "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed", "95460516fbfe34c48f577f67c9ed191f5d61fbaf", ".")
     for name, var, repo, rev, comps in [
-            ("qwen3.5-9b", "kquant", "nace-ai/Qwen3.5-9B-MLX-KQuant", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4", D9),
-            ("qwen3.5-9b", "kquant5", "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant", "bbddf39f41d3e0f682f2293351c67a9616d5941d", D9),
-            ("qwen3.8-27b", "kquant5", "nace-ai/Qwen3.8-27B-MLX-Q5-KQuant", "9f3187857e1940bf32fe7f23b4df0fb65631a874", D27),
-            ("qwen3.6-35b-a3b", "kquant5", "nace-ai/Qwen3.6-35B-A3B-MLX-Q5-KQuant", "50b3b1c57e2c096e007de22997ff6824224fccde",
+            ("qwen3.5-9b", "q4", "nace-ai/Qwen3.5-9B-MLX", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4", D9),
+            ("qwen3.5-9b", "q5", "nace-ai/Qwen3.5-9B-MLX-Q5", "bbddf39f41d3e0f682f2293351c67a9616d5941d", D9),
+            ("qwen3.8-27b", "q5", "nace-ai/Qwen3.8-27B-MLX-Q5", "9f3187857e1940bf32fe7f23b4df0fb65631a874", D27),
+            ("qwen3.6-35b-a3b", "q5", "nace-ai/Qwen3.6-35B-A3B-MLX-Q5", "50b3b1c57e2c096e007de22997ff6824224fccde",
              [MTP35] + D35)]:
         for a in [name + ":" + var, repo, "hf.co/" + repo, repo + "@" + rev]:
             j = plan(a)
             got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
-            # a Mac with matrix units has the 9B's Q4 pack as `4bit`, listed before `kquant`: its repo id finds `4bit`
-            v = "4bit" if (name, var) == ("qwen3.5-9b", "kquant") and a != name + ":" + var and q9[0] == repo else var
+            # a Mac with matrix units has the 9B's Q4 pack as `4bit`, listed before `q4`: its repo id finds `4bit`
+            v = "4bit" if (name, var) == ("qwen3.5-9b", "q4") and a != name + ":" + var and q9[0] == repo else var
             check(f"cli: {a} -> {name}:{v} with its base's drafter",
                   j.get("model") == name + ":" + v and j.get("kind") == "catalog" and j.get("variant") == v and
                   j.get("repo") == repo and j.get("revision") == rev and
@@ -892,6 +892,32 @@ def cli_checks(kapitsa):
     check("cli: a failed repair keeps what is there", rc == 0 and os.path.exists(os.path.join(m4, ".kapitsa", "manifest.json")), out)
     rc, out, _ = run("rm", "4b")
     check("cli: rm deletes it", rc == 0 and "Deleted qwen3.5-4b:4bit" in out and not os.path.exists(m4), out)
+    # a 27B pulled by 0.2.35 sits in `qwen3.8-27b-kquant` and its manifest says `qwen3.8-27b:kquant`: it is the catalog's
+    # `qwen3.8-27b:q4` now, listed once, downloaded, used where it is and not offered for download again
+    old27 = os.path.join(models, "qwen3.8-27b-kquant")
+    os.makedirs(os.path.join(old27, ".kapitsa"))
+    with open(os.path.join(old27, "config.json"), "w") as f:
+        f.write("{}")
+    with open(os.path.join(old27, "mtp.safetensors"), "wb") as f:
+        f.write(b"x" * 10)
+    with open(os.path.join(old27, ".kapitsa", "manifest.json"), "w") as f:
+        json.dump({"name": "qwen3.8-27b:kquant", "variant": "kquant", "repo": "nace-ai/Qwen3.8-27B-MLX-KQuant",  # redirected old id: what 0.2.35 wrote
+                   "revision": KQ27[1], "commit": KQ27[1],
+                   "files": [{"path": "config.json", "size": 2}, {"path": "mtp.safetensors", "size": 10}],
+                   "companions": [{"kind": k, "repo": r, "revision": v, "files": ["mtp.safetensors"]}
+                                  for k, r, v, _ in [PINNED["qwen3.8-27b"][2][1]]]}, f)
+    rc, out, _ = run("list", "--json")
+    lst = json.loads(out) if rc == 0 else []
+    check("cli: a pack pulled before the rename lists once, as the catalog's q4",
+          len(lst) == 1 and lst[0]["name"] == "qwen3.8-27b:q4" and lst[0]["variant"] == "q4" and lst[0]["complete"] and
+          lst[0]["dir"] == old27, out)
+    rc, out, _ = run("list")
+    check("cli: list does not offer the q4 it has for download", rc == 0 and out.count("qwen3.8-27b:q4") == 1, out)
+    rc, out, err = run("pull", "27b")
+    check("cli: pull uses the old folder in place, with no download", rc == 0 and "already downloaded" in out and
+          os.path.isdir(old27) and not os.path.exists(os.path.join(models, "qwen3.8-27b-q4")), out + err)
+    rc, out, _ = run("rm", "27b")
+    check("cli: rm deletes the old folder", rc == 0 and not os.path.exists(old27), out)
     rc, _, err = run("rm", folder)
     check("cli: rm leaves a folder of yours alone", rc == 2 and os.path.exists(folder), err)
     # rm says what it gives back: a model that is an APFS clone of another copy frees nothing
@@ -1064,22 +1090,22 @@ def cli_checks(kapitsa):
               j.get("model") == "qwen3.8-flash-next:4bit" and j.get("kind") == "catalog" and
               j.get("repo") == "nace-ai/Qwen3.8-Flash-Next-MLX-4bit" and
               j.get("revision") == "5d423f9f563c1f1b7ca7945b268e65c0b92b0eae" and j.get("downloaded") is False, json.dumps(j))
-    kquant_repo = "nace-ai/Qwen3.8-Flash-Next-MLX-KQuant"
-    kquant_revision = "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd"
-    for a in ["flash-next:kquant", "flash:kquant", "qwen3.8-flash-next:kquant", kquant_repo,
-              kquant_repo + "@" + kquant_revision]:
+    flash_repo = "nace-ai/Qwen3.8-Flash-Next-MLX"
+    flash_revision = "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd"
+    for a in ["flash-next:q4", "flash:q4", "qwen3.8-flash-next:q4", flash_repo,
+              flash_repo + "@" + flash_revision]:
         j = plan(a)
-        check(f"cli: {a} -> opt-in qwen3.8-flash-next:kquant at its pinned revision",
-              j.get("model") == "qwen3.8-flash-next:kquant" and j.get("kind") == "catalog" and
-              j.get("repo") == kquant_repo and j.get("revision") == kquant_revision and
+        check(f"cli: {a} -> opt-in qwen3.8-flash-next:q4 at its pinned revision",
+              j.get("model") == "qwen3.8-flash-next:q4" and j.get("kind") == "catalog" and
+              j.get("repo") == flash_repo and j.get("revision") == flash_revision and
               j.get("downloaded") is False, json.dumps(j))
-    # the combined KQuant repos' folders name the catalog entry of the same pack, companions included (#1210)
-    j = plan("nace-ai/Qwen3.5-9B-MLX-KQuant/Q5")
-    check("cli: nace-ai/Qwen3.5-9B-MLX-KQuant/Q5 -> 9b:kquant5 with its drafter and MTP head",
-          j.get("model") == "qwen3.5-9b:kquant5" and j.get("kind") == "catalog" and
-          j.get("repo") == "nace-ai/Qwen3.5-9B-MLX-Q5-KQuant" and
+    # the combined Nace repos' folders name the catalog entry of the same pack, companions included (#1210)
+    j = plan("nace-ai/Qwen3.5-9B-MLX/Q5")
+    check("cli: nace-ai/Qwen3.5-9B-MLX/Q5 -> 9b:q5 with its drafter and MTP head",
+          j.get("model") == "qwen3.5-9b:q5" and j.get("kind") == "catalog" and
+          j.get("repo") == "nace-ai/Qwen3.5-9B-MLX-Q5" and
           {c.get("kind") for c in j.get("companions", [])} == {"mtp-sidecar", "dflash"}, json.dumps(j))
-    rc, _, err = run("pull", "--dry-run", "--json", "nace-ai/Qwen3.8-Flash-Next-MLX-KQuant/Q4")
+    rc, _, err = run("pull", "--dry-run", "--json", "nace-ai/Qwen3.8-Flash-Next-MLX/Q4")
     check("cli: Flash-Next's combined Q4/ folder (a later checkpoint) is refused", rc != 0 and "Q4" in err, err)
     rc, _, err = run("serve", "--port", str(busy))
     check("cli: serve with no model, offline and nothing downloaded: a clear error", rc == 1 and "Can't reach" in err, err)

@@ -19,7 +19,7 @@ KAPITSA = "kapitsa"
 MODELS = {
     "4b": {"name": "Qwen3.5-4B", "prefix": "q35-4b", "folder": "qwen3.5-4b-4bit", "id": "qwen3.5-4b", "pull": "4b"},
     "27b": {"name": "Qwen3.8-27B", "prefix": "q38-27b", "folder": "qwen3.8-27b-4bit", "id": "qwen3.8-27b",
-            "pull": "27b:4bit"},  # the plain trunk the other engines read; `27b` is the KQuant pack since #495
+            "pull": "27b:4bit"},  # the plain trunk the other engines read; `27b` is the Nace Q4 pack since #495
     "35b": {"name": "Qwen3.6-35B-A3B", "prefix": "q36-35b", "folder": "qwen3.6-35b-a3b-4bit", "id": "qwen3.6-35b-a3b",
             "pull": "35b"},
 }

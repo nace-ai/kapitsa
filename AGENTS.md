@@ -214,7 +214,7 @@ Here a feature means a kernel path, a decode, drafting or verify strategy, a cac
 flag or environment variable. Three things are not features, so this rule does not apply to them: a kill switch for an
 existing default (`NI_X=0`), a debug or profiling switch, and a measuring tool. The output check still gates every
 default change, with one exception: a default that only switches which published pack a catalog name downloads (`27b`
-from the plain 4-bit pack to its KQuant pack). That changes which weights a catalog name loads, not the loader or the
+from the plain 4-bit pack to its Nace Q4 pack). That changes which weights a catalog name loads, not the loader or the
 kernels. A pack whose tensors need a different kernel path (for example 6-bit group-64 dense weights on `NI_QMT6`) goes
 back to the floor gate. The floors in `tools/logit_floors/` cover code paths on one pack, so
 `tools/logit_compare.py` between two packs can only report "moved". It gates on KL to BF16 for both packs on the

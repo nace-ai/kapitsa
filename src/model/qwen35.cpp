@@ -366,7 +366,7 @@ static bool exact_qmms(double bytes, bool multi, uint32_t K) {
 // chunks under 64 rows (NI_SHORTPF's own comment). qmr_sel().on is checked too: the qmt tile is only reached behind it,
 // so NI_QMM=0 keeps the short-prefill path the chunk had. Measured on the M5 Pro, 27B, 16K cached prefix, one chunk of new
 // rows, short-prefill against tensor_ops: 73 rows 679 -> 399 ms, 124 rows 1005 -> 483 ms. 5-bit group 64 from 64 rows
-// takes NI_QMTF's tile the same way (enc_qmm_large, enc_qmm_gu): on the 9B KQuant pack, an 85-row chunk ran its 5-bit
+// takes NI_QMTF's tile the same way (enc_qmm_large, enc_qmm_gu): on the 9B Nace Q4 pack, an 85-row chunk ran its 5-bit
 // down and z projections on qmmsf_f5g64_t6 at 1.11 ms a call, against 0.23 ms for the 4-bit pack's qmt_m64_n64.
 // 3-bit, 8-bit and unaligned projections, and every MoE expert GEMM, keep the short path they have.
 bool Qwen35::sp_qmt_pref(const QLinear& L, int M) const {

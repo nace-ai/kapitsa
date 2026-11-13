@@ -1389,7 +1389,9 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     else if (file_size(d, sz)) from.by_size.emplace(sz, d);
   }
   if (ref.kind == ModelRef::kCatalog) {
-    const std::string app = user_home() + "/.nace/models/" + ref.model->name + "-" + ref.variant->name;
+    std::string app = user_home() + "/.nace/models/" + ref.model->name + "-" + ref.variant->name;
+    const std::string was = legacy_dir_name(*ref.model, *ref.variant);
+    if (!is_dir(app) && !was.empty()) app = user_home() + "/.nace/models/" + was;
     if (is_dir(app)) {
       from.scan(app, 3);
       if (spin) spin->label("Checking Nace Agent's copy in " + tilde(app));
@@ -1959,6 +1961,14 @@ std::vector<Installed> installed() {
       const json j = json::parse(read_text(manifest_path(m.dir)));
       m.name = j.value("name", n);
       m.variant = j.value("variant", "");
+      // a pack pulled before the rename names its old variant: it is the catalog's current one, so it lists once
+      const std::string now_variant = current_variant_name(m.variant);
+      if (now_variant != m.variant) {
+        const std::string tail = ":" + m.variant;
+        if (m.name.size() > tail.size() && m.name.compare(m.name.size() - tail.size(), tail.size(), tail) == 0)
+          m.name = m.name.substr(0, m.name.size() - tail.size()) + ":" + now_variant;
+        m.variant = now_variant;
+      }
       m.repo = j.value("repo", "");
       m.commit = j.value("commit", "");
       m.total = j.value("total_bytes", uint64_t(0));
