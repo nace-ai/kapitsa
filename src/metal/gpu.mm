@@ -1225,7 +1225,8 @@ void Encoder::commit() {
   commit_cb((__bridge id<MTLCommandBuffer>)cb_);
 }
 [[noreturn]] static void gpu_fatal(id<MTLCommandBuffer> b) {
-  const std::string what = [[b.error description] UTF8String];
+  const char* desc = [[b.error description] UTF8String];
+  const std::string what = desc ? desc : "no error description";
   if (what.find("ImpactingInteractivity") == std::string::npos) fatal("GPU error: %s", what.c_str());
   const char* relax = getenv("AGX_RELAX_CDM_CTXSTORE_TIMEOUT");
   fatal("GPU error: %s. macOS stopped this work because it kept the GPU from the display too long; a long prompt on a "
