@@ -45,7 +45,7 @@ check(list(cat) == ["qwen3.5-4b", "qwen3.5-9b", "qwen3.8-27b", "qwen3.6-35b-a3b"
                    "ornith-1.5-35b-a3b", "clover-35b-a3b"], "the catalog's models, in order",
       str(list(cat)))
 check(cat["qwen3.6-35b-a3b"]["variants"] == {"4bit": "4-bit", "5bit": "5-bit", "6bit": "6-bit", "8bit": "8-bit", "bf16": "bf16",
-                                                   "16gb": "2-bit experts", "kquant5": "KQuant Q5"},
+                                                   "16gb": "2-bit experts", "q5": "Nace Q5"},
       "the 35B's precisions", str(cat["qwen3.6-35b-a3b"]["variants"]))
 # every variant in catalog.cpp is found by the checker: a comment between a variant's `{.name` and its `.quant` hid the 4B's and the 9B's 4-bit
 # (and the 35B's) from it, and a result for them was refused (kapitsa#1149, 10 Nov 2026)
@@ -54,13 +54,13 @@ _n_variants = len(re.findall(r"^\s*\.quant\s*=", _src, re.M))
 check(sum(len(m["variants"]) for m in cat.values()) == _n_variants, "the checker finds every variant of catalog.cpp",
       f"{sum(len(m['variants']) for m in cat.values())} found, {_n_variants} `.quant =` initializer fields in the source")
 _model9 = next(m for m in mt.parse_catalog(_src) if m["name"] == "qwen3.5-9b")
-check(cat["qwen3.5-9b"] == {"title": _model9["title"], "variants": {"4bit": "4-bit", "kquant": "KQuant Q4", "kquant5": "KQuant Q5"}}
-      and [v["name"] for v in _model9["variants"]] == ["4bit", "kquant", "kquant5"],
+check(cat["qwen3.5-9b"] == {"title": _model9["title"], "variants": {"4bit": "4-bit", "q4": "Nace Q4", "q5": "Nace Q5"}}
+      and [v["name"] for v in _model9["variants"]] == ["4bit", "q4", "q5"],
       "the community checker and models table read the same 9B row through catalog overloads")
 check(cat["nemotron-3.5-bolt"]["variants"] == {"24gb": "NVIDIA 24 GB"} and cat["qwen3.5-4b"]["title"] == "Qwen3.5-4B",
       "Bolt's precision and the 4B's title")
 check(macs["Mac16,7"]["name"] == "MacBook Pro (16-inch, 2024)" and len(macs) >= 58, "the Mac table")
-check(cat["qwen3.8-flash-next"]["variants"] == {"4bit": "4-bit", "kquant": "4-bit KQuant", "64gb": "2-bit experts"},
+check(cat["qwen3.8-flash-next"]["variants"] == {"4bit": "4-bit", "q4": "4-bit Nace", "64gb": "2-bit experts"},
       "a variant whose .quant string spans several lines is still read", str(cat["qwen3.8-flash-next"]["variants"]))
 check(versions, "a known version from CMakeLists.txt", str(versions))
 
@@ -140,6 +140,26 @@ e = cc.check_result(dory, cat, macs, versions)[0]
 check(not any("title" in x for x in e), "a title from an earlier release passes (Dory's, until 0.1.35)", str(e))
 check(ct.model_name(dory["model"]) == "Nemotron Dory1.0 4B", "the table names a model as the catalog does now",
       ct.model_name(dory["model"]))
+
+# The 0.2.35 release made two results under the variants `kquant` and `kquant5`, which the catalog now calls q4 and q5. Those
+# published files are read as they are (never rewritten): the checker maps the old names, the table keeps what they say.
+_RES = os.path.join(REPO, "bench", "community", "results")
+for _name, _old, _precision in (("kapitsa-bench-2026-11-12-m2-max-qwen3.8-27b-kquant-22d879.json", "kquant", "kquant"),
+                                ("kapitsa-bench-2026-11-12-m5-pro-qwen3.6-35b-a3b-kquant5-b460e8.json", "kquant5", "KQuant Q5")):
+    _r = json.load(open(os.path.join(_RES, _name), encoding="utf-8"))
+    check(_r["model"]["variant"] == _old and _r["model"]["precision"] == _precision,
+          f"{_name} is the published file, with its original variant and precision", str(_r["model"]))
+    check(not list(jsonschema.Draft202012Validator(schema).iter_errors(_r)), f"{_name} still follows the schema")
+    _e, _w = cc.check_result(_r, cat, macs, versions | {_r["kapitsa"]["version"]})
+    check(not _e, f"the published {_old} result passes the checker", str(_e))
+    _bad = copy.deepcopy(_r)
+    _bad["model"]["precision"] = "something else"
+    check(any("precision" in x for x in cc.check_result(_bad, cat, macs, versions | {_r["kapitsa"]["version"]})[0]),
+          f"a {_old} result with a made-up precision is still refused")
+    _bad = copy.deepcopy(_r)
+    _bad["model"]["variant"] = _old + "9"
+    check(any("no variant" in x for x in cc.check_result(_bad, cat, macs, versions | {_r["kapitsa"]["version"]})[0]),
+          f"an unknown old variant ({_old}9) is still refused")
 
 
 def prompts(r, sizes):

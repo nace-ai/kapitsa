@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""Check that every nace-ai KQuant Hugging Face id this checkout names resolves directly, and that the catalog's
-pinned revisions still hold the same files.
+"""Check that every nace-ai MLX Hugging Face id this checkout names resolves directly, that the catalog's pinned
+revisions still hold the same files, and that the old "KQuant" name stays out of the public files.
 
-1. Every nace-ai KQuant repo id in the tracked docs, sources, tests and tools (not bench/: those files are frozen
-   records of what ran) must answer HTTP 200 on the model API with no redirect.
-2. Every `.repo`/`.revision` pin of a KQuant pack in src/hub/catalog.cpp must resolve (tree of that revision, 200, no
-   redirect). With --base-ref, the same pins at that ref are fetched too (following redirects, as the old ids need)
+1. Every nace-ai MLX repo id (`nace-ai/<model>-MLX[-Q5|-4bit|...]`) in the tracked docs, sources, tests and tools (not
+   bench/results: those files are frozen records of what ran) must answer HTTP 200 on the model API with no redirect.
+   The ids the Hub renamed on 13 Nov 2026 redirect, so an old one left in a file fails here; the catalog's rows that
+   keep old ids accepted carry the mark "redirected old id" and are skipped.
+2. Every `.repo`/`.revision` pin of a nace-ai MLX pack in src/hub/catalog.cpp must resolve (tree of that revision, 200,
+   no redirect). With --base-ref, the same pins at that ref are fetched too (following redirects, as renamed ids need)
    and each pack's safetensors must have the same paths, sizes and LFS sha256 in both lists.
+3. The word "KQuant" appears in no tracked public file outside the marked old-id rows and the
+   files that test the hidden variant names (WORD_OK). Paths into bench/results and bench/community keep their old names, and those two
+   directories (published results, receipts) are not scanned.
 
 Anonymous requests only, so what passes is what a user without a token gets. Stdlib only.
-    python3 tools/check_kquant_ids.py --base-ref origin/main
+    python3 tools/check_nace_ids.py --base-ref origin/main
 """
 import argparse
 import json
@@ -20,11 +25,18 @@ import urllib.error
 import urllib.request
 
 HUB = "https://huggingface.co"
-ID_RE = re.compile(r"nace-ai/[A-Za-z0-9._-]*KQuant[A-Za-z0-9._-]*")
-PIN_RE = re.compile(r'\.repo = "(nace-ai/[A-Za-z0-9._-]*KQuant[A-Za-z0-9._-]*)",\s*\.revision = "([0-9a-f]{40})"')
+ID_RE = re.compile(r"nace-ai/[A-Za-z0-9._-]*-MLX(?:-[A-Za-z0-9.]+)*")
+PIN_RE = re.compile(r'\.repo = "(nace-ai/[A-Za-z0-9._-]*-MLX(?:-[A-Za-z0-9.]+)*)",\s*\.revision = "([0-9a-f]{40})"')
+WORD_RE = re.compile(r"kquant", re.I)
+# Published results keep the names they were made with: the old variant names in bench/results and bench/community paths stay.
+PATH_RE = re.compile(r"\S*bench/(?:results|community)/\S*")
 CATALOG = "src/hub/catalog.cpp"
 MARK = "redirected old id"
 SCAN = ["README.md", "docs", "src", "tests", "tools"]
+WORD_SCAN = SCAN + ["AGENTS.md", "bench/harness", ".github", ".cursor", "CMakeLists.txt"]
+WORD_OK = {"tools/check_nace_ids.py", "src/hub/resolve.cpp", "src/hub/hub.h", "tests/catalog_profile_test.cpp", "tests/test_server.py",
+           "tests/test_community.py", "tools/community_check.py",  # the hidden old variant names they map
+           "docs/site/leaderboard-data.js"}  # the published 0.2.35 results, as made
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -47,10 +59,20 @@ def git(*args):
 
 def ids_in_tree():
     ids = set()
-    for line in git("grep", "-h", "-E", ID_RE.pattern, "--", *SCAN).splitlines():
+    for line in git("grep", "-h", "-F", "nace-ai/", "--", *SCAN).splitlines():
         if MARK not in line:  # the old ids Kapitsa still accepts as input are marked, and redirect on purpose
             ids.update(ID_RE.findall(line))
     return sorted(ids)
+
+
+def word_hits():
+    hits = []
+    for line in git("grep", "-n", "-I", "-i", "kquant", "--", *WORD_SCAN).splitlines():
+        path, num, text = line.split(":", 2)
+        if path in WORD_OK or MARK in text or not WORD_RE.search(PATH_RE.sub("", text)):
+            continue
+        hits.append(f"{path}:{num}: {text.strip()[:100]}")
+    return hits
 
 
 def pins(ref):
@@ -90,6 +112,11 @@ def main():
         first = sorted(files)[0] if files else "-"
         print(f"{'ok  ' if ok else 'FAIL'} {code} {repo}@{rev[:8]} {len(files or {})} safetensors; first {first} "
               f"sha256 {((files or {}).get(first) or (0, ''))[1]}" + (f" -> {loc}" if loc else ""))
+
+    print('== names: the word "KQuant" in public files')
+    for hit in word_hits():
+        bad += 1
+        print("FAIL", hit)
 
     if args.base_ref:
         print(f"== same files: pins at {args.base_ref} (redirects followed) against the pins above")

@@ -391,7 +391,8 @@ void list() {
       r.mark = accent(kOk);
       for (const auto& c : hub::catalog())  // what --model takes for it
         for (const auto& var : c.variants)
-          if (m.name == hub::full_name(c, var) || m.name == c.name + "-" + var.name) r.alias = hub::short_name(c, var);
+          if (m.name == hub::full_name(c, var) || m.name == c.name + "-" + var.name || m.name == hub::legacy_dir_name(c, var))
+            r.alias = hub::short_name(c, var);
       if (!m.complete) {
         struct stat st {};
         const bool adopt = !r.alias.empty() && stat((m.dir + "/.kapitsa").c_str(), &st) != 0;

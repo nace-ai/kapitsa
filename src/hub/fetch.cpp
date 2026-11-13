@@ -1389,7 +1389,9 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     else if (file_size(d, sz)) from.by_size.emplace(sz, d);
   }
   if (ref.kind == ModelRef::kCatalog) {
-    const std::string app = user_home() + "/.nace/models/" + ref.model->name + "-" + ref.variant->name;
+    std::string app = user_home() + "/.nace/models/" + ref.model->name + "-" + ref.variant->name;
+    const std::string was = legacy_dir_name(*ref.model, *ref.variant);
+    if (!is_dir(app) && !was.empty()) app = user_home() + "/.nace/models/" + was;
     if (is_dir(app)) {
       from.scan(app, 3);
       if (spin) spin->label("Checking Nace Agent's copy in " + tilde(app));

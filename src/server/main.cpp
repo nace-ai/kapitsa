@@ -2399,7 +2399,7 @@ static int list(int argc, char** argv) {
         if (stat((m.dir + "/.kapitsa").c_str(), &st) != 0)
           for (const auto& c : hub::catalog())
             for (const auto& var : c.variants)
-              if (m.name == c.name + "-" + var.name) cat = hub::short_name(c, var);
+              if (m.name == c.name + "-" + var.name || m.name == hub::legacy_dir_name(c, var)) cat = hub::short_name(c, var);
         what = !cat.empty() ? "not checked yet: `kapitsa pull " + cat + "` checks it against the pinned checksums"
                             : "incomplete: `kapitsa pull " + m.name + "` continues it";
       }

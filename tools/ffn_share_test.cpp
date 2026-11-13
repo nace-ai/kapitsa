@@ -71,7 +71,7 @@ int main() {
     CHECK(plan_layer(H, I, b3, b3, b6, on) == Path::generic);
     CHECK(plan_layer(H, I, b4, b4, b8, on) == Path::generic);
     CHECK(plan_layer(H, I, b4, b4, q4k, on) == Path::generic);
-    CHECK(plan_layer(H, I, b4, b4, b5, on) == Path::generic);  // the 9B KQuant Q4 pack: 4-bit g64 gate/up, 5-bit down
+    CHECK(plan_layer(H, I, b4, b4, b5, on) == Path::generic);  // the 9B Nace Q4 pack: 4-bit g64 gate/up, 5-bit down
     CHECK(plan_layer(H, I, b3, b4, b3, on) == Path::generic);
     CHECK(plan_layer(H, I, q4k, b8, b8, on) == Path::generic);
     CHECK(plan_layer(H, I, b6, b6, b6, on) == Path::generic);

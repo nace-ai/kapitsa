@@ -244,7 +244,7 @@ def render(models, src):
         head + "\n".join(default_rows),
         "",
         "The 9B row applies to Macs with matrix units (M5 and newer). Other Macs, including M3 and M4, keep "
-        f"the legacy 4-bit KQuant pack at `{legacy['revision']}` from {link(legacy['repo'])}, "
+        f"the legacy 4-bit Nace pack at `{legacy['revision']}` from {link(legacy['repo'])}, "
         f"a {legacy_size.group(1)} GB download with the same companions. "
         "The device profile selects the pack; the alias stays `9b`.",
         "",

@@ -46,7 +46,7 @@ not ask for abstractions, interfaces or configuration the change does not need.
   Their floor is an older M4 Pro measurement, not a re-measurement of these M5 kernels. These historical results
   do not waive the output check for a new change or authorize another default. Do not report an unchanged default
   as a defect introduced by the PR; flag a new 35B comparison that uses the stale M4 Pro floor without saying so.
-- A default that only switches which published pack a catalog name downloads (the plain 4-bit pack to its KQuant pack)
+- A default that only switches which published pack a catalog name downloads (the plain 4-bit pack to its Nace Q4 pack)
   changes which weights a catalog name loads, not the loader or the kernels (a pack whose tensors need a different
   kernel path, such as 6-bit group-64 dense weights on `NI_QMT6`, goes back to the floor gate). The floors cover code
   paths on one pack: `tools/logit_compare.py` between two packs can only report "moved". It gates on KL to BF16 for both packs on the same token set (corpus and tool named),
