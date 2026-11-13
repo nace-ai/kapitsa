@@ -297,9 +297,12 @@ rather than generalising from a script that mirrored them.
   checked how. A separate "Not verified" section lists what was not run, above all anything needing a GPU.
 - Benchmark submissions carry the `benchmark` label, the results table, `Kapitsa version (commit)`, `Flags:`, and say
   `kapitsa bench` produced them. Results come only as pull requests from a fork, never as issues. A result file and the
-  regenerated `bench/community/RESULTS.md` (`python3 tools/community_table.py`) ride in the same pull request: the
-  `community-table` check reads the merge commit, so a row without its rewrite is red and, once merged, leaves main
-  stale until someone regenerates it. Bringing a bench pull request up to date re-runs the command before the merge.
+  two files generated from it ride in the same pull request: `bench/community/RESULTS.md` and
+  `docs/site/leaderboard-data.js`. One command writes both (`python3 tools/community_table.py` also runs
+  `python3 tools/build_leaderboard_data.py`), then `git add bench/community/RESULTS.md docs/site/leaderboard-data.js`.
+  The `community-table` check reads the merge commit and fails on either one, so a row without its rewrite is red and,
+  once merged, leaves main stale until someone regenerates it. Bringing a bench pull request up to date re-runs the
+  command before the merge.
 
 - PRs of more than ~1000 changed lines (generated data and vendored code excluded) fail the `PR size` check. Split them.
   Only a reviewer overrides it (`size/override` label and a `Size override: <why>` line in the description); an author

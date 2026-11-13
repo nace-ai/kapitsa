@@ -78,6 +78,20 @@ def build(repo):
     return js, len(results)
 
 
+def output_path(repo):
+    return os.path.join(repo, "docs", "site", "leaderboard-data.js")
+
+
+def write(repo):
+    """Write docs/site/leaderboard-data.js; returns (path, number of results). tools/community_table.py calls this."""
+    js, count = build(repo)
+    out_path = output_path(repo)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w") as fh:
+        fh.write(js)
+    return out_path, count
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -86,11 +100,10 @@ def main():
     args = parser.parse_args()
 
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    out_path = os.path.join(repo, "docs", "site", "leaderboard-data.js")
-
-    js, count = build(repo)
+    out_path = output_path(repo)
 
     if args.check:
+        js, count = build(repo)
         try:
             with open(out_path) as fh:
                 existing = fh.read()
@@ -103,10 +116,8 @@ def main():
             print(f"FAIL: leaderboard-data.js is stale; regenerate with: python3 tools/build_leaderboard_data.py", file=sys.stderr)
             sys.exit(1)
     else:
-        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        with open(out_path, "w") as fh:
-            fh.write(js)
-        print(f"Wrote {count} results ({len(js)} bytes) to {out_path}")
+        out_path, count = write(repo)
+        print(f"Wrote {count} results ({os.path.getsize(out_path)} bytes) to {out_path}")
 
 if __name__ == "__main__":
     main()
