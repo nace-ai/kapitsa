@@ -1,0 +1,8 @@
+05:18:08 bin=/Users/alisheramantay/Documents/nace/k495/kapitsa-0.2.35/kapitsa sha=19737e9cd311 kapitsa 0.2.35 (30b18f9) order=[A B B A] macos=26.5.2
+05:18:08 arm A = /Users/alisheramantay/Documents/nace/k495/abm5/arms/lms-9b
+05:18:08 arm B = /Users/alisheramantay/Documents/nace/k495/abm5/arms/kq-9b
+05:19:14 1-A rc=0 load 2.59->2.12 ok flags=[]
+05:20:19 2-B rc=0 load 2.12->2.56 ok flags=['decode_greedy: repetition loop (distinct-4-gram 0.4553)']
+05:21:20 3-B rc=0 load 2.56->2.10 ok flags=['decode: repetition loop (distinct-4-gram 0.4296)']
+05:22:21 4-A rc=0 load 2.10->2.87 ok flags=['decode: repetition loop (distinct-4-gram 0.4628)', 'decode: repetition loop (distinct-4-gram 0.4733)']
+05:22:21 LEGSDONE
