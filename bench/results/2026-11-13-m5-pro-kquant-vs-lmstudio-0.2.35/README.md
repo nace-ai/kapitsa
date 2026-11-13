@@ -3,11 +3,13 @@
 One A B B A per model on an M5 Pro, with the same drafter and MTP head on both packs, so the weights are the only
 difference. No leg was re-run.
 
-- **35B-A3B: KQuant writes faster**, 236.2 against 221.3 tok/s pooled over both decode modes (+6.7%): +7.6% at T 0.6
-  and +5.9% at T 0. 4K prefill is the same (-0.4%).
+- **35B-A3B: KQuant writes faster in both modes**: 236.2 against 221.3 tok/s pooled over both decode modes in this
+  run (+6.7%), +7.6% at T 0.6 and +5.9% at T 0. The same weights gave +10.1% pooled in the 2026-11-12 record (below), so
+  the size of the gain moves between runs. 4K prefill is the same (-0.4%).
 - **9B: within 5% pooled** (146.5 against 144.8 tok/s, +1.2%), but the two modes go opposite ways: KQuant is
   **slower at T 0.6** (131.5 against 140.3, -6.3%) and **faster at T 0** (161.5 against 149.3, +8.2%). 4K prefill is
-  2.7% slower. Three of the eight 9B answers carry bench's repetition-loop flag, on both packs (table below).
+  2.7% slower. Four of the 24 9B answers (6 per leg) carry bench's repetition-loop flag, in 3 of the 8 leg-modes and on
+  both packs (table below).
 
 | Pack | Repo and revision | sha256 of the files the legs read |
 | --- | --- | --- |
@@ -23,7 +25,9 @@ difference. No leg was re-run.
 Each shard and drafter hash equals the LFS sha256 the Hub publishes at that revision. The lmstudio 35B-A3B shards are
 byte for byte the shards of `Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed`, the "MTPLX" pack of the
 [2026-11-12 record](../2026-11-12-m5-pro-kquant-35b-0.2.35/README.md), so that record also timed KQuant against
-lmstudio's 35B-A3B weights.
+lmstudio's 35B-A3B weights. The two records time the same weights on the same binary, Mac and protocol and do not agree
+on the size: +10.7% at T 0.6 and +9.6% at T 0 there (+10.1% pooled), +7.6% and +5.9% here (+6.7% pooled). Most of the
+difference is the lmstudio arm, whose T 0.6 legs read 189.7 and 198.6 there and 210.2 and 212.1 here.
 
 Setup: Kapitsa 0.2.35 (`30b18f9`, binary sha256 `19737e9cd311…`), MacBook Pro M5 Pro 48 GB, macOS 26.5.2 (25F84), on
 AC, power mode 2 (not Low Power), the DSH window hidden, every model folder on the internal disk. 9B legs 05:18 to 05:22
@@ -34,12 +38,12 @@ leg it waits for AC and a 1-minute load average under 4; a leg is void if it end
 or if a Kapitsa process outside the leg's own bench ran during it (a census every 5 s). No leg was void, the census
 found no other Kapitsa process, and no leg reports contention.
 
-| Model | Leg | Pack | T 0.6, tok/s | T 0, tok/s | Accepted share, T 0.6 / T 0 | 4K prefill, tok/s | Loop flag |
+| Model | Leg | Pack | T 0.6, tok/s | T 0, tok/s | Accepted share, T 0.6 / T 0 | 4K prefill, tok/s | Loop-flagged answers |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 9B | 1-A | lmstudio | 139.8 | 153.9 | 0.717 / 0.738 | 1782 | none |
-| 9B | 4-A | lmstudio | 140.8 | 144.7 | 0.734 / 0.725 | 1782 | T 0.6 |
-| 9B | 2-B | KQuant | 132.7 | 159.7 | 0.727 / 0.764 | 1738 | T 0 |
-| 9B | 3-B | KQuant | 130.2 | 163.3 | 0.717 / 0.769 | 1731 | T 0.6 |
+| 9B | 4-A | lmstudio | 140.8 | 144.7 | 0.734 / 0.725 | 1782 | 2 at T 0.6 |
+| 9B | 2-B | KQuant | 132.7 | 159.7 | 0.727 / 0.764 | 1738 | 1 at T 0 |
+| 9B | 3-B | KQuant | 130.2 | 163.3 | 0.717 / 0.769 | 1731 | 1 at T 0.6 |
 | 35B-A3B | 1-A | lmstudio | 210.2 | 231.1 | 0.727 / 0.748 | 3225 | none |
 | 35B-A3B | 4-A | lmstudio | 212.1 | 231.8 | 0.717 / 0.748 | 3205 | none |
 | 35B-A3B | 2-B | KQuant | 224.0 | 241.6 | 0.754 / 0.766 | 3180 | none |
@@ -51,7 +55,8 @@ T 0 KQuant's share is higher (0.765 against 0.73), which outweighs the bytes. Th
 token, and KQuant's higher share in both modes makes it faster in both.
 
 The loop flag is bench's distinct-4-gram < 0.5 rule on a 512-token coding answer, which also fires on legitimate
-repeated code. Without the flagged answers the 9B figures are -5.1% at T 0.6 (one leg each) and +9.4% at T 0. A
+repeated code. Dropping every leg-mode with a flagged answer (a leg's figure is the median of its three answers) leaves
+-5.1% at T 0.6 (one leg per pack) and +9.4% at T 0 (one KQuant leg against both lmstudio legs). A
 separate plain-decode check on an M4 Pro (40 answers per pack at 2048 tokens) found 1 runaway loop for KQuant and 0 for
 lmstudio, Fisher p = 1.0.
 
