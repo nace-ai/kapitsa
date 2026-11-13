@@ -7,6 +7,7 @@ usage: test_server_lock.py
 """
 import fcntl, os, subprocess, sys, tempfile, time
 
+BOTH = "children see NI_LOCK_HELD=1 NACE_GPU_LOCK_HELD=1"
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, "test_server.py")
 FAILED = []
@@ -41,6 +42,8 @@ with tempfile.TemporaryDirectory() as d:
     out, _ = p.communicate(timeout=20)
     check(p.returncode == 0 and "GPU lock held" in out and "waiting" not in out, "a free lock is taken without waiting",
           f"rc {p.returncode}, {out!r}")
+    # the children of the run (every serve / doctor it starts) are told, or they take the lock again and block on it
+    check(BOTH in out, "after the take, a child sees NI_LOCK_HELD=1 and NACE_GPU_LOCK_HELD=1", f"{out!r}")
 
     # held by someone else: says it waits, stays blocked, goes on when the holder lets go
     fd = os.open(lock, os.O_RDONLY | os.O_CREAT)
@@ -52,6 +55,7 @@ with tempfile.TemporaryDirectory() as d:
     out, _ = p.communicate(timeout=20)
     check(out.splitlines()[:1] == [f"waiting for GPU lock ({lock})"] and "GPU lock held" in out and p.returncode == 0,
           "it prints one waiting line, then takes the lock when the holder releases", f"rc {p.returncode}, {out!r}")
+    check(BOTH in out, "a lock taken after waiting tells the children too", f"{out!r}")
 
     # the caller says it holds the lock (lockf -k ... env NI_LOCK_HELD=1): no second take, even while the file is locked
     fcntl.flock(fd, fcntl.LOCK_EX)
@@ -59,6 +63,7 @@ with tempfile.TemporaryDirectory() as d:
         p = start(lock, **{name: "1"})
         out, _ = p.communicate(timeout=20)
         check(p.returncode == 0 and "GPU lock not taken" in out, f"{name}=1 does not take the lock again", f"rc {p.returncode}, {out!r}")
+        check(f"{name}=1" in out, f"{name}=1 reaches the children as it came", f"{out!r}")
     p = start(lock, NI_LOCK_HELD="0")
     time.sleep(1.0)
     check(p.poll() is None, "NI_LOCK_HELD=0 is not a claim to hold it", f"rc {p.poll()}")
