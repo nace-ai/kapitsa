@@ -1961,6 +1961,14 @@ std::vector<Installed> installed() {
       const json j = json::parse(read_text(manifest_path(m.dir)));
       m.name = j.value("name", n);
       m.variant = j.value("variant", "");
+      // a pack pulled before the rename says `<model>:kquant`: it is the catalog's `<model>:q4` now, so it lists once
+      const std::string now_variant = current_variant_name(m.variant);
+      if (now_variant != m.variant) {
+        const std::string tail = ":" + m.variant;
+        if (m.name.size() > tail.size() && m.name.compare(m.name.size() - tail.size(), tail.size(), tail) == 0)
+          m.name = m.name.substr(0, m.name.size() - tail.size()) + ":" + now_variant;
+        m.variant = now_variant;
+      }
       m.repo = j.value("repo", "");
       m.commit = j.value("commit", "");
       m.total = j.value("total_bytes", uint64_t(0));

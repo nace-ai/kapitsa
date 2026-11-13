@@ -164,6 +164,9 @@ static void renamed_dirs() {
   mkdir((models + "/qwen3.5-9b-kquant").c_str(), 0755);
   CHECK(resolve("9b:q4").dir == models + "/qwen3.5-9b-q4" && exists(models + "/qwen3.5-9b-kquant"));
   CHECK(resolve("9b:kquant").dir == models + "/qwen3.5-9b-q4");
+  // a manifest from before the rename names the old variant: it reads as the current one, and other names stay as they are
+  CHECK(current_variant_name("kquant") == "q4" && current_variant_name("kquant5") == "q5");
+  CHECK(current_variant_name("q4") == "q4" && current_variant_name("4bit") == "4bit" && current_variant_name("kquant6") == "kquant6");
   // no folder of either name: the new one, to be downloaded
   CHECK(resolve("flash:q4").dir == models + "/qwen3.8-flash-next-q4" && !exists(models + "/qwen3.8-flash-next-q4"));
   std::string cmd = "rm -rf '" + home + "'";

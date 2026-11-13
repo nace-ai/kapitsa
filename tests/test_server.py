@@ -892,6 +892,32 @@ def cli_checks(kapitsa):
     check("cli: a failed repair keeps what is there", rc == 0 and os.path.exists(os.path.join(m4, ".kapitsa", "manifest.json")), out)
     rc, out, _ = run("rm", "4b")
     check("cli: rm deletes it", rc == 0 and "Deleted qwen3.5-4b:4bit" in out and not os.path.exists(m4), out)
+    # a 27B pulled by 0.2.35 sits in `qwen3.8-27b-kquant` and its manifest says `qwen3.8-27b:kquant`: it is the catalog's
+    # `qwen3.8-27b:q4` now, listed once, downloaded, used where it is and not offered for download again
+    old27 = os.path.join(models, "qwen3.8-27b-kquant")
+    os.makedirs(os.path.join(old27, ".kapitsa"))
+    with open(os.path.join(old27, "config.json"), "w") as f:
+        f.write("{}")
+    with open(os.path.join(old27, "mtp.safetensors"), "wb") as f:
+        f.write(b"x" * 10)
+    with open(os.path.join(old27, ".kapitsa", "manifest.json"), "w") as f:
+        json.dump({"name": "qwen3.8-27b:kquant", "variant": "kquant", "repo": "nace-ai/Qwen3.8-27B-MLX-KQuant",
+                   "revision": KQ27[1], "commit": KQ27[1],
+                   "files": [{"path": "config.json", "size": 2}, {"path": "mtp.safetensors", "size": 10}],
+                   "companions": [{"kind": k, "repo": r, "revision": v, "files": ["mtp.safetensors"]}
+                                  for k, r, v, _ in [PINNED["qwen3.8-27b"][2][1]]]}, f)
+    rc, out, _ = run("list", "--json")
+    lst = json.loads(out) if rc == 0 else []
+    check("cli: a pack pulled before the rename lists once, as the catalog's q4",
+          len(lst) == 1 and lst[0]["name"] == "qwen3.8-27b:q4" and lst[0]["variant"] == "q4" and lst[0]["complete"] and
+          lst[0]["dir"] == old27, out)
+    rc, out, _ = run("list")
+    check("cli: list does not offer the q4 it has for download", rc == 0 and out.count("qwen3.8-27b:q4") == 1, out)
+    rc, out, err = run("pull", "27b")
+    check("cli: pull uses the old folder in place, with no download", rc == 0 and "already downloaded" in out and
+          os.path.isdir(old27) and not os.path.exists(os.path.join(models, "qwen3.8-27b-q4")), out + err)
+    rc, out, _ = run("rm", "27b")
+    check("cli: rm deletes the old folder", rc == 0 and not os.path.exists(old27), out)
     rc, _, err = run("rm", folder)
     check("cli: rm leaves a folder of yours alone", rc == 2 and os.path.exists(folder), err)
     # rm says what it gives back: a model that is an APFS clone of another copy frees nothing

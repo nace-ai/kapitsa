@@ -85,6 +85,8 @@ const std::vector<CatalogModel>& catalog();
 // Pure device selection; the no-argument form uses the current device profile.
 const std::vector<CatalogModel>& catalog(const ni::DeviceProfile&);
 const CatalogModel* find_model(const std::string& name_or_alias);  // case-insensitive; nullptr if unknown
+// A variant's current name: the hidden old names (kquant, kquant5) give q4, q5; any other name comes back unchanged.
+std::string current_variant_name(const std::string& variant);
 // The folder name (under models_dir()) a variant had before it was renamed (`<model>-kquant` for q4), or "" if it kept its name.
 std::string legacy_dir_name(const CatalogModel&, const Variant&);
 // Nace AI's combined repos hold one model's packs, a folder each (Q4/, Q5/). Each row is a pack the catalog pins

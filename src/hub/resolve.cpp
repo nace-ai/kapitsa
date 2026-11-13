@@ -21,6 +21,12 @@ static std::string lower(std::string s) {
 // Variants renamed on 13 Nov 2026 (#530): the old names still select them, in saved configs and scripts. Not listed.
 static const char* const kRenamed[][2] = {{"kquant", "q4"}, {"kquant5", "q5"}};
 
+std::string current_variant_name(const std::string& v) {
+  for (const auto& r : kRenamed)
+    if (v == r[0]) return r[1];
+  return v;
+}
+
 std::string legacy_dir_name(const CatalogModel& m, const Variant& v) {
   for (const auto& r : kRenamed)
     if (v.name == r[1]) return m.name + "-" + r[0];
@@ -28,9 +34,7 @@ std::string legacy_dir_name(const CatalogModel& m, const Variant& v) {
 }
 
 const Variant* CatalogModel::variant(const std::string& v) const {
-  std::string want = v.empty() ? default_variant : lower(v);
-  for (const auto& r : kRenamed)
-    if (want == r[0]) want = r[1];
+  const std::string want = current_variant_name(v.empty() ? default_variant : lower(v));
   for (const auto& x : variants)
     if (x.name == want) return &x;
   return nullptr;
