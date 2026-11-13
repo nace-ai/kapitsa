@@ -12,8 +12,9 @@ candidate: this branch. Models: Kapitsa's `27b` (qwen3.8-27b-4bit) and `4b` (qwe
 65536, prefill chunk 2048, `--idle-unload 0`; every serve inside `lockf -k /tmp/kapitsa-gpu.lock`, one at a time,
 legs interleaved (ABBA or ABAB). Splash-M1 1.6.1-m1 (`mlx-community/Qwen3.8-27B-4bit`, its own drafter) ran in the
 same pass on the same prompts. Prompts: `bench.py` sweep prompts (cold, nonce-busted); decode is greedy, 400 tokens.
-Scripts: `legs520.sh` (one leg per server), `dec32.py` (cold prompts at five corpus offsets). Every leg's line is
-in `m1ultra/legs.log` and `m2pro/legs.log`, its JSON in `*/results/`.
+Scripts: `legs520.sh` (one leg per server), `dec32.py` (cold prompts at five corpus offsets). Every leg's numbers
+(decode median, each prompt's tokens and time to first token) are on its line in `m1ultra/legs.log` and
+`m2pro/legs.log`.
 
 Builds in the logs: `main` is origin/main; `pr5` is this branch's head; `pr`, `pr3` and `pr4` are its earlier
 steps. On the M2 Pro `pr` and `pr4` take the same paths as `pr5` (smallest split chunk 512, functions from 512).
