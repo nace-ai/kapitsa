@@ -1249,6 +1249,7 @@ KFlash's knobs are `NI_KFLASH_<NAME>`; each was `NI_DFLASH_<NAME>` before #362 a
 
 | Variable | Default | Effect |
 | --- | --- | --- |
+| `AGX_RELAX_CDM_CTXSTORE_TIMEOUT` | `1` (set by Kapitsa) | Apple's GPU driver setting. With it at `1`, macOS does not end a long prompt with `kIOGPUCommandBufferCallbackErrorImpactingInteractivity` while the display is on: unset, most cold 128K prompts on an M2 Pro died that way (#1194). Kapitsa sets it when it loads; a value you set yourself, `0` included, is kept. |
 | `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, `kapitsa bench`'s results in `bench/`, the last model chosen in `state.json`, bare `serve` startup arguments in `serve.json`, the automatic update's state in `update.json`, KFlash's measurements (this Mac's cost per verified row count and the draft model's calibration, per model, draft model and chip) in `kflash/`, saved as the server runs and when it stops, the [SSD prefix cache](#ssd-prefix-cache) in `prefix-cache/`. |
 | `KAPITSA_NO_AUTO_UPDATE` | | `1`: no automatic update and no check in the background ([Updating](#updating)); `kapitsa update` still works. |
 | `KAPITSA_UPDATE_URL` | `https://github.com/nace-ai/kapitsa/releases` | Where updates come from: a GitHub releases page or a copy of one (https, or http to this Mac). |
