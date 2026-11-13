@@ -308,6 +308,9 @@ jobs:
       - name: split_place_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/split_place_test
+      - name: Stage CLI flag validation
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: python3 tests/test_split.py build --flags-only
       - name: gemm_slices_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/gemm_slices_test
