@@ -3721,74 +3721,100 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
       return;
     }
   }
-  // The M1 (Apple7) runs 16-key tiles (attn_prefill11_k16xr: 11r's skipped unit rescales over attn_prefill11_k16x's
-  // 16-key tiles, fewer registers and the exchange in its own buffer). bench_attn on the M1 Pro, a 2048-query chunk
-  // of Qwen3.5-4B/9B's heads (16 q, 4 kv, D 256) against 4K / 8K / 16K keys: 39.3 / 90.8 / 203.7 ms vs 60.2 / 140.1 /
-  // 309.2 for attn_prefill11r. The 16-key tiles' online softmax rounds differently: outputs are not bit-identical to
-  // 11r's, error against an fp64 reference the same (2.1-2.4e-4).
-  static const std::string full = getenv("NI_ATTN") && *getenv("NI_ATTN") ? an
-                                  : legacy_gpu() ? "attn_prefill11_k16xr" : an;
-  uint32_t qb = 4, th = 256, gy = cfg_.hkv;
-  // NI_QATTN (default on, 0 = off): D 256, 4 or 8 query heads per KV head, on tensor_ops (qattn_t.metal) on the M5.
-  // G = 8 (the 35B) runs qattn_t_g8s4k16: 2 tokens x the KV head's 8 heads per 16-row tile, 8 tokens per
-  // threadgroup. bench_attn, T 2112 against 2112 / 4224 / 8448 / 16493 keys: 4.08 / 11.49 / 28.38 / 56.63 ms vs
-  // attn_prefill11r's 5.41 / 15.96 / 39.97 / 79.64 (1.32-1.41x), error 2.1-3.2e-4 against the fp64 reference (11r:
-  // 2.1-2.3e-4). End to end on the 35B through bench/harness on 487ea80 (the experts already on the tensor units),
-  // 3 interleaved sessions, median: 16K prefill 1,801 -> 1,999 tok/s (+11%), 4K flat (2,424 -> 2,476); on 330b216,
-  // before the experts moved, 4K prefill 1,693 -> 1,636 ms and 16K 8,819 -> 7,929 ms (median of three).
-  // It reassociates the K reductions (the products are 11r's: half x half in fp32), so its logits move: decode rows
-  // 5.6e-4 mean KL, 1.10x the 35B's noise-floor gate, and it departs from that gate by the user's call (AGENTS.md,
-  // "Changing speed or numerics"; tools/logit_floors/ is still the M4 Pro measurement of the old kernels).
-  // NI_QATTN_G8=0 keeps the 35B on 11r; NI_ATTN overrides both.
-  // NI_QATTN_D2 (default on, 0 = off): G = 8 runs qattn_t_g8d2s8 instead, the head dim split over a pair of
-  // simdgroups (half the accumulator registers; qattn_t.metal), 8 tokens per threadgroup as before. bench_attn on the
-  // M5 Pro, T 4224 against 8448 keys / T 3328 against 16000: 24.22 / 44.42 ms vs g8s4k16's 44.08 / 78.23 (1.82x /
-  // 1.76x), error against the fp64 reference the same (2.58e-4 / 3.09e-4 vs 2.60e-4 / 3.08e-4). The scores add the
-  // two halves of the head dim separately, so logits are not bit-identical to g8s4k16's.
-  // Only the environment is read once: the head ratios depend on cfg_, which changes when the server swaps models
-  // (--allow-switch), and function-local statics survive the swap.
-  static const bool g8_on = env_int("NI_QATTN_G8", 1) != 0;
-  // NI_QATTN_G6 (default on, 0 = off): G = 6 (the 27B, 24 query heads over 4 KV heads) runs qattn_t_g6d2s8, the d2
-  // kernel over (token, head) rows, 64 rows (10 2/3 tokens) per threadgroup; off, it stays on attn_prefill11r.
-  // bench_attn on the M5 Pro, the 27B's heads: T 141 / 512 against a 16K prefix 4.16 / 12.76 ms vs 11r's 10.93 /
-  // 30.77; T 2048 against 4096 / 16384 keys 8.85 / 44.23 ms vs 22.21 / 111.64 (2.4-2.6x). Error against the fp64
-  // reference 2.6-3.1e-4 (11r 1.9-2.6e-4; the shipped G = 4 and G = 8 qattn kernels sit the same distance above it).
-  // NI_QATTN_G4D2 (default on, 0 = off): G = 4 (the 4B and 9B, 16 query heads over 4 KV heads) runs qattn_t_g4d2s8, the
-  // same d2 kernel over (token, head) rows, 64 rows (16 tokens) per threadgroup; off, qattn_t_s8k16 as before.
-  // bench_attn on the M5 Max (40 cores, macOS 25E246), the 4B's heads, T 2048 against 4096 / 8192 / 16384 keys: 3.09 /
-  // 7.34 / 15.95 ms vs qattn_t_s8k16's 5.15 / 11.48 / 24.21 (1.67x / 1.56x / 1.52x); s4 4.04 / 9.61 / 21.92, s16 3.54 /
-  // 8.27 / 17.79. Error against the fp64 reference 2.70 / 3.01 / 3.29e-4 (s8k16 2.69 / 3.02 / 3.30e-4).
-  static const bool g4d2_on = env_int("NI_QATTN_G4D2", 1) != 0;
-  const bool qg4 = cfg_.hq == 4 * cfg_.hkv;
-  const bool qg8 = g8_on && cfg_.hq == 8 * cfg_.hkv;
-  const bool qg6 = g6_on && cfg_.hq == 6 * cfg_.hkv;
-  if (qattn && cfg_.head_dim == 256 && (qg6 || (qg4 && g4d2_on))) {
-    e.use(pipe(qg6 ? "qattn_t_g6d2s8" : "qattn_t_g4d2s8"));
-    e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
-    e.val(5, fp);
-    e.dispatch((uint32_t(T) * (qg6 ? 6 : 4) + 63) / 64, cfg_.hkv, 1, 256);   // 4 pairs x 16 rows
-    return;
-  }
-  if (qattn && cfg_.head_dim == 256 && (qg4 || qg8)) {
-    e.use(pipe(qg8 ? (d2_on ? "qattn_t_g8d2s8" : "qattn_t_g8s4k16") : "qattn_t_s8k16"));
-    e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
-    e.val(5, fp);
-    if (qg8) {
-      // g8s4k16: 4 simdgroups x 2 tokens of one KV head; g8d2s8: 4 pairs x 2 tokens
-      e.dispatch((uint32_t(T) + 7) / 8, cfg_.hkv, 1, d2_on ? 256 : 128);
-    } else {
-      e.dispatch((uint32_t(T) + 31) / 32, cfg_.hkv, 1, 256);
+  // A long prefix in slices of query rows, each its own dispatch of at most 2^20 query-key pairs per GPU core. One
+  // dispatch of a whole chunk holds the GPU for a second or more deep in a long prompt (M2 Pro, 9B: 2,048 rows
+  // against ~120K keys), and macOS kills the command buffer when it keeps the desktop off the GPU that long
+  // (kIOGPUCommandBufferCallbackErrorImpactingInteractivity, #1194). Slices start at multiples of 32 rows, so every
+  // threadgroup holds the rows it would in one dispatch: each row reads the same keys in the same order, and the
+  // outputs do not change.
+  auto pass = [&](int T, const kp::AttnPref& fp) {
+    // The M1 (Apple7) runs 16-key tiles (attn_prefill11_k16xr: 11r's skipped unit rescales over attn_prefill11_k16x's
+    // 16-key tiles, fewer registers and the exchange in its own buffer). bench_attn on the M1 Pro, a 2048-query chunk
+    // of Qwen3.5-4B/9B's heads (16 q, 4 kv, D 256) against 4K / 8K / 16K keys: 39.3 / 90.8 / 203.7 ms vs 60.2 / 140.1 /
+    // 309.2 for attn_prefill11r. The 16-key tiles' online softmax rounds differently: outputs are not bit-identical to
+    // 11r's, error against an fp64 reference the same (2.1-2.4e-4).
+    static const std::string full = getenv("NI_ATTN") && *getenv("NI_ATTN") ? an
+                                    : legacy_gpu() ? "attn_prefill11_k16xr" : an;
+    uint32_t qb = 4, th = 256, gy = cfg_.hkv;
+    // NI_QATTN (default on, 0 = off): D 256, 4 or 8 query heads per KV head, on tensor_ops (qattn_t.metal) on the M5.
+    // G = 8 (the 35B) runs qattn_t_g8s4k16: 2 tokens x the KV head's 8 heads per 16-row tile, 8 tokens per
+    // threadgroup. bench_attn, T 2112 against 2112 / 4224 / 8448 / 16493 keys: 4.08 / 11.49 / 28.38 / 56.63 ms vs
+    // attn_prefill11r's 5.41 / 15.96 / 39.97 / 79.64 (1.32-1.41x), error 2.1-3.2e-4 against the fp64 reference (11r:
+    // 2.1-2.3e-4). End to end on the 35B through bench/harness on 487ea80 (the experts already on the tensor units),
+    // 3 interleaved sessions, median: 16K prefill 1,801 -> 1,999 tok/s (+11%), 4K flat (2,424 -> 2,476); on 330b216,
+    // before the experts moved, 4K prefill 1,693 -> 1,636 ms and 16K 8,819 -> 7,929 ms (median of three).
+    // It reassociates the K reductions (the products are 11r's: half x half in fp32), so its logits move: decode rows
+    // 5.6e-4 mean KL, 1.10x the 35B's noise-floor gate, and it departs from that gate by the user's call (AGENTS.md,
+    // "Changing speed or numerics"; tools/logit_floors/ is still the M4 Pro measurement of the old kernels).
+    // NI_QATTN_G8=0 keeps the 35B on 11r; NI_ATTN overrides both.
+    // NI_QATTN_D2 (default on, 0 = off): G = 8 runs qattn_t_g8d2s8 instead, the head dim split over a pair of
+    // simdgroups (half the accumulator registers; qattn_t.metal), 8 tokens per threadgroup as before. bench_attn on the
+    // M5 Pro, T 4224 against 8448 keys / T 3328 against 16000: 24.22 / 44.42 ms vs g8s4k16's 44.08 / 78.23 (1.82x /
+    // 1.76x), error against the fp64 reference the same (2.58e-4 / 3.09e-4 vs 2.60e-4 / 3.08e-4). The scores add the
+    // two halves of the head dim separately, so logits are not bit-identical to g8s4k16's.
+    // Only the environment is read once: the head ratios depend on cfg_, which changes when the server swaps models
+    // (--allow-switch), and function-local statics survive the swap.
+    static const bool g8_on = env_int("NI_QATTN_G8", 1) != 0;
+    // NI_QATTN_G6 (default on, 0 = off): G = 6 (the 27B, 24 query heads over 4 KV heads) runs qattn_t_g6d2s8, the d2
+    // kernel over (token, head) rows, 64 rows (10 2/3 tokens) per threadgroup; off, it stays on attn_prefill11r.
+    // bench_attn on the M5 Pro, the 27B's heads: T 141 / 512 against a 16K prefix 4.16 / 12.76 ms vs 11r's 10.93 /
+    // 30.77; T 2048 against 4096 / 16384 keys 8.85 / 44.23 ms vs 22.21 / 111.64 (2.4-2.6x). Error against the fp64
+    // reference 2.6-3.1e-4 (11r 1.9-2.6e-4; the shipped G = 4 and G = 8 qattn kernels sit the same distance above it).
+    // NI_QATTN_G4D2 (default on, 0 = off): G = 4 (the 4B and 9B, 16 query heads over 4 KV heads) runs qattn_t_g4d2s8, the
+    // same d2 kernel over (token, head) rows, 64 rows (16 tokens) per threadgroup; off, qattn_t_s8k16 as before.
+    // bench_attn on the M5 Max (40 cores, macOS 25E246), the 4B's heads, T 2048 against 4096 / 8192 / 16384 keys: 3.09 /
+    // 7.34 / 15.95 ms vs qattn_t_s8k16's 5.15 / 11.48 / 24.21 (1.67x / 1.56x / 1.52x); s4 4.04 / 9.61 / 21.92, s16 3.54 /
+    // 8.27 / 17.79. Error against the fp64 reference 2.70 / 3.01 / 3.29e-4 (s8k16 2.69 / 3.02 / 3.30e-4).
+    static const bool g4d2_on = env_int("NI_QATTN_G4D2", 1) != 0;
+    const bool qg4 = cfg_.hq == 4 * cfg_.hkv;
+    const bool qg8 = g8_on && cfg_.hq == 8 * cfg_.hkv;
+    const bool qg6 = g6_on && cfg_.hq == 6 * cfg_.hkv;
+    if (qattn && cfg_.head_dim == 256 && (qg6 || (qg4 && g4d2_on))) {
+      e.use(pipe(qg6 ? "qattn_t_g6d2s8" : "qattn_t_g4d2s8"));
+      e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
+      e.val(5, fp);
+      e.dispatch((uint32_t(T) * (qg6 ? 6 : 4) + 63) / 64, cfg_.hkv, 1, 256);   // 4 pairs x 16 rows
+      return;
     }
-    return;
+    if (qattn && cfg_.head_dim == 256 && (qg4 || qg8)) {
+      e.use(pipe(qg8 ? (d2_on ? "qattn_t_g8d2s8" : "qattn_t_g8s4k16") : "qattn_t_s8k16"));
+      e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
+      e.val(5, fp);
+      if (qg8) {
+        // g8s4k16: 4 simdgroups x 2 tokens of one KV head; g8d2s8: 4 pairs x 2 tokens
+        e.dispatch((uint32_t(T) + 7) / 8, cfg_.hkv, 1, d2_on ? 256 : 128);
+      } else {
+        e.dispatch((uint32_t(T) + 31) / 32, cfg_.hkv, 1, 256);
+      }
+      return;
+    }
+    if (full.rfind("attn_prefill11", 0) == 0) { qb = 32; gy = cfg_.hq; }  // 32 queries of one q head
+    else if (full == "attn_prefill") th = 128;
+    else if (full == "attn_prefill2" || full == "attn_prefill3" || full == "attn_prefill4") qb = 8;
+    else if (full.find("_q8") != std::string::npos) { qb = 8; th = 512; }
+    e.use(pipe(full));
+    e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
+    e.val(5, fp);
+    e.dispatch((T + qb - 1) / qb, gy, 1, th);
+  };
+  const uint64_t keys = uint64_t(pos0) + uint64_t(T), budget = uint64_t(gpu_cores()) << 20;
+  if (T <= 32 || uint64_t(T) * keys <= budget) return pass(T, fp);
+  const int rows = int(std::max<uint64_t>(32, budget / keys / 32 * 32));
+  const size_t qb = size_t(cfg_.hq) * cfg_.head_dim * 4;  // bytes of one query row of qo_ / attn_out_ (qg_: twice)
+  const Buffer q = qo_, g = qg_, o = attn_out_;
+  for (int t0 = 0; t0 < T; t0 += rows) {
+    const int n = std::min(rows, T - t0);
+    kp::AttnPref f = fp;
+    f.T = uint32_t(n);
+    f.pos0 = uint32_t(pos0 + t0);
+    qo_ = q.view(size_t(t0) * qb, size_t(n) * qb);
+    qg_ = g.view(size_t(t0) * 2 * qb, size_t(n) * 2 * qb);
+    attn_out_ = o.view(size_t(t0) * qb, size_t(n) * qb);
+    pass(n, f);
   }
-  if (full.rfind("attn_prefill11", 0) == 0) { qb = 32; gy = cfg_.hq; }  // 32 queries of one q head
-  else if (full == "attn_prefill") th = 128;
-  else if (full == "attn_prefill2" || full == "attn_prefill3" || full == "attn_prefill4") qb = 8;
-  else if (full.find("_q8") != std::string::npos) { qb = 8; th = 512; }
-  e.use(pipe(full));
-  e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
-  e.val(5, fp);
-  e.dispatch((T + qb - 1) / qb, gy, 1, th);
+  qo_ = q;
+  qg_ = g;
+  attn_out_ = o;
 }
 
 // The token mixer (GDN or attention) of layer i for T rows at positions pos0.., residual rows x.
