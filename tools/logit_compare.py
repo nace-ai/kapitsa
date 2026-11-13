@@ -191,12 +191,14 @@ def row_metrics(ra, rb, nxt):
         a2 = a.copy()
         a2[ta] = -np.inf
         t2 = int(np.argmax(a2))
-        lse_a = a[ta] + math.log(float(np.exp(a - a[ta]).sum()))
-        lse_b = b[tb] + math.log(float(np.exp(b - b[tb]).sum()))
-        c = lse_a - lse_b
-        d = a - b
-        kl = float(np.dot(np.exp(a - lse_a), d - c))
-        maxdiff = float(np.abs(d).max())
+        # Normalize each row in its own coordinates: adding a large maximum back can erase log(sum(exp)).
+        ac, bc = a - a[ta], b - b[tb]
+        weights = np.exp(ac)
+        z = float(weights.sum())
+        log_z_diff = math.log(z) - math.log(float(np.exp(bc).sum()))
+        log_ratio = (ac - bc) - log_z_diff
+        kl = float(np.dot(weights / z, log_ratio))
+        maxdiff = float(np.abs(a - b).max())
     else:
         if not all(map(math.isfinite, itertools.chain(a, b))):
             return dict(out, kl=None)
@@ -205,18 +207,19 @@ def row_metrics(ra, rb, nxt):
         a2 = array.array("f", a)
         a2[ta] = -math.inf
         t2 = a2.index(max(a2))
-        lse_a = ma + math.log(math.fsum(map(math.exp, map(operator.sub, a, itertools.repeat(ma)))))
-        lse_b = mb + math.log(math.fsum(map(math.exp, map(operator.sub, b, itertools.repeat(mb)))))
-        c = lse_a - lse_b
-        d = list(map(operator.sub, a, b))
-        p = map(math.exp, map(operator.sub, a, itertools.repeat(lse_a)))
-        kl = math.fsum(map(operator.mul, p, map(operator.sub, d, itertools.repeat(c))))
-        maxdiff = max(map(abs, d))
+        ac = [x - ma for x in a]
+        bc = [x - mb for x in b]
+        weights = list(map(math.exp, ac))
+        z = math.fsum(weights)
+        log_z_diff = math.log(z) - math.log(math.fsum(map(math.exp, bc)))
+        log_ratio = [(x - y) - log_z_diff for x, y in zip(ac, bc)]
+        kl = math.fsum(map(operator.mul, weights, log_ratio)) / z
+        maxdiff = max(map(abs, map(operator.sub, a, b)))
     out.update(kl=kl, top_ref=ta, top_cand=tb, maxdiff=maxdiff,
                margin=float(a[ta] - a[tb]),
                margin2=float(a[ta] - a[t2]),
                margin_change=float((b[ta] - b[t2]) - (a[ta] - a[t2])),
-               nll_change=None if nxt is None else float((a[nxt] - b[nxt]) - c))
+               nll_change=None if nxt is None else float(log_ratio[nxt]))
     return out
 
 

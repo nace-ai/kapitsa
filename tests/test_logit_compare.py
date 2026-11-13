@@ -142,6 +142,19 @@ with tempfile.TemporaryDirectory() as tmp:
     meta = {"model": "test-model-without-floor", "build": "test", "path": "verify"}
     R = write_dump(os.path.join(tmp, "ref"), seqs, recs, ref, meta)
 
+    # A constant offset on just one row leaves its softmax unchanged.
+    a = write_dump(os.path.join(tmp, "offset"), [[0, 0]], [(0, 1)], [[2**60, 2**60]])
+    b = write_dump(os.path.join(tmp, "small"), [[0, 0]], [(0, 1)], [[0., 4.]])
+    metrics = lc.compare(lc.Dump(a), lc.Dump(b))
+    expected_nll = math.log1p(math.exp(4)) - math.log(2)
+    check(abs(metrics["kl_mean"] - (expected_nll - 2)) < 1e-12
+          and abs(metrics["nll_change_mean"] - expected_nll) < 1e-12
+          and metrics["max_abs_diff"] == 2**60,
+          "large row offset preserves KL, NLL and raw logit distance", metrics)
+    rc, out = run(a, b, "--max-mean-kl", "1", "--max-nll-change", "1")
+    check(rc == 1 and "FAIL: mean KL" in out and "FAIL: mean NLL change" in out,
+          "both bounds reject the offset row", out)
+
     # ---- identical ----
     rc, out = run(R, write_dump(os.path.join(tmp, "same"), seqs, recs, ref, meta))
     check(rc == 0 and "every row bitwise identical" in out and "no noise floor" in out,
