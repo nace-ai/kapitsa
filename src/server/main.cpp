@@ -173,6 +173,10 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
     const std::string e = b["reasoning_effort"];
     if (e == "none" || e == "minimal" || !r.template_kwargs.contains("reasoning_effort")) api::apply_effort(e, r.template_kwargs);
     r.effort = e;  // looped models: the loop count (Engine::request_loops)
+  } else if (const char* d = getenv("NI_DEFAULT_EFFORT"); d && *d && !r.template_kwargs.contains("reasoning_effort")) {
+    // local patch: the effort a request gets when it names none (clients that never send one)
+    api::apply_effort(d, r.template_kwargs);
+    r.effort = d;
   }
   r.loops = api::request_loops_field(b);
   api::request_think_field(b, r);

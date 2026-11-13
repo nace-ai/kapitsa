@@ -87,6 +87,16 @@ static bool ends_with_query(const ojson& messages) {
 
 // The checkpoint a turn boundary overwrites (Engine::chat, Engine::draft): an invalid one, else one saved at a tool
 // response, else the oldest; with NI_QUERY_CKPT=0 the oldest of all, as before query checkpoints were kept
+// NI_CKPT_LAST_MSG=1 (local patch): the turn boundary sits at the start of the prompt's last message instead of its
+// end, for clients that replace the last message every turn (a per-turn reminder dropped by the next request)
+static bool ckpt_last_msg() {
+  static const bool on = [] {
+    const char* v = getenv("NI_CKPT_LAST_MSG");
+    return v && v[0] == '1' && v[1] == 0;
+  }();
+  return on;
+}
+
 static bool keep_query_ckpts() {
   static const bool on = [] {
     const char* v = getenv("NI_QUERY_CKPT");
@@ -2976,6 +2986,23 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // every follow-up reads the conversation again)
   if (boundary < 0 && prefix_ok && text.size() == base.size() && !prompt.empty()) boundary = int(prompt.size());
   if (boundary > int(prompt.size())) boundary = -1;
+  // NI_CKPT_LAST_MSG: the boundary moves back to where the last message starts (a strict token prefix; not on the
+  // first turn, whose last message starts at the prefix checkpoint)
+  if (ckpt_last_msg() && prefix_ok && images.empty() && !flint_ && r.messages.is_array() && r.messages.size() > 2) {
+    // Qwen's message opener, or Inkling-2's (rca: the last of its four role headers)
+    size_t off = base.rfind("<|im_start|>");
+    for (const char* h : {"<|message_user|>", "<|message_tool|>", "<|message_system|>", "<|message_model|>"}) {
+      const size_t o = base.rfind(h);
+      if (o != std::string::npos && (off == std::string::npos || o > off)) off = o;
+    }
+    if (off != std::string::npos && off > 0) {
+      const std::vector<int> lt = tok_.encode(text.substr(0, off));
+      if (!lt.empty() && lt.size() < prompt.size() && std::equal(lt.begin(), lt.end(), prompt.begin())) {
+        logd("checkpoints: turn boundary %d moved to the last message's start at %zu", boundary, lt.size());
+        boundary = int(lt.size());
+      }
+    }
+  }
   // images: each placeholder becomes the image's rows; prefix reuse compares keys that tell images apart by content
   vision::Prompt mm;
   const vision::Prompt* mmp = nullptr;
