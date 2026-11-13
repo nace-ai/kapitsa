@@ -56,6 +56,7 @@ std::string mac_name() {
 int run_stage(int argc, char** argv, int first) {
   std::string model, layers, host = "0.0.0.0";
   int port = cluster::kStagePort, chunk = prefill_chunk_room(2048);
+  int layer_start = 0, layer_end = 0;
   double budget_gb = 0;
   const char* help = "kapitsa stage --help";
   for (int i = first; i < argc; ++i) {
@@ -68,8 +69,15 @@ int run_stage(int argc, char** argv, int first) {
       fputs(kHelp, stdout);
       return 0;
     } else if (a == "--model" || a == "-m") model = next();
-    else if (a == "--layers") layers = next();
-    else if (a == "--port") port = to_int(a, next(), help);
+    else if (a == "--layers") {
+      layers = next();
+      const size_t dash = layers.find('-');
+      layer_start = to_int(a, layers.substr(0, dash), help);
+      const bool has_end = dash != std::string::npos && dash + 1 < layers.size();
+      layer_end = has_end ? to_int(a, layers.substr(dash + 1), help) : 0;
+      if (layer_start == 0 || (has_end && layer_end < layer_start))
+        usage_error("--layers needs a positive start and an end at or after it", help);
+    } else if (a == "--port") port = to_int(a, next(), help);
     else if (a == "--host") host = next();
     else if (a == "--mem-budget") budget_gb = atof(next().c_str());
     else if (a == "--prefill-chunk") {
@@ -105,19 +113,17 @@ int run_stage(int argc, char** argv, int first) {
   o.chunk = chunk;
   if (!layers.empty()) {
     const int L = Qwen35::read_config(dir).layers;
-    const size_t dash = layers.find('-');
-    const int a = atoi(layers.c_str());
-    const int b = dash != std::string::npos && dash + 1 < layers.size() ? atoi(layers.c_str() + dash + 1) : L;
+    const int end = layer_end ? layer_end : L;
     // the head keeps the layers up to the n-gram block's (it reads the tokens): Flash-Next's first two
     const nlohmann::json root = nlohmann::json::parse(std::ifstream(dir + "/config.json"), nullptr, false);
     const nlohmann::json t = root.is_object() && root.contains("text_config") ? root["text_config"] : root;
     const int first = t.is_object() && t.contains("ple_layer_ids") && t["ple_layer_ids"].is_array() &&
                               !t["ple_layer_ids"].empty() ? t["ple_layer_ids"][0].get<int>() + 1 : 2;
-    if (a < first || b > L || a > b)
+    if (layer_start < first || end > L || layer_start > end)
       usage_error("--layers " + layers + ": A-B from " + std::to_string(first) + " to " + std::to_string(L) +
                   " (the head keeps layers 1-" + std::to_string(first - 1) + ", the n-gram block's among them)", help);
-    o.lo = a - 1;
-    o.hi = b;
+    o.lo = layer_start - 1;
+    o.hi = end;
   }
   o.status = [](const std::string& s) {
     char t[16];

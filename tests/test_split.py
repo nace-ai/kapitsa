@@ -131,6 +131,14 @@ def stage_flags(tmp):
         bad = run(["stage", "--model", model, "--prefill-chunk", value])
         check(bad.returncode == 2 and "--prefill-chunk" in bad.stderr and why in bad.stderr,
               f"invalid prefill chunk {value!r} is a usage error naming the flag", bad.stderr[:300])
+    for value in ("", "0", "-4", "3x", "3x-4", "3-4oops", "3-4-5", "3-0", "4-3", "2147483648", "3-2147483648"):
+        bad = run(["stage", "--model", model, "--layers", value])
+        check(bad.returncode == 2 and "--layers" in bad.stderr,
+              f"invalid layer range {value!r} is a usage error", bad.stderr[:300])
+    for value in ("3", "3-", "3-3", "3-4"):
+        good = run(["stage", "--model", model, "--layers", value])
+        check(good.returncode == 1 and "No folder at" in good.stderr,
+              f"valid layer range {value!r} reaches model lookup", good.stderr[:300])
     good = run(["stage", "--model", model, "--prefill-chunk", "2048"])
     check(good.returncode == 1 and "No folder at" in good.stderr and "--prefill-chunk" not in good.stderr,
           "a positive prefill chunk parses and stops at the model lookup", good.stderr[:300])
