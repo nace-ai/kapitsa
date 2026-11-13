@@ -83,6 +83,8 @@ for p in ["prefill"] + paths:
             if name:
                 q = random.Random(f"{name} {w} {k}")
                 row = [x + amp * q.gauss(0, 1) for x in row]
+        if os.environ.get("FAKE_NONFINITE") and p == "verify" and (w, k) == (0, 4):
+            row[0] = float("nan")
         data += row
     with open(os.path.join(d, "sequences.txt"), "w") as f:
         f.write("".join(" ".join(map(str, s)) + "\n" for s in seqs))
@@ -439,6 +441,14 @@ with tempfile.TemporaryDirectory() as tmp:
                            capture_output=True, text=True)
         with open(out) as f:
             check(p.returncode == 0 and json.load(f)["reorder_gate"] == rg, "--rescore derives the reorder gate again")
+    with open(out, "rb") as f:
+        saved_floor = f.read()
+    p = subprocess.run([sys.executable, os.path.join(TOOLS, "logit_floor.py"), mdir, "--bin", fake,
+                        "--work", os.path.join(tmp, "bad-work"), "--out", out, "--rows", "6"],
+                       capture_output=True, text=True, env={**os.environ, "FAKE_NONFINITE": "1"})
+    with open(out, "rb") as f:
+        check(p.returncode != 0 and "non-finite" in p.stderr and "sequence 0 prefix 4" in p.stderr
+              and f.read() == saved_floor, "non-finite logits cannot replace a measured floor", p.stderr)
     lc_saved, lf_mac = lc.FLOORS, lf.this_mac
     try:  # --rescore without --out: this Mac's file
         lc.FLOORS = os.path.join(tmp, "floors2")

@@ -72,6 +72,8 @@ def describe(name):
 
 
 def summary(s):
+    if s["non_finite"]:
+        sys.exit(f"cannot measure a floor with non-finite logits (first: {s['non_finite'][0]})")
     out = {k: s[k] for k in KEEP}
     if s["flip_list"]:
         out["largest_flip_margin"] = s["flip_list"][0]["margin"]
