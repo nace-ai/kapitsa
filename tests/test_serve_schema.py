@@ -20,6 +20,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # (field, value, valid): the answer both must give
 CASES = [
+    ("mem_budget", 1e-12, False), ("mem_budget", 1e-9, True), ("mem_budget", 20.5, True),
+    ("mem_budget", 18446744073.70955, True), ("mem_budget", 18446744073.709553, False), ("mem_budget", 1e300, False),
     ("idle_unload", "auto", True), ("idle_unload", "off", True), ("idle_unload", "0", True), ("idle_unload", 0, True),
     ("idle_unload", 0.5, True), ("idle_unload", 5, True), ("idle_unload", 10080, True),
     ("idle_unload", "soon", False), ("idle_unload", "5", False), ("idle_unload", 0.1, False),

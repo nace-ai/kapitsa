@@ -198,7 +198,12 @@ Options parse_options(const json& j, Source source) {
     const json& v = j["mem_budget"];
     if (!v.is_number() || !(v.get<double>() > 0))
       refuse(r.name("mem_budget") + " needs a size in GB, not " + v.dump());
-    e.mem_budget_gb = v.get<double>();
+    const double gb = v.get<double>();
+    // The engine converts decimal GB to a 64-bit byte count; zero bytes means no explicit budget.
+    const double bytes = gb * 1e9;
+    if (!(bytes >= 1 && bytes < 0x1p64))
+      refuse(r.name("mem_budget") + " must fit in a positive 64-bit byte count");
+    e.mem_budget_gb = gb;
   }
   e.image_max_pixels = long(r.whole("image_max_pixels", e.image_max_pixels));
   o.timing = r.text("timing", "both");
@@ -281,7 +286,7 @@ std::optional<json> flags_to_json(const std::vector<std::string>& args, bool pos
       case Kind::gb: {  // a size in GB above 0
         char* end = nullptr;
         const double x = strtod(v.c_str(), &end);
-        if (v.empty() || *end || !(x > 0)) refuse(a + " needs a size in GB, not \"" + v + "\"");
+        if (v.empty() || *end || !std::isfinite(x) || !(x > 0)) refuse(a + " needs a size in GB, not \"" + v + "\"");
         j[key] = x;
         break;
       }

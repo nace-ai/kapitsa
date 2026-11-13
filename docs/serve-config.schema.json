@@ -57,7 +57,7 @@
       ],
       "description": "auto, 0 or off, or minutes from 0.5 to 10080"
     },
-    "mem_budget": {"type": "number", "exclusiveMinimum": 0, "description": "GB"},
+    "mem_budget": {"type": "number", "minimum": 1e-9, "maximum": 18446744073.70955, "description": "Decimal GB, representable as a positive 64-bit byte count"},
     "image_max_pixels": {"type": "integer", "minimum": 0, "maximum": 2147483647},
     "timing": {"enum": ["ttft", "prefill", "both"], "default": "both"},
     "disk_cache": {"type": "string", "pattern": "^([aA][uU][tT][oO]|[oO][fF][fF]|[nN][oO]([nN][eE])?|0|[0-9]*[.]?[0-9]+ ?([kKmMgGtT]([iI]?[bB])?|[bB]))$", "description": "auto, 0 (off) or a size with its unit such as 16G (a bare number of bytes is refused)"},
