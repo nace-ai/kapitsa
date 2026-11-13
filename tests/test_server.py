@@ -41,7 +41,13 @@ def take_gpu_lock():
 
 GPU_LOCK_FD = take_gpu_lock() if CLI else None
 if LOCK_ONLY:
-    print("GPU lock held" if GPU_LOCK_FD is not None else "GPU lock not taken", flush=True)
+    # what a child (every `kapitsa serve` / `doctor` the script starts) inherits: without both markers it would open the
+    # lock file itself and block on the lock this process holds
+    seen = subprocess.run([sys.executable, "-c", "import os; print(os.environ.get('NI_LOCK_HELD', ''), "
+                           "os.environ.get('NACE_GPU_LOCK_HELD', ''), sep='|')"], capture_output=True, text=True).stdout
+    ni, _, nace = seen.strip().partition("|")
+    print(("GPU lock held" if GPU_LOCK_FD is not None else "GPU lock not taken")
+          + f"; children see NI_LOCK_HELD={ni} NACE_GPU_LOCK_HELD={nace}", flush=True)
     sys.exit(0)
 API_KEY = opt("--api-key")
 MODEL_ID = opt("--model-id")
