@@ -751,10 +751,18 @@ bool Store::has(Kind kind, const Key& key) const {
 
 bool Store::read(Kind kind, const Key& key, std::string* meta, const Take& take) {
   const std::string p = path_of(kind, key);
-  const int fd = ::open(p.c_str(), O_RDONLY | O_CLOEXEC);
+  int fd;
+  do {
+    fd = ::open(p.c_str(), O_RDONLY | O_CLOEXEC);
+  } while (fd < 0 && errno == EINTR);
   if (fd < 0) {
-    logi("SSD prefix cache: %s is missing; the entries that need it are dropped", p.c_str());
-    drop_damaged(kind, key);
+    const int err = errno;
+    if (err == ENOENT) {
+      logi("SSD prefix cache: %s is missing; the entries that need it are dropped", p.c_str());
+      drop_damaged(kind, key);
+    } else {
+      logi("SSD prefix cache: cannot open %s for reading (%s)", p.c_str(), strerror(err));
+    }
     return false;
   }
   fcntl(fd, F_NOCACHE, 1);

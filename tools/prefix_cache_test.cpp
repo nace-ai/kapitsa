@@ -12,6 +12,7 @@
 
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/xattr.h>
@@ -20,6 +21,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <string>
@@ -300,6 +302,46 @@ void damage(const std::string& root) {
   }
 }
 
+void read_open_error(const std::string& root) {
+  Store st;
+  std::string why;
+  Conv c = make_conv(25, 64, 6000, {64}, 1000, 2000);
+  if (!st.open(opts(root, ns_name(25), 64 * kMiB), &why) || !save_conv(st, c)) {
+    check(false, "prepare a saved conversation for the open-error test", why);
+    return;
+  }
+  const Key key = c.e.blocks.front();
+  const auto prompt = tokens_of(c, 80);
+  Entry e;
+  if (!st.pin(st.lookup(prompt.data(), 80, 80).entry, &e)) {
+    check(false, "pin the conversation for a restore");
+    return;
+  }
+  struct rlimit saved;
+  if (getrlimit(RLIMIT_NOFILE, &saved) != 0) {
+    check(false, "read the descriptor limit");
+    st.unpin(e.key, false);
+    return;
+  }
+  const struct rlimit limited{0, saved.rlim_max};
+  if (setrlimit(RLIMIT_NOFILE, &limited) != 0) {
+    check(false, "set the temporary descriptor limit");
+    st.unpin(e.key, false);
+    return;
+  }
+  bool ok = true;
+  read_piece(st, kKv, key, &ok);
+  if (setrlimit(RLIMIT_NOFILE, &saved) != 0) std::abort();
+  st.unpin(e.key, false);
+  check(!ok, "the read fails while the process cannot open a descriptor");
+  check(hit_pos(st, prompt) == 64 && read_piece(st, kKv, key, &ok) == c.blocks.front() && ok,
+        "the same checkpoint is readable after descriptor capacity returns");
+  const std::string file = st.dir() + "/kv/" + key.hex();
+  check(unlink(file.c_str()) == 0, "remove the piece to exercise a missing file");
+  read_piece(st, kKv, key, &ok);
+  check(!ok && hit_pos(st, prompt) == 0, "a missing piece still drops its dependent entry");
+}
+
 void quota(const std::string& root) {
   const std::string ns = ns_name(3);
   Store st;
@@ -572,6 +614,7 @@ int main() {
   sizes();
   write_read_restart(root);
   damage(root);
+  read_open_error(root);
   quota(root);
   concurrency(root);
   namespaces(root);
