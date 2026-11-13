@@ -122,7 +122,7 @@ endforeach()
 find_package(Threads REQUIRED)
 add_executable(gemm_slices_test tests/gemm_slices_test.cpp)  # src/model/gemm_slices.h: row slices of a GEMM
 target_include_directories(gemm_slices_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-add_executable(device_profile_test tests/device_profile_test.cpp src/engine/device_profile.cpp)
+add_executable(device_profile_test tests/device_profile_test.cpp src/engine/device_profile.cpp src/ane/default_share.cpp)
 target_include_directories(device_profile_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(catalog_profile_test tests/catalog_profile_test.cpp src/hub/catalog.cpp src/hub/resolve.cpp src/engine/device_profile.cpp)
 target_include_directories(catalog_profile_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

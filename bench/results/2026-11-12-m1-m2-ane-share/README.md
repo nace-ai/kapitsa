@@ -85,8 +85,8 @@ Short decode: M1 Ultra 252-256 tok/s main, 254-259 PR; M2 Pro 124.3-124.7 main, 
 | --- | --- | ---: | ---: | ---: | --- |
 | 27B, M1 Ultra | batch / step / verify | 0 / 0 / 0 of 192 | 5.9e-5 / 5.9e-5 / 6.0e-5 | 9.2-9.5e-4 | PASS |
 | 27B, M2 Pro | batch / step / verify | 0 / 0 / 0 of 192 | 1.21e-4 each | 1.06-1.13e-3 | PASS |
-| 4B, M1 Ultra | batch / step / verify | 0 / 0 / 0 of 192 | 1.13e-4 each | 2.0e-3 | PASS |
-| 4B, M2 Pro | batch / step / verify | 0 / 0 / 0 of 192 | 2.6e-4 each | 3.8e-3 | PASS |
+| 4B, M1 Ultra | batch / step / verify | 1 / 1 / 1 of 192, a near-tie (margin 0.05) | 1.13e-4 each | 2.0e-3 | PASS |
+| 4B, M2 Pro | batch / step / verify | 1 / 0 / 0 of 192, a near-tie (margin 0.016) | 2.6e-4 each | 3.8e-3 | PASS |
 | 27B KQuant, M1 Ultra | batch / step / verify | 0 / 0 / 0 of 192 | 4.2e-5 / 4.1e-5 / 4.1e-5 | 5.9-6.1e-4 | no floor |
 | 27B KQuant, M2 Pro | batch / step / verify | 0 / 0 / 0 of 192 | 1.0e-4 each | 1.5-1.6e-3 | no floor |
 
@@ -101,8 +101,11 @@ GPU alone on both Macs (`NI_ANE: no calibration for Apple M1 Ultra (run ane_cali
 - Share: the wavefront balance in `default_units()` with M1 and M2 costs from `ane_calib` (ANE ms per 512-channel
   unit, the GPU part per unit and the mixer, per layer, 2048 rows). The plain split's ANE cost puts both chips a
   little under their measured wavefront optimum, so the wavefront uses the cost that hits it (M1 3.76 ms, M2
-  4.58 ms); the plain split (a noncausal pass) keeps the measured one. Capped at 32 units: 33 and 34 fail ANE
-  compilation on both chips.
+  4.58 ms). Capped at 32 units: 33 and 34 fail ANE compilation on both chips. A noncausal pass (Drex Max) gets no
+  default share on M1 and M2 and stays on the GPU: it was not output-checked there.
+- Single-die M1: the formula gives a 32-core M1 Max 28 of 34. kapitsa#1194 measured that Mac (MacBook Pro 16-inch,
+  macOS 27.2, the 27B at ~4K tokens, client TTFT): GPU alone 129-134 tok/s, 24/34 220, 26/34 225-236, 28/34 223,
+  30/34 206, with an interleaved re-run of 26/34 at 1.75x. So the M1 Ultra's costs carry to a one-die M1.
 - Smallest split chunk: a chunk under 1024 rows runs the plain split at the wavefront's share. On the M1 Ultra
   that lost (620-812 tokens: 2.39-3.02 s alone, 3.22-3.63 s split), on the M2 Pro it won (812 tokens 9.6 -> 8.0 s).
   `default_min_rows()` returns 1024 where the 512-row ANE cost at that share exceeds the GPU alone; `ane_calib`'s
@@ -113,5 +116,5 @@ GPU alone on both Macs (`NI_ANE: no calibration for Apple M1 Ultra (run ane_cali
 - Each wavefront half needs half the smallest function, not half the smallest chunk: otherwise a chunk of
   1024-1151 rows still ran the plain split (a 1207-token prompt: 5.08 s, against 4.0 s with the halves).
 
-Not run: M1, M1 Pro, M1 Max, M2, M2 Max, M2 Ultra (their shares come from the same costs scaled by GPU cores); a
-fanless MacBook Air; the Drex Max noncausal pass on M1/M2.
+Not run here: M1, M1 Pro, M2, M2 Max, M2 Ultra (their shares come from the same costs scaled by GPU cores; the M1 Max
+is #1194's run above); a fanless MacBook Air. The Drex Max noncausal pass stays on the GPU on M1/M2.
