@@ -60,7 +60,8 @@ These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/t
 
 | Command | What it checks | Needs |
 | --- | --- | --- |
-| `python3 tests/test_server.py --cli build/kapitsa` | The command line, offline: model names and aliases, `pull --dry-run`, `list`, `rm`, refusals, early port errors | nothing |
+| `python3 tests/test_server.py --cli build/kapitsa` | The command line, offline: model names and aliases, `pull --dry-run`, `list`, `rm`, refusals, early port errors. It starts `kapitsa serve` on stand-in models, so it takes the GPU lock itself and waits for it (not when `NI_LOCK_HELD=1` says you hold it) | the GPU lock |
+| `python3 tests/test_server_lock.py` | That lock behavior of `test_server.py --cli`, on a throwaway lock file | nothing |
 | `python3 tests/test_idle_unload.py [--no-gpu] [--model 4b]` | `kapitsa serve --idle-unload`: bad values refused (CPU, `--no-gpu`, also in CI); on a Mac with a small model (takes the GPU lock): released after idle, loaded again by the next request with the same reply, the `auto` pressure gate both ways, `/v1/models` and a second request during a slow load | `--no-gpu`: `build/kapitsa`; the rest: a Mac and a small model |
 | `python3 tests/test_sidecar.py build/kapitsa` | `kapitsa mtp-sidecar` writes the same bytes as `tools/mtp_sidecar.py` | nothing |
 | `python3 tests/test_hub_download.py build/kapitsa` | Interrupted model adoption and download retries against a local HTTP fixture: existing SHA256/Git-blob digests, matching files, corrupt transfers and completed offline reuse. Also runs in `test_server.py --cli`. | nothing; no model load |

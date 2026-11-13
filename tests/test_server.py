@@ -3,8 +3,11 @@
 Messages and OpenAI Responses (tool loops, the cache across them, errors).
 usage: test_server.py [base_url] [--api-key KEY] [--model-id ID]   (default http://127.0.0.1:8090)
        test_server.py --cli <path to kapitsa>    offline checks of the command line: model names and aliases,
-                                                 `pull --dry-run`, `list`, `rm`, early port errors (no server)"""
-import json, os, re, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
+                                                 `pull --dry-run`, `list`, `rm`, early port errors (no server)
+       --cli starts `kapitsa serve` on stand-in models, so it takes the GPU lock ($BENCH_GPU_LOCK, default
+       /tmp/kapitsa-gpu.lock) before anything starts, waiting for it, unless NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1 says the
+       caller holds it (lockf -k /tmp/kapitsa-gpu.lock env NI_LOCK_HELD=1 NACE_GPU_LOCK_HELD=1 python3 tests/test_server.py ...)"""
+import fcntl, json, os, re, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
 
 ARGS = sys.argv[1:]
 def opt(name):
@@ -15,6 +18,31 @@ def opt(name):
         return v
     return None
 CLI = opt("--cli")
+LOCK_ONLY = "--lock-only" in ARGS  # tests/test_server_lock.py: take the lock, say so, stop
+if LOCK_ONLY:
+    ARGS.remove("--lock-only")
+
+
+def take_gpu_lock():
+    """The GPU lock as GpuLock does it (src/bench/system.mm): one flock on the shared file, waited for, held until this
+    process exits, and children told with NI_LOCK_HELD so they do not take it again (flock is per open file description)."""
+    if any(os.environ.get(n) not in (None, "", "0") for n in ("NI_LOCK_HELD", "NACE_GPU_LOCK_HELD")):
+        return None
+    path = os.path.expanduser(os.environ.get("BENCH_GPU_LOCK") or "/tmp/kapitsa-gpu.lock")
+    fd = os.open(path, os.O_RDONLY | os.O_CREAT, 0o644)  # not inherited by children
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print(f"waiting for GPU lock ({path})", flush=True)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+    os.environ["NI_LOCK_HELD"] = os.environ["NACE_GPU_LOCK_HELD"] = "1"
+    return fd
+
+
+GPU_LOCK_FD = take_gpu_lock() if CLI else None
+if LOCK_ONLY:
+    print("GPU lock held" if GPU_LOCK_FD is not None else "GPU lock not taken", flush=True)
+    sys.exit(0)
 API_KEY = opt("--api-key")
 MODEL_ID = opt("--model-id")
 BASE = ARGS[0] if ARGS else "http://127.0.0.1:8090"
