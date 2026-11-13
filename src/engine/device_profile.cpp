@@ -25,6 +25,14 @@ bool ane_builtin_share(const std::string& chip) {
   return chip.find("M4") != std::string::npos || chip.find("M5") != std::string::npos;
 }
 
+int ane_pre_m3_share(const std::string& chip) {
+  for (int family : {1, 2}) {
+    const std::string name = "Apple M" + std::to_string(family);
+    if (chip.compare(0, name.size(), name) == 0 && (chip.size() == name.size() || chip[name.size()] == ' ')) return family;
+  }
+  return 0;
+}
+
 bool ane_segmented_default(const DeviceFacts& facts) {
   return ane_builtin_share(facts.name) && !matrix_units(facts);
 }

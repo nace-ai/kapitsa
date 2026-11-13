@@ -3,7 +3,7 @@
 //   NI_ANE=1            enable (dense models; the MoE path is unchanged)
 //   New 2048-channel inputs default to fast on non-matrix Macs; NI_ANE=1/0 overrides. Existing 2560 inputs stay on.
 //   NI_ANE_UNITS=<u>    ANE share in 512-channel units (default: calibration, else per-chip default)
-//   NI_ANE_MIN_ROWS=<r> smallest prefill chunk that splits (default: calibration, else 512)
+//   NI_ANE_MIN_ROWS=<r> smallest prefill chunk that splits (default: calibration, else 512; 1024 on some M1/M2, default_min_rows)
 //   NI_ANE_FNS=a,b,..   ANE program functions (rows); default every 128 rows from min_rows to 2048
 //   NI_ANE_VERIFY=0     skip the startup check (on by default)
 //   NI_ANE_FAULT=<l>    test: the ANE job of layer l of the first split chunk never starts
@@ -139,8 +139,8 @@ void Qwen35::init_ane() {
   mma = mma && ffn_share::matrix_unit_share(fmts, qmtf_formats());
   const uint32_t total = uint32_t(cfg_.dense_I / 512);
   uint32_t units = have_cal ? cal.units : ane::default_units(chip, Gpu::get().core_count(), total, share_wave, mma);
-  uint32_t min_rows = have_cal && cal.min_rows ? cal.min_rows : 512;
   if (getenv("NI_ANE_UNITS")) units = uint32_t(atoi(getenv("NI_ANE_UNITS")));
+  uint32_t min_rows = have_cal && cal.min_rows ? cal.min_rows : ane::default_min_rows(chip, Gpu::get().core_count(), units, total);
   if (getenv("NI_ANE_MIN_ROWS")) min_rows = uint32_t(atoi(getenv("NI_ANE_MIN_ROWS")));
   if (!units) {
     logi("NI_ANE: no calibration for %s (run ane_calib) and no default share; GPU only", chip.c_str());
@@ -156,7 +156,13 @@ void Qwen35::init_ane() {
   }
   const int fault = getenv("NI_ANE_FAULT") ? atoi(getenv("NI_ANE_FAULT")) : -1;
   const int lanes = wave ? 2 : 1;
-  ane_init_ = {units, min_rows, parse_rows(getenv("NI_ANE_FNS")), fault, lanes,
+  std::vector<uint32_t> fns = parse_rows(getenv("NI_ANE_FNS"));
+  // A default above 512 rows (default_min_rows: an M1 or M2 whose small chunks lose on the plain split) still builds
+  // the functions from 512 rows, so a 1024-2047-row chunk's wavefront halves have theirs. Without them the M1 Ultra
+  // ran a 1306-token prompt on the plain split: 5.36 s against 4.69 s on the GPU alone and 4.17 s with the halves.
+  if (fns.empty() && !have_cal && !getenv("NI_ANE_MIN_ROWS") && min_rows > 512)
+    for (uint32_t r = 512; r < ane::FfnSplit::kMaxRows; r += 128) fns.push_back(r);
+  ane_init_ = {units, min_rows, fns, fault, lanes,
                getenv("NI_ANE_UNITS") ? "NI_ANE_UNITS" : have_cal ? "calibration" : "default for this chip"};
   if (env_on("NI_ANE_ASYNC")) {
     // The server path: the ANE daemon compiles the program in the background (~40 s when it has
@@ -390,7 +396,10 @@ void Qwen35::enc_mlp_gpu_part(Encoder& e, const Layer& L, int T, uint32_t g, con
 int Qwen35::ane_wave_rows(int T) const {
   if (!ane_ || ane_->lanes() < 2) return 0;
   const int h = (T / 2 + 127) / 128 * 128;
-  if (h >= T || h < int(ane_->fn_rows().front()) || T - h < int(ane_->min_rows()) / 2) return 0;
+  // each half at least half the smallest function (the min rows built them, or a default min rows above it,
+  // init_ane): an M1 Ultra chunk of 1024-1151 rows otherwise ran the plain split, 5.08 s against 4.0 s
+  const int fn0 = int(ane_->fn_rows().front());
+  if (h >= T || h < fn0 || T - h < fn0 / 2) return 0;
   if (h > int(ane::FfnSplit::kMaxRows) || T - h > int(ane::FfnSplit::kMaxRows)) return 0;
   return h;
 }

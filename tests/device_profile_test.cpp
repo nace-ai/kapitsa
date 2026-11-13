@@ -1,3 +1,4 @@
+#include "ane/default_share.h"
 #include "engine/device_profile.h"
 #include "metal/gpu.h"
 
@@ -98,7 +99,25 @@ int main() {
     CHECK(ni::default_matches(*segmented, with_ane) == expected);
     with_ane.ane = false;
     CHECK(!ni::default_matches(*segmented, with_ane));
+    // M1 and M2 get default_units()'s own share; it stays apart from the built-in share and the segmented default
+    CHECK(ni::ane_pre_m3_share(facts.name) == (facts.apple_family < 9 ? facts.apple_family - 6 : 0));
   }
+  CHECK(ni::ane_pre_m3_share("Apple M1 Ultra") == 1 && ni::ane_pre_m3_share("Apple M2 Pro") == 2);
+  CHECK(ni::ane_pre_m3_share("Apple M2 Max") == 2 && ni::ane_pre_m3_share("Apple M3 Max") == 0);
+  CHECK(ni::ane_pre_m3_share("Apple M10") == 0 && ni::ane_pre_m3_share("Apple M20 Pro") == 0);
+  // The shares the M1/M2 serve logs printed (bench/results/2026-11-12-m1-m2-ane-share): the 27B's 34 units and the
+  // 4B's 18, wavefront; the 32-unit compile cap; the M1 Max share #1194 measured around; no noncausal share; the M3
+  // still needs a calibration.
+  using ni::ane::default_units;
+  using ni::ane::default_min_rows;
+  CHECK(default_units("Apple M1 Ultra", 64, 34, true) == 20 && default_units("Apple M2 Pro", 19, 34, true) == 30);
+  CHECK(default_units("Apple M1 Ultra", 64, 18, true) == 11 && default_units("Apple M2 Pro", 19, 18, true) == 16);
+  CHECK(default_units("Apple M1 Max", 32, 34, true) == 28);
+  CHECK(default_units("Apple M1", 8, 34, true) == 32 && default_units("Apple M2", 10, 34, true) == 32);
+  CHECK(default_units("Apple M1 Ultra", 64, 34, false) == 0 && default_units("Apple M2 Pro", 19, 34, false) == 0);
+  CHECK(default_units("Apple M3 Pro", 18, 34, true) == 0 && default_units("Apple M3 Max", 40, 34, false) == 0);
+  CHECK(default_min_rows("Apple M1 Ultra", 64, 20, 34) == 1024 && default_min_rows("Apple M2 Pro", 19, 30, 34) == 512);
+  CHECK(default_min_rows("Apple M4 Pro", 20, 27, 34) == 512 && default_min_rows("Apple M5 Max", 40, 14, 34) == 512);
   // The fast profile's first member: matrix class, so every M5, not the M5 Pro it was measured on.
   const ni::DefaultRow* tattn = row("tattn_fast");
   CHECK(tattn && tattn->scope == ni::DefaultScope::kMatrix && !tattn->exclusive && tattn->win_pct == 8);

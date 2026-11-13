@@ -1,0 +1,31 @@
+prefill: 8 records (qwen3.8-27b-4bit)
+  reference: 0.2.35, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35, prefill_chunk 2048, ane {"chunks":7,"evals":896,"reruns":0}
+  bitwise identical rows 2 of 8; max |logit diff| 0.3875
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 1.127e-05 median 9.700e-06 p99 3.172e-05 max 3.226e-05; top-2 margin change up to 0.06854
+  next-token NLL change -2.131e-03 nats per record (candidate minus reference)
+batch: 192 records (qwen3.8-27b-4bit)
+  reference: 0.2.35, batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35, batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":7,"evals":896,"reruns":0}
+  bitwise identical rows 48 of 192; max |logit diff| 0.6197
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 5.904e-05 median 5.230e-07 p99 9.532e-04 max 2.377e-03; top-2 margin change up to 0.2174
+  next-token NLL change +1.886e-05 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+step: 192 records (qwen3.8-27b-4bit)
+  reference: 0.2.35, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35, prefill_chunk 2048, ane {"chunks":7,"evals":896,"reruns":0}
+  bitwise identical rows 48 of 192; max |logit diff| 0.6154
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 5.876e-05 median 5.438e-07 p99 9.498e-04 max 2.368e-03; top-2 margin change up to 0.2366
+  next-token NLL change +6.568e-06 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
+verify: 192 records (qwen3.8-27b-4bit)
+  reference: 0.2.35, verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35, verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":7,"evals":896,"reruns":0}
+  bitwise identical rows 48 of 192; max |logit diff| 0.6162
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.399))
+  KL mean 5.996e-05 median 5.405e-07 p99 9.235e-04 max 2.460e-03; top-2 margin change up to 0.2394
+  next-token NLL change +8.097e-05 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.8-27b-4bit.json)
