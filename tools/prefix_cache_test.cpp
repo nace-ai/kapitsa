@@ -556,6 +556,12 @@ void namespaces(const std::string& root) {
     set_mtime(lock, days);
   };
   const std::string old = ns_name(40), recent = ns_name(41), held = ns_name(42), mine = ns_name(43);
+  const std::string unreadable = r + "/" + ns_name(44), changed = r + "/" + ns_name(45);
+  make_ns(ns_name(44), 20, 1000);
+  fs::remove(unreadable + "/lock");
+  fs::create_directory(unreadable + "/lock");  // opening this path read/write fails even when run as root
+  set_mtime(unreadable, 20);
+  make_ns(ns_name(45), 2, 1000);
   make_ns(old, 15, 1000);
   make_ns(recent, 1, 3 * kMiB);
   make_ns(held, 30, 1000);
@@ -572,9 +578,13 @@ void namespaces(const std::string& root) {
     check(fs::exists(r + "/" + held), "one another server holds is left alone, however old");
     check(fs::exists(r + "/not-a-cache"), "a folder that is not a namespace is left alone");
     // the root's limit holds this namespace and the others nobody holds: the others go first, the oldest first
+    check(fs::exists(unreadable + "/kv/data"), "stale cleanup preserves a namespace whose lock cannot be opened");
+    fs::remove(changed + "/lock");
+    fs::create_directory(changed + "/lock");
     Conv a = make_conv(51, 64, 100, {64}, 60000, 100000);
     check(save_conv(st, a), "an entry in the new namespace");
     st.set_test_space(10 * kGiB + 8 * kMiB, 2000 * kGiB);  // a 2 MiB limit: the other namespace's 3 MiB do not fit
+    check(fs::exists(changed + "/kv/data"), "quota cleanup preserves a namespace whose lock became inaccessible");
     check(!fs::exists(r + "/" + recent) && hit_pos(st, tokens_of(a, 70)) == 64,
           "over the limit: another model's cache nobody holds goes before this one's entries");
     st.clear();
