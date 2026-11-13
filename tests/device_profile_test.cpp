@@ -84,7 +84,14 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 17);  // +1: 9B mixed-format catalog policy (#493)
+  CHECK(ni::default_count() == 18);  // +1: 9B mixed-format catalog policy (#493); +1: kflash_block16
+  // kflash_block16: a multi-slot server drafts 16 rows on the matrix class (M5 and the M6), not on M1 to M4
+  const ni::DefaultRow* b16 = row("kflash_block16");
+  CHECK(b16 && b16->scope == ni::DefaultScope::kMatrix && b16->live && !b16->exclusive && b16->win_pct == 22);
+  CHECK(ni::default_on(ni::Knob::kKflashBlock16, ni::resolve_device(mac(11, 12, "Apple M6", 32L << 30)), {}));
+  CHECK(ni::default_on(ni::Knob::kKflashBlock16, ni::resolve_device(mac(10, 40, "Apple M5 Max", 128L << 30)), {}));
+  CHECK(!ni::default_on(ni::Knob::kKflashBlock16, ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48)), {}));
+  CHECK(!ni::default_on(ni::Knob::kKflashBlock16, ni::resolve_device(mac(7, 32, "Apple M1 Max", 64L << 30)), {}));
   const auto* segmented = row("ane_segmented_fast");
   CHECK(segmented && segmented->scope == ni::DefaultScope::kAneBuiltinNonMatrix && !segmented->exclusive);
   for (const auto& facts : {mac(7, 8, "Apple M1", g48), mac(8, 10, "Apple M2", g48),
