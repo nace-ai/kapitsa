@@ -44,6 +44,7 @@ uint32_t default_units(const std::string& chip, int cores, uint32_t total, bool 
     return std::min<uint32_t>(u, 32);
   }
   if (!ane_builtin_share(chip)) return 0;
+  if (!wave && !ane_plain_share(chip)) return 0;  // M6 and later: the plain split is not output-checked there yet
   if (gpu_mma) {
     // gpu_mma: the GPU's share runs on the M5's matrix units (Qwen35's NI_QMT, 4-bit group 64), ~3.5x cheaper per
     // channel than its simdgroup GEMMs. Measured on the M5 Pro (20 cores, 27B, ane_calib, 2048 rows): the ANE

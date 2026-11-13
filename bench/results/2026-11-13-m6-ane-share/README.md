@@ -6,7 +6,9 @@ Qwen models (4B, 27B) read prompts on the GPU alone unless a calibration file or
 (`NI_ANE: no calibration for Apple M6 (run ane_calib) and no default share; GPU only`). The check now reads the
 generation number from the name ("Apple M<N>", N >= 4), so the M6 and later get the share `default_units()` already
 computes for a matrix-unit GPU (the M5 Pro's costs, scaled to the core count): 15 of 18 units on the 4B and 29 of 34 on
-the 27B with 12 GPU cores.
+the 27B with 12 GPU cores. That is the wavefront's share, which every causal prefill takes. The plain split's share (no
+wavefront: Drex Max's noncausal pass in `kapitsa-systemone`, or `NI_ANE_WAVE=0`) stays at 0 on the M6 and later, as on
+M1 and M2, until it is output-checked there (`ane_plain_share()`); a calibration or `NI_ANE_UNITS` still sets one.
 
 Runs: Mac mini (M6, 2026; `Mac18,5`), 12 CPU / 12 GPU cores, 32 GB, macOS 27.2.1 (26B131), on AC power, thermal state
 nominal throughout. Reference: `origin/main` 9e3159c4, built in its own worktree; candidate: this branch on the same
@@ -46,6 +48,23 @@ fall in rounds 2 and 3 across all three arms, so the dip follows the time, not t
 Writing, greedy: main 142.25 / 142.88 tok/s, PR 139.66 / 141.47 (-1.4%, inside the legs' spread); T 0.6 main 138.9 /
 133.9, PR 128.9 / 147.2. Peak memory 4.3 GB -> 4.5 GB (the Neural Engine program's 163 MB of Metal buffers).
 
+## Short prompts: 600 and 900 tokens (`short-prompts.txt`)
+
+A prompt of 512 to 1,023 rows runs as one chunk below the wavefront's 1,024 rows, where the split measured slower than
+the GPU alone on the M1 Ultra and M2 Pro (so `default_min_rows` gives those 1,024). On the M6 it gives 512. Cold
+prefills with `ni_run --pf-reps 5` (five each, state reset in between; the calibration moved aside, since main reads it
+too), main c399c549 against this branch, A B A B:
+
+| Prompt | Model | main (GPU alone), median ms | this PR (split), median ms | |
+| ---: | --- | ---: | ---: | ---: |
+| 600 | 4B | 309.2 / 308.4 | 268.8 / 295.8 | -9 to -13% |
+| 900 | 4B | 468.5 / 468.3 | 325.2 / 330.4 | -30% |
+| 600 | 27B KQuant | 1,913.0 / 1,908.8 | 1,462.0 / 1,482.0 | -23% |
+| 900 | 27B KQuant | 3,256.4 / 3,244.5 | 2,069.4 / 2,089.7 | -36% |
+
+The split is faster in every leg (one 4B rep at 515 ms is in `pr2`'s median of 295.8), so 512 stays the M6's smallest
+split chunk; the 1,024 rule of the M1 and M2 does not apply here.
+
 ## The share: what a calibration finds on this Mac
 
 `ane_calib --wave` sweeps (`calib-4b.log`, `calib-27b.log`, 2048-row chunks of random tokens):
@@ -83,9 +102,9 @@ revisits `default_units()`'s matrix-unit costs with more chips.
   0.045), the gate's allowance.
 
 Bench's text check flagged a repetition loop (distinct-4-gram 0.46-0.47) in two of the six 4B legs with the split
-(`4b-pr-2`, `4b-pr-calibrated-2`), in neither of the two main legs, and in none of the 27B's nine. The split moves the
-prefill's logits within the floor above, so sampled continuations differ from main's; two flagged legs of six is not
-enough to tell a cause from the 4B's own looping, and it was not investigated further.
+(`4b-pr-2`, `4b-pr-calibrated-2`), in neither of the two main legs, and in none of the 27B's nine. That is inside the
+4B's own rate: 7 of the 14 `qwen3.5-4b` results in `bench/community` on main carry the same flag, on M1 Pro, M1 Max,
+M3 Pro, M3 Ultra and M5 Ultra alike.
 
 ## Files
 
@@ -94,3 +113,4 @@ enough to tell a cause from the 4B's own looping, and it was not investigated fu
 - `bench/27b-main-{1,2,3}.json`, `bench/27b-pr-{1,2,3}.json`, `bench/27b-pr-calibrated-{1,2,3}.json`: the 27B rounds.
 - `calib-4b.log`, `calib-27b.log`: the `ane_calib --wave` sweeps.
 - `output-check.txt`: `tools/logit_compare.py` output.
+- `short-prompts.txt`: the 600- and 900-token cold prefills (`ni_run --pf-reps 5`).
