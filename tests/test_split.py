@@ -131,6 +131,14 @@ def stage_flags(tmp):
         bad = run(["stage", "--model", model, "--prefill-chunk", value])
         check(bad.returncode == 2 and "--prefill-chunk" in bad.stderr and why in bad.stderr,
               f"invalid prefill chunk {value!r} is a usage error naming the flag", bad.stderr[:300])
+    for value in ("", "garbage", "4GiB", "4.5oops", "-1", "nan", "inf", "1e400", "1e-400", "1e-12", "18446744073.709553"):
+        bad = run(["stage", "--model", model, "--mem-budget", value])
+        check(bad.returncode == 2 and "--mem-budget" in bad.stderr,
+              f"invalid stage memory budget {value!r} is a usage error", bad.stderr[:300])
+    for value in ("0", "1e-9", "4.5", "18446744073.70955"):
+        good = run(["stage", "--model", model, "--mem-budget", value])
+        check(good.returncode == 1 and "No folder at" in good.stderr,
+              f"valid stage memory budget {value!r} reaches model lookup", good.stderr[:300])
     for value in ("", "0", "-4", "3x", "3x-4", "3-4oops", "3-4-5", "3-0", "4-3", "2147483648", "3-2147483648"):
         bad = run(["stage", "--model", model, "--layers", value])
         check(bad.returncode == 2 and "--layers" in bad.stderr,
