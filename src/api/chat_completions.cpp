@@ -11,7 +11,8 @@ ojson chat_usage(const ChatResult& res) {
           {"prompt_tokens_details", {{"cached_tokens", res.cached_tokens}}}};
   if (res.reasoning_tokens > 0)
     u["completion_tokens_details"] = {{"reasoning_tokens", res.reasoning_tokens}};
-  if (res.loops > 0) u["kapitsa"] = kapitsa_usage(res);  // looped models: the loop count the request ran
+  // looped models: the loop count the request ran; a thinking budget: its cap and whether the close was forced
+  if (ojson k = kapitsa_usage(res); !k.is_null()) u["kapitsa"] = k;
   // the time the engine took to read the uncached part of the prompt (a client's prefill tok/s is
   // (prompt_tokens - cached_tokens) / prefill_ms; its own time to first token also holds the network and the queue).
   // Left out when the prompt had images (encoded before the clock starts) or the request gave up its turn to another
