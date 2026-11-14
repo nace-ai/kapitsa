@@ -8,10 +8,13 @@ run, newest first, every rate in tok/s and every time in seconds, so that each n
 and the precision it was measured with. A measurement that other apps disturbed (contention flagged) carries ⚠, and
 each row lists its run's flags. Quick runs say so. Files that are not results (or fail the schema's basics) are skipped
 with a warning; tools/community_check.py is the full check, run on every pull request. --check: exit 1 when RESULTS.md
-is not what this would write (it changes nothing).
+is not what this would write (it changes nothing). Writing the repository's own table (the default --results and --out) also
+rebuilds docs/site/leaderboard-data.js (tools/build_leaderboard_data.py), so one command brings a result pull request
+up to date: commit both files. The `community-table` check reads the two, and --check here reads only RESULTS.md.
 """
 import argparse, functools, glob, json, os, re, statistics, sys
 
+import build_leaderboard_data  # the leaderboard's data file, from the same folder
 import community_check  # the catalog, from the same folder
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -259,6 +262,10 @@ def main():
     with open(a.out, "w", encoding="utf-8") as fh:
         fh.write(text)
     print(f"{os.path.relpath(a.out)}: {len(results)} runs")
+    if (os.path.abspath(a.results), os.path.abspath(a.out)) == (os.path.join(COMMUNITY, "results"), os.path.join(COMMUNITY, "RESULTS.md")):
+        path, count = build_leaderboard_data.write(REPO)
+        print(f"{os.path.relpath(path)}: {count} results")
+        print("commit both: git add bench/community/RESULTS.md docs/site/leaderboard-data.js")
     return 0
 
 

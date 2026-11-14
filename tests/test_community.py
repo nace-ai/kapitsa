@@ -9,7 +9,7 @@ them and refuse each kind of implausible one; the labels must follow; the table 
 precision, with units and the contention marks; and the pull request check must work end to end against a stand-in
 GitHub API: the files read as data at the head commit, the labels set, the report in the job summary.
 """
-import copy, http.server, json, os, re, shutil, socketserver, subprocess, sys, tempfile, threading, urllib.parse
+import copy, glob, http.server, json, os, re, shutil, socketserver, subprocess, sys, tempfile, threading, urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, ".."))
@@ -283,6 +283,30 @@ os.makedirs(empty)
 p = subprocess.run([sys.executable, os.path.join(REPO, "tools", "community_table.py"), "--results", empty, "--out",
                     os.path.join(tmp, "E.md")], capture_output=True, text=True)
 check("No results yet" in open(os.path.join(tmp, "E.md")).read(), "no results: says how to add the first")
+
+# the repository's own table: one command writes RESULTS.md and docs/site/leaderboard-data.js; a table written
+# elsewhere (--results/--out) leaves the leaderboard alone. A stand-in repo, since the scripts find the repo from their folder.
+fake = os.path.join(tmp, "repo")
+for rel in ("tools/community_table.py", "tools/community_check.py", "tools/build_leaderboard_data.py", "src/hub/catalog.cpp",
+            "bench/community/schema.json", "bench/community/mac-models.json"):
+    os.makedirs(os.path.dirname(os.path.join(fake, rel)), exist_ok=True)
+    shutil.copy(os.path.join(REPO, rel), os.path.join(fake, rel))
+shutil.copytree(res_dir, os.path.join(fake, "bench", "community", "results"))
+os.remove(os.path.join(fake, "bench", "community", "results", "notes.json"))  # not a result; the leaderboard's reader has no skip for it
+fake_table, fake_board = (os.path.join(fake, "bench", "community", "RESULTS.md"),
+                          os.path.join(fake, "docs", "site", "leaderboard-data.js"))
+fake_cmd = [sys.executable, os.path.join(fake, "tools", "community_table.py")]
+p = subprocess.run(fake_cmd + ["--results", res_dir, "--out", os.path.join(tmp, "elsewhere.md")], capture_output=True, text=True)
+check(p.returncode == 0 and not os.path.exists(fake_board) and not os.path.exists(fake_table),
+      "a table written elsewhere leaves the repo's RESULTS.md and leaderboard data alone", p.stderr[-200:])
+p = subprocess.run(fake_cmd, capture_output=True, text=True)
+board = open(fake_board).read() if os.path.exists(fake_board) else ""
+n_results = len(glob.glob(os.path.join(fake, "bench", "community", "results", "*.json")))
+check(p.returncode == 0 and os.path.exists(fake_table) and board.count('{"time_utc"') == n_results,
+      "the repo's own table: RESULTS.md and the leaderboard data from one command", p.stderr[-200:] + str(board.count('{"time_utc"')))
+check("git add bench/community/RESULTS.md docs/site/leaderboard-data.js" in p.stdout, "and it names the two files to commit", p.stdout[-200:])
+p = subprocess.run([sys.executable, os.path.join(fake, "tools", "build_leaderboard_data.py"), "--check"], capture_output=True, text=True)
+check(p.returncode == 0, "that leaderboard data is what build_leaderboard_data.py --check expects", p.stderr[-200:])
 
 # ---------------------------------------------------------------- the pull request check, against a stand-in API
 good_name = "bench/community/results/kapitsa-bench-2026-10-18-m4-pro-qwen3.6-35b-a3b-4bit-quick-bbbbbb.json"
