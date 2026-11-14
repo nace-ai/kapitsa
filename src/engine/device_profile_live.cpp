@@ -47,4 +47,6 @@ bool simd_gpu() { return Gpu::get().apple_family() == 9; }  // M3, M4
 
 bool m1_max_32() { return Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32; }
 
+bool m5_pro_gpu() { return Gpu::get().name() == "Apple M5 Pro"; }
+
 }  // namespace ni

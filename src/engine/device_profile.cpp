@@ -121,7 +121,7 @@ const DefaultRow kDefaults[] = {
     {"legacy_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kLegacy, nullptr, "class", 0, 0, false,
      "11 sites; capability class: apple_family <= 7, the M1 path", false},
     {"wide_cores", Knob::kNone, ModelClass::kOther, DefaultScope::kWide, nullptr, "class", 0, 0, false,
-     "2 sites; capability class: matrix units and 40 cores or more", false},
+     "1 site; capability class: matrix units and 40 cores or more", false},
     // Capability class: apple_family == 9 (M3, M4; not M2 which is family 8). Fold of m4_10, m4_pro_gpu, m4_pro_20,
     // m4_ten_core (#393): low-rank 768, GDN 128, tree-fuse, lazy GDN, DFS, packed coeff, VIT prepack, NORM X8,
     // SHARE X8 widened from narrow M4 gates. m1_max_32 kept as its own guard row.
@@ -129,6 +129,14 @@ const DefaultRow kDefaults[] = {
      "9 sites; capability class: apple_family == 9 (M3, M4); fold of m4_10, m4_pro_gpu, m4_pro_20, m4_ten_core (#393)", false},
     {"m1_max_32", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M1 Max", "64", 0, 0, false,
      "4 sites; shape guard: 32 cores; 35B group of 64 (hidden 2048, intermediate 512, else 32); also the 35B 4096-row prefill chunk, the 35B q4-head v8 default, and the drafter CORE4 path (measured on M5 and the 32-core M1 Max)", false},
+    // NI_QMT_MIN on the Qwen3.8 27B shape (Qwen35::qmt_min_rows): every Mac with matrix units runs its dense GEMMs of
+    // 17 to 63 rows on the 64-row tensor tile, as the other dense models do, but the M5 Pro, the class member measured
+    // slower: its 4,129-token prefill with the Neural Engine split 5,577 -> 5,851 ms in 3 of 3 pairs (#393; a 40-token
+    // prompt was faster there too, 320.0 -> 144.6 ms). M5 Max (40 cores): 4,129 tokens 3,265 -> 3,182 ms. Mac mini M6
+    // (12 cores): 4,129 tokens 8,866 / 8,891 / 8,921 -> 8,682 / 8,658 / 8,876 ms, a 28 / 45 / 56-row cached turn
+    // 370 / 545 / 706 -> 221 / 232 / 265 ms. The M5 Pro was not run again for this row.
+    {"m5_pro_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M5 Pro", "64", 0, 0, true,
+     "1 site; measured miss: the 27B's 64-row tensor tile from 17 rows made its Neural Engine split prefill slower on the M5 Pro (#393); the M5 Max and the M6 take 17", false},
     {"ultra_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
      "1 site; correctness guard: two dies; fused merges failed past a 32-key tile on the old arrival (#421); the new arrival's fused merges are unverified on an Ultra", false},
     {"pre_m3_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
@@ -150,6 +158,7 @@ bool guard_matches(const char* id, const DeviceProfile& dev) {
   f.cores = dev.cores;
   f.cores_measured = dev.cores_measured;
   if (std::strcmp(id, "m1_max_32") == 0) return m1_max_32(f);
+  if (std::strcmp(id, "m5_pro_gpu") == 0) return m5_pro_gpu(f);
   if (std::strcmp(id, "ultra_gpu") == 0) return ultra_gpu(f);
   if (std::strcmp(id, "pre_m3_gpu") == 0) return pre_m3_gpu(f);
   return false;
@@ -321,6 +330,8 @@ bool legacy_gpu(const DeviceFacts& f) { return f.apple_family <= 7; }
 bool wide_cores(const DeviceFacts& f) { return f.apple_family >= 10 && f.cores >= 40; }
 
 bool m1_max_32(const DeviceFacts& f) { return f.name == "Apple M1 Max" && f.cores == 32; }
+
+bool m5_pro_gpu(const DeviceFacts& f) { return f.name == "Apple M5 Pro"; }
 
 bool ultra_gpu(const DeviceFacts& f) { return f.name.find("Ultra") != std::string::npos; }
 
