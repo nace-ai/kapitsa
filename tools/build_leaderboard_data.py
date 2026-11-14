@@ -13,6 +13,21 @@ import glob
 import os
 import sys
 
+
+# The decoding methods by the prefix of a result's decoding_detail (`kapitsa bench`'s decoding_of in src/bench/result.cpp)
+DECODINGS = ("KFlash", "prompt-lookup", "DFlash2", "LiLiCorr", "DSpark", "MTP", "plain")
+
+
+def decoding(model):
+    """The result's decoding method; for one Kapitsa 0.2.0 to 0.2.14 recorded as unknown (KFlash and prompt lookup,
+    issue #295), the one its decoding_detail starts with, so the table is right without rewriting submitted files"""
+    recorded = model.get("decoding", "")
+    if recorded != "unknown":
+        return recorded
+    detail = model.get("decoding_detail") or ""
+    return next((d for d in DECODINGS if detail.startswith(d)), "unknown")
+
+
 def trim(result):
     """Keep only the fields the leaderboard page reads."""
     prefill = result.get("results", {}).get("prefill", [{}])
@@ -27,7 +42,7 @@ def trim(result):
         "model": {
             "title": result.get("model", {}).get("title", ""),
             "variant": result.get("model", {}).get("variant", ""),
-            "decoding": result.get("model", {}).get("decoding", ""),
+            "decoding": decoding(result.get("model", {})),
         },
         "results": {
             "decode": {"median_tps": result.get("results", {}).get("decode", {}).get("median_tps", 0)},
