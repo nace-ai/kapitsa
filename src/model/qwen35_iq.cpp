@@ -61,7 +61,7 @@ void Qwen35::load_iq_experts() {
   std::vector<uint8_t> raw;
   size_t total = 0;
   const double t0 = now_ms();
-  const unsigned nth = std::max(2u, std::min(8u, std::thread::hardware_concurrency()));
+  const unsigned nth = std::max(2u, std::min(16u, std::thread::hardware_concurrency()));
   for (Layer& L : layers_)
     for (QLinear* q : {&L.eg, &L.eu, &L.ed}) {
       if (!q->iq) continue;
