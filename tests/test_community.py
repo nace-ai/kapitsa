@@ -15,6 +15,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, ".."))
 BUILD = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO, "build"))
 sys.path.insert(0, os.path.join(REPO, "tools"))
+import build_leaderboard_data as lb  # noqa: E402
 import community_check as cc  # noqa: E402
 import community_table as ct  # noqa: E402
 import models_table as mt  # noqa: E402
@@ -129,7 +130,9 @@ for detail, want in (("KFlash speculative decoding (DFlash2 lattice, tree verify
                      ("KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)", "KFlash"),
                      ("prompt-lookup speculative decoding (up to 4 drafts per cycle)", "prompt-lookup"),
                      ("a server kapitsa bench did not start (KAPITSA_BENCH_SERVER)", "unknown")):
-    got = ct.decoding({"decoding": "unknown", "decoding_detail": detail})
+    model = {"decoding": "unknown", "decoding_detail": detail}
+    got = ct.decoding(model)
+    check(lb.trim({"model": model})["model"]["decoding"] == want, f"the leaderboard labels the same run {want}")
     check(got == want, f"the table names a result 0.2.0-0.2.14 recorded as unknown by its detail: {want}", got)
 check(ct.decoding({"decoding": "DFlash2", "decoding_detail": "KFlash speculative decoding"}) == "DFlash2",
       "the table keeps a recorded decoding as it is")
