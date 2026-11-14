@@ -2400,6 +2400,25 @@ int pick_new_conversation_slot(const std::vector<NewConversationSlot>& v, const 
   return pick;
 }
 
+int evicted_prefix_slot(const std::vector<KvCacheSlot>& v, int pick, long free, int need) {
+  if (pick < 0 || pick >= int(v.size()) || v[size_t(pick)].prefix > 0) return -1;
+  // the pick's own cache goes first (the prompt reuses none of it), then the idle slots', least recently used first
+  long have = free + v[size_t(pick)].cap;
+  std::vector<int> idle;
+  for (int i = 0; i < int(v.size()); ++i)
+    if (i != pick && v[size_t(i)].idle && v[size_t(i)].cap > 0) idle.push_back(i);
+  std::sort(idle.begin(), idle.end(),
+            [&](int a, int b) { return v[size_t(a)].last_used < v[size_t(b)].last_used; });
+  int best = -1;
+  for (int i : idle) {
+    if (have >= need) break;
+    const KvCacheSlot& o = v[size_t(i)];
+    have += o.cap;
+    if (o.prefix > 0 && need <= o.cap && (best < 0 || o.prefix > v[size_t(best)].prefix)) best = i;
+  }
+  return best;
+}
+
 Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm, int loops,
                                 const std::string& key, bool* by_key) {
   if (by_key) *by_key = false;
@@ -2418,12 +2437,13 @@ Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
   };
   // A shared system prompt's checkpoint is no reason to take a slot from its conversation (the main agent's, while a
   // subagent starts): it only breaks ties among the slots a new conversation may take anyway.
-  auto has_prefix = [&](const Slot& s) {
+  auto prefix_pos = [&](const Slot& s) {
     size_t l = lcp(s);
     for (auto& c : s.ckpts)
-      if (c.prefix && c.pos >= 64 && c.pos <= int(l) && c.pos < int(prompt.size())) return true;
-    return false;
+      if (c.prefix && c.pos >= 64 && c.pos <= int(l) && c.pos < int(prompt.size())) return c.pos;
+    return 0;
   };
+  auto has_prefix = [&](const Slot& s) { return prefix_pos(s) > 0; };
   Slot* best = nullptr;
   int best_lcp = 0;
   for (auto& s : slots_) {
@@ -2461,7 +2481,34 @@ Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
       const bool ok = !s.busy && int(prompt.size()) + 64 <= s.seq->limit;
       view.push_back({ok, ok ? rank(s) : 0, s.key, ok && has_prefix(s), s.last_used});
     }
-    if (const int i = pick_new_conversation_slot(view, key, by_key); i >= 0) {
+    if (int i = pick_new_conversation_slot(view, key, by_key); i >= 0) {
+      // The prompt does not fit beside the other conversations' caches (a Mac whose budget holds one long conversation
+      // and little more): chat() would drop them for it (reserve_kv), and with them the prefix checkpoint the prompt
+      // shares, so a conversation an agent compacted, or started again, under the same system prompt and tools read
+      // that block again from row 0. It takes the slot that holds the checkpoint instead: that slot's conversation is
+      // the one the memory rule gives up either way, and it goes to the SSD as a replaced slot's does (disk_leaving).
+      // Mac mini M6 (32 GB), the 27B, 2 slots, interleaved base / new x 2: a 28,141-token prompt sharing 12,970 tokens
+      // with the 30,636-token conversation whose cache it does not fit beside, 74.1 / 71.5 -> 42.4 / 42.4 s, the same
+      // reply. (Hermes on that Mac: a 34,296-token prompt after a compaction shared 13,148 tokens with the
+      // 56,718-token conversation it replaced and was read from 0 in 129 s.)
+      if (budget_ > 0) {
+        const size_t per = model_->kv_bytes_per_pos(), used = Gpu::get().allocated_bytes();
+        const int need = std::min(slots_[size_t(i)].seq->limit, int(prompt.size()) + 32);
+        std::vector<KvCacheSlot> kv;
+        for (const Slot& s : slots_)
+          kv.push_back({!s.busy, s.seq->cap, !s.busy && int(prompt.size()) + 64 <= s.seq->limit ? prefix_pos(s) : 0,
+                        s.last_used});
+        // (reserve() grows a cache in 256-row steps at least)
+        if (const int x = evicted_prefix_slot(kv, i, budget_ > used ? long((budget_ - used) / per) : 0,
+                                              (need + 255) / 256 * 256);
+            x >= 0) {
+          logi("memory: the %d-token prompt does not fit beside slot %d's cache (%d tokens) and shares its prefix "
+               "checkpoint at %d: it takes that slot, not slot %d", int(prompt.size()), x,
+               int(slots_[size_t(x)].tokens.size()), kv[size_t(x)].prefix, i);
+          i = x;
+          if (by_key) *by_key = false;
+        }
+      }
       Slot* pick = &slots_[size_t(i)];
       pick->turns = 1;
       return pick;

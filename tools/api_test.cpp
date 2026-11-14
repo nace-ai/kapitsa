@@ -2221,6 +2221,36 @@ void new_conversation_slot_unit() {
         "new conversation: one slot (nothing to tell it from): not by_key");
 }
 
+// The slot a new conversation takes when its prompt does not fit beside the other slots' caches (evicted_prefix_slot,
+// Engine::pick_slot): the slot whose cache the memory rule would drop, if it holds a prefix checkpoint the prompt
+// shares. CPU only. (An agent's compacted conversation read its system prompt again from row 0: the one-off slot took
+// it, and the conversation's cache, with the checkpoint, was dropped to make room.)
+void evicted_prefix_slot_unit() {
+  using K = KvCacheSlot;
+  // slot 0: a one-off (1,024 rows); slot 1: the conversation (56,832 rows), its prefix checkpoint at 13,145
+  const std::vector<K> two = {{true, 1024, 0, 9}, {true, 56832, 13145, 5}};
+  check(evicted_prefix_slot(two, 0, 30000, 34560) == 1, "evicted prefix: the prompt does not fit beside the cache: its slot");
+  check(evicted_prefix_slot(two, 0, 40000, 34560) == -1, "evicted prefix: the prompt fits beside it: the pick (the copy)");
+  check(evicted_prefix_slot(two, 0, 33536, 34560) == -1, "evicted prefix: it fits once the pick's own cache is dropped");
+  check(evicted_prefix_slot(two, 1, 0, 34560) == -1, "evicted prefix: the pick holds the checkpoint itself");
+  check(evicted_prefix_slot(two, 0, 0, 57088) == -1, "evicted prefix: a prompt longer than that cache keeps the pick");
+  std::vector<K> none = two;
+  none[1].prefix = 0;
+  check(evicted_prefix_slot(none, 0, 30000, 34560) == -1, "evicted prefix: no shared checkpoint: the pick");
+  std::vector<K> busy = two;
+  busy[1].idle = false;
+  check(evicted_prefix_slot(busy, 0, 30000, 34560) == -1, "evicted prefix: a busy slot's cache is not dropped: the pick");
+  // three slots: the least recently used idle cache goes first, and when it makes the room the checkpoint's slot stays
+  const std::vector<K> three = {{true, 0, 0, 9}, {true, 56832, 13145, 5}, {true, 20480, 0, 3}};
+  check(evicted_prefix_slot(three, 0, 20000, 34560) == -1, "evicted prefix: an older cache makes the room: the pick");
+  check(evicted_prefix_slot(three, 0, 10000, 34560) == 1, "evicted prefix: the older cache is not enough: the slot");
+  // two slots share a prefix: the deeper checkpoint among those dropped
+  const std::vector<K> deep = {{true, 0, 0, 9}, {true, 40960, 13145, 5}, {true, 40960, 20000, 3}};
+  check(evicted_prefix_slot(deep, 0, 0, 34560) == 2, "evicted prefix: only the first cache is dropped: its checkpoint");
+  check(evicted_prefix_slot(deep, 0, -10000, 34560) == 2, "evicted prefix: both dropped: the deeper checkpoint");
+  check(evicted_prefix_slot(two, -1, 0, 1) == -1 && evicted_prefix_slot(two, 2, 0, 1) == -1, "evicted prefix: no pick");
+}
+
 // --dump DIR: the replies of each scenario as the server sends them, for tests/sdk_check.py (the official Python SDKs
 // parse them from a fake server): <name>.sse (a stream, with keepalives), <name>.json (a response body), <name>.status
 // (an error's)
@@ -2940,6 +2970,7 @@ int main(int argc, char** argv) {
   drafter_report_unit();
   draft_conversation_unit();
   new_conversation_slot_unit();
+  evicted_prefix_slot_unit();
   thinking_budget_mapping();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
