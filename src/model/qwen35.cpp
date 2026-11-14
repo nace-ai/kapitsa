@@ -2616,6 +2616,8 @@ int Qwen35::qmt_min_rows() const {
   return q27 && keep64 ? 64 : 17;
 }
 
+bool Qwen35::tile_pass(int rows) const { return !cfg_.moe && qmt_on() && rows >= qmt_min_rows(); }
+
 bool qmt128_for(int M) {
   static const bool on = [] {
     const bool o = qmt_on() && env_int("NI_QMT128", 1) != 0;
