@@ -123,12 +123,18 @@ class DFlash2 {
   // 8-row verify scratch and the prompt-capture buffers of the first prefill (*at_prefill, included); *per_slot:
   // one context ring (a slot holds three: the live state and its two checkpoints' snapshots).
   // The drafting block the engine will load for `target` with `slots` slots: NI_KFLASH_BLOCK if it names 8 or 16, else
-  // 16 on a one-slot engine whose target has a wide tree verify, else 8 (the load-time checks repeat this in full).
+  // 16 on a one-slot engine (or any slot count with multi16) whose target has a wide tree verify, else 8 (the load-time
+  // checks repeat this in full).
   // block_env: NI_KFLASH_BLOCK's value to decide from (nullptr: the environment; "" or "auto": the default), so the
   // decision can be asked several times in one process (a --allow-switch server decides each model at its load).
   // tw_ok: whether this Mac has the matrix-unit drafting pass (dfl_tw_supported(): M5-class GPU, macOS 26): the
   // caller asks the GPU, so that the decision stays a pure function a CPU test can drive both ways.
-  static int plan_block_rows(const Qwen35Config& target, int slots, const char* block_env, bool tw_ok);
+  // multi16: a server of more than one slot drafts 16 rows too (the device profile's kflash_block16 row, which the
+  // caller reads: default_on(Knob::kKflashBlock16)); false keeps such a server at 8.
+  static int plan_block_rows(const Qwen35Config& target, int slots, const char* block_env, bool tw_ok,
+                             bool multi16 = false);
+  // The device profile's answer for multi16 on this Mac (kflash_block16: the matrix class).
+  static bool multi_slot16_default();
   // Whether this Mac and these knobs run the drafting pass on the matrix units (dfl_tw_supported() and V8Knobs):
   // plan_block_rows takes the answer as an argument so that the decision itself is left with the environment alone.
   static bool tensor_path_ok();

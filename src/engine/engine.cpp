@@ -459,9 +459,11 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       dflash_unsupported = dir;
     } else {
       const size_t a0 = Gpu::get().allocated_bytes();
-      // one slot: nothing decodes alongside a request, so a 16-row block's deeper lattice is free to take (with more
-      // slots a 16-row block has no batched cycle at all, Engine::batch_rows, and requests take turns instead)
-      const int block_rows = DFlash2::plan_block_rows(q35_->config(), opts_.slots, nullptr, DFlash2::tensor_path_ok());
+      // one slot: nothing decodes alongside a request, so a 16-row block's deeper lattice is free to take; with more
+      // slots a 16-row block has no batched cycle at all (Engine::batch_rows) and requests take turns instead, which the
+      // matrix class takes too (the device profile's kflash_block16 row)
+      const int block_rows = DFlash2::plan_block_rows(q35_->config(), opts_.slots, nullptr, DFlash2::tensor_path_ok(),
+                                                      DFlash2::multi_slot16_default());
       const bool rows16 = block_rows > DFlash2::kB;
       dfl_ = std::make_unique<DFlash2>(*q35_, dir, 0, rows16);
       dfl_dir_ = dir;
@@ -1016,7 +1018,8 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
       // instead); the model with 1024-row prefill buffers, the slots' state, the Neural Engine split and one full
       // conversation come first
       const Qwen35Config dc = Qwen35::read_config(model_dir);
-      const int block_rows = DFlash2::plan_block_rows(dc, slots, nullptr, DFlash2::tensor_path_ok());
+      const int block_rows =
+          DFlash2::plan_block_rows(dc, slots, nullptr, DFlash2::tensor_path_ok(), DFlash2::multi_slot16_default());
       const Qwen35::MemPlan p = Qwen35::plan(model_dir, 1024, block_rows > DFlash2::kB);
       size_t per_slot = 0;  // the ring of the live state and of each of the slot's two checkpoints
       lp.dflash_bytes = lp.dflash_found_bytes =
@@ -1523,7 +1526,8 @@ int Engine::batch_rows(int n) const {
   if (mode == 0 || n < 2 || n > 8 || (!dfl_ && !lili_) || (mode < 0 && !batch_measured_)) return 0;
   // a 16-row drafting block has no batched cycle: it drafts a depth-15 lattice with the pair kernel, and the batch loop
   // drafts 7-token chains (encode_draft with tree = false), so the requests take turns instead
-  if (dfl_ && dfl_->block() > DFlash2::kB) return 0;
+  // (a drafter loaded with 16 rows that a long prompt narrowed to 8, set_block, keeps that: its other requests draft 16)
+  if (dfl_ && (dfl_->block() > DFlash2::kB || dfl_->narrow_ok())) return 0;
   // NI_BATCH_ROWS="n:rows,...": rows per member for n members (0: take turns)
   static const std::vector<int> env = [] {
     std::vector<int> t(9, -1);
@@ -3870,6 +3874,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       while (go) {
         if (parked) {
           parked = false;
+          // a request that started while this one waited its turn may have narrowed the drafter (set_block,
+          // NI_KFLASH_NARROW; a multi-slot engine drafts 16 rows on the matrix class): back to this request's block,
+          // with nothing in flight
+          if (dfl_->narrow_ok()) dfl_->set_block(Bk);
           start_cycles();
         }
         if (!next_draft) {  // no room for another drafting pass

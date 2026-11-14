@@ -630,8 +630,8 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
       if (block_ != kB && block_ != 16) fatal("NI_KFLASH_BLOCK=%s: 8, 16 or auto", v);
     } else if (rows16 && rows16_auto_ok()) {
       block_ = 16;
-      logi("KFlash: 16-row drafting block (one slot: the drafter drafts 15 guesses per weight read and the tree verify "
-           "runs 16 rows; NI_KFLASH_BLOCK=8 keeps 8)");
+      logi("KFlash: 16-row drafting block (one slot, or any slot count on the matrix class: the drafter drafts 15 guesses "
+           "per weight read and the tree verify runs 16 rows; NI_KFLASH_BLOCK=8 keeps 8)");
     }
     const char* vv = kenv("VERIFY");
     // The verify-depth default is the full block depth, as before; NI_KFLASH_CAP=<n> (the F74 depth cap) opts into
@@ -1149,7 +1149,7 @@ bool DFlash2::tensor_path_ok() {
   return dfl_tw_supported() && v8_knobs().tw && !(v8_knobs().dfl & (1 | 32 | 128));
 }
 
-int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* block_env, bool tw_ok) {
+int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* block_env, bool tw_ok, bool multi16) {
   const char* v = block_env ? block_env : kenv("BLOCK");
   if (v && *v && std::string(v) != "auto")  // 8 or 16; anything else fatals when the drafter loads
     return atoi(v) == 16 ? 16 : kB;
@@ -1158,8 +1158,10 @@ int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* 
   // matrix units with the fused attention the drafting pass needs (tw_ok, which the caller fills from its GPU and its
   // knobs). What is left out is the drafter's own weights (a v1 drafter, projections that are not 4-bit group 64), so
   // on such a drafter this is an upper bound: the plan reserves 16 rows and the load keeps 8, ~30 MB on the 27B. A MoE
-  // target has no wide verify, and a multi-slot engine co-decodes requests, so both keep the 8-row tile.
-  if (slots != 1 || target.moe) return kB;
+  // target has no wide verify, so it keeps the 8-row tile. A multi-slot engine co-decodes requests in 8-row batched
+  // passes; with multi16 (the device profile's kflash_block16 row: the matrix class) it drafts 16 rows anyway and its
+  // requests take turns (Engine::batch_rows), which measured faster for one session and for two at once.
+  if (target.moe || (slots != 1 && !multi16)) return kB;
   if (!kf_tree_default(15)) return kB;  // the 16-row block's full depth
   const char* vv = kenv("VERIFY");
   if (vv && *vv && atoi(vv) < 15) return kB;
@@ -1168,6 +1170,8 @@ int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* 
   if (!tw_ok) return kB;
   return 16;
 }
+
+bool DFlash2::multi_slot16_default() { return default_on(Knob::kKflashBlock16, ModelFacts{}); }
 
 size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, size_t head_row_bytes,
                            size_t* per_slot, size_t* at_prefill, int block_rows, bool lanes) {

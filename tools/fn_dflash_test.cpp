@@ -126,6 +126,12 @@ void run_cpu() {
   check(DFlash2::plan_block_rows(dense, 1, "8", true) == 8, "NI_KFLASH_BLOCK=8: 8 rows");
   check(DFlash2::plan_block_rows(dense, 1, "16", true) == 16, "NI_KFLASH_BLOCK=16, dense target: 16 rows");
   check(DFlash2::plan_block_rows(dense, 2, "", true) == 8, "two slots: 8 rows (a 16-row block has no batched cycle)");
+  // multi16: the device profile's kflash_block16 row (the matrix class), which the engine passes in
+  // (DFlash2::multi_slot16_default()): a multi-slot dense engine drafts 16 rows too and its requests take turns
+  check(DFlash2::plan_block_rows(dense, 2, "", true, true) == 16, "two slots, multi16, dense target: 16 rows");
+  check(DFlash2::plan_block_rows(dense, 3, "", true, true) == 16, "three slots, multi16, dense target: 16 rows");
+  check(DFlash2::plan_block_rows(moe, 2, "", true, true) == 8, "two slots, multi16, MoE target: 8 rows");
+  check(DFlash2::plan_block_rows(dense, 2, "8", true, true) == 8, "two slots, multi16, NI_KFLASH_BLOCK=8: 8 rows");
   check(DFlash2::plan_block_rows(moe, 1, "", true) == 8, "one slot, MoE target: 8 rows (no wide tree verify to run)");
   check(DFlash2::plan_block_rows(moe, 1, "16", true) == 16,
         "NI_KFLASH_BLOCK=16, MoE target: 16 rows (the load-time check refuses it)");
