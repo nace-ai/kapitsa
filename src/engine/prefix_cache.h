@@ -100,6 +100,7 @@ struct Entry {
   double used = 0;      // last write or restore (Unix time), for least-recently-used eviction
   uint64_t bytes = 0;   // the record's file
   int pins = 0;
+  bool damaged = false;  // hidden from new restores; dropped when the last pin is released
 };
 
 // An entry's conv: a digest of the prompt_cache_key (the empty key for "", so no key matches another's absence)
@@ -173,7 +174,7 @@ class Store {
   };
   std::unique_ptr<Job> begin(const std::vector<std::pair<Kind, Key>>& pieces);
   // Writes a piece of `bytes` from give(off, dst, n) (false: abort) unless it exists. False when it could not be
-  // written: no room within the limit, an I/O error, or give refused.
+  // written: no room within the limit, an I/O error, give refused, or damage still held by a reader or job.
   using Give = std::function<bool(uint64_t off, uint8_t* dst, size_t n)>;
   bool write(Job& job, Kind kind, const Key& key, const std::string& meta, uint64_t bytes, const Give& give);
   // Writes the entry's record (its pieces must exist) and indexes it. Entries whose restore points it has all
@@ -204,6 +205,7 @@ class Store {
   struct Piece {
     uint64_t bytes = 0;
     int refs = 0;  // entries and jobs that need it
+    bool damaged = false;  // cannot be reused while existing references drain
   };
   std::string path_of(Kind kind, const Key& key) const;
   bool write_file(Kind kind, const Key& key, const std::string& meta, uint64_t bytes, const Give& give,
