@@ -819,6 +819,12 @@ class Qwen35 : public Model {
   unsigned qmt_i8_next_ = 0;
   std::vector<Buffer> qmt_i8_retired_;
   std::pair<Buffer, Buffer> qmt_i8_scratch(size_t m, size_t k);
+  Buffer qmr_coeff_;
+  std::vector<Buffer> qmr_coeff_retired_;
+  size_t qmr_coeff_bytes_ = 0;
+  Buffer qmr_coeff_scratch(size_t groups);
+  std::unordered_map<const QLinear*, Buffer> qmr_coeff_cache_;
+  void load_qmr_coeff_cache();
   virtual void grow_kv(Seq& s, int cap);
   void enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int old_cap, int new_cap);
 
