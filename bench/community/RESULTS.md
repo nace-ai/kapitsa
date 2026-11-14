@@ -15,6 +15,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [Mac Studio (2026) · M5 Ultra 64-core GPU · 96 GB](#mac-studio-2026--m5-ultra-64-core-gpu--96-gb) | 9 |
 | [Mac Studio (2026) · M5 Ultra 80-core GPU · 256 GB](#mac-studio-2026--m5-ultra-80-core-gpu--256-gb) | 8 |
 | [Mac mini (2026) · M5 Pro 20-core GPU · 64 GB](#mac-mini-2026--m5-pro-20-core-gpu--64-gb) | 6 |
+| [Mac mini (2026) · M6 12-core GPU · 32 GB](#mac-mini-2026--m6-12-core-gpu--32-gb) | 1 |
 | [MacBook Air (13-inch, 2026) · M5 10-core GPU · 24 GB](#macbook-air-13-inch-2026--m5-10-core-gpu--24-gb) | 1 |
 | [MacBook Air (15-inch, 2026) · M5 10-core GPU · 32 GB](#macbook-air-15-inch-2026--m5-10-core-gpu--32-gb) | 1 |
 | [MacBook Pro (14-inch, 2026) · M5 Max 40-core GPU · 64 GB](#macbook-pro-14-inch-2026--m5-max-40-core-gpu--64-gb) | 1 |
@@ -251,6 +252,14 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | Run | Writing, T = 1.0 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
 | [2026-11-09](results/kapitsa-bench-2026-11-09-m5-pro-flint-4bit-1f3fbf.json) | 151.2 tok/s | 152.2 tok/s | 2,968 tok/s | 2,464 tok/s | 0.09 s | 0.10 s | 22.3 GB | pass | plain | 0.2.33 | 27.2 | – |
+
+## Mac mini (2026) · M6 12-core GPU · 32 GB
+
+### Qwen3.8 27B · kquant
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-11-13](results/kapitsa-bench-2026-11-13-m6-qwen3.8-27b-kquant-76d5a1.json) | 44.0 tok/s | 47.0 tok/s | 286 tok/s | 249 tok/s | 0.34 s | 0.36 s | 19.4 GB | pass | KFlash | 0.2.35 | 27.2.1 | – |
 
 ## MacBook Air (13-inch, 2026) · M5 10-core GPU · 24 GB
 
