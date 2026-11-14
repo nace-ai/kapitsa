@@ -122,7 +122,7 @@ endforeach()
 find_package(Threads REQUIRED)
 add_executable(gemm_slices_test tests/gemm_slices_test.cpp)  # src/model/gemm_slices.h: row slices of a GEMM
 target_include_directories(gemm_slices_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-add_executable(device_profile_test tests/device_profile_test.cpp src/engine/device_profile.cpp)
+add_executable(device_profile_test tests/device_profile_test.cpp src/engine/device_profile.cpp src/ane/default_share.cpp)
 target_include_directories(device_profile_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(catalog_profile_test tests/catalog_profile_test.cpp src/hub/catalog.cpp src/hub/resolve.cpp src/engine/device_profile.cpp)
 target_include_directories(catalog_profile_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
@@ -139,6 +139,8 @@ add_test(NAME load_error_test COMMAND load_error_test)
 set_tests_properties(load_error_test PROPERTIES TIMEOUT 30)
 add_test(NAME execution_session_test COMMAND execution_session_test)
 set_tests_properties(execution_session_test PROPERTIES TIMEOUT 30)
+add_test(NAME think_control_test COMMAND think_control_test)
+set_tests_properties(think_control_test PROPERTIES TIMEOUT 30)
 
 # kapitsa serve's one validator (src/server/service_config.cpp): flags and --config's JSON, against the schema in docs/
 add_executable(serve_options_test tests/serve_options_test.cpp src/server/service_config.cpp)

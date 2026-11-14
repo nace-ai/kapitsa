@@ -68,7 +68,7 @@ These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/t
 | `python3 tests/test_hub_download.py build/kapitsa` | Interrupted model adoption and download retries against a local HTTP fixture: existing SHA256/Git-blob digests, matching files, corrupt transfers and completed offline reuse. Also runs in `test_server.py --cli`. | nothing; no model load |
 | `python3 tests/test_bench.py build` | `kapitsa bench` against the harness: the same requests as `bench.py` (both run against a scripted server), its rates on the published runs' data, the result file, submitting (dry runs, a stand-in gh), the GPU lock; `build/bench_test self` checks the Mac table and formats | `pip install jsonschema` for the schema check |
 | `python3 tests/test_update.py build` | `kapitsa update` and the automatic update against a release server in the test (`KAPITSA_UPDATE_URL`; nothing from GitHub), on temporary installs made by `install.sh`: real signed releases, the checks that refuse bad ones, the switch, the rollback, Homebrew, app and source installs, the background check (throttle, off switches, time limit, `kapitsa bench`), what the requests carry; `build/update_test` checks version order and kinds of install | nothing (the full build, for `build/update_test`) |
-| `python3 tests/test_community.py build` | The community results: `tools/community_check.py`'s checks and labels, `tools/community_table.py`, the pull request check against a stand-in API | `pip install jsonschema` |
+| `python3 tests/test_community.py build` | The community results: `tools/community_check.py`'s checks and labels, `tools/community_table.py` (and the leaderboard data it writes), the pull request check against a stand-in API | `pip install jsonschema` |
 | `python3 tests/test_logit_compare.py` | `tools/logit_compare.py` on synthetic dumps: its numbers against a direct computation, records matched in any order, the gate's verdicts and refusals, numpy against the standard library; `tools/logit_floor.py`'s gate | nothing |
 | `python3 tests/test_sampled_tokens.py --reference OLD/ni_run --candidate build/ni_run --model MODEL --out NEW_DIR` | Actual sampled token IDs from two Release builds, frozen Qwen prompt, seed 42, T=.7, K20, top-p=.95, 512 tokens; `--spec 1` also requires an active MTP head. Takes the GPU lock; saves logs, IDs and hashes. Numerical check, not a timing run; see the script's docstring | a compatible Qwen tokenizer, the model and GPU |
 | `python3 tests/test_sampled_tokens_harness.py` | Failure controls for the sampled-token comparison, using fake executables and temporary GPU lock files | nothing |
@@ -76,6 +76,7 @@ These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/t
 | `python3 tests/test_reasoning.py` | `bench/reasoning`: the grader's equivalences and near misses, the frozen problem sets, a run against a scripted server (the requests, grading, resuming, the GPU lock on a test file) and the report; with the problems downloaded, `reasoning.py check` and the sets' draw | nothing (`python3 bench/reasoning/reasoning.py fetch` for the last two) |
 | `python3 tests/test_structured.py --cli build [MODEL_DIR]` | Structured output, offline: `build/grammar_test` (JSON Schema and tool-call grammars against accepted, open and rejected texts, the schemas refused; with a tokenizer, every mask along valid replies and random walks against brute force, and the mask's time per token) and how the three APIs read `response_format`, `text.format`, `output_format`, `tool_choice` and strict tools (`build/structured_check`) | nothing (the 4B's tokenizer, when downloaded, for the mask checks) |
 | `build/execution_session_test` | `ExecutionSession` (`src/engine/execution_session.h`) over a fake work function: one start, cancel from another thread, `cancelled` never after `finished`, `finished` held until an in-flight `cancelled` returns, `wait()` from a delta or a cancel callback refused, a session destroyed without starting, and the worker joined once | nothing |
+| `build/think_control_test` | The thinking budget's control (`src/engine/think_control.h`): chains, trees, a drafted `<think>`, closing text, tool calls, a cap of 0, the first block only, and `fill()` against `push()` on random chains and trees | nothing |
 | `build/http_stream_test` | The HTTP stream (`src/server/http_stream.h`) with a fake execution, through httplib's own chunked writer: success, an empty end, an engine error before and after the first byte, a throwing writer and meter, an abandoned provider, a client disconnect (the session cancelled, `after` skipped), the keepalive frame ahead of the end frame, early-accept mode, telemetry, prompt progress events in order between the first event and the first delta | nothing |
 | `build/prefix_cache_test` | The SSD prefix cache's store: pieces and entries written and read back byte for byte and taken back after a restart, CRCs, torn writes, the quota and its eviction order, the volume filling up, threads writing and reading at once, other models' caches, the namespace's lock | nothing |
 | `build/vision_pixels_test` | Image pixel storage: page alignment, mapped length and padding, copy/move lifetime, overflow, and every Qwen bicubic resize branch | nothing |
@@ -353,6 +354,17 @@ python3 tools/logit_compare.py /tmp/ref /tmp/new      # exit status 1 past the g
 
 The [benchmark harness](bench/harness/README.md) runs Kapitsa and other engines through the same client-side benchmark,
 one engine at a time; [docs/benchmarks.md](docs/benchmarks.md) has the published results.
+
+A result from `kapitsa bench --submit` goes in as a pull request from a fork ([bench/community](bench/community/README.md))
+with the two files generated from it: `bench/community/RESULTS.md` and `docs/site/leaderboard-data.js`. One command writes
+both, and the `community-table` check fails when either is stale:
+
+```bash
+python3 tools/community_table.py    # also runs python3 tools/build_leaderboard_data.py
+git add bench/community/RESULTS.md docs/site/leaderboard-data.js
+```
+
+If main moves before the merge (another result landed), rebase and run it again.
 
 ## Releasing
 

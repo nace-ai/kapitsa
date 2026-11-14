@@ -21,8 +21,36 @@ bool qwen35_a3b(const ModelFacts& m) {
 
 }  // namespace
 
-bool ane_builtin_share(const std::string& chip) {
-  return chip.find("M4") != std::string::npos || chip.find("M5") != std::string::npos;
+// The generation N of an "Apple M<N>" chip name ("Apple M6 Pro": 6), or 0 for any other name.
+int ane_generation(const std::string& chip) {
+  const std::string prefix = "Apple M";
+  if (chip.compare(0, prefix.size(), prefix) != 0) return 0;
+  size_t i = prefix.size();
+  int gen = 0;
+  while (i < chip.size() && chip[i] >= '0' && chip[i] <= '9' && gen < 1000) gen = gen * 10 + (chip[i++] - '0');
+  if (i == prefix.size() || (i < chip.size() && chip[i] != ' ')) return 0;
+  return gen;
+}
+
+// The M4 and every later generation ("Apple M4", "Apple M5 Pro", "Apple M6", "Apple M10 Max"). A substring test on
+// "M4"/"M5" left the M6 and later with no default share, so their Neural Engine prefill split stayed off without a
+// calibration, while the GPU half (matrix units, apple_family >= 10) already treats them as M5-class.
+bool ane_builtin_share(const std::string& chip) { return ane_generation(chip) >= 4; }
+
+// The plain split's default share (no wavefront: Drex Max's noncausal pass, or NI_ANE_WAVE=0) was output-checked on
+// the M4 Pro and the M5 Pro only; the M6 and later keep that pass on the GPU until it is measured there (review of
+// nace-ai/kapitsa#1259), as M1 and M2 do. Their wavefront share (every causal prefill) is unaffected.
+bool ane_plain_share(const std::string& chip) {
+  const int gen = ane_generation(chip);
+  return gen >= 4 && gen <= 5;
+}
+
+int ane_pre_m3_share(const std::string& chip) {
+  for (int family : {1, 2}) {
+    const std::string name = "Apple M" + std::to_string(family);
+    if (chip.compare(0, name.size(), name) == 0 && (chip.size() == name.size() || chip[name.size()] == ' ')) return family;
+  }
+  return 0;
 }
 
 bool ane_segmented_default(const DeviceFacts& facts) {

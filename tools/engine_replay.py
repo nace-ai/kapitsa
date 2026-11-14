@@ -25,6 +25,7 @@ import os
 import random
 import re
 import secrets
+import socketserver
 import sys
 import threading
 import time
@@ -563,9 +564,12 @@ def main():
     stage("instance ready")
 
     class Server(ThreadingHTTPServer):
-        def server_bind(self):  # the stdlib's own bind, then its getfqdn lookup; timed, not repeated
-            stage("server_bind begins (bind, then getfqdn(127.0.0.1))")
-            super().server_bind()
+        def server_bind(self):
+            # HTTPServer.server_bind binds and then calls socket.getfqdn(host), a reverse-DNS lookup that stalled for
+            # more than 15 s on a CI runner (kapitsa#1244). Nothing here reads server_name, so bind and name the host.
+            stage("server_bind begins (bind only)")
+            socketserver.TCPServer.server_bind(self)
+            self.server_name, self.server_port = self.server_address[:2]
             stage("server_bind done")
 
     srv = Server(("127.0.0.1", args.port), handler(inst))

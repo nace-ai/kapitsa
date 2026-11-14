@@ -13,6 +13,21 @@ import glob
 import os
 import sys
 
+
+# The decoding methods by the prefix of a result's decoding_detail (`kapitsa bench`'s decoding_of in src/bench/result.cpp)
+DECODINGS = ("KFlash", "prompt-lookup", "DFlash2", "LiLiCorr", "DSpark", "MTP", "plain")
+
+
+def decoding(model):
+    """The result's decoding method; for one Kapitsa 0.2.0 to 0.2.14 recorded as unknown (KFlash and prompt lookup,
+    issue #295), the one its decoding_detail starts with, so the table is right without rewriting submitted files"""
+    recorded = model.get("decoding", "")
+    if recorded != "unknown":
+        return recorded
+    detail = model.get("decoding_detail") or ""
+    return next((d for d in DECODINGS if detail.startswith(d)), "unknown")
+
+
 def trim(result):
     """Keep only the fields the leaderboard page reads."""
     prefill = result.get("results", {}).get("prefill", [{}])
@@ -27,7 +42,7 @@ def trim(result):
         "model": {
             "title": result.get("model", {}).get("title", ""),
             "variant": result.get("model", {}).get("variant", ""),
-            "decoding": result.get("model", {}).get("decoding", ""),
+            "decoding": decoding(result.get("model", {})),
         },
         "results": {
             "decode": {"median_tps": result.get("results", {}).get("decode", {}).get("median_tps", 0)},
@@ -78,6 +93,20 @@ def build(repo):
     return js, len(results)
 
 
+def output_path(repo):
+    return os.path.join(repo, "docs", "site", "leaderboard-data.js")
+
+
+def write(repo):
+    """Write docs/site/leaderboard-data.js; returns (path, number of results). tools/community_table.py calls this."""
+    js, count = build(repo)
+    out_path = output_path(repo)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w") as fh:
+        fh.write(js)
+    return out_path, count
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -86,11 +115,10 @@ def main():
     args = parser.parse_args()
 
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    out_path = os.path.join(repo, "docs", "site", "leaderboard-data.js")
-
-    js, count = build(repo)
+    out_path = output_path(repo)
 
     if args.check:
+        js, count = build(repo)
         try:
             with open(out_path) as fh:
                 existing = fh.read()
@@ -103,10 +131,8 @@ def main():
             print(f"FAIL: leaderboard-data.js is stale; regenerate with: python3 tools/build_leaderboard_data.py", file=sys.stderr)
             sys.exit(1)
     else:
-        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        with open(out_path, "w") as fh:
-            fh.write(js)
-        print(f"Wrote {count} results ({len(js)} bytes) to {out_path}")
+        out_path, count = write(repo)
+        print(f"Wrote {count} results ({os.path.getsize(out_path)} bytes) to {out_path}")
 
 if __name__ == "__main__":
     main()

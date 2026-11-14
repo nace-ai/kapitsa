@@ -356,6 +356,7 @@ ResponsesRequest responses_request(const ojson& body, const ResponseStore& store
   apply_effort(str(reasoning, "effort"), r.template_kwargs);
   r.effort = str(reasoning, "effort");   // looped models: the loop count (Engine::request_loops)
   r.loops = request_loops_field(body);
+  request_think_field(body, r);
   if (body.contains("chat_template_kwargs") && body["chat_template_kwargs"].is_object())
     for (auto& [k, v] : body["chat_template_kwargs"].items()) r.template_kwargs[k] = v;
 
@@ -567,7 +568,7 @@ std::string ResponsesStream::end(const ChatResult& res) {
                  {"output_tokens", res.completion_tokens},
                  {"output_tokens_details", {{"reasoning_tokens", res.reasoning_tokens}}},
                  {"total_tokens", res.prompt_tokens + res.completion_tokens}};
-  if (res.loops > 0) usage["kapitsa"] = kapitsa_usage(res);
+  if (ojson k = kapitsa_usage(res); !k.is_null()) usage["kapitsa"] = k;
   final_ = response(cut ? "incomplete" : "completed", usage, nullptr,
                     cut ? ojson{{"reason", "max_output_tokens"}} : ojson());
   return s + event(cut ? "response.incomplete" : "response.completed", {{"response", final_}});

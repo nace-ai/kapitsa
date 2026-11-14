@@ -12,6 +12,7 @@
 
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/xattr.h>
@@ -20,6 +21,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <string>
@@ -300,6 +302,129 @@ void damage(const std::string& root) {
   }
 }
 
+void pinned_damage(const std::string& root) {
+  for (Kind kind : {kKv, kState, kEntry}) {
+    for (bool missing : {false, true}) {
+      Store st;
+      std::string why;
+      Conv c = make_conv(26, 64, 7000, {64}, 1000, 2000);
+      check(st.open(opts(root, ns_name(260 + kind * 2 + missing), 64 * kMiB), &why) && save_conv(st, c),
+            "prepare pinned damage case", why);
+      const auto prompt = tokens_of(c, 80);
+      const Key entry = st.lookup(prompt.data(), 80, 80).entry;
+      Entry first, second;
+      check(st.pin(entry, &first) && st.pin(entry, &second), "two restores pin the same entry");
+      const Key key = kind == kKv ? c.e.blocks.front() : kind == kState ? c.e.snaps.front().state : entry;
+      const std::string file = st.dir() + (kind == kKv ? "/kv/" : kind == kState ? "/st/" : "/e/") + key.hex();
+      if (missing) check(unlink(file.c_str()) == 0, "remove the pinned file");
+      else flip_byte(file, 4096 + 5);
+      bool ok = true;
+      read_piece(st, kind, key, &ok);
+      check(!ok, "a pinned missing or corrupt file fails to read");
+      check(hit_pos(st, prompt) == 0 && !st.has(kEntry, entry) && !st.has(kind, key),
+            "damage immediately hides the pinned entry and damaged file");
+      Entry again;
+      const bool pinned_again = st.pin(entry, &again);
+      check(!pinned_again, "a damaged entry accepts no new restore");
+      if (pinned_again) st.unpin(entry, false);
+      check(!save_conv(st, c), "a save cannot reuse damage while restores still hold it");
+      st.unpin(entry, false);
+      check(st.stats().entries == 1, "the first restore leaves the second pin intact");
+      st.unpin(entry, true);  // another reader completing must not revive the failed entry
+      check(st.stats().entries == 0 && st.stats().pieces == 0 && st.stats().held == 0,
+            "the last restore discards the damaged entry and its references");
+      check(save_conv(st, c) && hit_pos(st, prompt) == 64, "the same conversation can be saved again");
+      check(read_piece(st, kKv, c.e.blocks.front(), &ok) == c.blocks.front() && ok,
+            "repaired KV is byte-identical");
+      check(read_piece(st, kState, c.e.snaps.front().state, &ok) == c.states.front() && ok,
+            "repaired state is byte-identical");
+      st.clear();
+    }
+  }
+}
+
+void damaged_job(const std::string& root) {
+  for (Kind kind : {kKv, kState}) {
+    Store st;
+    std::string why;
+    Conv a = make_conv(27, 64, 8000, {32}, 1000, 2000);
+    Conv b = make_conv(27, 64, 9000, {64}, 1000, 2000);
+    if (kind == kState) b.e.snaps.front().state = a.e.snaps.front().state, b.states = a.states;
+    // An extra restore point keeps the second entry when the first is written.
+    b.e.snaps.push_back({48, Snap::kQuery, 0, 0, Hasher().u64(280).done()});
+    b.states.push_back(pattern(280, 2000));
+    check(st.open(opts(root, ns_name(280 + kind), 64 * kMiB), &why) && save_conv(st, b) && save_conv(st, a),
+          "prepare shared damage and a pending writer", why);
+    const auto pa = tokens_of(a, 80), pb = tokens_of(b, 80);
+    Entry ea, eb;
+    check(st.pin(st.lookup(pa.data(), 80, 80).entry, &ea) && st.pin(st.lookup(pb.data(), 80, 80).entry, &eb),
+          "pin both entries sharing the piece");
+    const Key key = kind == kKv ? a.e.blocks.front() : a.e.snaps.front().state;
+    auto job = st.begin({{kind, key}});
+    const std::string file = st.dir() + (kind == kKv ? "/kv/" : "/st/") + key.hex();
+    check(truncate(file.c_str(), 100) == 0, "truncate the shared file header");
+    bool ok = true;
+    read_piece(st, kind, key, &ok);
+    check(!ok && hit_pos(st, pa) == 0 && hit_pos(st, pb) == 0,
+          "shared damage hides every dependent entry");
+    check(!st.put(*job, a.e), "an existing writer cannot publish a damaged piece");
+    st.unpin(ea.key, false);
+    st.unpin(eb.key, false);
+    check(st.stats().entries == 0 && st.stats().pieces == 1 && !st.has(kind, key),
+          "the writer retains only the invalid piece record");
+    const auto& data = kind == kKv ? a.blocks.front() : a.states.front();
+    check(!write_piece(st, *job, kind, key, data), "the writer cannot report an invalid piece as written");
+    auto late = st.begin({{kind, key}});
+    job.reset();
+    check(st.stats().pieces == 0 && st.stats().held == 0,
+          "the last old writer releases damage; a new job does not extend its lifetime");
+    check(save_conv(st, a), "a new save repairs the conversation after the writer ends");
+    check(read_piece(st, kind, key, &ok) == data && ok, "repaired shared piece has the complete original bytes");
+    late.reset();
+    st.clear();
+  }
+}
+
+void read_open_error(const std::string& root) {
+  Store st;
+  std::string why;
+  Conv c = make_conv(25, 64, 6000, {64}, 1000, 2000);
+  if (!st.open(opts(root, ns_name(25), 64 * kMiB), &why) || !save_conv(st, c)) {
+    check(false, "prepare a saved conversation for the open-error test", why);
+    return;
+  }
+  const Key key = c.e.blocks.front();
+  const auto prompt = tokens_of(c, 80);
+  Entry e;
+  if (!st.pin(st.lookup(prompt.data(), 80, 80).entry, &e)) {
+    check(false, "pin the conversation for a restore");
+    return;
+  }
+  struct rlimit saved;
+  if (getrlimit(RLIMIT_NOFILE, &saved) != 0) {
+    check(false, "read the descriptor limit");
+    st.unpin(e.key, false);
+    return;
+  }
+  const struct rlimit limited{0, saved.rlim_max};
+  if (setrlimit(RLIMIT_NOFILE, &limited) != 0) {
+    check(false, "set the temporary descriptor limit");
+    st.unpin(e.key, false);
+    return;
+  }
+  bool ok = true;
+  read_piece(st, kKv, key, &ok);
+  if (setrlimit(RLIMIT_NOFILE, &saved) != 0) std::abort();
+  st.unpin(e.key, false);
+  check(!ok, "the read fails while the process cannot open a descriptor");
+  check(hit_pos(st, prompt) == 64 && read_piece(st, kKv, key, &ok) == c.blocks.front() && ok,
+        "the same checkpoint is readable after descriptor capacity returns");
+  const std::string file = st.dir() + "/kv/" + key.hex();
+  check(unlink(file.c_str()) == 0, "remove the piece to exercise a missing file");
+  read_piece(st, kKv, key, &ok);
+  check(!ok && hit_pos(st, prompt) == 0, "a missing piece still drops its dependent entry");
+}
+
 void quota(const std::string& root) {
   const std::string ns = ns_name(3);
   Store st;
@@ -514,6 +639,12 @@ void namespaces(const std::string& root) {
     set_mtime(lock, days);
   };
   const std::string old = ns_name(40), recent = ns_name(41), held = ns_name(42), mine = ns_name(43);
+  const std::string unreadable = r + "/" + ns_name(44), changed = r + "/" + ns_name(45);
+  make_ns(ns_name(44), 20, 1000);
+  fs::remove(unreadable + "/lock");
+  fs::create_directory(unreadable + "/lock");  // opening this path read/write fails even when run as root
+  set_mtime(unreadable, 20);
+  make_ns(ns_name(45), 2, 1000);
   make_ns(old, 15, 1000);
   make_ns(recent, 1, 3 * kMiB);
   make_ns(held, 30, 1000);
@@ -530,9 +661,13 @@ void namespaces(const std::string& root) {
     check(fs::exists(r + "/" + held), "one another server holds is left alone, however old");
     check(fs::exists(r + "/not-a-cache"), "a folder that is not a namespace is left alone");
     // the root's limit holds this namespace and the others nobody holds: the others go first, the oldest first
+    check(fs::exists(unreadable + "/kv/data"), "stale cleanup preserves a namespace whose lock cannot be opened");
+    fs::remove(changed + "/lock");
+    fs::create_directory(changed + "/lock");
     Conv a = make_conv(51, 64, 100, {64}, 60000, 100000);
     check(save_conv(st, a), "an entry in the new namespace");
     st.set_test_space(10 * kGiB + 8 * kMiB, 2000 * kGiB);  // a 2 MiB limit: the other namespace's 3 MiB do not fit
+    check(fs::exists(changed + "/kv/data"), "quota cleanup preserves a namespace whose lock became inaccessible");
     check(!fs::exists(r + "/" + recent) && hit_pos(st, tokens_of(a, 70)) == 64,
           "over the limit: another model's cache nobody holds goes before this one's entries");
     st.clear();
@@ -572,6 +707,9 @@ int main() {
   sizes();
   write_read_restart(root);
   damage(root);
+  pinned_damage(root);
+  damaged_job(root);
+  read_open_error(root);
   quota(root);
   concurrency(root);
   namespaces(root);

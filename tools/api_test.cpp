@@ -23,6 +23,7 @@
 #include "engine/disk_saved.h"
 #include "engine/engine.h"
 #include "engine/history_gate.h"
+#include "engine/think_control.h"
 #include "engine/reasoning_memory.h"
 #include "engine/tool_args.h"
 #include "model/kflash_wrap.h"
@@ -968,6 +969,30 @@ std::vector<ChatDelta> generate(const TmplModel& m, const std::string& text, boo
   ChatDelta t = p.finish(true);
   if (!t.reasoning.empty() || !t.content.empty() || !t.tool_calls.empty()) out.push_back(t);
   return out;
+}
+
+// A thinking budget of 0 against thinking off through the model's chat template: the same prompt (Engine::chat sets
+// enable_thinking false for a cap of 0), not one ending inside an opened reasoning block, so the reply carries no empty
+// <think></think>; and the prompt with a cap of 4096 is the thinking-on one (the cap changes no rendering).
+void thinking_cap_zero_render(const TmplModel& m, const std::string& tag) {
+  const char* base = R"({"model": "m", "max_tokens": 100, "messages": [{"role": "user", "content": "What is 2 + 2?"}]})";
+  auto prompt = [&](const char* thinking, const char* control) {
+    ojson b = J(base);
+    if (thinking) b["thinking"] = J(thinking);
+    if (control) b["thinking_control"] = J(control);
+    ChatRequest r = messages_prompt(b, nullptr);
+    if (think_cap_of(r.think_cap, r.thinking_budget) == 0) r.template_kwargs["enable_thinking"] = false;  // as Engine::chat
+    return render_chat(*m.tmpl, r, true);
+  };
+  const std::string off = prompt(R"({"type": "disabled"})", nullptr);
+  const std::string cap0 = prompt(R"({"type": "enabled"})", R"({"hard_cap": 0})");
+  const std::string budget0 = prompt(R"({"type": "enabled", "budget_tokens": 0})", nullptr);
+  const std::string on = prompt(R"({"type": "enabled"})", nullptr);
+  const std::string capped = prompt(R"({"type": "enabled"})", R"({"hard_cap": 4096})");
+  const bool open = cap0.size() >= 8 && cap0.compare(cap0.size() - 8, 8, "<think>\n") == 0;
+  check(cap0 == off && budget0 == off && !open, tag + "thinking budget: a cap of 0 renders as thinking off",
+        "tail: " + cap0.substr(cap0.size() > 60 ? cap0.size() - 60 : 0));
+  check(capped == on && on != off, tag + "thinking budget: a cap above 0 leaves the thinking-on prompt as it is");
 }
 
 ChatResult finished(const std::vector<ChatDelta>& ds, int completion) {
@@ -2494,6 +2519,69 @@ bool exists(const std::string& p) {
   return stat(p.c_str(), &st) == 0;
 }
 
+// The thinking budget's request fields (src/engine/think_control.h): budget_tokens stays the API's budget, the
+// thinking_control extension sets the hard cap, its closing text and the tool-call end on every API; malformed ones are
+// a 400 naming the field; usage reports the cap
+void thinking_budget_mapping() {
+  const char* base = R"({"model": "m", "max_tokens": 100, "messages": [{"role": "user", "content": "hi"}],
+                         "thinking": {"type": "enabled", "budget_tokens": 2048}})";
+  ChatRequest r = messages_prompt(J(base), nullptr);
+  check(r.thinking_budget == 2048 && r.think_cap == -1 && r.think_close_text.empty() && r.think_end_on_tool_call == -1,
+        "thinking budget: budget_tokens alone leaves the extension unset");
+  ojson b = J(base);
+  b["thinking_control"] = J(R"({"hard_cap": 0, "close_text": " Time to answer.", "end_on_tool_call": false})");
+  r = messages_prompt(b, nullptr);
+  check(r.think_cap == 0 && r.think_close_text == " Time to answer." && r.think_end_on_tool_call == 0,
+        "thinking budget: thinking_control on /v1/messages (a cap of 0 is a cap)");
+  ChatRequest c;
+  request_think_field(J(R"({"thinking_control": {"hard_cap": 300, "end_on_tool_call": true}})"), c);
+  check(c.think_cap == 300 && c.think_end_on_tool_call == 1, "thinking budget: thinking_control on the OpenAI APIs");
+  for (const char* bad : {R"({"thinking_control": {"hard_cap": -1}})", R"({"thinking_control": {"hard_cap": 1.5}})",
+                          R"({"thinking_control": {"close_text": 5}})", R"({"thinking_control": {"end_on_tool_call": 1}})",
+                          R"({"thinking_control": 7})"}) {
+    ChatRequest x;
+    std::string param;
+    try {
+      request_think_field(J(bad), x);
+    } catch (const ApiError& e) {
+      param = e.param;
+    }
+    check(param.rfind("thinking_control", 0) == 0, std::string("thinking budget: refused ") + bad, "param " + param);
+  }
+  ChatResult res;
+  check(kapitsa_usage(res).is_null(), "thinking budget: no usage field without a cap or loops");
+  res.think_cap = 1024;
+  res.reasoning_tokens = 1300;  // (a second reasoning block after the first: not capped, counted by the API's field)
+  res.think_tokens = 1024;
+  res.think_forced = true;
+  check(kapitsa_usage(res) == J(R"({"thinking": {"hard_cap": 1024, "reasoning_tokens": 1024, "forced": true}})"),
+        "thinking budget: usage reports the cap and the capped block's tokens", dump(kapitsa_usage(res)));
+  res.loops = 2;
+  check(kapitsa_usage(res)["loops"] == 2 && kapitsa_usage(res).contains("thinking"),
+        "thinking budget: usage keeps a looped model's loop count beside it");
+  // a cap of 0 is thinking off (Engine::chat then renders the prompt as thinking off)
+  ojson z = J(base);
+  z["thinking"]["budget_tokens"] = 0;
+  const ChatRequest r0 = messages_prompt(z, nullptr);
+  ojson zc = J(base);
+  zc["thinking_control"] = J(R"({"hard_cap": 0})");
+  const ChatRequest rc0 = messages_prompt(zc, nullptr);
+  const ChatRequest off = messages_prompt(J(R"({"model": "m", "max_tokens": 100, "messages": [{"role": "user",
+                                                "content": "hi"}], "thinking": {"type": "disabled"}})"), nullptr);
+  check(think_cap_of(r0.think_cap, r0.thinking_budget) == 0 && think_cap_of(rc0.think_cap, rc0.thinking_budget) == 0,
+        "thinking budget: budget_tokens 0 and thinking_control's cap 0 read as a cap of 0");
+  // without a budget nothing changes: thinking disabled or absent is no cap, so chat_template_kwargs still decides
+  ojson kwon = J(R"({"model": "m", "max_tokens": 100, "messages": [{"role": "user", "content": "hi"}],
+                   "chat_template_kwargs": {"enable_thinking": true}})");
+  const ChatRequest none = messages_prompt(kwon, nullptr);
+  check(think_cap_of(off.think_cap, off.thinking_budget) == -1 &&
+            think_cap_of(none.think_cap, none.thinking_budget) == -1 && none.template_kwargs["enable_thinking"] == true,
+        "thinking budget: thinking disabled or absent is no cap");
+  check(think_cap_of(-1, -1) == -1 && think_cap_of(-1, 4096) == 4096 && think_cap_of(300, 4096) == 300,
+        "thinking budget: thinking_control's cap over budget_tokens, none without either");
+}
+
+
 }  // namespace
 
 // Qwen35::zero_centred_norm, which tells Hugging Face's zero-centred RMSNorm weights (applied as 1 + w) from MLX's when
@@ -2852,6 +2940,7 @@ int main(int argc, char** argv) {
   drafter_report_unit();
   draft_conversation_unit();
   new_conversation_slot_unit();
+  thinking_budget_mapping();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dump" && i + 1 < argc) dump_cases(argv[++i]);
@@ -2879,6 +2968,7 @@ int main(int argc, char** argv) {
     anthropic_tool_arguments(m, tag);
     template_checks(m, tag);
     draft_checks(m, tag);
+    thinking_cap_zero_render(m, tag);
   }
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;

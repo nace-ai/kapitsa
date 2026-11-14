@@ -110,6 +110,12 @@ const DeviceProfile& catalog_device();
 // The named checks the remaining gates call. The no-argument forms read the live GPU by calling the same Gpu methods
 // the sites used. The DeviceFacts forms are those predicates for the CPU test.
 bool ane_builtin_share(const std::string& chip);  // the families default_units() supports, independent of calibration
+int ane_generation(const std::string& chip);       // N of "Apple M<N>[ ...]", else 0
+// whether default_units() gives the plain split (no wavefront) a share on this chip: M4 and M5, where it was checked
+bool ane_plain_share(const std::string& chip);
+// 1 on an M1, 2 on an M2 (any size), else 0: the families default_units() gives a share of their own. Kept out of
+// ane_builtin_share, which also gates the fast profile's segmented inputs; those leave M1 to M3 off (review 6698446394).
+int ane_pre_m3_share(const std::string& chip);
 bool ane_segmented_default(const DeviceFacts&);   // built-in share, non-matrix GPU; runtime ANE checks still apply
 bool ane_segmented_default();
 bool matrix_units(const DeviceFacts&);  // apple_family() >= 10

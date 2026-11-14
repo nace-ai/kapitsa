@@ -1,0 +1,26 @@
+[kapitsa] read 15.13 GB of weights in 894 ms (16.9 GB/s)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k64_w12_m32_n64 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 4629 ms
+[kapitsa] prewarmed 96 prefill pipelines in 4634 ms
+[kapitsa] loaded /Users/ec2-user/.cache/kapitsa/models/qwen3.8-27b-4bit: 64 layers, dense, 15.1 GB mapped in 5772 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: no calibration for Apple M1 Ultra (run ane_calib) and no default share; GPU only
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k64_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+ane_calib --wave: Apple M1 Ultra, macOS 25G332, 2048-row prefill chunks, 2 reps (median)
+GPU alone: 7138 ms per chunk (286.9 tok/s)
+ 8 units: 7472 ms per chunk (274.1 tok/s, 0.96x the GPU alone); build 4.5 s
+12 units: 6745 ms per chunk (303.6 tok/s, 1.06x the GPU alone); build 6.5 s
+14 units: 6404 ms per chunk (319.8 tok/s, 1.11x the GPU alone); build 7.1 s
+17 units: 5922 ms per chunk (345.8 tok/s, 1.21x the GPU alone); build 8.6 s
+20 units: 5508 ms per chunk (371.8 tok/s, 1.30x the GPU alone); build 9.7 s
+22 units: 5622 ms per chunk (364.3 tok/s, 1.27x the GPU alone); build 10.7 s
+24 units: 5703 ms per chunk (359.1 tok/s, 1.25x the GPU alone); build 11.4 s
+28 units: 5973 ms per chunk (342.9 tok/s, 1.20x the GPU alone); build 13.0 s
+31 units: 6227 ms per chunk (328.9 tok/s, 1.15x the GPU alone); build 14.5 s
+[kapitsa] NI_ANE: Neural Engine split unavailable (ANE compile failed: Error Domain=com.apple.appleneuralengine.compiler Code=1 "_ANECompiler : ANECCompile() FAILED" UserInfo={NSLocalizedDescription=_ANECompiler : ANECCompile() FAILED, NSUnderlyingError=0xc518347b0 {Error Domain=com.apple.appleneuralengine.compiler Code=1 "ANECCompile(/var/folders/lr/r001x7rs11b40qqw5k415yf40000gn/C/nace-infer-ane/4f21981f4a83ce47/) FAILED: err=(
+    CompilationFailure
+)" UserInfo={NSLocalizedDescription=ANECCompile(/var/folders/lr/r001x7rs11b40qqw5k415yf40000gn/C/nace-infer-ane/4f21981f4a83ce47/) FAILED: err=(
+    CompilationFailure
+)}}}); the GPU runs the prefill FFN alone
+best: 20 units, 5508 ms per 2048-row chunk vs 7138 GPU alone (1.30x)
+rc=0

@@ -8,10 +8,14 @@ run, newest first, every rate in tok/s and every time in seconds, so that each n
 and the precision it was measured with. A measurement that other apps disturbed (contention flagged) carries ⚠, and
 each row lists its run's flags. Quick runs say so. Files that are not results (or fail the schema's basics) are skipped
 with a warning; tools/community_check.py is the full check, run on every pull request. --check: exit 1 when RESULTS.md
-is not what this would write (it changes nothing).
+is not what this would write (it changes nothing). Writing the repository's own table (the default --results and --out) also
+rebuilds docs/site/leaderboard-data.js (tools/build_leaderboard_data.py), so one command brings a result pull request
+up to date: commit both files. The `community-table` check reads the two, and --check here reads only RESULTS.md.
 """
 import argparse, functools, glob, json, os, re, statistics, sys
 
+import build_leaderboard_data  # the leaderboard's data file, from the same folder
+from build_leaderboard_data import decoding
 import community_check  # the catalog, from the same folder
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -21,19 +25,6 @@ MODEL_ORDER = ["qwen3.5-4b", "qwen3.8-27b", "qwen3.6-35b-a3b", "nemotron-3.5-lig
                "nemotron-3.5-super-vl"]
 VARIANT_ORDER = ["4bit", "5bit", "6bit", "8bit", "bf16", "24gb"]
 WARN = "⚠"
-
-
-# The decoding methods by the prefix of a result's decoding_detail (`kapitsa bench`'s decoding_of in src/bench/result.cpp)
-DECODINGS = ("KFlash", "prompt-lookup", "DFlash2", "LiLiCorr", "DSpark", "MTP", "plain")
-
-
-def decoding(model):
-    """The result's decoding method; for one Kapitsa 0.2.0 to 0.2.14 recorded as unknown (KFlash and prompt lookup,
-    issue #295), the one its decoding_detail starts with, so the table is right without rewriting submitted files"""
-    if model["decoding"] != "unknown":
-        return model["decoding"]
-    detail = model.get("decoding_detail") or ""
-    return next((d for d in DECODINGS if detail.startswith(d)), "unknown")
 
 
 def chip_short(chip):
@@ -259,6 +250,10 @@ def main():
     with open(a.out, "w", encoding="utf-8") as fh:
         fh.write(text)
     print(f"{os.path.relpath(a.out)}: {len(results)} runs")
+    if (os.path.abspath(a.results), os.path.abspath(a.out)) == (os.path.join(COMMUNITY, "results"), os.path.join(COMMUNITY, "RESULTS.md")):
+        path, count = build_leaderboard_data.write(REPO)
+        print(f"{os.path.relpath(path)}: {count} results")
+        print("commit both: git add bench/community/RESULTS.md docs/site/leaderboard-data.js")
     return 0
 
 

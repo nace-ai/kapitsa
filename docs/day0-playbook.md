@@ -134,7 +134,7 @@ Format: `prefill / decode` in tok/s, with the Mac, macOS version, and commit.
 # Regenerate the README tables from the JSON source
 python3 tools/readme_images/readme_images.py --tables
 
-# Generate the community results table
+# Generate the community results table and the leaderboard data (docs/site/leaderboard-data.js)
 python3 tools/community_table.py
 ```
 

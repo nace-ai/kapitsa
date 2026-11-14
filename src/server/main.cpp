@@ -173,6 +173,7 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
     r.effort = e;  // looped models: the loop count (Engine::request_loops)
   }
   r.loops = api::request_loops_field(b);
+  api::request_think_field(b, r);
   // structured output: response_format, tool_choice required or named, strict tools (src/api/chat_completions.cpp)
   r.grammar = api::chat_grammar(b, r.tools);
   return r;

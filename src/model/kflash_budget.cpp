@@ -6,13 +6,16 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <format>
 #include <fstream>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <utility>
 
 namespace ni {
 
@@ -41,6 +44,20 @@ bool same_build(const nlohmann::json& j, const std::string& key) {
   logi("KFlash: not loading the budget cache %s (written by %s; this is %s)", key.c_str(),
        b.empty() ? "an earlier build" : b.c_str(), kBuild);
   return false;
+}
+
+// Convert both coefficients for every stored depth before exposing any of them to the budget.
+template <size_t N>
+void load_calibration(const nlohmann::json& j, float (&alpha)[N], float (&beta)[N]) {
+  const auto& a = j.at("alpha");
+  const auto& b = j.at("beta");
+  const size_t end = std::min({N, a.size(), b.size()});
+  std::array<std::pair<float, float>, N> depths;
+  for (size_t d = 1; d < end; ++d) depths[d] = {a.at(d).get<float>(), b.at(d).get<float>()};
+  for (size_t d = 1; d < end; ++d) {
+    alpha[d] = depths[d].first;
+    beta[d] = depths[d].second;
+  }
 }
 
 // A cache file written whole beside its place, then renamed over it: a process ended mid-write (kill -9 after a stop
@@ -441,24 +458,23 @@ void KfBudget::write(KfParams& p) {
 
 std::string KfBudget::summary() const {
   std::lock_guard<std::mutex> lk(mu_);
-  char b[1024];
   const bool wide = wide_ && max_rows_ > 8;
-  int o = snprintf(b, sizeof b, "KFlash: %d cycles, %.2f rows per cycle; cycles by rows", cycles_,
-                   cycles_ ? rows_sum_ / cycles_ : 0.0);
-  for (int n = 1; n < kD && o < int(sizeof b) - 16; ++n)
-    if (ncycles_[n]) o += snprintf(b + o, sizeof b - o, " %d:%d", n, ncycles_[n]);
-  if (wide) o += snprintf(b + o, sizeof b - o, "; %d at capacity 8", narrow_cycles_);
-  if (ne_) o += snprintf(b + o, sizeof b - o, "; tokens per cycle expected %.3f, got %.3f", epred_ / ne_, etok_ / ne_);
-  if (rms_ > 0) o += snprintf(b + o, sizeof b - o, "; rate %.4f tok/ms", rtok_ / rms_);
-  o += snprintf(b + o, sizeof b - o, "; cost ms by rows");
-  for (int n = 1; n <= max_rows_ && o < int(sizeof b) - 16; ++n)
-    if ((allowed_ >> (n - 1)) & 1u) o += snprintf(b + o, sizeof b - o, " %d:%.2f", n, cur_cost(n));
-  if (wide) o += snprintf(b + o, sizeof b - o, " (8 at capacity 8: %.2f)", cost8n_);
-  if (unlocks_) o += snprintf(b + o, sizeof b - o, "; %d locked calibrations relaxed", unlocks_);
-  o += snprintf(b + o, sizeof b - o, "; calibration (alpha, beta) by depth");
-  for (int d = 1; d <= std::min(max_rows_, 8) && o < int(sizeof b) - 24; ++d)
-    o += snprintf(b + o, sizeof b - o, " (%.2f, %.2f)", alpha_[d], beta_[d]);
-  return b;
+  std::string result = std::format("KFlash: {} cycles, {:.2f} rows per cycle; cycles by rows", cycles_,
+                                   cycles_ ? rows_sum_ / cycles_ : 0.0);
+  for (int n = 1; n < kD; ++n)
+    if (ncycles_[n]) result += std::format(" {}:{}", n, ncycles_[n]);
+  if (wide) result += std::format("; {} at capacity 8", narrow_cycles_);
+  if (ne_) result += std::format("; tokens per cycle expected {:.3f}, got {:.3f}", epred_ / ne_, etok_ / ne_);
+  if (rms_ > 0) result += std::format("; rate {:.4f} tok/ms", rtok_ / rms_);
+  result += "; cost ms by rows";
+  for (int n = 1; n <= max_rows_; ++n)
+    if ((allowed_ >> (n - 1)) & 1u) result += std::format(" {}:{:.2f}", n, cur_cost(n));
+  if (wide) result += std::format(" (8 at capacity 8: {:.2f})", cost8n_);
+  if (unlocks_) result += std::format("; {} locked calibrations relaxed", unlocks_);
+  result += "; calibration (alpha, beta) by depth";
+  for (int d = 1; d <= std::min(max_rows_, 8); ++d)
+    result += std::format(" ({:.2f}, {:.2f})", alpha_[d], beta_[d]);
+  return result;
 }
 
 void KfBudget::load() {
@@ -469,21 +485,22 @@ void KfBudget::load() {
     const nlohmann::json j = nlohmann::json::parse(f);
     if (!same_build(j, key_)) return;
     const auto& c = j.at("cost");
-    const auto& a = j.at("alpha");
-    const auto& bb = j.at("beta");
+    KfCosts costs;
+    bool wide = false, pays = true;
+    double narrow8 = 0.0;
     if (j.value("cost_of", "") == kCostOf) {
-      c_.load(c.get<std::vector<double>>(), kExplore);
-      // wide verifies' extras (a cache a run without them wrote: its 8 rows are the 8-row verify's cost, set_wide)
-      wide_saved_ = j.value("wide", false);
-      if (wide_saved_) {
-        if (j.value("cost_narrow8", 0.0) > 0) cost8n_ = j["cost_narrow8"].get<double>(), ncost8n_ = 2;
-        wide_pays_ = j.value("wide_pays", true);  // the last decision, until this process's trees decide again
+      costs.load(c.get<std::vector<double>>(), kExplore);
+      wide = j.value("wide", false);
+      if (wide) {
+        narrow8 = j.value("cost_narrow8", 0.0);
+        pays = j.value("wide_pays", true);
       }
     }
-    for (int d = 1; d < kD && d < int(a.size()) && d < int(bb.size()); ++d) {
-      alpha_[d] = a[size_t(d)].get<float>();
-      beta_[d] = bb[size_t(d)].get<float>();
-    }
+    load_calibration(j, alpha_, beta_);
+    c_ = costs;
+    wide_saved_ = wide;
+    wide_pays_ = pays;
+    if (narrow8 > 0) cost8n_ = narrow8, ncost8n_ = 2;
   } catch (...) {
     logi("KFlash: ignoring an unreadable cache %s", key_.c_str());
   }
@@ -736,27 +753,26 @@ double KfBatch::cost(int M, int N) const {
 
 std::string KfBatch::summary() const {
   std::lock_guard<std::mutex> lk(mu_);
-  char b[2048];
-  int o = snprintf(b, sizeof b, "KFlash batch: %d cycles", cycles_);
-  for (int M = 2; M <= kMembers && o < int(sizeof b) - 160; ++M) {
+  std::string result = std::format("KFlash batch: {} cycles", cycles_);
+  for (int M = 2; M <= kMembers; ++M) {
     long cyc = 0, rows = 0;
     for (int n = 1; n <= kRows; ++n) cyc += ncyc_[M][n], rows += ncyc_[M][n] * n;
     if (!cyc) continue;
-    o += snprintf(b + o, sizeof b - o, "; %d members: %.2f rows per cycle (by rows", M, double(rows) / double(cyc));
+    result += std::format("; {} members: {:.2f} rows per cycle (by rows", M, double(rows) / double(cyc));
     for (int n = 1; n <= kRows; ++n)
-      if (ncyc_[M][n]) o += snprintf(b + o, sizeof b - o, " %d:%ld", n, ncyc_[M][n]);
-    o += snprintf(b + o, sizeof b - o, "), tokens per cycle expected %.3f, got %.3f", epred_[M] / double(cyc),
-                  etok_[M] / double(cyc));
-    if (rms_[M] > 0) o += snprintf(b + o, sizeof b - o, ", rate %.4f tok/ms", rtok_[M] / rms_[M]);
-    o += snprintf(b + o, sizeof b - o, ", cost ms by rows");
-    for (int n = M; n <= kRows && o < int(sizeof b) - 16; ++n)
-      if (c_[M].ncost[n]) o += snprintf(b + o, sizeof b - o, " %d:%.2f", n, c_[M].at(n));
+      if (ncyc_[M][n]) result += std::format(" {}:{}", n, ncyc_[M][n]);
+    result += std::format("), tokens per cycle expected {:.3f}, got {:.3f}", epred_[M] / double(cyc),
+                          etok_[M] / double(cyc));
+    if (rms_[M] > 0) result += std::format(", rate {:.4f} tok/ms", rtok_[M] / rms_[M]);
+    result += ", cost ms by rows";
+    for (int n = M; n <= kRows; ++n)
+      if (c_[M].ncost[n]) result += std::format(" {}:{:.2f}", n, c_[M].at(n));
   }
-  if (unlocks_) o += snprintf(b + o, sizeof b - o, "; %d locked sampled calibrations relaxed", unlocks_);
-  o += snprintf(b + o, sizeof b - o, "; sampled calibration (alpha, beta) by depth");
-  for (int d = 1; d <= kDrafts && o < int(sizeof b) - 24; ++d)
-    o += snprintf(b + o, sizeof b - o, " (%.2f, %.2f)", alpha_[d], beta_[d]);
-  return b;
+  if (unlocks_) result += std::format("; {} locked sampled calibrations relaxed", unlocks_);
+  result += "; sampled calibration (alpha, beta) by depth";
+  for (int d = 1; d <= kDrafts; ++d)
+    result += std::format(" ({:.2f}, {:.2f})", alpha_[d], beta_[d]);
+  return result;
 }
 
 void KfBatch::load() {
@@ -766,16 +782,13 @@ void KfBatch::load() {
   try {
     const nlohmann::json j = nlohmann::json::parse(f);
     if (!same_build(j, key_)) return;
+    std::array<KfCosts, kMembers + 1> costs;
     if (j.value("cost_of", "") == kBatchCostOf) {
       const auto& c = j.at("cost");
-      for (int M = 2; M <= kMembers && M < int(c.size()); ++M) c_[M].load(c[size_t(M)].get<std::vector<double>>(), kExplore);
+      for (int M = 2; M <= kMembers && M < int(c.size()); ++M) costs[M].load(c.at(M).get<std::vector<double>>(), kExplore);
     }
-    const auto& a = j.at("alpha");
-    const auto& bb = j.at("beta");
-    for (int d = 1; d <= kDrafts && d < int(a.size()) && d < int(bb.size()); ++d) {
-      alpha_[d] = a[size_t(d)].get<float>();
-      beta_[d] = bb[size_t(d)].get<float>();
-    }
+    load_calibration(j, alpha_, beta_);
+    std::copy(costs.begin(), costs.end(), c_);
   } catch (...) {
     logi("KFlash: ignoring an unreadable cache %s", key_.c_str());
   }

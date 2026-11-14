@@ -14,7 +14,9 @@
 
 #include <unistd.h>
 
+#include <cerrno>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <fstream>
@@ -57,7 +59,7 @@ int run_stage(int argc, char** argv, int first) {
   std::string model, layers, host = "0.0.0.0";
   int port = cluster::kStagePort, chunk = prefill_chunk_room(2048);
   int layer_start = 0, layer_end = 0;
-  double budget_gb = 0;
+  size_t budget_bytes = 0;
   const char* help = "kapitsa stage --help";
   for (int i = first; i < argc; ++i) {
     const std::string a = argv[i];
@@ -79,8 +81,16 @@ int run_stage(int argc, char** argv, int first) {
         usage_error("--layers needs a positive start and an end at or after it", help);
     } else if (a == "--port") port = to_int(a, next(), help);
     else if (a == "--host") host = next();
-    else if (a == "--mem-budget") budget_gb = atof(next().c_str());
-    else if (a == "--prefill-chunk") {
+    else if (a == "--mem-budget") {
+      const std::string value = next();
+      char* end = nullptr;
+      errno = 0;
+      const double gb = std::strtod(value.c_str(), &end);
+      const double bytes = gb * 1e9;
+      if (end == value.c_str() || *end || errno == ERANGE || !(gb == 0 || (bytes >= 1 && bytes < 0x1p64)))
+        usage_error("--mem-budget needs 0 (automatic) or a size in GB that fits in a positive byte count", help);
+      budget_bytes = size_t(bytes);
+    } else if (a == "--prefill-chunk") {
       chunk = to_int(a, next(), help);
       // serve reads a chunk below one as "size one for me", the engine picking it once the model is planned; a stage
       // cannot, since it builds its model at this many rows (src/cluster/stage.cpp), so 0 would be a 0-row model.
@@ -108,7 +118,7 @@ int run_stage(int argc, char** argv, int first) {
   o.host = host;
   o.port = port;
   o.name = mac_name();
-  o.mem = double(budget_gb > 0 ? size_t(budget_gb * 1e9) : default_mem_budget());
+  o.mem = double(budget_bytes ? budget_bytes : default_mem_budget());
   o.gbs = bandwidth_gbs(Gpu::get().name(), Gpu::get().core_count());
   o.chunk = chunk;
   if (!layers.empty()) {
