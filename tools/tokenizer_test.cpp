@@ -27,6 +27,7 @@ int fails = 0, passes = 0;
 
 void check(bool ok, const std::string& name, const std::string& detail = "") {
   printf("%s %s%s\n", ok ? "PASS" : "FAIL", name.c_str(), ok || detail.empty() ? "" : ("\n     " + detail).c_str());
+  if (ok && name.rfind("LFM2", 0) == 0) printf("ok %s\n", name.c_str());  // the autoresearch metric's checks
   ok ? ++passes : ++fails;
 }
 
@@ -90,6 +91,60 @@ const Case kCases[] = {
 
 const std::vector<std::string> kAdded = {"<think>", "</think>", "<tool_call>", "</tool_call>", "<|user|>"};
 
+// LFM2's pre-tokenizer (Liquid, LFM3; one Isolated split): the pieces HF tokenizers 0.22.1 makes of the same
+// texts with the regex (pretokenize_lfm2). Differs from Qwen3.5's where its letters leave the combining marks
+// out, its digits go in threes and its contractions stand alone; from Flint's where it has no CJK split and its
+// symbol run takes a ZWJ or variation selector with the emoji.
+const Case kLfm2Cases[] = {
+    {"LFM2: words, a contraction of its own, punctuation", "Hello world, it's a test.",
+     {"Hello", " world", ",", " it", "'s", " a", " test", "."}},
+    {"LFM2: contractions in any case, split off (U+017F folds to s)",
+     "it's IT'S It'S they'RE we've YOU'LL I'm she'd don't x'\u017F",
+     {"it", "'s", " IT", "'S", " It", "'S", " they", "'RE", " we", "'ve", " YOU", "'LL", " I", "'m", " she", "'d",
+      " don", "'t", " x", "'\u017F"}},
+    {"LFM2: a space takes the quote with it before a non-contraction ('tis)",
+     "IT\u2019S o'clock rock'n'roll 'tis ''s ABC's 123's",
+     {"IT", "\u2019S", " o", "'clock", " rock", "'n", "'roll", " '", "tis", " ''", "s", " ABC", "'s", " ", "123",
+      "'s"}},
+    {"LFM2: digits in threes, a run's leftover space stays whole",
+     "a1b22c333d4444e55555f 1234567 x  123",
+     {"a", "1", "b", "22", "c", "333", "d", "444", "4", "e", "555", "55", "f", " ", "123", "456", "7", " x", " ",
+      " ", "123"}},
+    {"LFM2: numbers other than ASCII digits (No, Nd, Nl)", "\u00BD\u00BD\u00BD\u00BD \u0661\u0662\u0663\u0664 \u216B",
+     {"\u00BD\u00BD\u00BD", "\u00BD", " ", "\u0661\u0662\u0663", "\u0664", " ", "\u216B"}},
+    {"LFM2: CJK and kana are letter runs; a middle dot starts the next word with its mark-less letters",
+     "\u6771\u4EAC\u30BF\u30EF\u30FC\u306F333\u30E1\u30FC\u30C8\u30EB\u3067\u3059\u3002\u30AB\u30BF\u30AB\u30CA"
+     "\u30FB\u30C6\u30B9\u30C8 \u65E5\u672C\u8A9E\u306Etest \u4E2D\u6587English",
+     {"\u6771\u4EAC\u30BF\u30EF\u30FC\u306F", "333", "\u30E1\u30FC\u30C8\u30EB\u3067\u3059", "\u3002\u30AB\u30BF"
+      "\u30AB\u30CA", "\u30FB\u30C6\u30B9\u30C8", " \u65E5\u672C\u8A9E\u306Etest", " \u4E2D\u6587English"}},
+    {"LFM2: a ZWJ or variation selector stays in the symbol run",
+     "\U0001F468\u200D\U0001F469\u200D\U0001F467 \u2705\uFE0F ok\u2705\uFE0F \U0001F44D\U0001F3FD!",
+     {"\U0001F468\u200D\U0001F469\u200D\U0001F467", " \u2705\uFE0F", " ok", "\u2705\uFE0F",
+      " \U0001F44D\U0001F3FD!"}},
+    {"LFM2: a combining mark is a symbol piece where a letter run ends",
+     "caf\u00E9 cafe\u0301 \u0301abc \u01C5emal HTTPServer McDONALD's",
+     {"caf\u00E9", " cafe", "\u0301", " \u0301", "abc", " \u01C5emal", " HTTPServer", " McDONALD", "'s"}},
+    {"LFM2: a mark between letters starts a piece with the letters after it",
+     "cafe\u0301x x\u0301 y e\u0301\u0301f a\u0301\u0301",
+     {"cafe", "\u0301x", " x", "\u0301", " y", " e", "\u0301\u0301", "f", " a", "\u0301\u0301"}},
+    {"LFM2: whitespace other than spaces, control and format characters",
+     "a\u3000\u3000b a\u0085b x\u00A0\u00A0y \034 \001\002abc a\u200Bb \u2028z",
+     {"a", "\u3000", "\u3000b", " a", "\u0085b", " x", "\u00A0", "\u00A0y", " \034", " \001\002", "abc", " a",
+      "\u200Bb", " ", "\u2028z"}},
+    {"LFM2: CR LF, tabs, spaces at the end", "line1\r\nline2\r\n\r\n  x\ttab\t\tend   ",
+     {"line", "1", "\r\n", "line", "2", "\r\n\r\n", " ", " x", "\ttab", "\t", "\tend", "   "}},
+    {"LFM2: code", "def f(x):\n    return x**2  # comment\n\n\n\tpass\n",
+     {"def", " f", "(x", "):\n", "   ", " return", " x", "**", "2", " ", " #", " comment", "\n\n\n", "\tpass",
+      "\n"}},
+    {"LFM2: punctuation and symbol runs",
+     "!!! ... ?!?! ---> (((a))) \"q\" #include <vector> \u00A9 50\u00B0C \u20AC100 a/b",
+     {"!!!", " ...", " ?!?!", " --->", " (((", "a", ")))", " \"", "q", "\"", " #", "include", " <", "vector", ">",
+      " \u00A9", " ", "50", "\u00B0C", " \u20AC", "100", " a", "/b"}},
+    {"LFM2: only spaces", "   ", {"   "}},
+    {"LFM2: only newlines and a space", "\n \n", {"\n \n"}},
+    {"LFM2: a lone quote", "'", {"'"}},
+};
+
 bool is_added(const std::string& p) { return std::find(kAdded.begin(), kAdded.end(), p) != kAdded.end(); }
 
 // A token as tokenizer.json writes it: its bytes through GPT-2's byte-to-unicode mapping
@@ -124,6 +179,16 @@ json flint_pre_tokenizer() {
       {"type", "ByteLevel"}, {"add_prefix_space", false}, {"trim_offsets", true}, {"use_regex", false}};
   return {{"type", "Sequence"},
           {"pretokenizers", json::array({split(R"(\p{N}{1,3})"), split(cjk), split(words), bytes})}};
+}
+
+json lfm2_pre_tokenizer() {
+  auto split = [](const char* re) {
+    return json{{"type", "Split"}, {"pattern", {{"Regex", re}}}, {"behavior", "Isolated"}, {"invert", false}};
+  };
+  const json bytes = {
+      {"type", "ByteLevel"}, {"add_prefix_space", false}, {"trim_offsets", true}, {"use_regex", false}};
+  return {{"type", "Sequence"},
+          {"pretokenizers", json::array({split(ni::Tokenizer::kLfm2Split), bytes})}};
 }
 
 // `j` loaded as a tokenizer.json (from a temporary file)
@@ -328,6 +393,41 @@ int main() {
 
   check_bpe_merges();
   check_lmstudio_pretokenizer();
+
+  // LFM2's split: the same synthetic vocabulary trick, HF tokenizers' pieces as the goldens
+  json lvocab = json::object();
+  auto ladd = [&](const std::string& s) {
+    const std::string t = byte_level(s);
+    if (!lvocab.contains(t)) lvocab[t] = int(lvocab.size());
+  };
+  for (int b = 0; b < 256; ++b) ladd(std::string(1, char(b)));
+  for (const Case& c : kLfm2Cases)
+    for (size_t i = 0; i < c.pieces.size(); ++i) {
+      std::string run;
+      for (size_t k = i; k < c.pieces.size() && !is_added(c.pieces[k]); ++k) ladd(run += c.pieces[k]);
+    }
+  json lj = {{"added_tokens", added}, {"normalizer", nullptr}, {"pre_tokenizer", lfm2_pre_tokenizer()},
+             {"model", {{"type", "BPE"}, {"vocab", lvocab}, {"merges", json::array()}, {"ignore_merges", true}}}};
+  ni::Tokenizer ltok;
+  load(ltok, lj);
+  auto lwant = [&](const Case& c) {
+    std::vector<int> ids;
+    for (const auto& p : c.pieces) ids.push_back(ltok.find(is_added(p) ? p : byte_level(p)));
+    return ids;
+  };
+  for (const Case& c : kLfm2Cases) {
+    const std::vector<int> got = ltok.encode(c.text), w = lwant(c);
+    check(got == w, c.what, "ids " + ids_str(got) + ", want " + ids_str(w));
+  }
+  // one step different: not LFM2's split either, the default one
+  json l2 = lj;
+  l2["pre_tokenizer"]["pretokenizers"][0]["pattern"]["Regex"] =
+      "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|"
+      "\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+  ni::Tokenizer lother;
+  load(lother, l2);
+  check(lother.encode(kLfm2Cases[3].text) != lwant(kLfm2Cases[3]),
+        "a Sequence other than LFM2's keeps the default split");
 
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;
