@@ -57,6 +57,22 @@ bool is_ns_name(const std::string& s) {
   return true;
 }
 
+// A neighboring server may be starting while we scan. Use the same lock file it opens,
+// including when the namespace exists but its lock file does not yet.
+int lock_other_namespace(const std::string& dir) {
+  const std::string path = dir + "/lock";
+  const int fd = ::open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+  if (fd < 0) return -1;
+  if (flock(fd, LOCK_EX | LOCK_NB) == 0) {
+    struct stat held, current;
+    if (fstat(fd, &held) == 0 && stat(path.c_str(), &current) == 0 &&
+        held.st_dev == current.st_dev && held.st_ino == current.st_ino)
+      return fd;
+  }
+  close(fd);
+  return -1;
+}
+
 // A page-aligned transfer buffer
 struct Buf {
   uint8_t* p = nullptr;
@@ -420,13 +436,10 @@ bool Store::open(const Options& o, std::string* why) {
       const std::string p = o.root + "/" + name;
       struct stat st;
       if (stat(p.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) continue;
-      const int fd = ::open((p + "/lock").c_str(), O_RDWR | O_CLOEXEC);
-      if (fd >= 0 && flock(fd, LOCK_EX | LOCK_NB) != 0) {  // in use by another server: its own to count
-        close(fd);
-        continue;
-      }
+      const int fd = lock_other_namespace(p);
+      if (fd < 0) continue;
       struct stat lt;
-      const double used = fd >= 0 && fstat(fd, &lt) == 0 ? mtime_of(lt) : mtime_of(st);
+      const double used = fstat(fd, &lt) == 0 ? mtime_of(lt) : mtime_of(st);
       if (unix_now() - used > o.stale_days * 86400) {
         const uint64_t bytes = dir_bytes(p);
         std::error_code ec;
@@ -437,7 +450,7 @@ bool Store::open(const Options& o, std::string* why) {
         others_.push_back({p, used, dir_bytes(p)});
         others_bytes_ += others_.back().bytes;
       }
-      if (fd >= 0) close(fd);
+      close(fd);
     }
     if (d) closedir(d);
     std::sort(others_.begin(), others_.end(), [](const Other& a, const Other& b) { return a.used < b.used; });
@@ -593,14 +606,11 @@ void Store::remove_others(uint64_t limit) {
     others_.erase(others_.begin());
     others_bytes_ -= o.bytes;
     // nobody may hold it now: one that started using it since is its server's to count
-    const int fd = ::open((o.path + "/lock").c_str(), O_RDWR | O_CLOEXEC);
-    if (fd >= 0 && flock(fd, LOCK_EX | LOCK_NB) != 0) {
-      close(fd);
-      continue;
-    }
+    const int fd = lock_other_namespace(o.path);
+    if (fd < 0) continue;
     std::error_code ec;
     std::filesystem::remove_all(o.path, ec);
-    if (fd >= 0) close(fd);
+    close(fd);
     logi("SSD prefix cache: removed %s (%s), the oldest cache of another model, to keep within %s", o.path.c_str(),
          gib(o.bytes).c_str(), gib(limit).c_str());
   }
