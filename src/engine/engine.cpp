@@ -3192,8 +3192,15 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     }
     // the default case: a dense target at the weight floor whose drafter drafts a 16-row block (DFlash2). A dense
     // target whose drafter drafts 8 rows keeps the prefill path, whatever capacity the pass sized for itself.
+    // and a suffix the prefill path would read on the staged short-prefill GEMMs, not on the 64-row tensor tile
+    // (Qwen35::tile_pass: from NI_QMT_MIN rows, 17 on the matrix class, 64 for the 27B on the M5 Pro): the passes won
+    // against the staged GEMMs (above), and the tile wins against the passes. Mac mini M6 (12 cores), the 27B with a
+    // 16-row block and the tile from 17 rows, a cached turn's prefill as passes against the prefill path, two
+    // interleaved rounds: 25 rows 377 / 382 -> 223 / 224 ms, 32 rows 419 / 422 -> 227 / 228, 45 rows 431 / 434 ->
+    // 241 / 240, 56-58 rows 558-567 -> 249-257; 23 rows (never passes: the boundary) and 69-92 rows the same.
     const bool vpf_default =
-        q35_ && !q35_->config().moe && vpf_scale >= 3000000000LL && q35_->drafter_wide() && q35_->verify_wide_ok();
+        q35_ && !q35_->config().moe && vpf_scale >= 3000000000LL && q35_->drafter_wide() && q35_->verify_wide_ok() &&
+        !q35_->tile_pass(n - p);
     // a boundary inside the suffix makes the passes fold at it for the checkpoint; under vpf_split_min rows that
     // fold costs more than the passes save, so the plain path (which snapshots the checkpoint mid-chunk) keeps it
     const bool vpf_split = boundary > p && boundary < n && n - p < vpf_split_min;

@@ -2596,9 +2596,12 @@ bool qmt_on() {
 // kernels. A chunk's last rows and a short turn's message are such GEMMs. Default 17 for every dense model; MoE models
 // keep 64 (not measured). M5 Pro, ni_run, interleaved 3 x 2 (#393): a 40-token prefill on the 4B 47.3 -> 28.8 ms, the 9B
 // 99.5 -> 46.6, the 27B 320.0 -> 144.6; a 4,129-token prefill on the 4B 952.6 -> 932.8 ms and the 9B 2,370 -> 2,316, the
-// same greedy text. The 27B shape (hidden 5120, FFN 17408, 64 layers) keeps 64 below the 40-core class: its 4,129-token
-// prefill with its Neural Engine split was 5,577 -> 5,851 ms on the M5 Pro (slower in 3 of 3 pairs, the Neural Engine
-// 20.6 -> 23-24 ms per evaluation), while the M5 Max measurements below are for that shape.
+// same greedy text. The 27B shape (hidden 5120, FFN 17408, 64 layers) keeps 64 on the M5 Pro alone (the m5_pro_gpu
+// row of the profile table): its 4,129-token prefill with its Neural Engine split was 5,577 -> 5,851 ms there (slower
+// in 3 of 3 pairs, the Neural Engine 20.6 -> 23-24 ms per evaluation), while the M5 Max measurements below are for
+// that shape and a Mac mini M6 (12 cores, the KQuant pack, ni_run, interleaved) reads the same 4,129 tokens in
+// 8,682 / 8,658 / 8,876 ms against 8,866 / 8,891 / 8,921, and a cached turn's suffix of 28 / 45 / 56 rows (an in-pass
+// checkpoint, a 2,000-token prefix, 5 passes a setting twice) in 221 / 232 / 265 ms against 370 / 545 / 706.
 // bench_qmm on the M5 Max, the 27B's shapes, the 64-row tile against the short-prefill tile the pass takes: gate/up
 // (17408 x 5120) at 17 rows 514 against 638 us, at 33 527 against 1,215; down (5120 x 17408) at 24 rows 334 against
 // 400, at 33 337 against 623; GDN in_proj (16384 x 5120) at 33 288 against 525. At 16 rows and fewer the short tiles
@@ -2606,12 +2609,14 @@ bool qmt_on() {
 // bench/results/2026-11-05-m5-max-qmt-short.
 int Qwen35::qmt_min_rows() const {
   static const int env = std::clamp(env_int("NI_QMT_MIN", 0), 0, 64);
-  static const bool max = wide_cores();
+  static const bool keep64 = m5_pro_gpu();  // guard: the measured miss (profile table)
   if (env) return env;
   if (cfg_.moe) return 64;
   const bool q27 = cfg_.hidden == 5120 && cfg_.dense_I == 17408 && cfg_.layers == 64;
-  return q27 && !max ? 64 : 17;
+  return q27 && keep64 ? 64 : 17;
 }
+
+bool Qwen35::tile_pass(int rows) const { return !cfg_.moe && qmt_on() && rows >= qmt_min_rows(); }
 
 bool qmt128_for(int M) {
   static const bool on = [] {
