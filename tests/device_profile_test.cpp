@@ -102,6 +102,19 @@ int main() {
     // M1 and M2 get default_units()'s own share; it stays apart from the built-in share and the segmented default
     CHECK(ni::ane_pre_m3_share(facts.name) == (facts.apple_family < 9 ? facts.apple_family - 6 : 0));
   }
+  // The built-in share is the M4 and every later generation, by the name's generation number, not a substring.
+  CHECK(ni::ane_builtin_share("Apple M6") && ni::ane_builtin_share("Apple M6 Pro") && ni::ane_builtin_share("Apple M7 Max"));
+  CHECK(ni::ane_builtin_share("Apple M10") && ni::ane_builtin_share("Apple M5 Ultra"));
+  CHECK(!ni::ane_builtin_share("Apple M3 Max") && !ni::ane_builtin_share("Apple M1") && !ni::ane_builtin_share("Apple M2 Ultra"));
+  CHECK(!ni::ane_builtin_share("Apple M") && !ni::ane_builtin_share("Apple M6X") && !ni::ane_builtin_share("Paravirtual M5"));
+  // An M6 is matrix class: the share's gpu_mma branch applies, and the fast profile's segmented inputs stay off.
+  CHECK(!ni::ane_segmented_default(mac(11, 12, "Apple M6", 32L << 30)));
+  CHECK(ni::ane::default_units("Apple M6", 12, 34, true, true) == 29 && ni::ane::default_units("Apple M6", 12, 18, true, true) == 15);
+  // ... but the plain split (Drex Max's noncausal pass, NI_ANE_WAVE=0) keeps no default share on M6 and later until it
+  // is output-checked there; M4 and M5 keep theirs
+  CHECK(ni::ane::default_units("Apple M6", 12, 34, false, true) == 0 && ni::ane::default_units("Apple M7 Max", 40, 34, false) == 0);
+  CHECK(ni::ane::default_units("Apple M5 Pro", 20, 34, false, true) > 0 && ni::ane::default_units("Apple M4 Pro", 20, 34, false) > 0);
+  CHECK(ni::ane_generation("Apple M6 Pro") == 6 && ni::ane_generation("Apple M10") == 10 && ni::ane_generation("AMD M6") == 0);
   CHECK(ni::ane_pre_m3_share("Apple M1 Ultra") == 1 && ni::ane_pre_m3_share("Apple M2 Pro") == 2);
   CHECK(ni::ane_pre_m3_share("Apple M2 Max") == 2 && ni::ane_pre_m3_share("Apple M3 Max") == 0);
   CHECK(ni::ane_pre_m3_share("Apple M10") == 0 && ni::ane_pre_m3_share("Apple M20 Pro") == 0);
