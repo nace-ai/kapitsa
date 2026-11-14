@@ -220,6 +220,7 @@ new architecture requires more than implementing `Model` if it needs a new draft
   The SSD prefix cache (`src/engine/prefix_cache.h`, `engine_disk.cpp`) keeps those states as files too, so evicted
   conversations and server restarts keep them: KV rows in blocks keyed by the tokens and the requests that computed
   them (a conversation's turns share their blocks), states byte for byte as the slot held them, CRC-checked.
+  A shared system-prefix checkpoint has no DFlash2 ring; restoring it starts the ring empty, as the RAM copy path does.
 * **GPU and Neural Engine overlap.** Eligible prefill operations split across both processors. GPU work and Neural
   Engine jobs synchronize through shared events. The split uses additional quantization and is a numerical tradeoff;
   it is distinct from speculative verification. Runtime checks and watchdogs can disable the split and rerun a

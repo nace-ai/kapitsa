@@ -40,7 +40,7 @@ namespace dc {
 // whenever what a state's bytes mean changes without the model's disk_format() saying so (the order or precision of the
 // KV rows, the recurrent state's layout, the drafter ring, what a snapshot holds). Older namespaces are then never read,
 // and go once unused for 14 days.
-constexpr int kStateFormat = 1;
+constexpr int kStateFormat = 2;
 constexpr int kBlockRows = 512;  // KV rows per block file: 10 MB on the 35B, 32 MB on the 27B, 18 MB on the 4B
 
 double env_num(const char* name, double def) {
@@ -286,7 +286,7 @@ struct Engine::Disk {
       const int c = p.src[i];
       std::vector<Buffer> bufs;
       en.model_->disk_state(s, c < 0 ? nullptr : &slot.ckpts[size_t(c)], bufs);
-      if (en.dfl_) {
+      if (en.dfl_ && !(sn.flags & pcache::Snap::kPrefix)) {
         const DFlashSeq& r = c < 0 ? *slot.dseq : *slot.dckpts[size_t(c)];
         bufs.push_back(r.ring_k), bufs.push_back(r.ring_v);
       }
@@ -425,13 +425,13 @@ std::unique_ptr<Engine::DiskPlan> Engine::disk_plan(const Slot& slot) const {
   if (slot.live_ok && live >= d.min_pos) cs.push_back({live, -1, pcache::Snap::kLive});
   for (size_t i = 0; i < slot.ckpts.size(); ++i) {
     const TurnCheckpoint& c = slot.ckpts[i];
-    // the prefix checkpoint has no drafter ring (dckpts[i] is null): a restore from it could not rebuild the ring
-    if (dfl_ && c.prefix) continue;
+    // the prefix checkpoint has no drafter ring (dckpts[i] is null): it is saved without one, and a restore from it
+    // starts the ring empty, as the RAM path does
     std::vector<Buffer> bufs;  // (a checkpoint without its whole state, as Dory's rings when memory was short: none)
     model_->disk_state(*slot.seq, &c, bufs);
     const bool whole = std::all_of(bufs.begin(), bufs.end(), [](const Buffer& b) { return b.mtl != nullptr; });
     if (c.pos >= d.min_pos && c.pos <= live && !(slot.live_ok && c.pos == live) && whole)
-      cs.push_back({c.pos, int(i), c.query ? pcache::Snap::kQuery : 0u});
+      cs.push_back({c.pos, int(i), c.prefix ? pcache::Snap::kPrefix : c.query ? pcache::Snap::kQuery : 0u});
   }
   if (cs.empty()) return nullptr;
   std::sort(cs.begin(), cs.end(), [](const C& a, const C& b) { return a.pos < b.pos; });
@@ -468,7 +468,7 @@ std::unique_ptr<Engine::DiskPlan> Engine::disk_plan(const Slot& slot) const {
     pcache::Snap sn;
     sn.pos = c.pos;
     sn.flags = c.flags;
-    if (dfl_) {
+    if (dfl_ && !(c.flags & pcache::Snap::kPrefix)) {
       const DFlashSeq& r = c.src < 0 ? *slot.dseq : *slot.dckpts[size_t(c.src)];
       sn.dctx = r.ctx, sn.dvalid = r.valid_lo;
     }
@@ -944,7 +944,7 @@ bool Engine::disk_restore(Slot& slot, const pcache::Hit& hit) {
   }
   std::vector<Buffer> bufs;
   model_->disk_state(s, nullptr, bufs);
-  if (dfl_) bufs.push_back(slot.dseq->ring_k), bufs.push_back(slot.dseq->ring_v);
+  if (dfl_ && !(sn.flags & pcache::Snap::kPrefix)) bufs.push_back(slot.dseq->ring_k), bufs.push_back(slot.dseq->ring_v);
   Gather st;
   pcache::Hasher h;
   for (const Buffer& b : bufs) st.add(b.ptr(), b.size), h.u64(b.size);
@@ -1013,7 +1013,7 @@ bool Engine::disk_restore(Slot& slot, const pcache::Hit& hit) {
       if (spans[k].pos + spans[k].n <= P) slot.img_spans.push_back(spans[k]), slot.img_digests.push_back(digests[k]);
   }
   for (TurnCheckpoint& c : slot.ckpts) c.pos = -1;
-  if (dfl_) slot.dseq->ctx = sn.dctx, slot.dseq->valid_lo = sn.dvalid;
+  if (dfl_) slot.dseq->ctx = sn.dctx, slot.dseq->valid_lo = sn.dvalid;  // (a prefix snapshot: 0, 0, the ring empty)
   if (d.mtp && q35_) q35_->draft_vocab_restore(s, e.vocab, e.vocab_scanned);
   slot.turns = std::max(slot.turns, 2);
   slot.live_ok = false;
