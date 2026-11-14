@@ -679,13 +679,21 @@ void Store::drop_damaged(Kind kind, const Key& key) {
   std::lock_guard<std::mutex> lk(mu_);
   if (kind == kEntry) {
     auto it = entries_.find(key);
-    if (it != entries_.end() && it->second.pins == 0) drop_entry(it);
+    if (it != entries_.end()) {
+      it->second.damaged = true;
+      unlink(path_of(kEntry, key).c_str());
+      if (it->second.pins == 0) drop_entry(it);
+    }
     return;
   }
   for (auto it = entries_.begin(); it != entries_.end();) {
     bool uses = false;
     for (const Key& b : it->second.blocks) uses = uses || (kind == kKv && b == key);
     for (const Snap& s : it->second.snaps) uses = uses || (kind == kState && s.state == key);
+    if (uses) {
+      it->second.damaged = true;
+      unlink(path_of(kEntry, it->first).c_str());
+    }
     if (uses && it->second.pins == 0) {
       auto next = std::next(it);
       drop_entry(it);
@@ -697,9 +705,9 @@ void Store::drop_damaged(Kind kind, const Key& key) {
   // (pinned users keep the piece's record until unpinned; its file goes now)
   unlink(path_of(kind, key).c_str());
   auto& m = kind == kKv ? kv_ : st_;
-  if (auto it = m.find(key); it != m.end() && it->second.refs == 0) {
-    held_ -= std::min(held_, it->second.bytes);
-    m.erase(it);
+  if (auto it = m.find(key); it != m.end()) {
+    it->second.damaged = true;
+    if (it->second.refs == 0) erase_piece(kind, key);
   }
 }
 
@@ -710,7 +718,7 @@ Hit Store::lookup(const int* keys, int n, int below, uint32_t tag, const Reusabl
   Hit best;
   double best_used = -1;
   for (const auto& [k, e] : entries_) {
-    if (e.tag != tag) continue;
+    if (e.damaged || e.tag != tag) continue;
     const size_t m = std::min(e.tokens.size(), size_t(std::max(n, 0)));
     size_t l = 0;
     while (l < m && e.tokens[l] == keys[l]) ++l;
@@ -727,7 +735,7 @@ Hit Store::lookup(const int* keys, int n, int below, uint32_t tag, const Reusabl
 bool Store::pin(const Key& entry, Entry* out) {
   std::lock_guard<std::mutex> lk(mu_);
   auto it = entries_.find(entry);
-  if (it == entries_.end()) return false;
+  if (it == entries_.end() || it->second.damaged) return false;
   ++it->second.pins;
   *out = it->second;
   return true;
@@ -738,6 +746,10 @@ void Store::unpin(const Key& entry, bool used) {
   auto it = entries_.find(entry);
   if (it == entries_.end()) return;
   if (it->second.pins > 0) --it->second.pins;
+  if (it->second.damaged) {
+    if (it->second.pins == 0) drop_entry(it);
+    return;
+  }
   if (used) {
     it->second.used = unix_now();
     it->second.replaced = false;  // (restored: the guess that its conversation was over was wrong)
@@ -756,7 +768,13 @@ int Store::demote(const Key& conv) {
 
 bool Store::has(Kind kind, const Key& key) const {
   std::lock_guard<std::mutex> lk(mu_);
-  return kind == kEntry ? entries_.count(key) > 0 : (kind == kKv ? kv_ : st_).count(key) > 0;
+  if (kind == kEntry) {
+    const auto it = entries_.find(key);
+    return it != entries_.end() && !it->second.damaged;
+  }
+  const auto& m = kind == kKv ? kv_ : st_;
+  const auto it = m.find(key);
+  return it != m.end() && !it->second.damaged;
 }
 
 bool Store::read(Kind kind, const Key& key, std::string* meta, const Take& take) {
@@ -822,7 +840,10 @@ Store::Job::~Job() {
   std::lock_guard<std::mutex> lk(st_->mu_);
   for (const auto& [kind, key] : held_) {
     auto& m = kind == kKv ? st_->kv_ : st_->st_;
-    if (auto it = m.find(key); it != m.end() && it->second.refs > 0) --it->second.refs;  // kept: a later write reuses it
+    if (auto it = m.find(key); it != m.end() && it->second.refs > 0) {
+      --it->second.refs;
+      if (it->second.refs == 0 && it->second.damaged) st_->erase_piece(kind, key);
+    }  // healthy pieces stay for a later write
   }
 }
 
@@ -832,7 +853,7 @@ std::unique_ptr<Store::Job> Store::begin(const std::vector<std::pair<Kind, Key>>
   for (const auto& [kind, key] : pieces) {
     if (kind == kEntry) continue;
     auto& m = kind == kKv ? kv_ : st_;
-    if (auto it = m.find(key); it != m.end()) {
+    if (auto it = m.find(key); it != m.end() && !it->second.damaged) {
       ++it->second.refs;
       j->held_.push_back({kind, key});
     }
@@ -905,6 +926,7 @@ bool Store::write(Job& job, Kind kind, const Key& key, const std::string& meta, 
     std::lock_guard<std::mutex> lk(mu_);
     auto& m = kind == kKv ? kv_ : st_;
     if (auto it = m.find(key); it != m.end()) {
+      if (it->second.damaged) return false;
       ++it->second.refs;
       job.held_.push_back({kind, key});
       return true;
@@ -930,10 +952,11 @@ bool Store::put(Job& job, Entry e) {
   {
     std::lock_guard<std::mutex> lk(mu_);
     for (const Key& b : e.blocks)
-      if (!kv_.count(b)) return false;
+      if (auto it = kv_.find(b); it == kv_.end() || it->second.damaged) return false;
     for (const Snap& s : e.snaps)
-      if (!st_.count(s.state)) return false;
+      if (auto it = st_.find(s.state); it == st_.end() || it->second.damaged) return false;
     if (auto it = entries_.find(e.key); it != entries_.end()) {  // the same conversation, saved before
+      if (it->second.damaged) return false;
       it->second.used = unix_now();
       it->second.replaced = e.replaced;
       utimes(path_of(kEntry, e.key).c_str(), nullptr);
@@ -950,6 +973,19 @@ bool Store::put(Job& job, Entry e) {
                              &fb);
   if (!ok) return false;
   std::lock_guard<std::mutex> lk(mu_);
+  bool intact = true;
+  for (const Key& b : e.blocks) {
+    const auto it = kv_.find(b);
+    intact = intact && it != kv_.end() && !it->second.damaged;
+  }
+  for (const Snap& sn : e.snaps) {
+    const auto it = st_.find(sn.state);
+    intact = intact && it != st_.end() && !it->second.damaged;
+  }
+  if (!intact) {
+    unlink(path_of(kEntry, e.key).c_str());
+    return false;
+  }
   for (const Key& b : e.blocks) ++kv_[b].refs;
   for (const Snap& s : e.snaps) ++st_[s.state].refs;
   e.bytes = fb;
