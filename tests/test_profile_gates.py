@@ -77,6 +77,7 @@ def read_baseline(path: pathlib.Path = BASELINE) -> dict[str, int]:
 PREDICATES = (
     "matrix_units",
     "m1_max_32",
+    "m5_pro_gpu",
     "legacy_gpu",
     "wide_cores",
     "pre_m3_gpu",
@@ -179,6 +180,7 @@ CLASS_GATE_IDS = (
 # none of them cites a 10% win the wider class misses.
 GUARD_IDS = (
     "m1_max_32",
+    "m5_pro_gpu",
     "ultra_gpu",
     "pre_m3_gpu",
 )
