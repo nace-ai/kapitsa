@@ -330,6 +330,22 @@ struct NewConversationSlot {
 int pick_new_conversation_slot(const std::vector<NewConversationSlot>& v, const std::string& key,
                                bool* by_key = nullptr);
 
+// A slot's KV cache as the memory rule sees it (Engine::reserve_kv drops idle slots' caches, least recently used
+// first, until a prompt fits), for evicted_prefix_slot.
+struct KvCacheSlot {
+  bool idle = true;      // not busy: its cache may be dropped for another slot's prompt
+  int cap = 0;           // the KV rows its cache holds
+  int prefix = 0;        // the row of its prefix checkpoint the new prompt shares (0: none)
+  uint64_t last_used = 0;
+};
+// A new conversation was given slot `pick`; its prompt needs `need` KV rows and the budget has `free` rows left beside
+// the caches held now. When the prompt does not fit without dropping other slots' caches and one of the slots that
+// would be dropped holds a prefix checkpoint the prompt shares, in a cache that holds the prompt: that slot (the
+// deepest checkpoint), else -1. Its conversation is lost to the memory rule either way, and with its cache the shared
+// system prompt, which the new conversation would then read again from row 0; taking the slot itself restores the
+// checkpoint instead. -1 too when the pick shares a prefix checkpoint itself. CPU only: tools/api_test checks it.
+int evicted_prefix_slot(const std::vector<KvCacheSlot>& v, int pick, long free, int need);
+
 // What one read ahead of a user's draft did (Engine::draft, POST /v1/draft; docs/usage.md has the statuses).
 struct DraftResult {
   std::string status;  // prefilled unchanged interrupted busy no_conversation unsupported no_room

@@ -999,7 +999,10 @@ the parts in use in the page cache and can drop them under pressure. When memory
   with 448-row chunks, one slot and 8K.
 - A prompt that needs more room takes it from cached image embeddings, then from idle slots, least recently used first
   (their conversations are read again when they return), then from the Neural Engine split (prefill then runs on the
-  GPU alone) and last from the image encoder; failing that, the request gets an `insufficient memory` error. With
+  GPU alone) and last from the image encoder; a new conversation that would take an idle slot's cache this way and
+  shares that slot's system prompt and tools takes the slot itself, so its prefix checkpoint is restored and the
+  shared block is not read again (a conversation an agent compacted, on a Mac whose budget holds one long conversation
+  and little more: Mac mini M6, the 27B, a 28,141-token prompt sharing 12,970 tokens, 74.1 / 71.5 -> 42.4 / 42.4 s); failing that, the request gets an `insufficient memory` error. With
   other requests in flight, a request that fits only once one of them ends waits for it, and only a prompt that does
   not fit even alone gets the error; a reply in progress may take the cache of a request still waiting (that request
   then reads its prompt again). A reply that cannot grow its cache ends with finish reason `length`.
