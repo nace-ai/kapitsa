@@ -89,10 +89,11 @@ const DefaultRow kDefaults[] = {
     // the drafting pass runs on the matrix units. Requests decoding together then take turns instead of sharing an
     // 8-row batched pass (Engine::batch_rows). Mac mini M6 (12 cores), 27B KQuant, serve's default 2 slots, the opencode agent replay:
     // writing 36.2 -> 44.3 tok/s (+22%), the session 159.8 -> 147.7 s (-7.6%); two sessions at once 294.3 -> 279.0 s
-    // (-5.2%); the 2 slots' drafter rings 0.25 -> 0.46 GB. One slot already drafts 16 rows; the call site keeps its
-    // checks (DFlash2::plan_block_rows).
+    // (-5.2%); the 2 slots' drafter rings 0.25 -> 0.46 GB. M5 Pro (#1262's review lane), 27B 4-bit, serve's default
+    // 4 slots: writing 68.7 -> 79.8 tok/s (+16%), the session 88.6 -> 82.0 s (-7.4%). One slot already drafts 16 rows;
+    // the call site keeps its checks (DFlash2::plan_block_rows).
     {"kflash_block16", Knob::kKflashBlock16, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 22, 0, false,
-     "Mac mini M6; widened by judgment, sweep 1", true},
+     "Mac mini M6, M5 Pro", true},
     // Capability classes the call sites still read. Not a name gate: the predicate is the class. The site count is
     // calls outside this module; tests/test_profile_gates.py checks the where string against that count.
     {"matrix_units", Knob::kNone, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "class", 0, 0, false,
