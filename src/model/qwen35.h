@@ -463,6 +463,9 @@ class Qwen35 : public Model {
   // target's own chain passes may run wider (pass_rows). NI_VPF's default is for a target whose drafter drafts
   // 16 rows, so the default keys on this and not on the capacity the pass raised.
   bool drafter_wide() const { return drafter_wide_; }
+  // A prefill pass of `rows` rows runs its dense GEMMs on the 64-row tensor tile (a dense model, the tile on, rows at
+  // or above NI_QMT_MIN's): the engine's NI_VPF default leaves such a suffix to the prefill path
+  bool tile_pass(int rows) const;
   // The rows one chain pass of a cached suffix runs (8, 16 or 32: vpf_pass_rows at load; a 24-row tail of a ladder
   // still runs inside the 32-row capacity).
   int pass_rows() const { return pass_rows_; }
