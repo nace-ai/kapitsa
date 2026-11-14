@@ -120,14 +120,14 @@ jobs:
           fi
           # show what the table is missing, then fail: the row and its rewrite have to ride in the same pull request
           python3 tools/community_table.py
-          git --no-pager diff -- bench/community/RESULTS.md || true
-          fix="python3 tools/community_table.py && git add bench/community/RESULTS.md && git commit -m 'bench/community/RESULTS.md: the community results, rewritten from bench/community/results'"
-          echo "::error title=Community results table is stale::bench/community/RESULTS.md does not match bench/community/results after this merge. Run: $fix"
+          git --no-pager diff -- bench/community/RESULTS.md docs/site/leaderboard-data.js || true
+          fix="python3 tools/community_table.py && git add bench/community/RESULTS.md docs/site/leaderboard-data.js && git commit -m 'bench/community: RESULTS.md and the leaderboard data, rewritten from bench/community/results'"
+          echo "::error title=Community results table is stale::bench/community/RESULTS.md does not match bench/community/results after this merge. One command rewrites it and docs/site/leaderboard-data.js. Run: $fix"
           {
             echo "### Community results table is stale"
             echo
             echo "After this pull request merges, \`bench/community/RESULTS.md\` would not match \`bench/community/results\`."
-            echo "The result row and its rewrite land in the same pull request. Regenerate it, commit, and push to this branch:"
+            echo "The result row and its rewrites (\`bench/community/RESULTS.md\` and \`docs/site/leaderboard-data.js\`, both written by the one command below) land in the same pull request. Regenerate them, commit, and push to this branch:"
             echo
             echo '```sh'
             echo "$fix"
@@ -143,7 +143,7 @@ jobs:
             exit 0
           fi
           python3 tools/build_leaderboard_data.py
-          echo "::error title=Leaderboard data is stale::docs/site/leaderboard-data.js does not match bench/community/results and uncensored.json. Run: python3 tools/build_leaderboard_data.py && git add -f docs/site/leaderboard-data.js"
+          echo "::error title=Leaderboard data is stale::docs/site/leaderboard-data.js does not match bench/community/results and uncensored.json. Run: python3 tools/community_table.py && git add bench/community/RESULTS.md docs/site/leaderboard-data.js"
           exit 1
 
   docs-links:
