@@ -226,6 +226,8 @@ int main(int argc, char** argv) {
         {"nameless", "<function=>\n<parameter=command>\nls\n</parameter>\n</function>\n</tool_call>", false, true, false},
         {"text after the call", valid + "\nDone.", false, true, false},
         {"two calls", valid + "\n" + valid, false, true, false},
+        {"two calls, one </tool_call>", "<function=run_shell>\n<parameter=command>\nls\n</parameter>\n</function>\n" + body, false, true, false},
+        {"two calls of two tools, one </tool_call>", "<function=read_file>\n<parameter=path>\na.txt\n</parameter>\n</function>\n" + body, false, true, false},
         {"cut by max_tokens", valid, false, false, false},
         {"a prefix of <function= and more", "<fund raising>", false, true, false},
         {"<function= and the answer ends", "<function=", false, true, false},

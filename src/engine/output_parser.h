@@ -160,9 +160,10 @@ class OutputParser {
 
   // A call whose <tool_call> the model never wrote (Qwen3.6-35B-A3B's UD-IQ2_XXS build, the 24 GB Macs' 35b:16gb,
   // writes <function=NAME>...</function></tool_call> five replies in five, #1277). The reply is that call when, after
-  // whitespace, its first text is "<function=", the text up to </tool_call> ends with </function> and parses, NAME is
-  // a tool of the request, and nothing but whitespace follows until the end of the turn. The text is held from its
-  // first "<function=" until that is decided (the reply as text once it is not), so such a reply streams at its end.
+  // whitespace, its first text is "<function=", the text up to </tool_call> is one call (its only </function> is the
+  // last text) that parses, NAME is a tool of the request, and nothing but whitespace follows until the end of the
+  // turn. The text is held from its first "<function=" until that is decided (the reply as text once it is not), so
+  // such a reply streams at its end.
   // kArmed: nothing but whitespace was content so far, outside the reasoning and any call; kHolding: the held text
   // began a call; kClosed: </tool_call> ended a valid call, which finish() returns if the turn ends there;
   // kOff: decided (a reply is one or the other), or no call to look for.
@@ -191,8 +192,9 @@ class OutputParser {
       lead_buf_ += dec_.flush();
       const std::string body = trim_ws(lead_buf_), end = "</function>";
       ToolCall tc;
-      if (body.size() >= end.size() && body.compare(body.size() - end.size(), end.size(), end) == 0 &&
-          parse_tool(body, tc) && has_tool(tc.name)) {
+      // one call: the first </function> is the last text (two calls under one </tool_call> would parse as one)
+      if (body.size() >= end.size() && body.find(end) == body.size() - end.size() && parse_tool(body, tc) &&
+          has_tool(tc.name)) {
         lead_call_ = std::move(tc);
         lead_ = Lead::kClosed;
       } else {

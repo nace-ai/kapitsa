@@ -340,7 +340,7 @@ catalog, named after the file).
 
 This build often writes a tool call without its opening `<tool_call>` (`<function=NAME>...</function></tool_call>`).
 Kapitsa returns such a reply as a tool call when the call is the whole reply: it starts with `<function=` (after
-whitespace), ends with `</function></tool_call>`, names one of the request's tools, and only whitespace follows. Any
+whitespace), is one call ending with `</function></tool_call>`, names one of the request's tools, and only whitespace follows. Any
 other reply stays the text the model wrote, and a reply that starts with `<function=` is held until its end to decide.
 
 On a MacBook Pro M1 Pro 16 GB it decodes 52.6 tok/s (llama.cpp b11669 on the same file: 38.0-38.8) and reads a
