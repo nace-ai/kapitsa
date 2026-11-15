@@ -2597,10 +2597,13 @@ bool qmt_on() {
 // kernels. A chunk's last rows and a short turn's message are such GEMMs. Default 17 for every dense model; MoE models
 // keep 64 (not measured). M5 Pro, ni_run, interleaved 3 x 2 (#393): a 40-token prefill on the 4B 47.3 -> 28.8 ms, the 9B
 // 99.5 -> 46.6, the 27B 320.0 -> 144.6; a 4,129-token prefill on the 4B 952.6 -> 932.8 ms and the 9B 2,370 -> 2,316, the
-// same greedy text. The 27B shape (hidden 5120, FFN 17408, 64 layers) keeps 64 on the M5 Pro alone (the m5_pro_gpu
-// row of the profile table): its 4,129-token prefill with its Neural Engine split was 5,577 -> 5,851 ms there (slower
-// in 3 of 3 pairs, the Neural Engine 20.6 -> 23-24 ms per evaluation), while the M5 Max measurements below are for
-// that shape and a Mac mini M6 (12 cores, the KQuant pack, ni_run, interleaved) reads the same 4,129 tokens in
+// same greedy text. The 27B shape (hidden 5120, FFN 17408, 64 layers) kept 64 on the M5 Pro after #393 (its 4,129-token
+// prefill with its Neural Engine split read 5,577 -> 5,851 ms, slower in 3 of 3 pairs) and takes 17 there too since it
+// was measured again (M5 Pro, macOS 26.5.2, ni_run, 8 rounds in rotated order with 64 run twice as the control): 4,096
+// tokens 5,076 / 5,091 ms with 64, 5,082 with 17; 4,129 tokens (a 33-row tail chunk) 5,400 / 5,401 against 5,425, each
+// inside the spread of the two 64 runs; a cached turn's suffix of 26 / 45 / 63 rows 212 / 251 / 301 -> 155 / 163 / 173 ms.
+// The M5 Max measurements below are for that shape and a Mac mini M6 (12 cores, the KQuant pack, ni_run, interleaved)
+// reads the same 4,129 tokens in
 // 8,682 / 8,658 / 8,876 ms against 8,866 / 8,891 / 8,921, and a cached turn's suffix of 28 / 45 / 56 rows (an in-pass
 // checkpoint, a 2,000-token prefix, 5 passes a setting twice) in 221 / 232 / 265 ms against 370 / 545 / 706.
 // bench_qmm on the M5 Max, the 27B's shapes, the 64-row tile against the short-prefill tile the pass takes: gate/up
@@ -2610,11 +2613,8 @@ bool qmt_on() {
 // bench/results/2026-11-05-m5-max-qmt-short.
 int Qwen35::qmt_min_rows() const {
   static const int env = std::clamp(env_int("NI_QMT_MIN", 0), 0, 64);
-  static const bool keep64 = m5_pro_gpu();  // guard: the measured miss (profile table)
   if (env) return env;
-  if (cfg_.moe) return 64;
-  const bool q27 = cfg_.hidden == 5120 && cfg_.dense_I == 17408 && cfg_.layers == 64;
-  return q27 && keep64 ? 64 : 17;
+  return cfg_.moe ? 64 : 17;
 }
 
 bool Qwen35::tile_pass(int rows) const {

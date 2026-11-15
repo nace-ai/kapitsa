@@ -3240,7 +3240,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     // the default case: a dense target at the weight floor whose drafter drafts a 16-row block (DFlash2). A dense
     // target whose drafter drafts 8 rows keeps the prefill path, whatever capacity the pass sized for itself.
     // and a suffix the prefill path would read on the staged short-prefill GEMMs, not on the 64-row tensor tile
-    // (Qwen35::tile_pass: from NI_QMT_MIN rows, 17 on the matrix class, 64 for the 27B on the M5 Pro, and only for a
+    // (Qwen35::tile_pass: from NI_QMT_MIN rows, 17 on the matrix class, and only for a
     // pack whose dense projections are all 4-bit group 64, the tile's format): the passes won
     // against the staged GEMMs (above), and the tile wins against the passes. Mac mini M6 (12 cores), the 27B with a
     // 16-row block and the tile from 17 rows, a cached turn's prefill as passes against the prefill path, two
