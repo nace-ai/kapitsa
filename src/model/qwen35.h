@@ -22,6 +22,7 @@ namespace ni {
 
 namespace ane {
 class FfnSplit;
+class ProjSplit;
 struct FfnConfig;
 struct FfnLayer;
 }
@@ -660,6 +661,18 @@ class Qwen35 : public Model {
   // NI_ANE wavefront: the first half's rows (0 = not used for a chunk of T rows)
   int ane_wave_rows(int T) const;
   void enc_prefill_wave(Encoder& e, Seq& s, int pos0, int T, int h);
+  // NI_ANE_PROJ: the wavefront with the token mixers' input projections on the Neural Engine too (ane_proj_). Per layer
+  // the Neural Engine runs I_A(i), F_B(i-1), I_B(i), F_A(i) (I: input projection, F: FFN; half B a step behind half A).
+  void enc_prefill_wave2(Encoder& e, Seq& s, int pos0, int T, int h);
+  void enc_mixer_in(Encoder& e, int li, const Layer& L, int T, const Buffer& x, int lane);  // in-norm, pack, launch
+  void enc_gdn_ab(Encoder& e, const Layer& L, int T);  // DeltaNet's a / b from xh_ (GPU; tiny)
+  // unpack, then DeltaNet's scan and out_proj, or attention's (enc_attn_post)
+  void enc_mixer_out(Encoder& e, Seq& s, int li, const Layer& L, int T, const Buffer& x, int lane, int pos0);
+  void enc_attn_post(Encoder& e, Seq& s, int i, const Layer& L, int pos0, int T, const Buffer& xbuf);
+  bool gdn_par_on() const;
+  void ane_proj_build();
+  static bool proj_on();  // NI_ANE_PROJ through the profile: on under fast, off under precise
+  double ane_proj_verify();  // startup check: relative error against the GPU's projections
   // NI_PF_WAVE: a MoE chunk in two halves on the GPU alone, half B's token mixer beside half A's MoE layer and half A's
   // next mixer beside half B's MoE (Encoder tapes, play_pair): the first half's rows, 0 = not for a chunk of T rows
   int gpu_wave_rows(int T) const;
@@ -823,6 +836,8 @@ class Qwen35 : public Model {
   void enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int old_cap, int new_cap);
 
   std::unique_ptr<ane::FfnSplit> ane_;
+  std::unique_ptr<ane::ProjSplit> ane_proj_;  // NI_ANE_PROJ (see enc_prefill_wave2)
+  bool ane_proj_chunk_ = false;               // the chunk being encoded runs it
   bool ane_chunk_ = false;  // the chunk being encoded runs the split
   bool ane_on_ = true;      // benchmarks: false runs the GPU alone
   AneStats ane_stats_;

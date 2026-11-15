@@ -10,6 +10,8 @@
 //   NI_ANE_WAVE=0       the plain split (default: the two-half wavefront, for chunks >= 2 x the
 //                       smallest function; smaller chunks always run the plain split)
 #include "ane/ffn_split.h"
+#include "ane/proj_split.h"
+#include "engine/profile.h"
 #include "ane/input_profile.h"
 #include "ane/slabs.h"
 #include "model/kparams.h"
@@ -80,7 +82,21 @@ bool Qwen35::ane_finish_chunk() {
   if (!ane_chunk_) return true;
   ane_chunk_ = false;
   double ms = 0;
-  const bool ok = ane_->finish_chunk(&ms);
+  bool ok = ane_->finish_chunk(&ms);
+  if (ane_proj_chunk_) {
+    ane_proj_chunk_ = false;
+    double pms = 0;
+    const bool pok = ane_proj_->finish_chunk(&pms);
+    if (pok) {
+      ane_stats_.ane_ms += pms;
+      ane_stats_.evals += ane_proj_->last_jobs();
+    } else {
+      logi("NI_ANE_PROJ: Neural Engine in_proj stopped (%s)", ane_proj_->reason().c_str());
+      ane_proj_.reset();
+      if (ok) ane_->retire("the Neural Engine in_proj of the same chunk failed");
+      ok = false;
+    }
+  }
   if (ok) {
     ane_stats_.ane_ms += ms;
     ane_stats_.evals += ane_->last_jobs();
@@ -94,6 +110,7 @@ bool Qwen35::ane_finish_chunk() {
 
 void Qwen35::ane_abort(const std::string& why) {
   if (ane_chunk_ && ane_) ane_->retire(why);
+  if (ane_proj_chunk_ && ane_proj_) ane_proj_->retire(why);
 }
 
 void Qwen35::init_ane() {
@@ -219,6 +236,16 @@ Qwen35::AnePlan Qwen35::ane_plan(const std::string& dir, const MemPlan& m) {
     return a;
   }
   a.bytes = ane::split_bytes(uint32_t(m.hidden), uint32_t(m.ffn), a.units, m.layers, wave ? 2 : 1) + m.slot_state / 3;
+  if (wave && proj_on()) {  // the mixers' input projections (ane_proj_build): built for causal models with the wavefront
+    const Qwen35Config c = read_config(dir);
+    if (c.causal && !c.moe) {
+      const uint32_t lin = uint32_t(2 * c.lin_hk * c.lin_dk + 2 * c.lin_hv * c.lin_dv);
+      const uint32_t att = uint32_t(2 * c.hq * c.head_dim + 2 * c.hkv * c.head_dim);
+      size_t rows = 0;
+      for (int i = 0; i < c.layers; ++i) rows += size_t(i) < c.is_linear.size() && c.is_linear[size_t(i)] ? lin : att;
+      a.bytes += ane::proj_bytes(uint32_t(m.hidden), std::max(lin, att), rows, 2);
+    }
+  }
   return a;
 }
 
@@ -231,6 +258,7 @@ bool Qwen35::ane_release() {
   if (!ane_) return false;
   logi("NI_ANE: releasing the Neural Engine split (%.0f MB) for KV cache; prefill runs on the GPU alone", ane_->metal_bytes() / 1e6);
   ane_.reset();
+  ane_proj_.reset();
   return true;
 }
 
@@ -286,6 +314,7 @@ void Qwen35::ane_finish_init() {
     logi("NI_ANE: startup check %.2f%% of the ANE's part from the GPU alone (%zu functions, %.0f ms)", 100 * err,
          rows.size(), now_ms() - t0);
   }
+  ane_proj_build();
 }
 
 ane::FfnConfig Qwen35::ane_cfg(uint32_t units, uint32_t min_rows, const std::vector<uint32_t>& fn_rows, int fault_layer,
@@ -432,6 +461,123 @@ void Qwen35::enc_prefill_wave(Encoder& e, Seq& s, int pos0, int T, int h) {
   }
   A.join(e, 1, xB, TB);
   if (cap_) enc_capture(e, cfg_.layers - 1, pos0 + TA, TB, &xB);
+}
+
+// NI_ANE_PROJ: the wavefront with the token mixers' input projections on the Neural Engine as well (DeltaNet's in_proj
+// qkv + z, attention's q / k / v). Per layer i the Neural Engine runs I_A(i) F_B(i-1) I_B(i) F_A(i) (I: the input
+// projection, F: the FFN's share; half B a step behind half A, as in enc_prefill_wave). F_A(i) and F_B(i-1) find their
+// inputs ready two jobs ahead, so the GPU's own work (scans, attention, out / o projections, the FFN's GPU channels,
+// staging) runs beside them; an I job follows the F job it needs by the GPU's join, norm and pack. Each half's rows go
+// through the kernels of a chunk of its size.
+void Qwen35::enc_prefill_wave2(Encoder& e, Seq& s, int pos0, int T, int h) {
+  const int D = cfg_.hidden, TA = h, TB = T - h, NL = cfg_.layers;
+  const Buffer xA = x_.view(0, size_t(TA) * D * 4), xB = x_.view(size_t(TA) * D * 4, size_t(TB) * D * 4);
+  const uint32_t g = ane_->gpu_channels();
+  ane::FfnSplit& F = *ane_;
+  ane::ProjSplit& P = *ane_proj_;
+  ane_proj_chunk_ = true;
+  P.begin_chunk();
+  F.stage_layer(e, 0, 0);
+  P.stage_layer(e, 0, P.stage_set(0));
+  // layer i+1's projection weights, into the set layer i's jobs do not read (sets alternate by layer; I_A(i) is
+  // unpacked and I_B(i) reads layer i's set)
+  auto stage_next_proj = [&](int i) {
+    if (i + 1 < NL) P.stage_layer(e, i + 1, P.stage_set(i + 1));
+  };
+  auto launch_fb = [&](int j) {  // F_B(j): needs half B's mixer of layer j
+    enc_rows_half(e, xB, layers_[j].post_norm, xh_, TB, D);
+    F.pack(e, 1, xh_, TB);
+    F.launch(e, 1, j, TB);
+  };
+  auto finish_b = [&](int j) {  // half B's FFN of layer j: GPU channels, join
+    enc_mlp_gpu_part(e, layers_[j], TB, g, xB);
+    F.join(e, 1, xB, TB);
+    if (cap_) enc_capture(e, j, pos0 + TA, TB, &xB);  // layer j is complete in B's rows
+  };
+  // F_A(i), after half A's GPU channels of the FFN: they fill the Neural Engine's I_B(i), where the GPU has room,
+  // instead of the stretch to F_A's join, where it has none
+  auto launch_fa = [&](int i) {
+    enc_rows_half(e, xA, layers_[i].post_norm, xh_, TA, D);
+    F.pack(e, 0, xh_, TA);
+    enc_mlp_gpu_part(e, layers_[i], TA, g, xA);
+    F.launch(e, 0, i, TA);
+  };
+  for (int i = 0; i < NL; ++i) {
+    const Layer& L = layers_[i];
+    enc_mixer_in(e, i, L, TA, xA, 0);  // I_A(i)
+    if (L.linear) enc_gdn_ab(e, L, TA);
+    if (i > 0) launch_fb(i - 1);      // F_B(i-1)
+    enc_mixer_out(e, s, i, L, TA, xA, 0, pos0);
+    stage_next_proj(i);               // while F_B(i-1) runs: the GPU has room here
+    if (i > 0) finish_b(i - 1);
+    enc_mixer_in(e, i, L, TB, xB, 1);  // I_B(i)
+    if (L.linear) enc_gdn_ab(e, L, TB);
+    launch_fa(i);                     // F_A(i)
+    enc_mixer_out(e, s, i, L, TB, xB, 1, pos0 + TA);
+    if (i + 1 < NL) F.stage_layer(e, i + 1, (i + 1) & 1);
+    F.join(e, 0, xA, TA);
+    if (cap_) enc_capture(e, i, pos0, TA, &xA);  // layer i is complete in A's rows
+  }
+  launch_fb(NL - 1);
+  finish_b(NL - 1);
+}
+
+// A fast profile member (docs/profiles.md): it moves the 27B's logits past the M5-class floor's gate (decode paths'
+// mean KL 2.2e-4 against 1.18e-4, 0 top-1 flips), so precise keeps the projections on the GPU. Its class is wherever
+// the wavefront split runs (ane_proj_build's checks: a causal dense Qwen with the two-lane split). NI_ANE_PROJ=1 or 0
+// overrides either profile.
+bool Qwen35::proj_on() {
+  static const bool on = profile_switch("NI_ANE_PROJ", true,
+                                        "the token mixers' input projections on the Neural Engine (NI_ANE_PROJ)");
+  return on;
+}
+
+void Qwen35::ane_proj_build() {
+  ane_proj_.reset();
+  if (!proj_on()) return;
+  if (!ane_ || ane_->lanes() < 2 || !cfg_.causal || cfg_.moe || !gdn_par_on()) return;
+  std::vector<ane::ProjLayer> pl(layers_.size());
+  for (size_t i = 0; i < layers_.size(); ++i) {
+    const Layer& L = layers_[i];
+    const std::vector<const QLinear*> qs = L.linear ? std::vector<const QLinear*>{&L.qkv, &L.z}
+                                                    : std::vector<const QLinear*>{&L.q, &L.k, &L.v};
+    for (const QLinear* q : qs) {
+      if (!format_supported(q->bits, q->gs)) {
+        logi("NI_ANE_PROJ: no Neural Engine input projections for %s weights", format_name(q->bits, q->gs).c_str());
+        return;
+      }
+      pl[i].parts.push_back({q->w->buf, q->s->buf, q->b->buf, q->N, q->K, q->bits, q->gs});
+    }
+  }
+  ane::ProjConfig pc;
+  pc.fn_rows = ane_->fn_rows();
+  pc.cache_dir = ane::cache_dir();
+  pc.model_key = ane::model_key(dir_);
+  pc.tag = "mixer-in";
+  const double t0 = now_ms();
+  try {
+    ane_proj_ = std::make_unique<ane::ProjSplit>(pc, std::move(pl));
+  } catch (const std::exception& ex) {
+    logi("NI_ANE_PROJ: Neural Engine in_proj unavailable (%s); the GPU runs it", ex.what());
+    return;
+  }
+  double err = -1;
+  try {
+    err = ane_proj_verify();
+  } catch (const std::exception& ex) {
+    logi("NI_ANE_PROJ: startup check failed (%s); the GPU runs the input projections", ex.what());
+    ane_proj_.reset();
+    return;
+  }
+  if (!(err <= 0.05)) {
+    logi("NI_ANE_PROJ: startup check: %.1f%% from the GPU's projections (> 5%%); the GPU runs them", 100 * err);
+    ane_proj_.reset();
+    return;
+  }
+  logi("NI_ANE_PROJ: token mixers' input projections (DeltaNet qkv + z, attention q / k / v; %u rows) on the Neural "
+       "Engine in wavefront chunks; %s; %.1f MB Metal; "
+       "ready in %.1f s, startup check %.2f%% from the GPU (fast profile; NI_ANE_PROJ=0: GPU)", ane_proj_->rows_out(),
+       ane_proj_->startup_note().c_str(), ane_proj_->metal_bytes() / 1e6, (now_ms() - t0) / 1000, 100 * err);
 }
 
 // NI_ANE_NONCAUSAL: layer li's FFN of a noncausal pass of T rows, slab by slab on lane 0 (the chunk began with the
@@ -653,4 +799,52 @@ double Qwen35::ane_bench_chunk(int T, int reps, bool split) {
   return median(ms);
 }
 
+}  // namespace ni
+
+namespace ni {
+// The startup check of ane_proj_: the first DeltaNet and the first attention layer, the smallest function's rows of
+// random post-norm-like input (unit variance, a few channels 8x: outliers the rotation must spread), the Neural Engine's
+// projections against the GPU's GEMMs. Returns the worse relative RMS error of the two layers (W8A8: ~1.3%).
+double Qwen35::ane_proj_verify() {
+  Gpu& g = Gpu::get();
+  ane::ProjSplit& P = *ane_proj_;
+  const int D = cfg_.hidden, T = std::min(int(P.fn_rows().front()), tmax_);
+  std::mt19937 r(20261115);
+  std::normal_distribution<float> nd(0.f, 1.f);
+  _Float16* xp = xh_.as<_Float16>();
+  for (size_t i = 0; i < size_t(T) * D; ++i) xp[i] = _Float16(nd(r) * ((i % D) % 97 == 3 ? 8.f : 1.f));
+  double worst = 0;
+  for (bool lin : {true, false}) {
+    int li = -1;
+    for (int i = 0; i < cfg_.layers && li < 0; ++i)
+      if (layers_[i].linear == lin) li = i;
+    if (li < 0) continue;
+    const Layer& L = layers_[li];
+    const std::vector<const QLinear*> qs = lin ? std::vector<const QLinear*>{&L.qkv, &L.z}
+                                               : std::vector<const QLinear*>{&L.q, &L.k, &L.v};
+    ScratchBufs bufs;
+    std::vector<Buffer> ref, got;
+    for (const QLinear* q : qs) {
+      ref.push_back(bufs.add(size_t(T) * q->N * 4, "proj check ref"));
+      got.push_back(bufs.add(size_t(T) * q->N * 4, "proj check ane"));
+    }
+    auto e = g.begin();
+    for (size_t k = 0; k < qs.size(); ++k) enc_qmm(*e, *qs[k], xh_, ref[k], T, false);
+    P.begin_chunk();
+    P.stage_layer(*e, li, P.stage_set(li));
+    P.pack(*e, 0, xh_, T);
+    P.launch(*e, 0, li, T);
+    e = g.begin();
+    P.unpack(*e, 0, li, got, T);
+    e->commit_and_wait();
+    if (!P.finish_chunk()) throw std::runtime_error(P.reason());
+    for (size_t k = 0; k < qs.size(); ++k) {
+      double d = 0, n = 0;
+      const float *a = got[k].as<float>(), *b = ref[k].as<float>();
+      for (size_t i = 0; i < size_t(T) * qs[k]->N; ++i) d += double(a[i] - b[i]) * (a[i] - b[i]), n += double(b[i]) * b[i];
+      worst = std::max(worst, std::sqrt(d / std::max(n, 1e-30)));
+    }
+  }
+  return worst;
+}
 }  // namespace ni
