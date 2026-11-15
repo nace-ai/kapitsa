@@ -2616,7 +2616,18 @@ int Qwen35::qmt_min_rows() const {
   return q27 && keep64 ? 64 : 17;
 }
 
-bool Qwen35::tile_pass(int rows) const { return !cfg_.moe && qmt_on() && rows >= qmt_min_rows(); }
+bool Qwen35::tile_pass(int rows) const {
+  if (cfg_.moe || !qmt_on() || rows < qmt_min_rows()) return false;
+  // The tile takes 4-bit group-64 matrices only (enc_qmm_large, enc_qmm_gu: qmr_ok). A pack with any dense projection in
+  // another format (the 27B's Q5, 5-bit, 6-bit, 8-bit and bf16 packs, a mixed pack) runs part of its suffix on the staged
+  // short-prefill GEMMs, where the passes were the faster path, so it keeps them: only the all-4-bit-group-64 case
+  // (the Q4 and plain 4-bit 27B packs) was measured with the tile. Every projection a prefill pass reads counts, the
+  // token mixer's as well as the FFN's.
+  for (const Layer& L : layers_)
+    for (const QLinear* q : {&L.qkv, &L.z, &L.a, &L.b, &L.out, &L.q, &L.k, &L.v, &L.o, &L.mg, &L.mu, &L.md})
+      if (*q && !qmr_ok(*q)) return false;
+  return true;
+}
 
 bool qmt128_for(int M) {
   static const bool on = [] {
