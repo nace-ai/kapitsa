@@ -24,6 +24,8 @@ in [benchmarks.md](benchmarks.md). It runs the rows teacher-forced, full vocabul
 |---|---|---|---|---|
 | Qwen3.8-Flash-Next Q2_0, M5 Pro | Splash 1.5.0 | 72 (16K, 32K, 64K windows) | 16 | 0.46 |
 | Qwen3.6-35B-A3B 4-bit, M5 Pro | Splash 1.5.0 | 192 (8 windows, 512 to 3,200 tokens) | 4 | 2.1e-3 |
+| Qwen3.8 27B KQuant, Mac mini M6 | mlx-lm 0.32.2 (MLX 0.32.4; mlx-serve's engine) | 192 (`logit_dump` step rows, 8 windows) | 0 | 2.9e-4 |
+| Qwen3.5 4B 4-bit, Mac mini M6 | mlx-lm 0.32.2 (MLX 0.32.4) | 192 (`logit_dump` step rows, 8 windows) | 2 | 7.1e-4 |
 
 On Flash-Next, Splash's rows were scored from its prefix cache; on the 32 rows also scored cold, the two agree (same
 top-1 on 31 of 32 rows, mean KL at most 1.5e-2).
@@ -104,7 +106,7 @@ updated on 7 Nov; rows name their measured Mac. Drift is against Kapitsa's preci
 | 7 | Nemotron Lightning attention projections in 8-bit (`NI_NH_ATTN_Q8`) | Lightning | BF16 to 8-bit weights | M5 Pro 48 GB, 8 interleaved `kapitsa bench --quick` legs: decode about the same (T 0.6 +1%, T 0 -4%, ranges overlap), 4K prefill 8% slower ([results](../bench/results/2026-11-07-lightning-attn-q8/)) | 192 rows: 1 flip (a near-tie), mean KL 6.5e-4; inside the fallback bar (4 of 192, 2.1e-3); fails the floor's gate (mean KL 6.5e-4 against 2.9e-4, p99 1.5e-2 against 6.8e-3), so it can only join `fast`, never `precise` | not a member: not faster |
 | 8 | Fused Flash-Next indexer selection (`NI_QSA_FUSE`) | Flash-Next decode | block keys a few ulp off | Flash-Next 32K, decode about 6% slower (40.5 against 42.9 tok/s, 2 legs against 1; 1 leg void for load) | 72 rows: every row bitwise identical to precise | slower and no drift; not a member |
 | 9 | Prompt prefix routed to 4 experts instead of 8 (#853) | 35B-A3B | fewer experts per prefix token | not reproduced | 7 flips, mean KL 3.6e-2 | closed |
-| 10 | Token mixers' input projections on the Neural Engine (`NI_ANE_PROJ`) | Qwen 4B and 27B on Macs with matrix units (profile row `ane_proj_fast`); measured on a Mac mini M6 | DeltaNet in_proj qkv + z and attention q / k / v in W8A8, as the FFN split | 27B 4K prefill 488-497 -> 583-595 tok/s, 16K 426-431 -> 513-522; 4B 4K +8.6%, 16K +6%; 1024-row chunks +3.5% (`ni_run`, 3 interleaved pairs) | 27B, 192 rows a path: 0 flips, mean KL 2.2e-4; fails the M5-class floor's gate (1.18e-4); the 27B's bar against its fastest other engine is not measured yet (the 35B's is 4 flips, 2.1e-3) | proposed member (draft PR): needs the 27B bar and a second setup |
+| 10 | Token mixers' input projections on the Neural Engine (`NI_ANE_PROJ`) | Qwen3.8 27B on Macs with matrix units (profile row `ane_proj_fast`); measured on a Mac mini M6 | DeltaNet in_proj qkv + z and attention q / k / v in W8A8, as the FFN split | 27B 4K prefill 488-497 -> 583-595 tok/s, 16K 426-431 -> 513-522, 1024-row chunks +3.5%; 4B 4K +8.6%, 16K +6% (`ni_run`, 3 interleaved pairs) | 27B, 192 step rows: 0 flips, mean KL 2.2e-4 (bar 0, 2.9e-4: inside); fails the M5-class floor's gate (1.18e-4). 4B: 4 flips, 7.7e-4 (bar 2, 7.1e-4: over) | proposed member (draft PR #1275) for the 27B; the 4B is out; needs a second setup |
 
 Already lossy defaults (they passed their gates, so they are in precise): `NI_MOE_QTM`, `NI_QATTN_G8`/`D2` on the
 35B-A3B, `NI_QMT6` on Flash-Next, the Neural Engine W8A8 split on the 4B and 27B, `NI_FLINT_SELF`.

@@ -530,7 +530,7 @@ void Qwen35::enc_prefill_wave2(Encoder& e, Seq& s, int pos0, int T, int h) {
 
 // A fast profile member (docs/profiles.md): it moves the 27B's logits past the M5-class floor's gate (decode paths'
 // mean KL 2.2e-4 against 1.18e-4, 0 top-1 flips), so precise keeps the projections on the GPU. Its class is the device
-// profile's ane_proj_fast row: the 4B and 27B dense shapes on Macs with matrix units. NI_ANE_PROJ=1 or 0 overrides
+// profile's ane_proj_fast row: the 27B's shape on Macs with matrix units (the 4B was over its bar). NI_ANE_PROJ=1 or 0 overrides
 // either profile (1 also outside the row's class). `log`: the fast profile's one line (profile_switch).
 bool Qwen35::proj_on(const Qwen35Config& c, bool log) {
   ModelFacts f;

@@ -19,10 +19,8 @@ bool qwen35_a3b(const ModelFacts& m) {
   return qwen35_shape(m) && !m.clover && m.experts == 256 && m.top_k == 8 && m.moe_i == 512 && m.shared_i == 512;
 }
 
-// The 4B and 27B dense shapes (ModelClass::kQwenDenseAne)
-bool qwen_dense_ane(const ModelFacts& m) {
-  return !m.moe && ((m.hidden == 2560 && m.layers == 32) || (m.hidden == 5120 && m.layers == 64));
-}
+// The Qwen3.8 27B's shape (ModelClass::kQwen27bDense)
+bool qwen27b_dense(const ModelFacts& m) { return !m.moe && m.hidden == 5120 && m.layers == 64; }
 
 }  // namespace
 
@@ -67,7 +65,7 @@ bool model_class_matches(ModelClass c, const ModelFacts& m) {
     case ModelClass::kOther: return true;
     case ModelClass::kQwen35Shape: return qwen35_shape(m);
     case ModelClass::kQwen35A3b: return qwen35_a3b(m);
-    case ModelClass::kQwenDenseAne: return qwen_dense_ane(m);
+    case ModelClass::kQwen27bDense: return qwen27b_dense(m);
   }
   return false;
 }
@@ -155,12 +153,13 @@ const DefaultRow kDefaults[] = {
     {"tattn_fast", Knob::kNone, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "fast profile", 8, 10, false,
      "M5 Pro", false},
     // Fast profile only (docs/profiles.md): the token mixers' input projections on the Neural Engine beside the FFN
-    // split's wavefront (NI_ANE_PROJ, Qwen35::proj_on). The 4B and 27B shapes on the matrix class: measured on a Mac
-    // mini M6 (12 cores), 27B 4K and 16K prefill +20%, 4B +6 to +9%, 1024-row chunks +3.5% (ni_run, 3 interleaved
-    // pairs); the 27B's decode paths move 2.2e-4 mean KL with 0 top-1 flips, past the M5 floor's gate, hence fast. Not
-    // the non-matrix Macs with a share (M1 to M4, not measured) nor other dense shapes (the 9B's 2048-channel inputs).
-    {"ane_proj_fast", Knob::kAneProjFast, ModelClass::kQwenDenseAne, DefaultScope::kMatrix, nullptr, "on", 6, 20, false,
-     "Mac mini M6 (4B, 27B); fast profile only", true},
+    // split's wavefront (NI_ANE_PROJ, Qwen35::proj_on). The 27B's shape on the matrix class. Mac mini M6 (12 cores):
+    // 27B 4K and 16K prefill +20%, 1024-row chunks +3.5% (ni_run, 3 interleaved pairs); its 192 step rows move 0 flips,
+    // mean KL 2.2e-4 against precise, inside its bar (mlx-lm on the same rows: 0 flips, 2.9e-4). A model, not the
+    // dense class, on a measured miss: the 4B was faster (+6 to +9%) but over its bar (4 flips, 7.7e-4 against mlx-lm's
+    // 2 flips, 7.1e-4). Not the non-matrix Macs with a share (M1 to M4, not measured).
+    {"ane_proj_fast", Knob::kAneProjFast, ModelClass::kQwen27bDense, DefaultScope::kMatrix, nullptr, "on", 20, 0, false,
+     "Mac mini M6 (27B; the 4B over its bar); fast profile only", true},
 };
 
 bool guard_matches(const char* id, const DeviceProfile& dev) {
@@ -197,7 +196,7 @@ DeviceProfile resolve_device(const DeviceFacts& f) {
 ModelClass resolve_model(const ModelFacts& m) {
   if (qwen35_a3b(m)) return ModelClass::kQwen35A3b;
   if (qwen35_shape(m)) return ModelClass::kQwen35Shape;
-  if (qwen_dense_ane(m)) return ModelClass::kQwenDenseAne;
+  if (qwen27b_dense(m)) return ModelClass::kQwen27bDense;
   return ModelClass::kOther;
 }
 
@@ -215,7 +214,7 @@ const char* model_class_name(ModelClass m) {
   switch (m) {
     case ModelClass::kQwen35A3b: return "qwen35-a3b";
     case ModelClass::kQwen35Shape: return "qwen35-shape";
-    case ModelClass::kQwenDenseAne: return "qwen-dense-ane";
+    case ModelClass::kQwen27bDense: return "qwen-27b-dense";
     case ModelClass::kOther: return "other";
   }
   return "other";

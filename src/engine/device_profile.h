@@ -17,10 +17,9 @@ enum class ChipClass { kLegacy, kSimd, kMatrix, kWide };
 
 // The model half of a row. kOther matches every model. kQwen35Shape is the 35B-A3B's prefill shape (MoE, hidden
 // 2048, 40 layers), which Clover-35B-A3B shares; kQwen35A3b is the full shape with the drafter fields, Clover out
-// (its sampled decode is slower with the KFlash lanes on the M5 Pro, #1094). kQwenDenseAne is the two dense Qwen shapes
-// whose Neural Engine split takes 2560-channel input segments: the Qwen3.5 4B (hidden 2560, 32 layers) and the Qwen3.8
-// 27B (hidden 5120, 64 layers).
-enum class ModelClass { kOther, kQwen35Shape, kQwen35A3b, kQwenDenseAne };
+// (its sampled decode is slower with the KFlash lanes on the M5 Pro, #1094). kQwen27bDense is the Qwen3.8 27B's shape
+// (dense, hidden 5120, 64 layers).
+enum class ModelClass { kOther, kQwen35Shape, kQwen35A3b, kQwen27bDense };
 
 // The knobs the table decides, in the table's order. A call site passes the enum, not the string: a typo is a
 // compile error, not a default that silently reads as off. kNone is a documentation row (a class or a guard the
