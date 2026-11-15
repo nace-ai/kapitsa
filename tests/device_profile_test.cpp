@@ -84,8 +84,7 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 20);  // +1: 9B mixed-format catalog policy (#493); +1: kflash_block16; +1: m5_pro_gpu;
-                                     // +1: ane_proj_fast
+  CHECK(ni::default_count() == 19);  // +1: 9B mixed-format catalog policy (#493); +1: kflash_block16; +1: ane_proj_fast
   // ane_proj_fast: the 27B on the Apple M6 by name (slower on the M5 Pro; the 4B was over its bar; the fast profile reads it)
   const ni::DefaultRow* proj = row("ane_proj_fast");
   CHECK(proj && proj->scope == ni::DefaultScope::kName && proj->live && proj->exclusive && proj->win_pct >= 10 &&
@@ -232,11 +231,6 @@ int main() {
   // m1_max_32: kept as guard (#393)
   CHECK(ni::m1_max_32(m1));  // m1 is an M1 Max 32-core
   CHECK(!ni::m1_max_32(m4) && !ni::m1_max_32(m5pro_f) && !ni::m1_max_32(mac(7, 16, "Apple M1 Pro", 32L << 30)));
-  // m5_pro_gpu: the 27B's 64-row tensor tile keeps 64 rows there (a measured miss at 17); the name, not the cores
-  CHECK(ni::m5_pro_gpu(m5pro_f) && ni::m5_pro_gpu(faked_f) && !ni::m5_pro_gpu(m5max_f) && !ni::m5_pro_gpu(m4pro));
-  CHECK(!ni::m5_pro_gpu(mac(10, 12, "Apple M6", 32L << 30)) && !ni::m5_pro_gpu(mac(10, 10, "Apple M5", 24L << 30)));
-  CHECK(row("m5_pro_gpu")->scope == ni::DefaultScope::kGuard && row("m5_pro_gpu")->exclusive);
-  CHECK(ni::default_matches(*row("m5_pro_gpu"), m5pro) && !ni::default_matches(*row("m5_pro_gpu"), m5max));
 
   const std::string text = ni::format_profile(m5pro, false);
   CHECK(text.find("chip class: matrix") != std::string::npos);
