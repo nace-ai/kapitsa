@@ -12,6 +12,7 @@
 #include "ane/ffn_split.h"
 #include "ane/proj_split.h"
 #include "engine/profile.h"
+#include "engine/device_profile.h"
 #include "ane/input_profile.h"
 #include "ane/slabs.h"
 #include "model/kparams.h"
@@ -91,9 +92,13 @@ bool Qwen35::ane_finish_chunk() {
       ane_stats_.ane_ms += pms;
       ane_stats_.evals += ane_proj_->last_jobs();
     } else {
-      logi("NI_ANE_PROJ: Neural Engine in_proj stopped (%s)", ane_proj_->reason().c_str());
+      // The FFN split retires with it: the engine reruns the chunk once and does not finish that rerun's split
+      // (engine.cpp), so the rerun must find no split at all. One projection fault costs the FFN split too, for the
+      // rest of the process, as an FFN fault does.
+      logi("NI_ANE_PROJ: the Neural Engine's input projections stopped (%s); the FFN split stops with them",
+           ane_proj_->reason().c_str());
       ane_proj_.reset();
-      if (ok) ane_->retire("the Neural Engine in_proj of the same chunk failed");
+      if (ok) ane_->retire("the Neural Engine's input projections of the same chunk failed");
       ok = false;
     }
   }
@@ -236,8 +241,9 @@ Qwen35::AnePlan Qwen35::ane_plan(const std::string& dir, const MemPlan& m) {
     return a;
   }
   a.bytes = ane::split_bytes(uint32_t(m.hidden), uint32_t(m.ffn), a.units, m.layers, wave ? 2 : 1) + m.slot_state / 3;
-  if (wave && proj_on()) {  // the mixers' input projections (ane_proj_build): built for causal models with the wavefront
-    const Qwen35Config c = read_config(dir);
+  // the mixers' input projections (ane_proj_build): built for causal dense models with the wavefront. Counted when the
+  // switch is on; a build that then fails (startup check, compile) leaves this headroom unused until a reload.
+  if (const Qwen35Config c = read_config(dir); wave && proj_on(c, false)) {
     if (c.causal && !c.moe) {
       const uint32_t lin = uint32_t(2 * c.lin_hk * c.lin_dk + 2 * c.lin_hv * c.lin_dv);
       const uint32_t att = uint32_t(2 * c.hq * c.head_dim + 2 * c.hkv * c.head_dim);
@@ -523,18 +529,21 @@ void Qwen35::enc_prefill_wave2(Encoder& e, Seq& s, int pos0, int T, int h) {
 }
 
 // A fast profile member (docs/profiles.md): it moves the 27B's logits past the M5-class floor's gate (decode paths'
-// mean KL 2.2e-4 against 1.18e-4, 0 top-1 flips), so precise keeps the projections on the GPU. Its class is wherever
-// the wavefront split runs (ane_proj_build's checks: a causal dense Qwen with the two-lane split). NI_ANE_PROJ=1 or 0
-// overrides either profile.
-bool Qwen35::proj_on() {
-  static const bool on = profile_switch("NI_ANE_PROJ", true,
-                                        "the token mixers' input projections on the Neural Engine (NI_ANE_PROJ)");
-  return on;
+// mean KL 2.2e-4 against 1.18e-4, 0 top-1 flips), so precise keeps the projections on the GPU. Its class is the device
+// profile's ane_proj_fast row: the 4B and 27B dense shapes on Macs with matrix units. NI_ANE_PROJ=1 or 0 overrides
+// either profile (1 also outside the row's class). `log`: the fast profile's one line (profile_switch).
+bool Qwen35::proj_on(const Qwen35Config& c, bool log) {
+  ModelFacts f;
+  f.moe = c.moe, f.hidden = c.hidden, f.layers = c.layers;
+  const bool here = default_on(Knob::kAneProjFast, f);
+  if (log) return profile_switch("NI_ANE_PROJ", here, "the token mixers' input projections on the Neural Engine (NI_ANE_PROJ)");
+  if (const char* v = getenv("NI_ANE_PROJ"); v && *v) return strcmp(v, "0") != 0;
+  return profile() == Profile::kFast && here;
 }
 
 void Qwen35::ane_proj_build() {
   ane_proj_.reset();
-  if (!proj_on()) return;
+  if (!proj_on(cfg_, true)) return;
   if (!ane_ || ane_->lanes() < 2 || !cfg_.causal || cfg_.moe || !gdn_par_on()) return;
   std::vector<ane::ProjLayer> pl(layers_.size());
   for (size_t i = 0; i < layers_.size(); ++i) {

@@ -671,7 +671,7 @@ class Qwen35 : public Model {
   void enc_attn_post(Encoder& e, Seq& s, int i, const Layer& L, int pos0, int T, const Buffer& xbuf);
   bool gdn_par_on() const;
   void ane_proj_build();
-  static bool proj_on();  // NI_ANE_PROJ through the profile: on under fast, off under precise
+  static bool proj_on(const Qwen35Config& c, bool log);  // NI_ANE_PROJ through the profile and ane_proj_fast
   double ane_proj_verify();  // startup check: relative error against the GPU's projections
   // NI_PF_WAVE: a MoE chunk in two halves on the GPU alone, half B's token mixer beside half A's MoE layer and half A's
   // next mixer beside half B's MoE (Encoder tapes, play_pair): the first half's rows, 0 = not for a chunk of T rows

@@ -84,7 +84,27 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 19);  // +1: 9B mixed-format catalog policy (#493); +1: kflash_block16; +1: m5_pro_gpu
+  CHECK(ni::default_count() == 20);  // +1: 9B mixed-format catalog policy (#493); +1: kflash_block16; +1: m5_pro_gpu;
+                                     // +1: ane_proj_fast
+  // ane_proj_fast: the 4B and 27B dense shapes on the matrix class only (the fast profile reads it)
+  const ni::DefaultRow* proj = row("ane_proj_fast");
+  CHECK(proj && proj->scope == ni::DefaultScope::kMatrix && proj->live && !proj->exclusive &&
+        proj->model == ni::ModelClass::kQwenDenseAne);
+  {
+    ni::ModelFacts q27, q4, q9, moe;
+    q27.hidden = 5120, q27.layers = 64;
+    q4.hidden = 2560, q4.layers = 32;
+    q9.hidden = 4096, q9.layers = 32;
+    moe.moe = true, moe.hidden = 2048, moe.layers = 40;
+    const auto m6 = ni::resolve_device(mac(11, 12, "Apple M6", 32L << 30));
+    const auto m5max = ni::resolve_device(mac(10, 40, "Apple M5 Max", 128L << 30));
+    const auto m4pro = ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48));
+    CHECK(ni::default_on(ni::Knob::kAneProjFast, m6, q27) && ni::default_on(ni::Knob::kAneProjFast, m6, q4));
+    CHECK(ni::default_on(ni::Knob::kAneProjFast, m5max, q27));
+    CHECK(!ni::default_on(ni::Knob::kAneProjFast, m4pro, q27) && !ni::default_on(ni::Knob::kAneProjFast, m4pro, q4));
+    CHECK(!ni::default_on(ni::Knob::kAneProjFast, m6, q9) && !ni::default_on(ni::Knob::kAneProjFast, m6, moe));
+    CHECK(ni::resolve_model(q27) == ni::ModelClass::kQwenDenseAne && ni::resolve_model(q9) == ni::ModelClass::kOther);
+  }
   // kflash_block16: a multi-slot server drafts 16 rows on the matrix class (M5 and the M6), not on M1 to M4
   const ni::DefaultRow* b16 = row("kflash_block16");
   CHECK(b16 && b16->scope == ni::DefaultScope::kMatrix && b16->live && !b16->exclusive && b16->win_pct == 22);
