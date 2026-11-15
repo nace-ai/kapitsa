@@ -10,8 +10,8 @@
 class Kapitsa < Formula
   desc "Fast local LLM inference for Apple silicon, with an OpenAI-compatible server"
   homepage "https://github.com/nace-ai/kapitsa"
-  url "https://github.com/nace-ai/kapitsa/archive/refs/tags/v0.2.35.tar.gz"
-  sha256 "ea266c00d4075c88e21e89e45b20fbbc703d8da2e467c9bf93a3a637849b4502"
+  url "https://github.com/nace-ai/kapitsa/archive/refs/tags/v0.2.36.tar.gz"
+  sha256 "a34b1f044fbe650c2cc45d8e50eece4869af7a635676bf2947787300346f84be"
   license "Apache-2.0"
 
   livecheck do
