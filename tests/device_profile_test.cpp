@@ -86,9 +86,9 @@ int main() {
 
   CHECK(ni::default_count() == 20);  // +1: 9B mixed-format catalog policy (#493); +1: kflash_block16; +1: m5_pro_gpu;
                                      // +1: ane_proj_fast
-  // ane_proj_fast: the 27B's shape on the matrix class only (the fast profile reads it; the 4B was over its bar)
+  // ane_proj_fast: the 27B on the Apple M6 by name (slower on the M5 Pro; the 4B was over its bar; the fast profile reads it)
   const ni::DefaultRow* proj = row("ane_proj_fast");
-  CHECK(proj && proj->scope == ni::DefaultScope::kMatrix && proj->live && !proj->exclusive &&
+  CHECK(proj && proj->scope == ni::DefaultScope::kName && proj->live && proj->exclusive && proj->win_pct >= 10 &&
         proj->model == ni::ModelClass::kQwen27bDense);
   {
     ni::ModelFacts q27, q4, q9, moe;
@@ -100,7 +100,9 @@ int main() {
     const auto m5max = ni::resolve_device(mac(10, 40, "Apple M5 Max", 128L << 30));
     const auto m4pro = ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48));
     CHECK(ni::default_on(ni::Knob::kAneProjFast, m6, q27) && !ni::default_on(ni::Knob::kAneProjFast, m6, q4));
-    CHECK(ni::default_on(ni::Knob::kAneProjFast, m5max, q27));
+    CHECK(!ni::default_on(ni::Knob::kAneProjFast, m5max, q27));
+    CHECK(!ni::default_on(ni::Knob::kAneProjFast, ni::resolve_device(mac(10, 20, "Apple M5 Pro", g48)), q27));
+    CHECK(!ni::default_on(ni::Knob::kAneProjFast, ni::resolve_device(mac(11, 20, "Apple M6 Pro", g48)), q27));
     CHECK(!ni::default_on(ni::Knob::kAneProjFast, m4pro, q27) && !ni::default_on(ni::Knob::kAneProjFast, m4pro, q4));
     CHECK(!ni::default_on(ni::Knob::kAneProjFast, m6, q9) && !ni::default_on(ni::Knob::kAneProjFast, m6, moe));
     CHECK(ni::resolve_model(q27) == ni::ModelClass::kQwen27bDense && ni::resolve_model(q4) == ni::ModelClass::kOther);
