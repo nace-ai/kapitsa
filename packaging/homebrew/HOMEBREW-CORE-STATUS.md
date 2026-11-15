@@ -12,7 +12,7 @@ The repo turned 30 days old on 2026-11-15, the last homebrew-core requirement it
 | Repo age (30 days) | 30 days on 2026-11-15 (created 2026-10-16) |
 | Open-source license (DFSG-compatible) | Apache-2.0 |
 | Builds from source | CMake, Apple Clang |
-| Stable releases | v0.2.35 (2026-11-12) |
+| Stable releases | v0.2.36 (2026-11-15) |
 | Active development | Pushed 2026-11-15 |
 | livecheck | GitHub latest release strategy |
 | Platform restriction documented | arm64 macOS only (Metal kernels) |
