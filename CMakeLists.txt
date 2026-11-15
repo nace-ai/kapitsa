@@ -142,6 +142,12 @@ set_tests_properties(execution_session_test PROPERTIES TIMEOUT 30)
 add_test(NAME think_control_test COMMAND think_control_test)
 set_tests_properties(think_control_test PROPERTIES TIMEOUT 30)
 
+# Flint refuses NI_KV_I8 (#1257): the refusal text, header only
+add_executable(flint_kv_test tests/flint_kv_test.cpp)
+target_include_directories(flint_kv_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_test(NAME flint_kv_test COMMAND flint_kv_test)
+set_tests_properties(flint_kv_test PROPERTIES TIMEOUT 30)
+
 # kapitsa serve's one validator (src/server/service_config.cpp): flags and --config's JSON, against the schema in docs/
 add_executable(serve_options_test tests/serve_options_test.cpp src/server/service_config.cpp)
 target_include_directories(serve_options_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
