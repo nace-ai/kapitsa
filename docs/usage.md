@@ -338,6 +338,11 @@ its size and the folder's size after the import. A copy of the file you already 
 35b:16gb --from DIR` (a clone, no download), or `kapitsa import Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf` (a folder outside the
 catalog, named after the file).
 
+This build often writes a tool call without its opening `<tool_call>` (`<function=NAME>...</function></tool_call>`).
+Kapitsa returns such a reply as a tool call when the call is the whole reply: it starts with `<function=` (after
+whitespace), ends with `</function></tool_call>`, names one of the request's tools, and only whitespace follows. Any
+other reply stays the text the model wrote, and a reply that starts with `<function=` is held until its end to decide.
+
 On a MacBook Pro M1 Pro 16 GB it decodes 52.6 tok/s (llama.cpp b11669 on the same file: 38.0-38.8) and reads a
 4K-token prompt in 9.0 s (11.8 s). Against llama.cpp's Metal backend on the same file its next-token distributions are at
 KL 0.023 with the same top token 97.5% of the time (llama.cpp's own CPU backend: 0.012 and 97.5%); part of the gap is

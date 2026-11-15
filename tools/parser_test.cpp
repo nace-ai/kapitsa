@@ -195,6 +195,70 @@ int main(int argc, char** argv) {
     }
   }
 
+  // A call without its <tool_call> (the 24 GB Macs' 35b:16gb never writes it, #1277) is the reply's call when it is the
+  // whole reply: it starts with <function=, ends with </function></tool_call>, names a tool of the request, and only
+  // whitespace follows. Everything else stays the text the model wrote. Same result at every token boundary.
+  {
+    const auto bytes = byte_ids(tok);
+    const std::string body = "<function=run_shell>\n<parameter=command>\nls -la\n</parameter>\n</function>\n";
+    const std::string valid = body + "</tool_call>";
+    const std::string want_call = R"([run_shell{"command":"ls -la"}])";
+    auto rtrim = [](std::string t) {
+      t.resize(t.find_last_not_of(" \n\r\t") + 1);
+      return t;
+    };
+    struct Lenient {
+      const char* name;
+      std::string text;
+      bool in_think;
+      bool ended;
+      bool call;  // returned as a call (else the text as written)
+    };
+    const std::vector<Lenient> lenient = {
+        {"thinking off", valid, false, true, true},
+        {"after </think>", "Plan.\n</think>\n\n" + valid, true, true, true},
+        {"whitespace around", "\n \n" + valid + "\n\n", false, true, true},
+        {"call is the first text, prose as the next reply", "Use <function=run_shell> to run it.", false, true, false},
+        {"prose before the call", "I will list the files.\n\n" + valid, false, true, false},
+        {"no </tool_call>", body, false, true, false},
+        {"no </function>", "<function=run_shell>\n<parameter=command>\nls\n</tool_call>", false, true, false},
+        {"undeclared name", "<function=nope>\n<parameter=command>\nls\n</parameter>\n</function>\n</tool_call>", false, true, false},
+        {"nameless", "<function=>\n<parameter=command>\nls\n</parameter>\n</function>\n</tool_call>", false, true, false},
+        {"text after the call", valid + "\nDone.", false, true, false},
+        {"two calls", valid + "\n" + valid, false, true, false},
+        {"cut by max_tokens", valid, false, false, false},
+        {"a prefix of <function= and more", "<fund raising>", false, true, false},
+        {"<function= and the answer ends", "<function=", false, true, false},
+        {"</tool_call> alone", "</tool_call>", false, true, false},
+        {"the opener written", "<tool_call>\n" + body + "</tool_call>", false, true, true},
+    };
+    for (auto& c : lenient) for (bool think_tools : {false, true}) for (size_t cut : {0u, 1u, 2u, 3u, 5u, 7u}) {
+      const auto ids = cut ? cut_ids(tok, c.text, cut, bytes) : tok.encode(c.text);
+      Out out = run_ids(tok, ids, think_tools, c.in_think, c.ended, kTools, false, CallFormat::QwenXml);
+      const bool ok = c.call ? out.content.empty() && calls_str(out.calls) == want_call
+                             : out.calls.empty() && out.content == rtrim(c.text.substr(c.text.find("</think>") == std::string::npos
+                                                                                      ? 0 : c.text.find("</think>") + 8));
+      check(ok && (c.in_think || out.reasoning.empty()),
+            std::string("call without its opener: ") + c.name + " cut=" + std::to_string(cut) +
+                " think_tools=" + std::to_string(think_tools), show(out));
+    }
+    // streaming: the call's text never reaches the content, and a reply that is text streams its text whole
+    Out sp = run(tok, valid, true, false);
+    bool leaked = false;
+    for (auto& d : sp.deltas)
+      if (d.content.find("<function=") != std::string::npos || d.content.find("</tool_call>") != std::string::npos)
+        leaked = true;
+    size_t shown = 0;
+    for (auto& d : sp.deltas) shown += !d.content.empty() || !d.reasoning.empty() || !d.tool_calls.empty();
+    check(!leaked && shown == 1, "call without its opener: one delta, no markup in the content", show(sp));
+    // no tools in the request: the reply is text
+    Out none = run(tok, valid, true, false, true, ojson::array());
+    check(none.calls.empty() && none.content == valid, "call without its opener: no tools in the request, text", show(none));
+    // Glm markup is not looked at
+    Out glm = run_ids(tok, tok.encode(valid), false, false, true, kTools, false, CallFormat::Glm);
+    check(glm.calls.empty() && glm.content == valid, "call without its opener: GLM format unchanged", show(glm));
+  }
+
   // Turns without a call inside the reasoning: the stream is identical with and without the switch.
   struct Same {
     const char* name;
