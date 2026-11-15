@@ -1029,6 +1029,49 @@ ojson anthropic_reply(const std::vector<Event>& ev) {
   return {{"role", "assistant"}, {"content", blocks}};
 }
 
+// A call whose <tool_call> the model never wrote (35b:16gb, #1277) reaches the client as a call: chat reply, chat stream
+// and finish reason; the same text with an undeclared tool, or with prose after it, stays the content.
+void call_without_opener(const TmplModel& m, const std::string& tag) {
+  const ojson tools = J(R"([{"type":"function","function":{"name":"bash","parameters":{
+    "type":"object","properties":{"command":{"type":"string"}}}}}])");
+  const std::string call = "<function=bash>\n<parameter=command>\nfind / -name \"main.py\" | head -20\n</parameter>\n</function>\n</tool_call>";
+  struct C {
+    const char* name;
+    std::string text;
+    bool is_call;
+  };
+  for (const C& c : {C{"bare call", call, true}, C{"after thinking", "Look first.\n</think>\n\n" + call, true},
+                     C{"prose after", call + "\nDone.", false},
+                     C{"undeclared", "<function=rm>\n<parameter=command>\nx\n</parameter>\n</function>\n</tool_call>", false}}) {
+    const std::string label = tag + "call without its opener: " + c.name + " ";
+    std::vector<int> ids;
+    const auto ds = generate(m, c.text, c.text.find("</think>") != std::string::npos, tools, &ids);
+    const auto res = finished(ds, int(ids.size()));
+    const auto calls = chat_tool_calls(res.tool_calls, 0, false);
+    check(c.is_call ? res.content.empty() && calls.size() == 1 && calls[0]["function"]["name"] == "bash" &&
+                          calls[0]["function"]["arguments"] ==
+                              R"({"command":"find / -name \"main.py\" | head -20"})" && res.finish_reason == "tool_calls"
+                    : calls.empty() && res.content == c.text && res.finish_reason == "stop",
+          label + "chat reply", res.content);
+    ChatCompletionsStream cw("chat", "m", 1);
+    std::string wire = cw.begin(res);
+    for (const auto& d : ds) wire += cw.delta(d);
+    wire += cw.end(res);
+    const size_t done = wire.find("data: [DONE]");
+    std::string text, reason;
+    size_t streamed = 0;
+    for (const auto& e : parse_sse(wire.substr(0, done == std::string::npos ? wire.size() : done))) {
+      const auto& choice = e.data["choices"][0];
+      if (choice["delta"].contains("content")) text += choice["delta"]["content"].get<std::string>();
+      if (choice["delta"].contains("tool_calls")) streamed += choice["delta"]["tool_calls"].size();
+      if (choice["finish_reason"].is_string()) reason = choice["finish_reason"];
+    }
+    check(done != std::string::npos && (c.is_call ? text.empty() && streamed == 1 && reason == "tool_calls"
+                                                  : streamed == 0 && text == c.text && reason == "stop"),
+          label + "chat stream", text);
+  }
+}
+
 void nameless_tool_replies(const TmplModel& m, const std::string& tag) {
   const ojson tools = J(R"([{"type":"function","function":{"name":"read_file","parameters":{
     "type":"object","properties":{"path":{"type":"string"}}}}}])");
@@ -2992,6 +3035,7 @@ int main(int argc, char** argv) {
     const std::string tag = "[" + dir.substr(dir.find_last_of('/') + 1) + "] ";
     anthropic_round_trip(m, tag);
     nameless_tool_replies(m, tag);
+    call_without_opener(m, tag);
     reasoning_memory(m, tag);
     responses_round_trip(m, tag, false);
     responses_round_trip(m, tag, true);

@@ -2,7 +2,8 @@
 // template's <tool_call><function=...><parameter=...> XML, turned into OpenAI-style deltas; with CallFormat::Glm, calls
 // in GLM-4.5's <tool_call>NAME<arg_key>...</arg_key><arg_value>...</arg_value></tool_call> (Flint's) instead. With
 // TextTags, tags that are no tokens of the vocabulary (Nemotron Nano 9B v2's <think> and <TOOLCALL>[...] JSON calls)
-// are matched in the decoded text.
+// are matched in the decoded text. A Qwen call whose <tool_call> the model left out (the 24 GB Macs' 35B:16gb) is
+// returned as a call when it is the whole reply (see Lead).
 #pragma once
 #include "engine/chat.h"
 #include "engine/tool_args.h"
@@ -48,7 +49,11 @@ class OutputParser {
       : dec_(t), hdec_(t), tt_(text_tags), think_open_(think_open), think_close_(think_close), tc_open_(tc_open),
         tc_close_(tc_close), in_think_(start_in_think), parse_tools_(parse_tools),
         think_tools_(think_tools && parse_tools && !text_tags.any()), think_ws_(think_ws), fmt_(call_format),
-        tools_(tools) {}
+        tools_(tools) {
+    // only Qwen's markup in tokens: a call there starts with <function=, which no other turn starts with
+    if (parse_tools_ && fmt_ == CallFormat::QwenXml && !tt_.any() && tools_.is_array() && !tools_.empty())
+      lead_ = Lead::kArmed;
+  }
 
   // Returns the delta produced by this token.
   ChatDelta push(int id) {
@@ -74,6 +79,19 @@ class OutputParser {
         replay(d);
       }
     }
+    if (lead_ == Lead::kHolding || lead_ == Lead::kClosed) {  // the reply is a call without its opener, or text
+      const std::string tail = dec_.flush();
+      const bool closed = lead_ == Lead::kClosed;
+      lead_ = Lead::kOff;
+      if (closed && ended && trim_ws(tail).empty()) {
+        d.tool_calls.push_back(std::move(lead_call_));
+        lead_buf_.clear();
+      } else {
+        emit(d, std::move(lead_buf_) + (closed ? "</tool_call>" + lead_ws_ : "") + tail);
+        lead_buf_.clear();
+        lead_ws_.clear();
+      }
+    }
     std::string s = dec_.flush();
     if (tt_.any()) {  // the text held as a possible tag's start is text after all
       text_push(d, s);
@@ -96,6 +114,7 @@ class OutputParser {
 
  private:
   void push_plain(ChatDelta& d, int id) {
+    if ((lead_ == Lead::kHolding || lead_ == Lead::kClosed) && lead_token(d, id)) return;
     if (id == think_open_) {
       flush_text(d);
       in_think_ = true;
@@ -110,6 +129,7 @@ class OutputParser {
       return;
     }
     if (parse_tools_ && id == tc_open_ && !in_think_) {
+      lead_ = Lead::kOff;  // the model writes its openers
       flush_text(d);
       held_.clear();
       in_tool_ = true;
@@ -134,7 +154,82 @@ class OutputParser {
       tool_buf_ += s;
       return;
     }
+    if (lead_ == Lead::kArmed && !in_think_ && lead_text(d, s)) return;
     emit(d, s);
+  }
+
+  // A call whose <tool_call> the model never wrote (Qwen3.6-35B-A3B's UD-IQ2_XXS build, the 24 GB Macs' 35b:16gb,
+  // writes <function=NAME>...</function></tool_call> five replies in five, #1277). The reply is that call when, after
+  // whitespace, its first text is "<function=", the text up to </tool_call> is one call (its only </function> is the
+  // last text) that parses, NAME is a tool of the request, and nothing but whitespace follows until the end of the
+  // turn. The text is held from its first "<function=" until that is decided (the reply as text once it is not), so
+  // such a reply streams at its end.
+  // kArmed: nothing but whitespace was content so far, outside the reasoning and any call; kHolding: the held text
+  // began a call; kClosed: </tool_call> ended a valid call, which finish() returns if the turn ends there;
+  // kOff: decided (a reply is one or the other), or no call to look for.
+  enum class Lead { kOff, kArmed, kHolding, kClosed };
+
+  static bool lead_viable(const std::string& t) {
+    static const std::string open = "<function=";
+    return t.size() >= open.size() ? t.compare(0, open.size(), open) == 0 : open.compare(0, t.size(), t) == 0;
+  }
+
+  // The first content text s while armed; true when it was taken (held, or given out as text)
+  bool lead_text(ChatDelta& d, const std::string& s) {
+    const size_t k = s.find_first_not_of(" \n\r\t");
+    if (k == std::string::npos) return false;  // whitespace goes on as it does
+    emit(d, s.substr(0, k));
+    lead_buf_ = s.substr(k);
+    if (lead_viable(lead_buf_)) lead_ = Lead::kHolding;
+    else give_up(d, false);
+    return true;
+  }
+
+  // A token while the call is held or closed; true when it was taken (a token that ends the hold is replayed by the
+  // caller as it is)
+  bool lead_token(ChatDelta& d, int id) {
+    if (id == tc_close_ && lead_ == Lead::kHolding) {
+      lead_buf_ += dec_.flush();
+      const std::string body = trim_ws(lead_buf_), end = "</function>";
+      ToolCall tc;
+      // one call: the first </function> is the last text (two calls under one </tool_call> would parse as one)
+      if (body.size() >= end.size() && body.find(end) == body.size() - end.size() && parse_tool(body, tc) &&
+          has_tool(tc.name)) {
+        lead_call_ = std::move(tc);
+        lead_ = Lead::kClosed;
+      } else {
+        give_up(d, true);
+      }
+      return true;
+    }
+    if (id == think_open_ || id == think_close_ || id == tc_open_ || id == tc_close_) {
+      lead_buf_ += dec_.flush();
+      give_up(d, lead_ == Lead::kClosed);
+      return false;
+    }
+    const std::string s = dec_.push(id);
+    if (lead_ == Lead::kClosed) {
+      if (trim_ws(s).empty()) {  // whitespace after the call ends the turn as well
+        lead_ws_ += s;
+        return true;
+      }
+      give_up(d, true);
+      emit(d, s);
+      return true;
+    }
+    lead_buf_ += s;
+    if (!lead_viable(lead_buf_)) give_up(d, false);
+    return true;
+  }
+
+  // The held text (with the </tool_call> that closed it) is the reply's text after all
+  void give_up(ChatDelta& d, bool closed) {
+    lead_ = Lead::kOff;
+    std::string t;
+    t.swap(lead_buf_);
+    if (closed) t += "</tool_call>" + lead_ws_;
+    lead_ws_.clear();
+    emit(d, t);
   }
 
   // TextTags: the decoded text s after the text held so far, split at the tags the parser's state looks for (the think
@@ -428,6 +523,9 @@ class OutputParser {
   const ojson& tools_;
   bool in_tool_ = false, skip_leading_ws_ = false;
   std::string tool_buf_, held_;
+  Lead lead_ = Lead::kOff;
+  std::string lead_buf_, lead_ws_;  // the held text; the whitespace after a closed call
+  ToolCall lead_call_;
   // think_tools hold: token ids, complete call bodies, the body being read, </think> seen after them
   bool holding_ = false, in_body_ = false, closed_ = false;
   std::vector<int> hold_ids_;
