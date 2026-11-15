@@ -1,0 +1,23 @@
+[
+ {
+  "label": "q38-27b-kquant-mlxlm",
+  "extends": "q38-27b-mlxlm",
+  "model_name": "Qwen3.8-27B KQuant",
+  "model_path": "{models}/qwen3.8-27b-kquant",
+  "cmd": ["{env:MLX_LM_SERVER=mlx_lm.server}", "--model", "{models}/qwen3.8-27b-kquant",
+          "--host", "127.0.0.1", "--port", "8081", "--prompt-cache-size", "4", "--prompt-cache-bytes", "8589934592",
+          "--max-tokens", "16384", "--prefill-step-size", "2048"],
+  "requires_paths": ["{models}/qwen3.8-27b-kquant/config.json"],
+  "note": "mlx-lm's server on Kapitsa's KQuant 27B folder (plain MLX affine 4-bit g64; the MTP and DFlash2 side-cars are ignored); no speculative decoding. Same server settings as configs/mlx-lm.json."
+ },
+ {
+  "label": "q38-27b-kquant-kapitsa",
+  "extends": "q38-27b-kapitsa",
+  "model_name": "Qwen3.8-27B KQuant",
+  "model_path": "{models}/qwen3.8-27b-kquant",
+  "cmd": ["{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}", "serve", "--model", "{models}/qwen3.8-27b-kquant",
+          "--model-id", "qwen3.8-27b", "--host", "127.0.0.1", "--port", "8091", "--ctx", "32768", "--slots", "1"],
+  "requires_paths": ["{models}/qwen3.8-27b-kquant/config.json"],
+  "note": "Kapitsa main (v0.2.36, precise) on the KQuant 27B folder, its own DFlash2 drafter and MTP head from that folder, Neural Engine split per this Mac's calibration; --slots 1 as configs/kapitsa.json."
+ }
+]

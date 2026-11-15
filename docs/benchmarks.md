@@ -446,6 +446,16 @@ cells are newer.
   mlx-vlm on Bolt; oMLX MTP on Lightning and DFlash2 on the 27B and 35B-A3B; mlx-serve MTP except its DFlash2 draft tree
   on the 27B; Ollama its MLX runner with MTP; llama.cpp MTP n-max 3 (2 on the 35B-A3B and Lightning).
 
+### Mac mini M6, 32 GB
+
+Mac mini (2026), Apple M6, 12-core GPU, macOS 27.2.1, AC power.
+
+- **Qwen3.8 27B KQuant** (2026-11-15, the harness, two interleaved rounds): Kapitsa main `fe6a17af` 473 / 42.8
+  (16K 403; greedy 52.4); mlx-lm 0.32.2 283 / 9.5 (16K 251; greedy 9.6), no speculative decoding
+  ([results](../bench/results/2026-11-15-m6-27b-mlx-lm/README.md)). Kapitsa's runs are contention-flagged in prefill
+  (a desktop app at a mean 2.8% of the GPU, max 11%). llama.cpp, mlx-serve, mlx-vlm and the other engines were not run
+  on this Mac.
+
 <a id="m4-pro"></a>
 
 ### MacBook Pro M4 Pro, 48 GB

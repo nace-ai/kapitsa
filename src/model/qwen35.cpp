@@ -1,6 +1,7 @@
 #include "ane/input_profile.h"
 #include "util/load_threads.h"
 #include "model/qwen35.h"
+#include "ane/proj_split.h"
 #include "engine/device_profile.h"
 #include "model/affine_pack.h"
 #include "model/gemm_slices.h"
@@ -3807,6 +3808,30 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   e.dispatch((T + qb - 1) / qb, gy, 1, th);
 }
 
+bool Qwen35::gdn_par_on() const { return gdn_par(); }
+
+// NI_ANE_PROJ (enc_prefill_wave2): layer li's token mixer around its input projections on the Neural Engine
+void Qwen35::enc_mixer_in(Encoder& e, int li, const Layer& L, int T, const Buffer& x, int lane) {
+  enc_rows_half(e, x, L.in_norm, xh_, T, cfg_.hidden);
+  ane_proj_->pack(e, lane, xh_, T);
+  ane_proj_->launch(e, lane, li, T);
+}
+
+void Qwen35::enc_gdn_ab(Encoder& e, const Layer& L, int T) {
+  enc_proj(e, {{&L.b, bb_, false}, {&L.a, ab_, false}}, xh_, T);
+}
+
+void Qwen35::enc_mixer_out(Encoder& e, Seq& s, int li, const Layer& L, int T, const Buffer& x, int lane, int pos0) {
+  if (L.linear) {
+    ane_proj_->unpack(e, lane, li, {qkv_, zb_}, T);
+    enc_gdn_prefill_par(e, s, li, L, T);
+    enc_qmm(e, L.out, hh_, x, T, true);
+    return;
+  }
+  ane_proj_->unpack(e, lane, li, {qg_, kr_, vr_}, T);
+  enc_attn_post(e, s, li, L, pos0, T, x);
+}
+
 // The token mixer (GDN or attention) of layer i for T rows at positions pos0.., residual rows x.
 // snap / snap_row: capture the recurrent state after row snap_row (NI_SHORTPF in-pass checkpoint).
 void Qwen35::enc_mixer_prefill(Encoder& e, Seq& s, int i, const Layer& L, int pos0, int T, const Buffer& xbuf,
@@ -3838,6 +3863,13 @@ void Qwen35::enc_mixer_prefill(Encoder& e, Seq& s, int i, const Layer& L, int po
     enc_qmm(e, L.out, hh_, xbuf, T, true);
   } else {
     enc_proj(e, {{&L.q, qg_, false}, {&L.k, kr_, false}, {&L.v, vr_, false}}, xh_, T);
+    enc_attn_post(e, s, i, L, pos0, T, xbuf);
+  }
+}
+
+// attention after its q / k / v projections (qg_, kr_, vr_): norms and rope into the cache, attention, o
+void Qwen35::enc_attn_post(Encoder& e, Seq& s, int i, const Layer& L, int pos0, int T, const Buffer& xbuf) {
+  {
     kp::AttnPrep ap{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim),
                     uint32_t(cfg_.rot_dims), uint32_t(pos0), uint32_t(s.cap), cfg_.eps, cfg_.theta};
     e.use(pipe(mrope(s) ? "attn_prep_m" : "attn_prep"));
@@ -3871,7 +3903,9 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   const bool slabs = ane_slabs(T);
   ane_chunk_ = slabs || (cfg_.causal && !snap && ane_splits(T));
   if (ane_chunk_) ane_begin_chunk(slabs ? ane::slab_rows(T, int(ane::FfnSplit::kMaxRows)) : T);
-  if (ane_chunk_ && !slabs && ane_wave_rows(T)) {
+  if (ane_chunk_ && !slabs && ane_wave_rows(T) && ane_proj_ && !ane_proj_->retired()) {
+    enc_prefill_wave2(e, s, pos0, T, ane_wave_rows(T));
+  } else if (ane_chunk_ && !slabs && ane_wave_rows(T)) {
     enc_prefill_wave(e, s, pos0, T, ane_wave_rows(T));
   } else if (!ane_chunk_ && !snap && e.grouped() && gpu_wave_rows(T)) {
     enc_prefill_gpu_wave(e, s, pos0, T, gpu_wave_rows(T));

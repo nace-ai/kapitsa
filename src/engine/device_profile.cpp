@@ -19,6 +19,9 @@ bool qwen35_a3b(const ModelFacts& m) {
   return qwen35_shape(m) && !m.clover && m.experts == 256 && m.top_k == 8 && m.moe_i == 512 && m.shared_i == 512;
 }
 
+// The Qwen3.8 27B's shape (ModelClass::kQwen27bDense)
+bool qwen27b_dense(const ModelFacts& m) { return !m.moe && m.hidden == 5120 && m.layers == 64; }
+
 }  // namespace
 
 // The generation N of an "Apple M<N>" chip name ("Apple M6 Pro": 6), or 0 for any other name.
@@ -62,6 +65,7 @@ bool model_class_matches(ModelClass c, const ModelFacts& m) {
     case ModelClass::kOther: return true;
     case ModelClass::kQwen35Shape: return qwen35_shape(m);
     case ModelClass::kQwen35A3b: return qwen35_a3b(m);
+    case ModelClass::kQwen27bDense: return qwen27b_dense(m);
   }
   return false;
 }
@@ -148,6 +152,16 @@ const DefaultRow kDefaults[] = {
     // tattn() in qwen4_exp.cpp, whose matrix-unit check predates this table. Knob::kNone: not a default_on lookup.
     {"tattn_fast", Knob::kNone, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "fast profile", 8, 10, false,
      "M5 Pro", false},
+    // Fast profile only (docs/profiles.md): the token mixers' input projections on the Neural Engine beside the FFN
+    // split's wavefront (NI_ANE_PROJ, Qwen35::proj_on). A narrow row on a measured miss: the gain needs a GPU slower than
+    // the Neural Engine at the projections, so it is the chip and model measured, not the matrix class. Mac mini M6
+    // (12 cores), the 27B: 4K and 16K prefill +20%, 1024-row chunks +3.5% (ni_run, 3 interleaved pairs); 192 step rows
+    // 0 flips, mean KL 2.2e-4 against precise, inside its bar (mlx-lm: 0 flips, 2.9e-4). M5 Pro (48 GB, review of
+    // #1275): 4K 750 -> 563 tok/s (-25%), 16K 688 -> 542 (-21%), 3 rounds: slower on the wider class. The 4B on the
+    // M6: faster (+6 to +9%) but over its bar (4 flips, 7.7e-4 against mlx-lm's 2, 7.1e-4). Not measured: the M5 Max,
+    // the M5, the M6 Pro and Max (their GPUs are faster than the M6's), and the Macs without matrix units.
+    {"ane_proj_fast", Knob::kAneProjFast, ModelClass::kQwen27bDense, DefaultScope::kName, "Apple M6", "on", 20, 0, true,
+     "Mac mini M6 (27B); slower on the M5 Pro (-21 to -25%); fast profile only", true},
 };
 
 bool guard_matches(const char* id, const DeviceProfile& dev) {
@@ -184,6 +198,7 @@ DeviceProfile resolve_device(const DeviceFacts& f) {
 ModelClass resolve_model(const ModelFacts& m) {
   if (qwen35_a3b(m)) return ModelClass::kQwen35A3b;
   if (qwen35_shape(m)) return ModelClass::kQwen35Shape;
+  if (qwen27b_dense(m)) return ModelClass::kQwen27bDense;
   return ModelClass::kOther;
 }
 
@@ -201,6 +216,7 @@ const char* model_class_name(ModelClass m) {
   switch (m) {
     case ModelClass::kQwen35A3b: return "qwen35-a3b";
     case ModelClass::kQwen35Shape: return "qwen35-shape";
+    case ModelClass::kQwen27bDense: return "qwen-27b-dense";
     case ModelClass::kOther: return "other";
   }
   return "other";
