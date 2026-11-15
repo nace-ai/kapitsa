@@ -24,7 +24,7 @@ in [benchmarks.md](benchmarks.md). It runs the rows teacher-forced, full vocabul
 |---|---|---|---|---|
 | Qwen3.8-Flash-Next Q2_0, M5 Pro | Splash 1.5.0 | 72 (16K, 32K, 64K windows) | 16 | 0.46 |
 | Qwen3.6-35B-A3B 4-bit, M5 Pro | Splash 1.5.0 | 192 (8 windows, 512 to 3,200 tokens) | 4 | 2.1e-3 |
-| Qwen3.8 27B KQuant, Mac mini M6 | mlx-lm 0.32.2 (MLX 0.32.4; mlx-serve's engine) | 192 (`logit_dump` step rows, 8 windows) | 0 | 2.9e-4 |
+| Qwen3.8 27B KQuant, Mac mini M6 | mlx-lm 0.32.2 (MLX 0.32.4), on the same weights folder; the only other engine measured on this Mac (decode 9.5 tok/s, [benchmarks](benchmarks.md)), so not shown to be the fastest | 192 (`logit_dump` step rows, 8 windows) | 0 | 2.9e-4 |
 | Qwen3.5 4B 4-bit, Mac mini M6 | mlx-lm 0.32.2 (MLX 0.32.4) | 192 (`logit_dump` step rows, 8 windows) | 2 | 7.1e-4 |
 
 On Flash-Next, Splash's rows were scored from its prefix cache; on the 32 rows also scored cold, the two agree (same
