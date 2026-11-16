@@ -2548,8 +2548,7 @@ void NemotronH::enc_head(Encoder& e, int R, const Buffer& out, size_t out_row_st
 
 void NemotronH::enc_sample(Encoder& e, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
                            uint32_t step, const Buffer* dstep, size_t dstep_off) {
-  // top_k <= 0 or above the two passes' 32 (sampler.h); a tree verify's rows (dstep) never sample that way: such a
-  // request decodes in plain steps
+  // top_k as topk_k() takes it, up to the two passes' 64 (sampler.h); a tree verify's rows (dstep) sample the same way
   const uint32_t K = topk_k(sp);
   const TopkStageP ts{uint32_t(cfg_.vocab), K, topk_chunk(K)};
   const uint32_t ntg = topk_lists(uint32_t(cfg_.vocab), K);

@@ -6,6 +6,7 @@
 // cells with expected count < 5 pooled), as dflash2_ref.py `stat` does for the MLX reference.
 //   dflash_stat <model_dir> @<ids file> [trials=2000] [temp=0.6] [--dflash <dir|auto>] [--min-warm N]
 //               [--max-warm N] [--top-p 0.95] [--top-k 20]
+#include "model/sampler.h"
 #include "metal/gpu.h"
 #include "model/dflash2.h"
 #include "model/qwen35.h"
@@ -171,11 +172,11 @@ int main(int argc, char** argv) {
       if (!o) continue;
       o->id.clear();
       o->p.clear();
-      for (int q = 0; q < 32; ++q) {
-        const int id = dfl.dist_ids()[r * 32 + q];
+      for (int q = 0; q < kTopkMax; ++q) {  // (rows of kTopkMax: dfl_dist_rows' kDflDistW)
+        const int id = dfl.dist_ids()[r * kTopkMax + q];
         if (id < 0) break;
         o->id.push_back(id);
-        o->p.push_back(dfl.dist_probs()[r * 32 + q]);
+        o->p.push_back(dfl.dist_probs()[r * kTopkMax + q]);
       }
     }
   };
