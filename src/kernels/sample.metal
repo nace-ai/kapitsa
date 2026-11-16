@@ -203,8 +203,8 @@ NI_INLINE void sample_stage2_impl(const device float* cv, const device uint* ci,
 }
 
 // ---- Full-vocabulary sampling (kapitsa#1286) ----
-// A sampled request whose top-k the two passes above cannot hold: top_k <= 0 (no truncation) or above the 32
-// candidates sample_stage2 keeps per row (sampler.h: kTopkMax). The same rules over the whole row: the K best logits
+// A sampled request whose top-k the two passes above cannot hold: top_k <= 0 (no truncation) or above the 64
+// candidates they keep per row (sampler.h: kTopkMax). The same rules over the whole row: the K best logits
 // (value desc, id asc; K = 0: every token), the top-p prefix of that order on the untempered probabilities, then
 // exp((l - max) / T) over the kept tokens. The cuts are found by bisecting on the logits' order keys (32 passes over
 // the row for top-k, 32 for top-p), ties at a cut taken by lowest id as the sorted lists take them. The draw walks the
