@@ -68,6 +68,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <chrono>
 #include <condition_variable>
 #include <deque>
 #include <filesystem>
@@ -1127,6 +1128,76 @@ static int serve(int argc, char** argv, int first) {
   return server::run_service(std::move(options));
 }
 
+// #1288: ExecutionSession::wait() never looks at the client, so a non-streaming request whose client hangs up keeps
+// generating to the end. The streaming path notices through its sink; these watch the connection the handler serves.
+namespace {
+thread_local ::socket_t tl_serving_socket = INVALID_SOCKET;
+
+// httplib's keep-alive loop as Server::process_and_close_socket runs it, plus the socket recorded for the handler
+class ServingServer final : public httplib::Server {
+protected:
+  bool process_and_close_socket(::socket_t sock) override {
+    tl_serving_socket = sock;
+    std::string remote_addr;
+    int remote_port = 0;
+    httplib::detail::get_remote_ip_and_port(sock, remote_addr, remote_port);
+    std::string local_addr;
+    int local_port = 0;
+    httplib::detail::get_local_ip_and_port(sock, local_addr, local_port);
+    const bool ret = httplib::detail::process_server_socket(
+        svr_sock_, sock, keep_alive_max_count_, keep_alive_timeout_sec_, read_timeout_sec_, read_timeout_usec_,
+        write_timeout_sec_, write_timeout_usec_,
+        [&](httplib::Stream& strm, bool close_connection, bool& connection_closed) {
+          return process_request(strm, remote_addr, remote_port, local_addr, local_port, close_connection,
+                                 connection_closed, nullptr);
+        });
+    tl_serving_socket = INVALID_SOCKET;
+    httplib::detail::shutdown_socket(sock);
+    httplib::detail::close_socket(sock);
+    return ret;
+  }
+};
+
+// Polls `sock` until the caller's wait ends; cancels the execution if the peer closes first.
+class DisconnectWatch {
+public:
+  DisconnectWatch(::socket_t sock, ExecutionSession& execution)
+      : thread_([this, sock, &execution] {
+          std::unique_lock<std::mutex> lk(mu_);
+          while (!cv_.wait_for(lk, std::chrono::milliseconds(250), [this] { return stop_; })) {
+            if (!httplib::detail::is_socket_alive(sock)) {
+              execution.cancel();
+              return;
+            }
+          }
+        }) {}
+  ~DisconnectWatch() {
+    {
+      std::lock_guard<std::mutex> lk(mu_);
+      stop_ = true;
+    }
+    cv_.notify_all();
+    thread_.join();
+  }
+  DisconnectWatch(const DisconnectWatch&) = delete;
+  DisconnectWatch& operator=(const DisconnectWatch&) = delete;
+
+private:
+  std::mutex mu_;
+  std::condition_variable cv_;
+  bool stop_ = false;
+  std::thread thread_;
+};
+
+// The non-streaming routes' wait: the result, cancelled early if the client left. Outside a served request there
+// is no socket to watch, so it just waits (is_socket_alive on an invalid fd would cancel at once).
+const ChatResult& wait_for_client(ExecutionSession& execution) {
+  if (tl_serving_socket == INVALID_SOCKET) return execution.wait();
+  DisconnectWatch watch(tl_serving_socket, execution);
+  return execution.wait();
+}
+}  // namespace
+
 int ni::server::run_service(Options o) {
   EngineOptions opt = std::move(o.engine);
   opt.splash_binary = expand_home(opt.splash_binary);
@@ -1587,7 +1658,7 @@ int ni::server::run_service(Options o) {
   }
 
   api::ResponseStore responses;  // recent responses, for previous_response_id
-  httplib::Server srv;
+  ServingServer srv;
   // conversations carry their images as base64 every turn (an agent's screenshots: 1-4 MB each)
   srv.set_payload_max_length(256u << 20);
   // Stream events go out as written: with Nagle's algorithm a small SSE chunk waits for the ACK of
@@ -1716,7 +1787,7 @@ int ni::server::run_service(Options o) {
     if (!stream) {
       auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
       execution->start(r);
-      const ChatResult& out = execution->wait();
+      const ChatResult& out = wait_for_client(*execution);
       ui::done(meter, out);
       prefill_after(r, out);
       if (out.finish_reason == "error") {
@@ -1785,7 +1856,7 @@ int ni::server::run_service(Options o) {
     if (!q.stream) {
       auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
       execution->start(q.chat);
-      const ChatResult& out = execution->wait();
+      const ChatResult& out = wait_for_client(*execution);
       ui::done(meter, out);
       if (out.finish_reason == "error") {
         auto [status, fail_body] = api::messages_failure(out);
@@ -1877,7 +1948,7 @@ int ni::server::run_service(Options o) {
     if (!q->stream) {
       auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
       execution->start(q->chat);
-      const ChatResult& out = execution->wait();
+      const ChatResult& out = wait_for_client(*execution);
       ui::done(meter, out);
       if (out.finish_reason == "error") {
         auto [status, fail_body] = api::responses_failure(out);
@@ -2065,7 +2136,7 @@ int ni::server::run_service(Options o) {
     if (!stream) {
       auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
       execution->start(r);
-      const ChatResult& out = execution->wait();
+      const ChatResult& out = wait_for_client(*execution);
       ui::done(meter, out);
       prefill_after(r, out);
       if (out.finish_reason == "error") { ollama_fail(out, res); return; }
@@ -2149,7 +2220,7 @@ int ni::server::run_service(Options o) {
     if (!stream) {
       auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
       execution->start(r);
-      const ChatResult& out = execution->wait();
+      const ChatResult& out = wait_for_client(*execution);
       ui::done(meter, out);
       if (out.finish_reason == "error") { ollama_fail(out, res); return; }
       ojson j{{"model", model},
