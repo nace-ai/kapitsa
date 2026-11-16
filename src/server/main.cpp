@@ -50,6 +50,7 @@
 #include "server/activity.h"
 #include "server/service.h"
 #include "splash/discover.h"
+#include "server/disconnect.h"
 #include "server/ui.h"
 #include "server/ws_upgrade.h"
 #include "util/log.h"
@@ -68,6 +69,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <chrono>
 #include <condition_variable>
 #include <deque>
 #include <filesystem>
@@ -1127,6 +1129,7 @@ static int serve(int argc, char** argv, int first) {
   return server::run_service(std::move(options));
 }
 
+
 int ni::server::run_service(Options o) {
   EngineOptions opt = std::move(o.engine);
   opt.splash_binary = expand_home(opt.splash_binary);
@@ -1587,7 +1590,7 @@ int ni::server::run_service(Options o) {
   }
 
   api::ResponseStore responses;  // recent responses, for previous_response_id
-  httplib::Server srv;
+  ServingServer srv;
   // conversations carry their images as base64 every turn (an agent's screenshots: 1-4 MB each)
   srv.set_payload_max_length(256u << 20);
   // Stream events go out as written: with Nagle's algorithm a small SSE chunk waits for the ACK of
@@ -1716,7 +1719,7 @@ int ni::server::run_service(Options o) {
     if (!stream) {
       auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
       execution->start(r);
-      const ChatResult& out = execution->wait();
+      const ChatResult& out = wait_for_client(*execution);
       ui::done(meter, out);
       prefill_after(r, out);
       if (out.finish_reason == "error") {
@@ -1785,7 +1788,7 @@ int ni::server::run_service(Options o) {
     if (!q.stream) {
       auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
       execution->start(q.chat);
-      const ChatResult& out = execution->wait();
+      const ChatResult& out = wait_for_client(*execution);
       ui::done(meter, out);
       if (out.finish_reason == "error") {
         auto [status, fail_body] = api::messages_failure(out);
@@ -1877,7 +1880,7 @@ int ni::server::run_service(Options o) {
     if (!q->stream) {
       auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
       execution->start(q->chat);
-      const ChatResult& out = execution->wait();
+      const ChatResult& out = wait_for_client(*execution);
       ui::done(meter, out);
       if (out.finish_reason == "error") {
         auto [status, fail_body] = api::responses_failure(out);
@@ -2065,7 +2068,7 @@ int ni::server::run_service(Options o) {
     if (!stream) {
       auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
       execution->start(r);
-      const ChatResult& out = execution->wait();
+      const ChatResult& out = wait_for_client(*execution);
       ui::done(meter, out);
       prefill_after(r, out);
       if (out.finish_reason == "error") { ollama_fail(out, res); return; }
@@ -2149,7 +2152,7 @@ int ni::server::run_service(Options o) {
     if (!stream) {
       auto execution = native_execution(guard, std::make_shared<MeterChatEvents>(meter));
       execution->start(r);
-      const ChatResult& out = execution->wait();
+      const ChatResult& out = wait_for_client(*execution);
       ui::done(meter, out);
       if (out.finish_reason == "error") { ollama_fail(out, res); return; }
       ojson j{{"model", model},
