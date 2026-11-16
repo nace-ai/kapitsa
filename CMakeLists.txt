@@ -108,7 +108,7 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/src/model/kflash_budget.cpp PROP
 
 file(GLOB NI_TOOLS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tools/*.cpp ${CMAKE_SOURCE_DIR}/tools/*.mm)
 # a library the Python converters build and load themselves (ctypes), not a command
-list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/(mlx_quant|execution_session_test|http_stream_test|events_test|control_test|engine_view_test|splash_protocol_test|splash_runtime_test|splash_discover_test|splash_plan_test)\\.cpp$")
+list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/(mlx_quant|execution_session_test|http_stream_test|disconnect_test|events_test|control_test|engine_view_test|splash_protocol_test|splash_runtime_test|splash_discover_test|splash_plan_test)\\.cpp$")
 foreach(t ${NI_TOOLS})
   get_filename_component(name ${t} NAME_WE)
   add_executable(${name} ${t})
@@ -178,6 +178,11 @@ target_include_directories(http_stream_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CM
 target_link_libraries(http_stream_test PRIVATE Threads::Threads)
 add_test(NAME http_stream_test COMMAND http_stream_test)
 set_tests_properties(http_stream_test PROPERTIES TIMEOUT 45)
+add_executable(disconnect_test tools/disconnect_test.cpp src/engine/execution_session.cpp)
+target_include_directories(disconnect_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
+target_link_libraries(disconnect_test PRIVATE Threads::Threads)
+add_test(NAME disconnect_test COMMAND disconnect_test)
+set_tests_properties(disconnect_test PROPERTIES TIMEOUT 60)
 # Normal static-archive linking uses this object's cache symbols, not naceinfer's hook-free member.
 target_sources(fn_store_test PRIVATE src/model/expert_store.cpp)
 target_compile_definitions(fn_store_test PRIVATE NI_EXPERT_CACHE_TEST)
