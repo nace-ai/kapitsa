@@ -292,7 +292,7 @@ def main():
     if a.wait_gib: wait_for_memory(a.wait_gib, a.wait_cap_s, a.run_anyway)
     if a.wait_only: return
     if not (os.environ.get("NI_LOCK_HELD") or os.environ.get("NACE_GPU_LOCK_HELD")):
-        lock = open(os.environ.get("BENCH_GPU_LOCK", "/tmp/kapitsa-gpu.lock"), "a")  # held until this process ends
+        lock = os.fdopen(os.open(os.environ.get("BENCH_GPU_LOCK", "/tmp/kapitsa-gpu.lock"), os.O_RDONLY | os.O_CREAT, 0o644), "rb")  # held until this process ends
         print("waiting for the GPU lock (up to %d s) ..." % a.lock_timeout_s, flush=True)
         end = time.time() + a.lock_timeout_s
         while True:

@@ -151,7 +151,7 @@ def main():
     if not any(os.environ.get(k) == "1" for k in ("NI_LOCK_HELD", "NACE_GPU_LOCK_HELD")):
         path = Path(os.environ.get("BENCH_GPU_LOCK", "/tmp/kapitsa-gpu.lock"))
         path.parent.mkdir(parents=True, exist_ok=True)
-        lock = path.open("a")
+        lock = os.fdopen(os.open(path, os.O_RDONLY | os.O_CREAT, 0o644), "rb")
         fcntl.flock(lock, fcntl.LOCK_EX)
     corpus = (Path(__file__).resolve().parents[1] / "bench/harness/corpus/bench_corpus.txt").read_text()
     first = [{"role": "system", "content": "You are a careful code reviewer, cancellation test."},

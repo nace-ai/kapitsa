@@ -69,7 +69,7 @@ def gpu_lock():
         return None
     path = os.environ.get("BENCH_GPU_LOCK") or os.path.expanduser("/tmp/kapitsa-gpu.lock")
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    f = open(path, "a")
+    f = os.fdopen(os.open(path, os.O_RDONLY | os.O_CREAT, 0o644), "rb")
     print(f"waiting for the GPU lock {path} ...", flush=True)
     fcntl.flock(f, fcntl.LOCK_EX)
     return f
