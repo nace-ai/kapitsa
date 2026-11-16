@@ -44,6 +44,10 @@ inline int omitted_top_k(int publisher) { return publisher >= 1 && publisher <= 
 uint32_t topk_k(const SamplingParams& sp);
 // sp with top_k as topk_k() takes it: for a verify whose own sample is not used (Clover's check picks from the logits)
 SamplingParams two_pass(const SamplingParams& sp);
+// Whether a verify pass (encode_verify / encode_verify8 / encode_verify_chain: the two-pass sampler over each row) may
+// sample for sp: false for a full-vocabulary request, which a verify would clamp. The vpf prefill's gate uses it;
+// sample_topk_test --cpu pins its rule, and that two_pass(sp) (Clover's check) always passes it.
+inline bool verify_pass_ok(const SamplingParams& sp) { return !full_vocab(sp); }
 
 // One logits row (V floats) sampled over the whole vocabulary: tokens[out_index] = the sampled id, sprob[0] = the
 // row's largest logit (as sample_stage2 writes). One threadgroup.

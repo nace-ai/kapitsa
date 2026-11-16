@@ -3270,7 +3270,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     const bool vpf_split = boundary > p && boundary < n && n - p < vpf_split_min;
     // (a full-vocabulary request's first token is sampled by the prefill's own step, sample_full: the verify chain's
     // sampler holds kTopkMax candidates, kapitsa#1286)
-    const bool vpf = vpf_on && q35_ && dfl_ && !lili_ && !spec_ && !full_steps && (vpf_forced || vpf_default) &&
+    const bool vpf = vpf_on && q35_ && dfl_ && !lili_ && !spec_ && verify_pass_ok(sp) && (vpf_forced || vpf_default) &&
                      p == start && p >= 1024 && T == n - p && n - p <= vpf_max && pbound <= p && !s.embeds &&
                      s.mask_rows == 0 && !vpf_split;
     if (!vpf && q35_ && dfl_ && p >= 1024 && n - p <= vpf_max)  // (why a cached short suffix took the prefill path)

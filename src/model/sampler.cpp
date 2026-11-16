@@ -20,8 +20,9 @@ uint32_t topk_k(const SamplingParams& sp) {
 }
 
 SamplingParams two_pass(const SamplingParams& sp) {
+  // topk_k()'s clamp without its warning: a caller of this asks for the clamp on purpose (Clover's check at top_k 0)
   SamplingParams c = sp;
-  c.top_k = int(topk_k(sp));
+  c.top_k = sp.temperature <= 0 ? 1 : !full_vocab(sp) ? sp.top_k : sp.top_k <= 0 ? kTopkOmitted : kTopkMax;
   return c;
 }
 
