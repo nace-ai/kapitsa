@@ -89,6 +89,21 @@ NI_INLINE size_t flint_kv_index(constant FlintPrepP& p, uint kvh, uint t, uint d
   return (size_t(kvh) * p.rows + (p.ring ? pos % p.rows : pos)) * kFD + d;
 }
 
+#ifdef NI_KV_I8
+// One K or V row of the cache in the int8 layout ([kFD codes][f32 scale][pad], kKvRow bytes): the threadgroup is the row
+// (kFD threads, one value each). The value is rounded to half first, as flint_attn_d2 and flint_kv_store quantize it.
+NI_INLINE void flint_kv_put_i8(device half* cache, constant FlintPrepP& p, uint kvh, uint t, threadgroup float* scratch,
+                               uint d, float x) {
+  const uint pos = p.pos0 + t;
+  device char* row = (device char*)cache + (size_t(kvh) * p.rows + (p.ring ? pos % p.rows : pos)) * kKvRow;
+  const float h = float(half(x));
+  const float mx = tg_max(fabs(h), scratch, d, kFD);
+  const float sc = mx > 0.0f ? mx / 127.0f : 1.0f;
+  row[d] = (char)rint(h / sc);
+  if (d == 0) *(device float*)(row + kFD) = sc;
+}
+#endif
+
 // grid: (Hq + 2 Hkv, R) x 128 threads. qkv: fp32 [R][qkv_ld] (q heads | k heads | v heads); q_out: fp32 [R][Hq * 128];
 // inv: fp32 [64], RoPE's inverse frequencies.
 [[kernel]] void flint_prep(const device float* qkv [[buffer(0)]], device float* q_out [[buffer(1)]],
@@ -104,6 +119,12 @@ NI_INLINE size_t flint_kv_index(constant FlintPrepP& p, uint kvh, uint t, uint d
   const uint QD = p.Hq * kFD, KD = p.Hkv * kFD;
   if (h >= p.Hq + p.Hkv) {  // a value head: into the cache as it is
     const uint vh = h - p.Hq - p.Hkv;
+#ifdef NI_KV_I8
+    if (!p.chunk) {  // the cache holds int8 rows; a prefill chunk's own buffers stay half
+      flint_kv_put_i8(vc, p, vh, t, scratch, d, src[QD + KD + vh * kFD + d]);
+      return;
+    }
+#endif
     vc[flint_kv_index(p, vh, t, d)] = half(src[QD + KD + vh * kFD + d]);
     return;
   }
@@ -119,6 +140,9 @@ NI_INLINE size_t flint_kv_index(constant FlintPrepP& p, uint kvh, uint t, uint d
     x = d < kFD / 2 ? row[d] * cs - row[d + kFD / 2] * sn : row[d] * cs + row[d - kFD / 2] * sn;
   }
   if (is_q) q_out[(size_t(t) * p.Hq + h) * kFD + d] = x;
+#ifdef NI_KV_I8
+  else if (!p.chunk) flint_kv_put_i8(kc, p, h - p.Hq, t, scratch, d, x);
+#endif
   else kc[flint_kv_index(p, h - p.Hq, t, d)] = half(x);
 }
 
