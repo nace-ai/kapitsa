@@ -85,7 +85,7 @@ NI_INLINE void sample_stage2_impl(const device float* cv, const device uint* ci,
                                   threadgroup uint* topi) {
   uint K = max(1u, min(p.K, 64u));
   if (p.temp <= 0.0f) K = 1;
-  if (p.temp > 0.0f && p.K >= 8 && p.K <= 64 && p.n % p.K == 0 && p.n / p.K <= 128) {
+  if (p.temp > 0.0f && p.K >= 8 && p.K <= 32 && p.n % p.K == 0 && p.n / p.K <= 128) {
     // Stage 1 already sorted each list. A lane holds four list heads and advances
     // the winning list, avoiding a threadgroup reduction at every rank.
     if (tid >= 32) return;
