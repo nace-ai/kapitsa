@@ -1,4 +1,5 @@
 #include "util/load_threads.h"
+#include "model/sampler.h"
 #include "model/nemotron_h.h"
 #include "engine/device_profile.h"
 #include "model/kflash_budget.h"
@@ -2547,15 +2548,16 @@ void NemotronH::enc_head(Encoder& e, int R, const Buffer& out, size_t out_row_st
 
 void NemotronH::enc_sample(Encoder& e, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
                            uint32_t step, const Buffer* dstep, size_t dstep_off) {
-  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
-  const TopkStageP ts{uint32_t(cfg_.vocab), K, 2048};
-  const uint32_t ntg = (uint32_t(cfg_.vocab) + 2047) / 2048;
+  // top_k as topk_k() takes it, up to the two passes' 64 (sampler.h); a tree verify's rows (dstep) sample the same way
+  const uint32_t K = topk_k(sp);
+  const TopkStageP ts{uint32_t(cfg_.vocab), K, topk_chunk(K)};
+  const uint32_t ntg = topk_lists(uint32_t(cfg_.vocab), K);
   e.use(pipe("topk_stage1"));
   e.buf(0, lrow);
   e.buf(1, cand_v_);
   e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, 1, 1, 256);
+  e.dispatch(ntg, 1, 1, topk_threads(K));
   const SampleP p2{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, uint32_t(out_index)};
   e.use(pipe(dstep ? "sample_stage2_dstep" : "sample_stage2"));
   e.buf(0, cand_v_);
@@ -2798,9 +2800,9 @@ void NemotronH::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& 
 void NemotronH::encode_accept(Encoder& e, Seq& s, int pos, int R, int K, const SamplingParams& sp) {
   // the R rows' samples in two passes (topk_stage1_rows, sample_stage2_rows: each row's candidates and RNG step pos + r
   // as enc_sample's two passes per row give them)
-  const uint32_t Kc = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
-  const TopkStageP ts{uint32_t(cfg_.vocab), Kc, 2048};
-  const uint32_t ntg = (uint32_t(cfg_.vocab) + 2047) / 2048;
+  const uint32_t Kc = topk_k(sp);
+  const TopkStageP ts{uint32_t(cfg_.vocab), Kc, topk_chunk(Kc)};
+  const uint32_t ntg = topk_lists(uint32_t(cfg_.vocab), Kc);
   // (the M5: on simdgroup reductions, the same candidates and samples: topk_stage1_rows_sg, sample_stage2_rows_sg)
   const bool sg = sample_sg_ && ntg <= 64 && Kc <= 32;
   e.use(pipe(sg ? "topk_stage1_rows_sg" : "topk_stage1_rows"));
@@ -2808,7 +2810,7 @@ void NemotronH::encode_accept(Encoder& e, Seq& s, int pos, int R, int K, const S
   e.buf(1, cand_v_);
   e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, uint32_t(R), 1, 256);
+  e.dispatch(ntg, uint32_t(R), 1, topk_threads(Kc));
   const SampleRowsP p2{ntg * Kc, Kc, sp.temperature, sp.top_p, sp.seed, uint32_t(pos), 0, 0, 0, 0};
   e.use(pipe(sg ? "sample_stage2_rows_sg" : "sample_stage2_rows"));
   e.buf(0, cand_v_);

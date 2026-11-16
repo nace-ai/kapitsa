@@ -3,6 +3,7 @@
 // layers roll back through Qwen35's tape and the n-gram conv window through its position-indexed ring (a rejected
 // row's slot is rewritten when its position is fed again).
 #include "model/kparams.h"
+#include "model/sampler.h"
 #include "model/qwen4_exp.h"
 #include "engine/device_profile.h"
 #include "util/log.h"
@@ -334,13 +335,12 @@ void Qwen4Exp::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingP
   enc_gr_rows(e, mix_, R, x_, 0, true, injM_, injA_, xrn_, uint32_t(D));
   // the verify cycle's LM head runs the full 8-row block: the pair kernel takes it (pair8), the sole R=8 caller
   enc_rows(e, {{&lm_head_, logits_}}, xrn_, R, 0, true);
-  const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
-  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
+  const uint32_t V = uint32_t(cfg_.vocab), K = topk_k(sp), chunk = topk_chunk(K), ntg = topk_lists(V, K);
   kp::TopkStage ts{V, K, chunk};
   e.use(pipe4("topk_stage1_rows"));
   e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, uint32_t(R), 1, 256);
+  e.dispatch(ntg, uint32_t(R), 1, topk_threads(K));
   kp::SampleRows sr{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, 0, 0, 0};
   e.use(pipe4("sample_stage2_rows"));
   e.buf(0, cand_v_); e.buf(1, cand_i_); e.buf(2, samp_);

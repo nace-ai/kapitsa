@@ -1,4 +1,5 @@
 #include "engine/history_gate.h"
+#include "model/sampler.h"
 #include "engine/engine.h"
 #include "engine/device_profile.h"
 #include "engine/output_parser.h"
@@ -1806,8 +1807,8 @@ void Engine::batch_cycle(int rows) {
     if (k > 0 && exact) {  // the sampled members' acceptance (stage-1 candidates per row: as the pass made them)
       uint32_t Kmax = 1;
       for (const auto& gr : groups)
-        if (gr.sp.temperature > 0) Kmax = std::max(Kmax, uint32_t(std::clamp(gr.sp.top_k <= 0 ? 32 : gr.sp.top_k, 1, 32)));
-      const uint32_t n = (uint32_t(model_->vocab()) + 2047) / 2048 * Kmax;
+        Kmax = std::max(Kmax, topk_k(gr.sp));
+      const uint32_t n = topk_lists(uint32_t(model_->vocab()), Kmax) * Kmax;
       int r0 = 0;
       for (size_t i = 0; i < nj; ++i) {
         BatchJob* j = jobs[i];

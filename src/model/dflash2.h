@@ -212,8 +212,8 @@ class DFlash2 {
   void encode_accept(Encoder& e, Seq& s, int P, int K, const SamplingParams& sp);
   // The target's sampler distribution of verify rows 0..R-1 (dist_ids() / dist_probs()), T > 0.
   void encode_dist(Encoder& e, int R, const SamplingParams& sp);
-  const int* dist_ids() const { return dist_id_.as<int>(); }       // [8][32], -1 past the kept prefix
-  const float* dist_probs() const { return dist_p_.as<float>(); }  // [8][32]
+  const int* dist_ids() const { return dist_id_.as<int>(); }       // [8][kTopkMax], -1 past the kept prefix
+  const float* dist_probs() const { return dist_p_.as<float>(); }  // [8][kTopkMax]
   // One whole cycle into `e`, no host round trip inside: ring commit of the previous cycle's m_prev
   // kept rows, the drafting pass from the anchor tokens[P], the target's verify of the first K
   // proposals with captures, the acceptance. Afterwards tokens[P+1 .. P+1+accepted()] are the next

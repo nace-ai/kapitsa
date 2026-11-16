@@ -1,4 +1,5 @@
 #include "ane/input_profile.h"
+#include "model/sampler.h"
 #include "util/load_threads.h"
 #include "model/qwen35.h"
 #include "ane/proj_split.h"
@@ -2541,16 +2542,16 @@ void Qwen35::enc_sample(Encoder& e, Seq& s, const Buffer& xrow, int out_index, c
   static Pipeline st2 = Gpu::get().pipeline("sample_stage2");
   enc_qmv(e, lm_head_, xrow, logits_, nullptr, final_norm_);
   enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);  // structured output (nothing without masks)
-  // stage 2 holds 4 candidates per thread (4096): 122 threadgroups x 32 fits
-  uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
-  kp::TopkStage ts{uint32_t(cfg_.vocab), K, 2048};
-  uint32_t ntg = (cfg_.vocab + 2047) / 2048;
+  // stage 2 holds 4 candidates per thread (4096): 122 lists x 32, or 61 x 64 (topk_chunk)
+  const uint32_t K = topk_k(sp);
+  kp::TopkStage ts{uint32_t(cfg_.vocab), K, topk_chunk(K)};
+  uint32_t ntg = topk_lists(uint32_t(cfg_.vocab), K);
   // Independent SIMD selection and a merge avoid a threadgroup barrier per top-k rank.
   // Keep the small-k path; both kernels emit the same sorted lists.
   e.use(sample_sg_ && K >= 8 ? pipe("topk_stage1_rows_sg") : st1);
   e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, 1, 1, 256);
+  e.dispatch(ntg, 1, 1, topk_threads(K));
   kp::Sample sp2{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, uint32_t(out_index)};
   e.use(st2);
   e.buf(0, cand_v_); e.buf(1, cand_i_); e.buf(2, s.tok); e.buf(3, sprob_);

@@ -1,4 +1,5 @@
 #include "util/load_threads.h"
+#include "model/sampler.h"
 #include "model/affine_coeff_fixed.h"
 #include "model/dflash2_lowrank_cache.h"
 // DFlash2 block drafter: loading, load-time quantization, context ring and the drafting pass.
@@ -982,8 +983,8 @@ void DFlash2::alloc_buffers() {
   walk_s_ = g.alloc(D * 16 * 4, "dfl_walk_s");
   qprob_ = g.alloc(D * 16 * 4, "dfl_qprob");
   walk_k_ = g.alloc(B * 4, "dfl_walk_k");
-  dist_id_ = g.alloc(B * 32 * 4, "dfl_dist_id");
-  dist_p_ = g.alloc(B * 32 * 4, "dfl_dist_p");
+  dist_id_ = g.alloc(B * kTopkMax * 4, "dfl_dist_id");  // (dfl_dist_rows' kDflDistW per row)
+  dist_p_ = g.alloc(B * kTopkMax * 4, "dfl_dist_p");
   dist_keep_ = g.alloc(B * 4, "dfl_dist_keep");
   acc_ = g.alloc(16, "dfl_acc");
   memset(acc_.ptr(), 0, acc_.size);
@@ -1846,7 +1847,7 @@ void DFlash2::encode_accept_rows(Encoder& e, Seq& s, DFlashSeq& d, int P, int K,
                                  uint32_t n) {
   if (K < 1 || K > kB - 1 || sp.temperature <= 0) fatal("DFlash2 accept_rows: K=%d T=%g", K, sp.temperature);
   const size_t R = size_t(K) + 1;
-  kp::DflDist dp{n, uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)), sp.temperature, sp.top_p};
+  kp::DflDist dp{n, topk_k(sp), sp.temperature, sp.top_p};
   e.use(dpipe("dfl_dist_rows"));
   e.buf(0, tg_.verify_cand_vals().view(size_t(r0) * n * 4, R * n * 4));
   e.buf(1, tg_.verify_cand_ids().view(size_t(r0) * n * 4, R * n * 4));
@@ -2283,7 +2284,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
 
 void DFlash2::encode_dist(Encoder& e, int R, const SamplingParams& sp) {
   if (R < 1 || R > kB || sp.temperature <= 0) fatal("DFlash2 dist: R=%d T=%g", R, sp.temperature);
-  kp::DflDist dp{tg_.verify_candidates(sp), uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)), sp.temperature,
+  kp::DflDist dp{tg_.verify_candidates(sp), topk_k(sp), sp.temperature,
                  sp.top_p};
   e.use(dpipe("dfl_dist_rows"));
   e.buf(0, tg_.verify_cand_vals()); e.buf(1, tg_.verify_cand_ids()); e.buf(2, dist_id_); e.buf(3, dist_p_);
