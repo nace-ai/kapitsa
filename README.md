@@ -57,11 +57,11 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 The 9B row is the legacy pack (`9b` on M3 and M4); on M5 and newer `9b` is Nace Q4, which these numbers do not cover. [How it was measured](docs/benchmarks.md#nace-quants-against-the-packs-they-replace) · [every run](bench/results/2026-11-10-m5-pro-kquant/README.md)
 
-**Download.** The MLX builds for Kapitsa and the GGUF files for llama.cpp, LM Studio and Ollama that [Nace.AI](https://huggingface.co/nace-ai) publishes:
+**Download.** The MLX builds for Kapitsa and the GGUF files for [llama.cpp](https://github.com/ggml-org/llama.cpp), [LM Studio](https://lmstudio.ai) and [Ollama](https://github.com/ollama/ollama) that [Nace.AI](https://huggingface.co/nace-ai) publishes:
 
 | Model | MLX | GGUF |
 | --- | --- | --- |
-| [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B) · `4b` | [MLX](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX) | — |
+| [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B) · `4b` | [MLX](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX) | not published |
 | [Qwen3.5-9B](https://huggingface.co/Qwen/Qwen3.5-9B) · `9b` | [MLX](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX) · [MLX-4bit](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit) · [MLX-Q5](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-Q5) | [GGUF](https://huggingface.co/nace-ai/Qwen3.5-9B-GGUF) |
 | [Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) · `27b` | [MLX](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX) · [MLX-3bit](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-3bit) · [MLX-4bit](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-4bit) · [MLX-Q5](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-Q5) · [MLX-8bit](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-8bit) | [GGUF](https://huggingface.co/nace-ai/Qwen3.8-27B-GGUF) |
 | [Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) · `35b` | [MLX](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX) · [MLX-Q5](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX-Q5) | [GGUF](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-GGUF) |
