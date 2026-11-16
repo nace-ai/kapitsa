@@ -777,7 +777,7 @@ std::string Flint::disk_format() const {
   // separate SSD prefix-cache namespaces
   snprintf(b, sizeof b, "flint %s; K, V %s [%d][cap][%d]%s; rings of %d; %s",
            std::string(cfg_.kind.begin(), cfg_.kind.end()).c_str(), kv_i8() ? "i8" : "f16", cfg_.hkv,
-           int(kv_row_bytes(cfg_.hd)), kv_i8() ? " (int8 codes, an f32 scale a 32-dim group)" : "", ring_rows_,
+           int(kv_row_bytes(cfg_.hd)), kv_i8() ? " (int8 codes, an f16 scale a 16-dim group)" : "", ring_rows_,
            formats_summary().c_str());
   return b;
 }
