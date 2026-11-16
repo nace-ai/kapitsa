@@ -46,7 +46,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ### Nace quants
 
-**Downloads closer to the original model, at the same size.** Nace quants are our quantization for MLX packs and GGUF files. The [`4b`, `9b`, `27b`, `35b` and `flash-next`](docs/models.md) aliases download them.
+**Downloads closer to the original model, at the same size.** Nace quants are our quantization for MLX packs and GGUF files. The `4b`, `9b`, `27b`, `35b` and `flash-next` [aliases](docs/models.md) download them.
 
 | 4-bit | Compared with | KL from bf16 (lower is closer) | [GSM8K](https://huggingface.co/datasets/openai/gsm8k), 1,319 questions |
 | --- | --- | --- | --- |
@@ -80,7 +80,7 @@ kapitsa-systemone --model ~/.cache/kapitsa/models/drex-max-v1 --port 8000 --cont
 
 [The guide](docs/drex-max.md) has the request, the memory a longer context needs and the encoding.
 
-Drex GGUF files: [drex-dlm-Q8_0](https://huggingface.co/nace-ai/drex-dlm-Q8_0) · [drex-v1.5-Q8_0](https://huggingface.co/nace-ai/drex-v1.5-Q8_0) · [drex-max-v1-Q8_0](https://huggingface.co/nace-ai/drex-max-v1-Q8_0) · [drex-v2.0-Q8_0](https://huggingface.co/nace-ai/drex-v2.0-Q8_0) · [drex-v2.0-Q4_K_M](https://huggingface.co/nace-ai/drex-v2.0-Q4_K_M). The affine Q4 checkpoint is [drex-max-v1-affine-q4](https://huggingface.co/nace-ai/drex-max-v1-affine-q4).
+Drex GGUF files: [drex-dlm-Q8_0](https://huggingface.co/nace-ai/drex-dlm-Q8_0) · [drex-v1.5-Q8_0](https://huggingface.co/nace-ai/drex-v1.5-Q8_0) · [drex-max-v1-Q8_0](https://huggingface.co/nace-ai/drex-max-v1-Q8_0) · [drex-v2.0-Q8_0](https://huggingface.co/nace-ai/drex-v2.0-Q8_0) · [drex-v2.0-Q4_K_M](https://huggingface.co/nace-ai/drex-v2.0-Q4_K_M), and the affine Q4 checkpoint [drex-max-v1-affine-q4](https://huggingface.co/nace-ai/drex-max-v1-affine-q4).
 
 
 ## Benchmarks
