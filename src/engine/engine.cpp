@@ -3268,7 +3268,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     // a boundary inside the suffix makes the passes fold at it for the checkpoint; under vpf_split_min rows that
     // fold costs more than the passes save, so the plain path (which snapshots the checkpoint mid-chunk) keeps it
     const bool vpf_split = boundary > p && boundary < n && n - p < vpf_split_min;
-    const bool vpf = vpf_on && q35_ && dfl_ && !lili_ && !spec_ && (vpf_forced || vpf_default) &&
+    // (a full-vocabulary request's first token is sampled by the prefill's own step, sample_full: the verify chain's
+    // sampler holds kTopkMax candidates, kapitsa#1286)
+    const bool vpf = vpf_on && q35_ && dfl_ && !lili_ && !spec_ && !full_steps && (vpf_forced || vpf_default) &&
                      p == start && p >= 1024 && T == n - p && n - p <= vpf_max && pbound <= p && !s.embeds &&
                      s.mask_rows == 0 && !vpf_split;
     Checkpoint* snap = nullptr;
@@ -3326,6 +3328,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       T = 0;
       for (int c = 0; c < nc; ++c) T += Ts[c];  // the common tail below: p += T, the saves, the commit
     } else if (vpf) {
+      logd("prefill: %d suffix rows after %d cached as verify passes (NI_VPF)", n - p, p);
       int q = p;
       // the suffix's rows [q, upto) as verify passes: as many rows a pass as NI_VPF_ROWS gave the target's verify (32, 24
       // or 16), and 8 for what is left under 16

@@ -3,13 +3,26 @@
 #include "model/kparams.h"
 #include "util/log.h"
 
+#include <atomic>
+
 namespace ni {
 
 uint32_t topk_k(const SamplingParams& sp) {
   if (sp.temperature <= 0) return 1;
-  if (full_vocab(sp)) fatal("top_k %d reached the %d-candidate sampler: it is sampled over the whole vocabulary", sp.top_k,
-                            kTopkMax);
+  if (full_vocab(sp)) {  // a route that should have taken sample_full: clamped as before #1286, said once, never fatal
+    static std::atomic<bool> said{false};
+    if (!said.exchange(true))
+      logi("warning: top_k %d reached the %d-candidate sampler (a route without sample_full): sampled from %d candidates", sp.top_k,
+           kTopkMax, sp.top_k <= 0 ? kTopkOmitted : kTopkMax);
+    return uint32_t(sp.top_k <= 0 ? kTopkOmitted : kTopkMax);
+  }
   return uint32_t(sp.top_k);
+}
+
+SamplingParams two_pass(const SamplingParams& sp) {
+  SamplingParams c = sp;
+  c.top_k = int(topk_k(sp));
+  return c;
 }
 
 uint32_t topk_lists(uint32_t V, uint32_t K) {

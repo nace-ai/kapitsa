@@ -301,6 +301,13 @@ int cpu_checks() {
             topk_lists(151936, 64) * 64 <= 4096 && topk_lists(131072, 64) * 64 <= 4096,
         "top_k 33..64: 4096-logit chunks, at most 4096 candidates for stage 2 (Qwen, Flint and Nemotron vocabularies)");
   check(topk_k(sp(0.0f, 0)) == 1 && topk_k(sp(0.0f, 100)) == 1, "topk_k: greedy keeps 1");
+  // a route that missed sample_full (kapitsa#1287 review: vpf, Clover's check) is clamped and logged, never fatal
+  check(topk_k(sp(1.0f, 0)) == 32 && topk_k(sp(1.0f, -1)) == 32 && topk_k(sp(1.0f, 65)) == 64 &&
+            topk_k(sp(1.0f, 100)) == 64,
+        "topk_k on a full-vocabulary request: 32 (top_k <= 0) or 64, no fatal");
+  check(two_pass(sp(1.0f, 0)).top_k == 32 && two_pass(sp(1.0f, 40)).top_k == 40 && two_pass(sp(1.0f, 100)).top_k == 64 &&
+            !full_vocab(two_pass(sp(1.0f, 0))),
+        "two_pass (Clover's check): a top_k the two passes hold");
 
   // A request that leaves top_k out keeps the two-pass sampler (and the speculative loops): kapitsa#1286 changes only
   // what an explicit top_k <= 0 or above 64 does.

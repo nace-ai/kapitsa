@@ -38,9 +38,12 @@ inline bool full_vocab(const SamplingParams& sp) {
 // ChatRequest's 20 and Clover decodes greedily: neither reads this.)
 inline int omitted_top_k(int publisher) { return publisher >= 1 && publisher <= kTopkMax ? publisher : kTopkOmitted; }
 
-// The two-pass sampler's candidates per row: top_k, 1 when greedy. A full-vocabulary request never reaches a path
-// that calls this (fatal: it would be clamped to kTopkMax).
+// The two-pass sampler's candidates per row: top_k, 1 when greedy. A full-vocabulary request is routed to sample_full
+// before any caller of this; one that still arrives gets kTopkOmitted (top_k <= 0) or kTopkMax and a warning (once),
+// never a fatal: serve has no recovery from one.
 uint32_t topk_k(const SamplingParams& sp);
+// sp with top_k as topk_k() takes it: for a verify whose own sample is not used (Clover's check picks from the logits)
+SamplingParams two_pass(const SamplingParams& sp);
 
 // One logits row (V floats) sampled over the whole vocabulary: tokens[out_index] = the sampled id, sprob[0] = the
 // row's largest logit (as sample_stage2 writes). One threadgroup.
