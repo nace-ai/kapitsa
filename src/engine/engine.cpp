@@ -521,6 +521,10 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       if (k > 0) nh_ngram_ = std::min(k, NemotronH::kMaxRows - 1);
     }
   }
+  if (nh_ && !lili_) {
+    const auto& kind = nh_->config().kind;
+    nh_batch_ = std::find(kind.begin(), kind.end(), 'E') == kind.end();
+  }
 
   // Flint has no drafter: prompt lookup drafts up to K tokens per cycle when asked (--spec K, else NI_FLINT_NGRAM=K),
   // verified in one pass; the reply is the one plain decoding writes up to near-ties (a pass of 2+ rows sums in another
@@ -606,10 +610,10 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   }
   // batched decode for DFlash2 drafters (Qwen3.6 35B-A3B, Qwen3.8 27B) and LiLiCorr on Bolt's 24 GB checkpoint; the
   // 4B's DFlash (v1) drafter, Super-VL's LiLiCorr and Lightning's DSpark take turns today, a narrower gate than the
-  // class (NI_BATCH=1 batches them too). A Nemotron Nano decoding with prompt lookup (nh_ngram_: the Nano 4B, BF16 or
-  // FP8) batches plain rows, one pass for every member's pending token (bench/results/2026-11-16-nano-batch-decode)
+  // class (NI_BATCH=1 batches them too). A Nemotron Nano (nh_batch_: the 4B with prompt lookup, the 9B v2 with plain
+  // steps) batches plain rows, one pass for every member's pending token (bench/results/2026-11-16-nano-batch-decode)
   batch_measured_ = (dfl_ && !dfl_->config().v1) ||
-                    (lili_ && std::string(lili_->name()) == "LiLiCorr" && nh_->iq2_experts()) || nh_ngram_ > 0;
+                    (lili_ && std::string(lili_->name()) == "LiLiCorr" && nh_->iq2_experts()) || nh_batch_;
   if (kflash_budget_on() && (nh_ngram_ > 0 || flint_ngram_ > 0)) {
     // what an extra row of a pass costs in decode steps (NI_KFLASH_ROW_COST overrides): Flint 0.6 (an M4 Pro: 2 / 4 / 8
     // rows = 1.6 / 2.8 / 5.2 steps); Nemotron 0.25 is NOT measured here: calibrate it from the request log's "row x
@@ -1534,7 +1538,7 @@ int Engine::batch_rows(int n) const {
     const char* v = getenv("NI_BATCH");
     return v && *v ? atoi(v) : -1;
   }();
-  if (mode == 0 || n < 2 || n > 8 || (!dfl_ && !lili_ && nh_ngram_ == 0) || (mode < 0 && !batch_measured_)) return 0;
+  if (mode == 0 || n < 2 || n > 8 || (!dfl_ && !lili_ && !nh_batch_) || (mode < 0 && !batch_measured_)) return 0;
   // a 16-row drafting block has no batched cycle: it drafts a depth-15 lattice with the pair kernel, and the batch loop
   // drafts 7-token chains (encode_draft with tree = false), so the requests take turns instead
   // (a drafter loaded with 16 rows that a long prompt narrowed to 8, set_block, keeps that: its other requests draft 16)
@@ -1554,7 +1558,7 @@ int Engine::batch_rows(int n) const {
     return t;
   }();
   int rows = env[size_t(n)];
-  // no drafter (a Nemotron Nano's prompt lookup): plain rows, every member's pending token (its lookup drafts wait
+  // no drafter (a Nemotron Nano): plain rows, every member's pending token (its lookup drafts wait
   // for its own loop)
   if (!dfl_ && !lili_) return rows == 0 ? 0 : 1;
   // KFlash's batch budget (DFlash2 drafters, 2 .. 4 members; NI_BATCH_KF=0 keeps the table below): each cycle, the rows
@@ -1587,7 +1591,7 @@ int Engine::batch_rows(int n) const {
 }
 
 bool Engine::batch_wanted() const {
-  if (!dfl_ && !lili_ && nh_ngram_ == 0) return false;
+  if (!dfl_ && !lili_ && !nh_batch_) return false;
   int n = 0;  // requests decoding (not waiting for memory)
   for (const Slot& o : slots_) n += o.busy && o.decoding && o.mem_wait == Slot::MemWait::none;
   // join the running batch: it is to take every decoding request (its runner waits for them when fewer rows do not
@@ -3671,8 +3675,13 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       if (next) next->wait();
     };
     if (r.max_tokens > 1) next = encode_at(pos);
+    // a Nemotron Nano joins the batch while another request decodes (plain rows, Engine::batch_rows); a request whose
+    // reasoning is capped decodes alone (Nemotron-H's batched passes take no masks)
+    const bool may_join = nh_batch_ && slot.decoding;  // (not full_steps)
+    bool joined = false;  // back from the batch: tokens[pos] is handled, the step in flight feeds it
     while (true) {
-      bool go = handle(s.tokens()[pos]);  // available: produced by the previous command buffer
+      // available: produced by the previous command buffer
+      bool go = std::exchange(joined, false) || handle(s.tokens()[pos]);
       if (go && pos + 2 >= s.cap) {
         // the KV cache grows between steps: the step in flight writes it, so it completes first
         if (next) next->wait();
@@ -3683,6 +3692,25 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         }
       }
       if (!go) break;
+      if (may_join) slot.decoding = !tc.armed();
+      if (may_join && !tc.armed() && batch_wanted()) {
+        // parked, the step in flight sampled tokens[pos + 1]: the batch's anchor once handled
+        park();
+        next.reset();
+        ++pos;
+        cycle_done(1);
+        if (!handle(s.tokens()[pos])) break;
+        const bool done = batch(pos);
+        if (done) {  // (the batch's last rows are pending: into the state)
+          auto ef = g.begin();
+          nh_->encode_flush(*ef, s);
+          ef->commit_and_wait();
+          break;
+        }
+        next = encode_at(pos);
+        joined = true;
+        continue;
+      }
       if (contended()) {
         park();
         yield_turn(res);
