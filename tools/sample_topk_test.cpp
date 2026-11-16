@@ -308,6 +308,17 @@ int cpu_checks() {
   check(two_pass(sp(1.0f, 0)).top_k == 32 && two_pass(sp(1.0f, 40)).top_k == 40 && two_pass(sp(1.0f, 100)).top_k == 64 &&
             !full_vocab(two_pass(sp(1.0f, 0))),
         "two_pass (Clover's check): a top_k the two passes hold");
+  // the guards at the verify-pass call sites: the vpf prefill's gate and Clover's check (verify_pass_ok)
+  {
+    bool vpf = true, clover = true;
+    for (int k : {-1, 0, 1, 20, 32, 33, 40, 64, 65, 100, 2000})
+      for (float t : {0.0f, 0.7f}) {
+        vpf = vpf && verify_pass_ok(sp(t, k)) == (t <= 0 || (k >= 1 && k <= kTopkMax));
+        clover = clover && verify_pass_ok(two_pass(sp(t, k)));
+      }
+    check(vpf, "verify_pass_ok (vpf's gate): top_k 1..64 or greedy only; 0, -1, 65, 100, 2000 at T > 0 stay off it");
+    check(clover, "verify_pass_ok(two_pass(sp)) (Clover's check): true for every top_k");
+  }
 
   // A request that leaves top_k out keeps the two-pass sampler (and the speculative loops): kapitsa#1286 changes only
   // what an explicit top_k <= 0 or above 64 does.

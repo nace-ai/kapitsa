@@ -425,7 +425,9 @@ void Clover::encode_check(Encoder& e, Seq& s, int P, int W, const CloverReply& r
   // row r predicts position length + r + 1 and checks the draft tokens[P + r + 1]
   // (the verify's own sample is not read, enc_pick draws from its logits with no top-k: its sampler gets a top_k it
   // holds, kapitsa#1286)
-  encode_verify(e, s, P, W, two_pass(sp), step, /*v8=*/true);
+  const SamplingParams vsp = two_pass(sp);
+  if (!verify_pass_ok(vsp)) fatal("Clover: check with top_k %d", vsp.top_k);  // (two_pass never gives one)
+  encode_verify(e, s, P, W, vsp, step, /*v8=*/true);
   set_controls(reply, stops, W, reply.length + 1, false, 0, false);
   enc_pick(e, logits_, uint32_t(cfg_.vocab), W, sp, step + 1, ptok_, 0, uint32_t(W), false, s.tok, size_t(P + 1) * 4,
            uint32_t(W - 1));
