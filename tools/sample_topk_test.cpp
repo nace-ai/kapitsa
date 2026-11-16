@@ -1,20 +1,24 @@
-// The two-pass top-k sampler at top_k up to 64 (kapitsa#1286; src/model/sampler.h). Synthetic logits, no model.
-//   sample_topk_test --cpu                 topk_k() and stage 1's lists (topk_chunk, topk_lists)
+// A request's top-k on the GPU samplers (kapitsa#1286; src/model/sampler.h). Synthetic logits, no model.
+//   sample_topk_test --cpu                 which top_k the two-pass sampler takes and which go to the whole vocabulary
 //   sample_topk_test [--draws N (4000)] [--two-pass]
 // The GPU cases sample one logits row (Qwen3.5's 248,320 tokens, logit -0.02 * rank over a random permutation of the
-// ids) N times, each draw with its own RNG step, by the route a model's plain step takes: topk_stage1 + sample_stage2
-// with topk_k(sp) (stage 1's chunk: topk_chunk(K)); each case also draws with topk_stage1_rows_sg as stage 1 (Qwen's
-// step on the M5, K >= 8), which must give the same tokens. Each case checks the drawn ids against the plain sampler's
-// law computed on the CPU in double (the K best by value desc, id asc; the top-p prefix of the untempered
+// ids) N times, each draw with its own RNG step, by the route a model's plain step takes: sample_full when
+// full_vocab(sp), else topk_stage1 + sample_stage2 with topk_k(sp) (stage 1's chunk: topk_chunk(K)); a two-pass case
+// also draws with topk_stage1_rows_sg as stage 1 (Qwen's step on the M5, K >= 8) and must give the same tokens. Each case checks the drawn ids against the plain
+// sampler's law computed on the CPU in double (the K best by value desc, id asc; the top-p prefix of the untempered
 // probabilities; exp((l - max) / T) over it): no draw outside the kept set, the number of distinct ids, and a
-// chi-square test (cells with expected count < 5 pooled). top_k 40 and 64 must reach their 40 and 64.
-// --two-pass runs every case with the clamp main had before #1286 (clamp(top_k <= 0 ? 32 : top_k, 1, 32)): top_k 40
-// and 64 then fail, which is the bug.
+// chi-square test (cells with expected count < 5 pooled). top_k 0 must reach ranks past 32, top_k 40 and 64 (the two
+// passes since the cap went to 64) their 40 and 64, and top_k 100 its 100.
+// --two-pass routes every case through the two-pass sampler with the clamp main had before #1286
+// (clamp(top_k <= 0 ? 32 : top_k, 1, 32)): top_k 0 and 100 then fail, which is the bug.
 // Takes the GPU lock (NI_LOCK_HELD=1 when the caller holds it).
 #include "bench/bench.h"
 #include "metal/gpu.h"
 #include "model/kparams.h"
 #include "model/sampler.h"
+#include "api/anthropic.h"
+#include "api/ollama.h"
+#include "api/responses.h"
 #include "util/log.h"
 
 #include <algorithm>
@@ -127,11 +131,15 @@ struct Gpu1 {
     sprob = g.alloc(64 * 4);
   }
   // the route of a model's plain step (Qwen35 / Flint / Dory / NemotronH::enc_sample)
-  void draw(const SamplingParams& sp, uint32_t V, int n, bool two_pass, bool sg = false) {
+  void draw(const SamplingParams& sp, uint32_t V, int n, bool two_pass, bool force_full = false, bool sg = false) {
     const int chunk = 512;  // (command buffers of 512 draws)
     for (int t0 = 0; t0 < n; t0 += chunk) {
       auto e = g.begin();
       for (int t = t0; t < std::min(n, t0 + chunk); ++t) {
+        if (force_full || (!two_pass && full_vocab(sp))) {
+          enc_sample_full(*e, logits, V, tokens, t, sprob, sp, uint32_t(t));
+          continue;
+        }
         const uint32_t K = two_pass ? (sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u)
                                     : topk_k(sp);
         const kp::TopkStage ts{V, K, topk_chunk(K)};
@@ -177,7 +185,8 @@ void run_case(Gpu1& G, const Case& c, uint32_t V, int draws, bool two_pass) {
   sp.top_p = c.top_p;
   sp.top_k = c.top_k;
   sp.seed = 0x5eed1286u;
-  printf("  route: %s; kept set %d ids\n", two_pass ? "two-pass (main's clamp)" : "two-pass", kept);
+  printf("  route: %s; kept set %d ids\n",
+         two_pass ? "two-pass (main's clamp)" : full_vocab(sp) ? "sample_full" : "two-pass", kept);
   G.draw(sp, V, draws, two_pass);
   const int* tk = G.tokens.as<int>();
   std::vector<long> obs(V, 0);
@@ -221,34 +230,130 @@ void run_case(Gpu1& G, const Case& c, uint32_t V, int draws, bool two_pass) {
     check(distinct >= c.min_distinct,
           "draws reach at least " + std::to_string(c.min_distinct) + " distinct ids (" + std::to_string(distinct) + ")");
   check(pv > 1e-4, "the draws follow the sampler's law (chi-square p > 1e-4)");
-  if (two_pass || sp.top_k < 8) return;
-  // stage 1 on simdgroup reductions (Qwen35::enc_sample on the M5): the same lists, the same tokens
-  const std::vector<int> st1(tk, tk + draws);
-  G.draw(sp, V, draws, false, true);
-  long dsg = 0;
-  for (int t = 0; t < draws; ++t) dsg += G.tokens.as<int>()[t] != st1[size_t(t)];
-  check(dsg == 0, "topk_stage1_rows_sg draws topk_stage1's token at every step (" + std::to_string(dsg) + " differ)");
+  if (two_pass) return;
+  if (!full_vocab(sp)) {
+    const std::vector<int> st2(tk, tk + draws);
+    if (sp.top_k >= 8) {  // stage 1 on simdgroup reductions (Qwen35::enc_sample on the M5): the same lists, the same tokens
+      G.draw(sp, V, draws, false, false, true);
+      long dsg = 0;
+      for (int t = 0; t < draws; ++t) dsg += G.tokens.as<int>()[t] != st2[size_t(t)];
+      check(dsg == 0, "topk_stage1_rows_sg draws topk_stage1's token at every step (" + std::to_string(dsg) + " differ)");
+    }
+    // sample_full on the same request: its list path runs sample_stage2's rules over the same top-k in the same order
+    G.draw(sp, V, draws, false, true);
+    long diff = 0;
+    for (int t = 0; t < draws; ++t) diff += G.tokens.as<int>()[t] != st2[size_t(t)];
+    check(diff == 0, "sample_full draws sample_stage2's token at every step (" + std::to_string(diff) + " differ)");
+    return;
+  }
+  // sample_full's draw itself, in double: the uniform of its step walked over the kept law. The list path (top-k of at
+  // most 1024, or a top-p prefix of at most 1024 tokens) walks the kept tokens in value order (desc, id asc) as
+  // sample_stage2 does; the bisection path in id order. A draw within 1e-5 of a boundary may take either side (the GPU
+  // sums in float).
+  const int V_ = int(V);
+  const int Kc = c.top_k > 0 && c.top_k < V_ ? c.top_k : V_;
+  const bool list = Kc <= 1024 || (Kc == V_ && c.top_p < 1.0f && kept <= 1024);
+  std::vector<uint32_t> walk;
+  for (uint32_t i = 0; i < V; ++i)
+    if (p[i] > 0) walk.push_back(i);
+  if (list)
+    std::sort(walk.begin(), walk.end(), [&](uint32_t a, uint32_t b) { return p[a] > p[b] || (p[a] == p[b] && a < b); });
+  std::vector<double> cum(walk.size());
+  double a = 0;
+  for (size_t q = 0; q < walk.size(); ++q) cum[q] = a += p[walk[q]];
+  std::vector<int> pos(V, -1);
+  for (size_t q = 0; q < walk.size(); ++q) pos[walk[q]] = int(q);
+  long wrong = 0;
+  for (int t = 0; t < draws; ++t) {
+    const double u = double(pcg_hash(sp.seed ^ pcg_hash(uint32_t(t))) & 0xffffff) / 16777216.0;
+    const int want = int(std::upper_bound(cum.begin(), cum.end(), u) - cum.begin());
+    const int got = pos[size_t(tk[t])];
+    if (got == want || got < 0) continue;  // (got < 0: counted as outside above)
+    const int lo = std::min(got, want);
+    if (std::fabs(cum[size_t(lo)] - u) < 1e-5) continue;
+    if (++wrong <= 3) printf("  draw %d: u %.7f got walk index %d want %d\n", t, u, got, want);
+  }
+  printf("  draw order: %s\n", list ? "value (list path)" : "id (bisection path)");
+  check(wrong == 0, "every draw is the id its uniform selects in the kept law (" + std::to_string(wrong) + " not)");
 }
 
 int cpu_checks() {
-  printf("[cpu] topk_k and stage 1's lists (sampler.h, kTopkMax %d)\n", kTopkMax);
+  printf("[cpu] routing (sampler.h, kTopkMax %d)\n", kTopkMax);
   auto sp = [](float t, int k) {
     SamplingParams s;
     s.temperature = t;
     s.top_k = k;
     return s;
   };
+  check(full_vocab(sp(1.0f, 0)), "top_k 0 at T > 0: the whole vocabulary");
+  check(full_vocab(sp(0.6f, -1)), "top_k -1 at T > 0: the whole vocabulary");
+  check(full_vocab(sp(1.0f, 65)) && full_vocab(sp(1.0f, 100)), "top_k 65 and 100: the whole vocabulary");
+  check(!full_vocab(sp(1.0f, 1)) && !full_vocab(sp(1.0f, 20)) && !full_vocab(sp(1.0f, 32)) && !full_vocab(sp(1.0f, 40)) &&
+            !full_vocab(sp(1.0f, 64)),
+        "top_k 1, 20, 32, 40, 64: the two-pass sampler");
+  check(!full_vocab(sp(0.0f, 0)) && !full_vocab(sp(0.0f, 100)), "greedy (T = 0), any top_k: the two-pass sampler");
   check(topk_k(sp(1.0f, 20)) == 20 && topk_k(sp(1.0f, 40)) == 40 && topk_k(sp(1.0f, 64)) == 64 &&
             topk_k(sp(1.0f, 1)) == 1,
-        "topk_k: top_k 1..64 as asked (main clamped 33..64 to 32)");
-  check(topk_k(sp(1.0f, 0)) == 32 && topk_k(sp(1.0f, -1)) == 32, "topk_k: top_k <= 0 is 32, as before");
-  check(topk_k(sp(1.0f, 100)) == 64, "topk_k: above 64, 64");
-  check(topk_k(sp(0.0f, 0)) == 1 && topk_k(sp(0.0f, 100)) == 1, "topk_k: greedy keeps 1");
+        "topk_k: top_k 1..64 unchanged");
   check(topk_chunk(32) == 2048 && topk_threads(32) == 256 && topk_lists(248320, 32) == 122,
         "top_k up to 32: stage 1 as before (2048-logit chunks, 256 threads, 122 lists for 248,320 ids)");
   check(topk_chunk(33) == 4096 && topk_threads(64) == 512 && topk_lists(248320, 64) * 64 <= 4096 &&
             topk_lists(151936, 64) * 64 <= 4096 && topk_lists(131072, 64) * 64 <= 4096,
         "top_k 33..64: 4096-logit chunks, at most 4096 candidates for stage 2 (Qwen, Flint and Nemotron vocabularies)");
+  check(topk_k(sp(0.0f, 0)) == 1 && topk_k(sp(0.0f, 100)) == 1, "topk_k: greedy keeps 1");
+  // a route that missed sample_full (kapitsa#1287 review: vpf, Clover's check) is clamped and logged, never fatal
+  check(topk_k(sp(1.0f, 0)) == 32 && topk_k(sp(1.0f, -1)) == 32 && topk_k(sp(1.0f, 65)) == 64 &&
+            topk_k(sp(1.0f, 100)) == 64,
+        "topk_k on a full-vocabulary request: 32 (top_k <= 0) or 64, no fatal");
+  check(two_pass(sp(1.0f, 0)).top_k == 32 && two_pass(sp(1.0f, 40)).top_k == 40 && two_pass(sp(1.0f, 100)).top_k == 64 &&
+            !full_vocab(two_pass(sp(1.0f, 0))),
+        "two_pass (Clover's check): a top_k the two passes hold");
+
+  // A request that leaves top_k out keeps the two-pass sampler (and the speculative loops): kapitsa#1286 changes only
+  // what an explicit top_k <= 0 or above 64 does.
+  printf("[cpu] omitted top_k\n");
+  check(omitted_top_k(20) == 20 && omitted_top_k(32) == 32 && omitted_top_k(1) == 1,
+        "generation_config top_k 1..32: the publisher's");
+  check(omitted_top_k(0) == 32 && omitted_top_k(-1) == 32 && omitted_top_k(100) == 32 && omitted_top_k(40) == 40,
+        "generation_config without top_k, or top_k <= 0 / above 64: 32, as before #1286; 40: its 40");
+  auto sampled = [](const ChatRequest& r) {
+    SamplingParams s;
+    s.temperature = r.temperature > 0 ? r.temperature : 0;
+    s.top_k = r.top_k;
+    return s;
+  };
+  const ChatRequest qwen;  // Qwen3.5/3.6/3.8: the engine's defaults are ChatRequest's
+  check(qwen.top_k == 20 && !full_vocab(sampled(qwen)), "Qwen defaults: top_k 20, two-pass");
+  ChatRequest pub;  // Dory / Nemotron: the publisher's temperature 1.0, no top_k
+  pub.temperature = 1.0f;
+  pub.top_k = omitted_top_k(0);
+  const ojson msgs = ojson::parse(R"([{"role": "user", "content": "hi"}])");
+  for (const ChatRequest* d : {static_cast<const ChatRequest*>(&qwen), static_cast<const ChatRequest*>(&pub)}) {
+    const std::string who = d == &qwen ? "Qwen defaults" : "publisher defaults without top_k";
+    ojson b{{"model", "m"}, {"messages", msgs}, {"options", {{"temperature", 0.7}}}};
+    const ChatRequest oc = api::ollama_chat_request(b, *d);
+    check(oc.top_k == d->top_k && !full_vocab(sampled(oc)), "Ollama /api/chat, top_k omitted (" + who + "): " +
+                                                                 std::to_string(oc.top_k) + ", two-pass");
+    ojson g{{"model", "m"}, {"prompt", "hi"}, {"options", {{"temperature", 0.7}}}};
+    const ChatRequest og = api::ollama_generate_request(g, *d);
+    check(og.top_k == d->top_k && !full_vocab(sampled(og)), "Ollama /api/generate, top_k omitted (" + who + "): " +
+                                                                 std::to_string(og.top_k) + ", two-pass");
+    b["options"]["top_k"] = 0;
+    check(full_vocab(sampled(api::ollama_chat_request(b, *d))), "Ollama, explicit top_k 0: the whole vocabulary");
+  }
+  {
+    ojson b{{"model", "m"}, {"max_tokens", 64}, {"temperature", 0.7}, {"messages", msgs}};
+    const ChatRequest a = api::messages_request(b).chat;
+    check(a.top_k == 20 && !full_vocab(sampled(a)), "Anthropic /v1/messages, top_k omitted: 20, two-pass");
+    b["top_k"] = 0;
+    check(full_vocab(sampled(api::messages_request(b).chat)), "Anthropic, explicit top_k 0: the whole vocabulary");
+    api::ResponseStore store;
+    ojson rb{{"model", "m"}, {"input", "hi"}, {"temperature", 0.7}};
+    const ChatRequest o = api::responses_request(rb, store).chat;
+    check(o.top_k == 20 && !full_vocab(sampled(o)), "OpenAI /v1/responses, top_k omitted: 20, two-pass");
+  }
+  // (/v1/chat/completions: parse_request in src/server/main.cpp starts from the engine's defaults, as Ollama's do;
+  // tests/test_topk_omitted.py checks it against a running server)
   return failures;
 }
 
@@ -273,14 +378,20 @@ int main(int argc, char** argv) {
   const uint32_t V = 248320;  // Qwen3.5's vocabulary
   Gpu1 G(V, draws);
   const Case cases[] = {
-      {"top_k 20 (unchanged)", 20, 1.0f, 1.0f, 0, false, 20},
-      {"top_k 32 (unchanged)", 32, 0.95f, 0.8f, 0, false, 0},
-      {"top_k 40", 40, 1.0f, 1.0f, 0, false, 40},
-      {"top_k 40, top_p 0.95, T 0.7, masked and NaN ids", 40, 0.95f, 0.7f, 0, true, 0},
-      {"top_k 48, tie at the cut", 48, 1.0f, 1.0f, 4, false, 48},
-      {"top_k 64", 64, 1.0f, 1.0f, 0, false, 64},
+      {"top_k 0", 0, 1.0f, 1.0f, 0, false, 200},
+      {"top_k 100", 100, 1.0f, 1.0f, 0, false, 100},
+      {"top_k 20 (two-pass, unchanged)", 20, 1.0f, 1.0f, 0, false, 20},
+      {"top_k 0, top_p 0.9", 0, 0.9f, 1.0f, 0, false, 0},
+      {"top_k 100, top_p 0.5, T 0.7", 100, 0.5f, 0.7f, 0, false, 0},
       {"top_k 64, tie at the cut", 64, 1.0f, 1.0f, 8, false, 64},
-      {"top_k 64, top_p 0.9, flat", 64, 0.9f, 1.0f, 0, false, 0, 0.002f},
+      {"top_k 40 (two-pass, 4096-logit lists)", 40, 1.0f, 1.0f, 0, false, 40},
+      {"top_k 40, top_p 0.95, T 0.7, masked and NaN ids", 40, 0.95f, 0.7f, 0, true, 0},
+      {"top_k 65 (sample_full)", 65, 1.0f, 1.0f, 0, false, 65},
+      {"top_k 0, masked and NaN ids", 0, 0.95f, 0.6f, 0, true, 0},
+      {"top_k 0, top_p 0.95, flat (prefix past the 1024 list)", 0, 0.95f, 1.0f, 0, false, 1000, 0.002f},
+      {"top_k 2000, top_p 0.9, flat (bisection)", 2000, 0.9f, 1.0f, 0, false, 800, 0.002f},
+      {"top_k 1024, tie at the cut", 1024, 1.0f, 1.0f, 8, false, 0, 0.002f},
+      {"top_k 20 at sample_full's list", 20, 0.95f, 0.8f, 0, false, 0},
   };
   for (const Case& c : cases) run_case(G, c, V, draws, two_pass);
   printf("sample_topk_test%s: %d failures\n", two_pass ? " --two-pass" : "", failures);

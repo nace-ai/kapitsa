@@ -717,6 +717,16 @@ model writes its reply in the same turn.
   `usage.kapitsa.thinking`; it refuses a closing text of more than 63 tokens or one holding `</think>` or the tool-call
   token.
 
+### Sampling: top_k
+
+A sampled request's `top_k` is honored as given. `top_k` 1 to 64 runs on the GPU's two-pass top-k sampler, with every
+speculative loop. `top_k` 0 or below means no truncation, and `top_k` above 64 keeps exactly that many tokens: those
+requests are sampled over the whole vocabulary (`sample_full`, `src/model/sampler.h`) in plain decode steps, without
+the drafter, so they decode slower: on an M5 Pro at temperature 0.7, top-p 0.95, 512 tokens, the 35B-A3B wrote
+~110 tok/s at top_k 0 against ~160 at top_k 40, the 4B ~92 against ~163 at top_k 20. Before kapitsa#1286 every
+`top_k` was clamped to 32 without a word. A request that leaves `top_k` out gets the model's default (Qwen: 20; a
+`generation_config.json` without one: 32), so it stays on the two-pass sampler. Clover's own loops apply no top-k at all.
+
 ### Structured output
 
 A request can hold the reply to a JSON Schema, to any JSON object, or to tool calls. Each token is then sampled under a

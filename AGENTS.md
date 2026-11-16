@@ -68,7 +68,7 @@ build/cluster_test                           # several Macs (src/cluster/): TXT,
 build/split_place_test                       # where a split model's layers go (src/cluster/place.h)
 build/gemm_slices_test                       # a large GEMM's 2048-row slices and their bounds (src/model/gemm_slices.h)
 build/device_profile_test                    # chip class and the default table from injected facts (src/engine/device_profile.h)
-build/sample_topk_test --cpu                 # the two-pass sampler's top_k up to 64 and its stage-1 lists (src/model/sampler.h); without --cpu: the GPU draws
+build/sample_topk_test --cpu                 # which top_k the two-pass sampler takes and which the whole vocabulary (src/model/sampler.h); without --cpu: the GPU draws
 build/qwen4_config_test                      # what a Qwen 4 config asks that Flash-Next's path does not run (src/model/qwen4_config.h)
 build/nh_quant_q8_test                       # Q8 load quantization: code/half-scale bytes, rounding, fallback and guards (CPU only)
 build/flint_kv_test                          # Flint refuses NI_KV_I8 (src/model/flint_kv.h)
@@ -147,7 +147,7 @@ interleaved speed gates below, and does not establish an inference speedup.
 Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `tests/vision/check_cpu.py`, `logit_dump`,
 `batch_check`, `ni_v8check`, `tests/test_server.py URL`, `tests/test_disk_cache.py`, `tests/test_draft.py`,
 `tests/test_structured.py URL`, `logit_mask_check`, `split_check`, `tests/test_split.py`, `tests/test_pair.py`,
-`tests/test_ane_split_abort.py`, `tests/test_systemone.py`, `tests/test_sampled_tokens.py`): run it only when allowed, and report it as run.
+`tests/test_ane_split_abort.py`, `tests/test_systemone.py`, `tests/test_sampled_tokens.py`, `tests/test_topk_omitted.py`): run it only when allowed, and report it as run.
 
 Lint: `uv tool install prek && prek install` once, then `prek run --all-files` (the same hooks CI runs).
 
