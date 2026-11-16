@@ -799,7 +799,7 @@ NI_INLINE void sample_stage2_rows_impl(const device float* cv, const device uint
 
 // The same two passes on simdgroup reductions (no threadgroup barrier per candidate): the same candidates in the same
 // order, so the same tokens. topk_stage1_rows_sg: each simdgroup's 256 logits give their K best (K rounds of a
-// simdgroup argmax, value desc, id asc), simdgroup 0 merges the 8 sorted lists. sample_stage2_rows_sg: one simdgroup
+// simdgroup argmax, value desc, id asc), simdgroup 0 merges the 8 sorted lists (16 at 512 threads: K above 32, chunk 4096). sample_stage2_rows_sg: one simdgroup
 // merges the ntgs <= 64 sorted lists of stage 1 (K <= 32 each; lane l: lists l and l + 32) into the row's K best, then
 // samples as sample_stage2_rows (the candidates loaded by all its threads first). grids as theirs.
 NI_INLINE void sg_argmax(thread float& v, thread uint& i) {
@@ -813,8 +813,8 @@ NI_INLINE void sg_argmax(thread float& v, thread uint& i) {
                                     device uint* ci [[buffer(2)]], constant TopkStageParams& p [[buffer(3)]],
                                     uint2 tg [[threadgroup_position_in_grid]], uint2 tid2 [[thread_position_in_threadgroup]],
                                     uint2 ntg2 [[threads_per_threadgroup]]) {
-  threadgroup float lv[8][64];
-  threadgroup uint li[8][64];
+  threadgroup float lv[16][64];  // (up to 512 threads: topk_chunk 4096 for K above 32)
+  threadgroup uint li[16][64];
   const uint tid = tid2.x, sg = tid / 32, lane = tid % 32, nsg = ntg2.x / 32, r = tg.y;
   const uint ntgs = (p.V + p.chunk - 1) / p.chunk, K = min(p.K, 64u);
   const device float* lg = logits + size_t(r) * p.V;

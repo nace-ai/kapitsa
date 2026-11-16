@@ -2,6 +2,7 @@
 // verifies the pending token plus drafts in one small-batch forward, and Gated DeltaNet layers roll
 // back through a tape (rows are only folded into the recurrent state once accepted).
 #include "engine/device_profile.h"
+#include "model/sampler.h"
 #include "loader/safetensors.h"
 #include "model/affine_pack.h"
 #include "model/dflash2.h"
@@ -1109,9 +1110,8 @@ void Qwen35::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0)
 // ---- trunk verify ----
 
 uint32_t Qwen35::verify_candidates(const SamplingParams& sp) const {
-  const uint32_t V = uint32_t(cfg_.vocab), ntg = (V + 2047) / 2048;
-  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
-  return ntg * K;
+  const uint32_t K = topk_k(sp);
+  return topk_lists(uint32_t(cfg_.vocab), K) * K;
 }
 
 void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step, bool v8) {
@@ -1164,14 +1164,13 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
     enc_rows_norm(e, x_, final_norm_, xrn_, R, D);
     enc_qmvr(e, lm_head_, xrn_, logits_, R, false);
   }
-  const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
-  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
+  const uint32_t V = uint32_t(cfg_.vocab), K = topk_k(sp), chunk = topk_chunk(K), ntg = topk_lists(V, K);
   enc_logit_mask(e, s, logits_, R, int(V), int(V));  // structured output (nothing without masks)
   kp::TopkStage ts{V, K, chunk};
   e.use(pipe2("topk_stage1_rows"));
   e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, R, 1, 256);
+  e.dispatch(ntg, R, 1, topk_threads(K));
   kp::SampleRows sr{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, 0, 0, 0};
   e.use(pipe2("sample_stage2_rows"));
   e.buf(0, cand_v_); e.buf(1, cand_i_); e.buf(2, samp_);

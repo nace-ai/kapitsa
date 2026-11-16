@@ -1,4 +1,5 @@
 #include "model/flint.h"
+#include "model/sampler.h"
 #include "model/flint_kv.h"
 #include "engine/device_profile.h"
 #include "gguf/gguf.h"
@@ -1503,15 +1504,15 @@ void Flint::enc_head(Encoder& e, const Buffer& x, int R, const Buffer& out, size
 
 void Flint::enc_sample(Encoder& e, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
                        uint32_t step) {
-  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
-  const kp::TopkStage ts{uint32_t(cfg_.vocab), K, 2048};
-  const uint32_t ntg = (uint32_t(cfg_.vocab) + 2047) / 2048;
+  const uint32_t K = topk_k(sp);
+  const kp::TopkStage ts{uint32_t(cfg_.vocab), K, topk_chunk(K)};
+  const uint32_t ntg = topk_lists(uint32_t(cfg_.vocab), K);
   e.use(pipe("topk_stage1"));
   e.buf(0, lrow);
   e.buf(1, cand_v_);
   e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, 1, 1, 256);
+  e.dispatch(ntg, 1, 1, topk_threads(K));
   const kp::Sample p2{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, uint32_t(out_index)};
   e.use(pipe("sample_stage2"));
   e.buf(0, cand_v_);

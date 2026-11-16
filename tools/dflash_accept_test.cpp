@@ -127,10 +127,11 @@ struct Dist {
   std::vector<int> id;
   std::vector<float> p;
 };
-enum Regime { kRandom, kEqual, kDisjoint, kPoint, kMixed, kBias };
+enum Regime { kRandom, kEqual, kDisjoint, kPoint, kMixed, kBias, kWide };
+constexpr int kW = 64;        // dfl_dist_rows' row width (kDflDistW; sampler.h's kTopkMax)
 const char* regime_name(int r) {
   static const char* n[] = {"random p, random q", "q = p", "q disjoint from p", "point masses", "mixed (p(d)=0, flat q)",
-                            "depth-sensitive"};
+                            "depth-sensitive", "wide p (33-64 tokens)"};
   return n[r];
 }
 
@@ -152,9 +153,11 @@ Dist p_of(const std::vector<int>& prefix, int regime) {
     d.p = {0.5f, 0.5f};
     return d;
   }
-  int ns = regime == kPoint ? 1 + int(r() % 2) : 1 + int(r() % 10);
-  std::vector<int> u(kV);
-  for (int i = 0; i < kV; ++i) u[i] = i;
+  // kWide: a top-k above 32 (the second half of dfl_accept's lanes), ids from a 64-token universe of its own
+  const int nv = regime == kWide ? kW : kV;
+  int ns = regime == kPoint ? 1 + int(r() % 2) : regime == kWide ? 33 + int(r() % 32) : 1 + int(r() % 10);
+  std::vector<int> u(nv);
+  for (int i = 0; i < nv; ++i) u[i] = i;
   std::shuffle(u.begin(), u.end(), r);
   std::vector<float> w(ns);
   float tot = 0;
@@ -244,8 +247,8 @@ struct Slot {
   std::vector<int> cand;    // [7 * 16]
   std::vector<float> qp;    // [7 * 16]
   std::vector<int> wk;      // [8]
-  std::vector<int> did;     // [8 * 32]
-  std::vector<float> dp;    // [8 * 32]
+  std::vector<int> did;     // [8 * kW]
+  std::vector<float> dp;    // [8 * kW]
 };
 
 // Inputs of one cycle with the anchor at position P (tokens[P] = anchor, proposals at P+1..): the
@@ -256,15 +259,15 @@ void fill(Slot& s, const std::vector<int>& prefix, int P, int K, int regime, std
   s.cand.assign(7 * 16, -3);
   s.qp.assign(7 * 16, 0.0f);
   s.wk.assign(8, 0);
-  s.did.assign(8 * 32, -1);
-  s.dp.assign(8 * 32, 0.0f);
+  s.did.assign(8 * kW, -1);
+  s.dp.assign(8 * kW, 0.0f);
   std::vector<int> pre = prefix;
   chain->clear();
   for (int i = 0; i <= K; ++i) {
     const Dist p = p_of(pre, regime);
     for (size_t j = 0; j < p.id.size(); ++j) {
-      s.did[i * 32 + j] = p.id[j];
-      s.dp[i * 32 + j] = p.p[j];
+      s.did[i * kW + j] = p.id[j];
+      s.dp[i * kW + j] = p.p[j];
     }
     if (i == K) break;
     const Dist q = q_of(pre, regime, p);
@@ -1264,10 +1267,11 @@ int main(int argc, char** argv) {
   int fails = 0;
 
   // ---- 1. dfl_dist_rows vs the CPU transcription of sample_stage2_rows ----
-  {
-    const uint32_t R = 8, n = 122 * 20, Kk = 20;
+  // (top_k 20 over 122 lists of 2048; 48 and 64 over 61 lists of 4096, sampler.h's topk_chunk)
+  for (const auto [Kk, n] : {std::pair<uint32_t, uint32_t>{20, 122 * 20}, {48, 61 * 48}, {64, 61 * 64}}) {
+    const uint32_t R = 8;
     Buffer cv = g.alloc(size_t(R) * n * 4), ci = g.alloc(size_t(R) * n * 4);
-    Buffer did = g.alloc(R * 32 * 4), dp = g.alloc(R * 32 * 4), dk = g.alloc(R * 4);
+    Buffer did = g.alloc(R * kW * 4), dp = g.alloc(R * kW * 4), dk = g.alloc(R * 4);
     std::mt19937_64 r(7);
     for (uint32_t row = 0; row < R; ++row)
       for (uint32_t i = 0; i < n; ++i) {
@@ -1294,7 +1298,7 @@ int main(int argc, char** argv) {
         for (uint32_t i = 0; i < n; ++i) c[i] = {cv.as<float>()[row * n + i], ci.as<uint32_t>()[row * n + i]};
         std::sort(c.begin(), c.end(),
             [](auto& a, auto& b) { return a.first > b.first || (a.first == b.first && a.second < b.second); });
-        float probs[32], tot = 0;
+        float probs[kW], tot = 0;
         for (uint32_t q = 0; q < Kk; ++q) {
           probs[q] = std::exp(c[q].first - c[0].first);
           tot += probs[q];
@@ -1315,15 +1319,15 @@ int main(int argc, char** argv) {
         }
         if (dk.as<uint32_t>()[row] != keep) ++id_bad;
         for (uint32_t q = 0; q < keep; ++q) {
-          if (uint32_t(did.as<int>()[row * 32 + q]) != c[q].second) ++id_bad;
-          const double ref = probs[q] / kt, got = dp.as<float>()[row * 32 + q];
+          if (uint32_t(did.as<int>()[row * kW + q]) != c[q].second) ++id_bad;
+          const double ref = probs[q] / kt, got = dp.as<float>()[row * kW + q];
           max_rel = std::max(max_rel, std::fabs(got - ref) / ref);
         }
       }
     }
     const bool ok = id_bad == 0 && max_rel < 1e-5;
-    printf("[dist] dfl_dist_rows vs CPU sampler distribution, 3 settings x 8 rows: %d id/keep mismatches, max rel. "
-           "prob error %.2e: %s\n", id_bad, max_rel, ok ? "PASS" : "FAIL");
+    printf("[dist] dfl_dist_rows vs CPU sampler distribution, top_k %u, 3 settings x 8 rows: %d id/keep mismatches, "
+           "max rel. prob error %.2e: %s\n", Kk, id_bad, max_rel, ok ? "PASS" : "FAIL");
     if (!ok) ++fails;
   }
 
@@ -1339,11 +1343,12 @@ int main(int argc, char** argv) {
                              {kRandom, 7, 1.0f},     {kMixed, 7, 1.0f},
                              {kRandom, 3, 0.6f, 0.1f}, {kRandom, 7, 1.0f, 0.05f}, {kMixed, 7, 0.6f, 0.2f},
                              {kEqual, 7, 0.6f, 0.3f},  {kBias, 3, 0.6f, 0.3f},       {kBias, 3, 0.6f, 0.3f, 1},
-                             {kBias, 3, 0.6f, 0.3f, 2}, {kMixed, 7, 0.6f, 0.2f, 2}};
+                             {kBias, 3, 0.6f, 0.3f, 2}, {kMixed, 7, 0.6f, 0.2f, 2},
+                             {kWide, Kmain, 0.6f},      {kWide, 7, 1.0f}};
   Pipeline acc = g.pipeline("dfl_accept"), dep = g.pipeline("dfl_depth");
   const int B = 4096;  // trials per command buffer
   Buffer tok = g.alloc(size_t(B) * 16 * 4), cand = g.alloc(size_t(B) * 112 * 4), qp = g.alloc(size_t(B) * 112 * 4);
-  Buffer wk = g.alloc(size_t(B) * 8 * 4), did = g.alloc(size_t(B) * 256 * 4), dp = g.alloc(size_t(B) * 256 * 4);
+  Buffer wk = g.alloc(size_t(B) * 8 * 4), did = g.alloc(size_t(B) * 8 * kW * 4), dp = g.alloc(size_t(B) * 8 * kW * 4);
   Buffer res = g.alloc(size_t(B) * 4 * 4), samp = g.alloc(64), scratch = g.alloc(64), kd = g.alloc(size_t(B) * 16);
   Buffer ws = g.alloc(size_t(B) * 112 * 4);  // the walk's scores: log q, so softmax(S_j) = q_j (dfl_depth)
   for (size_t ci = 0; ci < cases.size(); ++ci) {
@@ -1365,8 +1370,8 @@ int main(int argc, char** argv) {
         memcpy(qp.as<float>() + i * 112, s.qp.data(), 112 * 4);
         for (int j = 0; j < 112; ++j) ws.as<float>()[i * 112 + j] = s.qp[j] > 0 ? std::log(s.qp[j]) : -1e30f;
         memcpy(wk.as<int>() + i * 8, s.wk.data(), 32);
-        memcpy(did.as<int>() + i * 256, s.did.data(), 256 * 4);
-        memcpy(dp.as<float>() + i * 256, s.dp.data(), 256 * 4);
+        memcpy(did.as<int>() + i * 8 * kW, s.did.data(), 8 * kW * 4);
+        memcpy(dp.as<float>() + i * 8 * kW, s.dp.data(), 8 * kW * 4);
       };
       auto run = [&](int count, uint32_t P, const std::vector<uint32_t>& seed) {
         auto e = g.begin();
@@ -1382,7 +1387,7 @@ int main(int argc, char** argv) {
           kp::DflAccept ap{P, uint32_t(cs.K), cs.temp, seed[i], cs.tau > 0 ? 1u : 0u};
           e->use(acc);
           e->buf(0, tok, size_t(i) * 64);
-          e->buf(1, samp); e->buf(2, did, size_t(i) * 1024); e->buf(3, dp, size_t(i) * 1024);
+          e->buf(1, samp); e->buf(2, did, size_t(i) * 8 * kW * 4); e->buf(3, dp, size_t(i) * 8 * kW * 4);
           e->buf(4, cand, size_t(i) * 448); e->buf(5, qp, size_t(i) * 448); e->buf(6, wk, size_t(i) * 32);
           e->buf(7, res, size_t(i) * 16);
           e->val(8, ap);
