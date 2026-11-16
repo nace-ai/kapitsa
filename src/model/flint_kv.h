@@ -11,6 +11,11 @@ inline const char* flint_kv_i8_refusal(bool int8_kv) {
   return int8_kv ? "int8 KV cache isn't supported with Flint models yet; unset NI_KV_I8" : nullptr;
 }
 
+// What the Flint constructor asks: the answer the Metal library was compiled with.
 inline const char* flint_kv_i8_refusal() { return flint_kv_i8_refusal(kv_i8()); }
+
+// What unsupported_model asks, before any engine is built or released (a model switch is refused, the old model stays
+// up): the environment's answer now.
+inline const char* flint_kv_i8_requested_refusal() { return flint_kv_i8_refusal(kv_i8_requested()); }
 
 }  // namespace ni

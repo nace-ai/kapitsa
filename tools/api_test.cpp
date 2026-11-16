@@ -2493,6 +2493,24 @@ void unsupported_model_unit() {
             gemma.find("nemotron_h") != std::string::npos && gemma.find("flint") != std::string::npos &&
             gemma.find("clover_moe") != std::string::npos,
         "unsupported_model: another architecture is named by its model_type, with the ones Kapitsa runs");
+  // a Flint folder is accepted, unless NI_KV_I8 asks for int8 KV rows (#1257): the refusal comes here, before an engine
+  // is built or released, so a model switch leaves the old model up
+  {
+    const std::string flint = folder("flint", R"({"model_type": "flint"})");
+    const char* old = getenv("NI_KV_I8");
+    const std::string saved = old ? old : "";
+    unsetenv("NI_KV_I8");
+    check(refused(flint).empty(), "unsupported_model: a flint config is not refused without NI_KV_I8");
+    setenv("NI_KV_I8", "0", 1);
+    check(refused(flint).empty(), "unsupported_model: a flint config is not refused with NI_KV_I8=0");
+    setenv("NI_KV_I8", "1", 1);
+    check(refused(flint) == "int8 KV cache isn't supported with Flint models yet; unset NI_KV_I8",
+          "unsupported_model: a flint config is refused with NI_KV_I8=1, with the one message");
+    check(refused(folder("qwen35i8", R"({"model_type": "qwen3_5"})")).empty(),
+          "unsupported_model: a qwen3_5 config is not refused with NI_KV_I8=1");
+    if (old) setenv("NI_KV_I8", saved.c_str(), 1);
+    else unsetenv("NI_KV_I8");
+  }
   // the Qwen3.5 family is accepted by its model_type, and by the hybrid's shape when the config names none
   check(refused(folder("qwen35", R"({"model_type": "qwen3_5"})")).empty(),
         "unsupported_model: a qwen3_5 config is not refused");

@@ -13,11 +13,13 @@ namespace ni {
 // NI_KV_I8=1: the Qwen3.5-family attention caches hold int8 rows (src/kernels/kv_int8.h) instead of fp16. The Metal
 // library is compiled with the same answer (compile_library), so this is read once, before any kernel compiles, and
 // cannot change while the process runs. Unset (the default) is the fp16 layout every earlier build wrote.
+// The environment's answer now (kv_i8 below reads it once; a CPU check of the refusal reads it as often as it likes).
+inline bool kv_i8_requested() {
+  const char* v = getenv("NI_KV_I8");
+  return v && *v && atoi(v) != 0;
+}
 inline bool kv_i8() {
-  static const bool on = [] {
-    const char* v = getenv("NI_KV_I8");
-    return v && *v && atoi(v) != 0;
-  }();
+  static const bool on = kv_i8_requested();
   return on;
 }
 
