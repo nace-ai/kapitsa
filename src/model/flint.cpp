@@ -1504,6 +1504,10 @@ void Flint::enc_head(Encoder& e, const Buffer& x, int R, const Buffer& out, size
 
 void Flint::enc_sample(Encoder& e, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
                        uint32_t step) {
+  if (full_vocab(sp)) {  // top_k <= 0 or above the two passes' 32 (sampler.h)
+    enc_sample_full(e, lrow, uint32_t(cfg_.vocab), tokens, out_index, sprob_, sp, step);
+    return;
+  }
   const uint32_t K = topk_k(sp);
   const kp::TopkStage ts{uint32_t(cfg_.vocab), K, topk_chunk(K)};
   const uint32_t ntg = topk_lists(uint32_t(cfg_.vocab), K);

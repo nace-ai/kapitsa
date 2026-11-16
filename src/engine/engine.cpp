@@ -338,13 +338,14 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
             opts_.model_dir.c_str(), need.bytes / 1e9, need.parts.c_str(), budget_ / 1e9, rws / 1e9);
   }
   // the publisher's sampling settings (generation_config.json; Nemotron 3.5 and Dory: temperature 1.0, top-p 0.95, no
-  // top-k: the sampler's 32)
+  // top-k). A request that leaves top_k out gets omitted_top_k() (sampler.h): the publisher's within 1..64, else 32, as
+  // before kapitsa#1286, so those defaults keep their speculative loops; a request that asks for top_k 0 gets every token.
   auto publisher_sampling = [&] {
     auto gc = nlohmann::json::parse(read_file(opts_.model_dir + "/generation_config.json"), nullptr, false);
     if (!gc.is_discarded() && gc.is_object()) {
       if (gc.contains("temperature") && gc["temperature"].is_number()) defaults_.temperature = gc["temperature"];
       if (gc.contains("top_p") && gc["top_p"].is_number()) defaults_.top_p = gc["top_p"];
-      defaults_.top_k = gc.contains("top_k") && gc["top_k"].is_number() ? gc["top_k"].get<int>() : 0;
+      defaults_.top_k = omitted_top_k(gc.contains("top_k") && gc["top_k"].is_number() ? gc["top_k"].get<int>() : 0);
     }
   };
   if (Qwen4Exp::is_model(opts_.model_dir)) {
@@ -384,7 +385,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     auto gc = nlohmann::json::parse(read_file(opts_.model_dir + "/generation_config.json"), nullptr, false);
     const bool sample = !gc.is_discarded() && gc.is_object() && gc.value("do_sample", false);
     if (sample) publisher_sampling();
-    else defaults_.temperature = 0.0f, defaults_.top_p = 1.0f, defaults_.top_k = 0;
+    else defaults_.temperature = 0.0f, defaults_.top_p = 1.0f, defaults_.top_k = kTopkOmitted;  // (a client's temperature alone: 32, as before #1286)
   } else {
     auto m = std::make_unique<Qwen35>(opts_.model_dir, opts_.prefill_chunk);
     q35_ = m.get();
@@ -2967,6 +2968,13 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   sp.top_p = r.top_p;
   sp.top_k = r.top_k;
   sp.seed = r.seed ? r.seed : uint32_t(std::random_device{}());
+  // kapitsa#1286: a top_k the two-pass sampler cannot hold (<= 0: no truncation; above its 64) is sampled over the whole
+  // vocabulary (sampler.h), in plain steps: the speculative loops' verifies and acceptances keep 64 candidates per row.
+  // (Clover's own loops draw from the whole vocabulary already, its pick kernel applying no top-k: they are kept.)
+  const bool full_steps = full_vocab(sp) && !clover_own;
+  if (full_steps)
+    logi("chat: top_k %d at temperature %.2f: sampled over the whole vocabulary, plain steps (kapitsa#1286)", sp.top_k,
+         sp.temperature);
   // Structured output: the matcher's state. A reply held from its first token samples that token (in the prompt's last
   // chunk) under the grammar's first mask; with reasoning on the grammar starts after </think>.
   GrammarState gst;
@@ -3560,7 +3568,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       tr_margin.push_back(a - b);
     }
   };
-  if (live) live->spec.store(lili_ ? 3 : dfl_ ? 2 : depth > 0 ? 1 : 0, std::memory_order_relaxed),
+  if (live) live->spec.store(full_steps ? 0 : lili_ ? 3 : dfl_ ? 2 : depth > 0 ? 1 : 0, std::memory_order_relaxed),
       live->phase.store(2, std::memory_order_relaxed);
   // batched decode: this request decodes (other requests' batch_wanted() counts it) until its loop ends
   struct Decoding {
@@ -3596,8 +3604,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     return !(v && v[0] == '0');
   }();
   const bool flint_self = flint_self_ > 0 && n >= flint_self_min_;  // Flint drafts itself this request
-  const bool spec_loop = lili_ || dfl_ || dory_spec_ > 0 || nh_ngram_ > 0 || flint_ngram_ > 0 || flint_self || depth > 0;
-  const bool g_dfl = gm && dfl_ && grammar_spec;
+  const bool spec_loop =
+      !full_steps && (lili_ || dfl_ || dory_spec_ > 0 || nh_ngram_ > 0 || flint_ngram_ > 0 || flint_self || depth > 0);
+  const bool g_dfl = gm && dfl_ && grammar_spec && !full_steps;
   const bool g_direct = gm && !g_dfl && (g_on || !spec_loop);
   g_in_spec = gm && !g_direct && !g_on;
   double mask_ms = 0;  // the masks this request computed (host ms) and how many (the log line at its end)
@@ -3616,15 +3625,67 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // Thinking budget: DFlash2 cycles (KFlash trees and chains) and the constrained loop mask their rows near the cap.
   // The other loops (LiLiCorr, Dory, n-gram, MTP, plain steps) hand over to the constrained loop in time: the rest of
   // the reply is plain steps there, slower but exact.
-  const bool dfl_loop = !clover_own && !g_direct && !lili_ && dfl_;
+  const bool dfl_loop = !clover_own && !g_direct && !lili_ && dfl_ && !full_steps;
   if (tc.on() && !g_direct && !dfl_loop) tc_rows = spec_loop ? kf::kMaxRows + 1 : 2;
   // (a cap that close: the constrained loop from the first token, as the hand-over could come too late)
   const bool tc_direct = tc_rows > 0 && tc.near(tc_rows);  // (near: from the first forced position, think_close_for)
   if (tc_direct) tc_rows = 0;
+  // plain steps: each step samples the token after the one it feeds (no drafter)
+  auto plain_steps = [&] {
+    std::unique_ptr<Encoder> next;  // step feeding the newest sampled token
+    int pos = n;                    // position of the newest sampled token
+    auto encode_at = [&](int q) {
+      auto x = model_->grouped_passes() ? g.begin_grouped() : g.begin();
+      model_->encode_step(*x, s, q, sp, uint32_t(q), true);
+      x->commit();
+      return x;
+    };
+    // parked: the step in flight completes (it writes only the slot's state and its next token)
+    auto park = [&] {
+      if (next) next->wait();
+    };
+    if (r.max_tokens > 1) next = encode_at(pos);
+    while (true) {
+      bool go = handle(s.tokens()[pos]);  // available: produced by the previous command buffer
+      if (go && pos + 2 >= s.cap) {
+        // the KV cache grows between steps: the step in flight writes it, so it completes first
+        if (next) next->wait();
+        if (pos + 2 >= s.limit || !grow_kv(std::min(s.limit, pos + 3), park)) {
+          finish = "length";
+          res.context_full = true;
+          go = false;
+        }
+      }
+      if (!go) break;
+      if (contended()) {
+        park();
+        yield_turn(res);
+      }
+      kf_rows = kfw.plan(0);  // KFlash's budget with no proposals: the pending token's row alone, this step (so plain decoding is as before)
+      // the step feeding token `pos` is in flight; queue the one after it, then wait
+      auto cur = std::move(next);
+      next = encode_at(pos + 1);
+      cur->wait();
+      ++pos;
+      cycle_done(1);
+    }
+    // Drain: the step feeding the last token (if encoded) completes, so the live state covers
+    // tokens [0, pos] when it ran, else [0, pos).
+    fed_until = pos;
+    if (next) {
+      next->wait();
+      fed_until = pos + 1;
+      tc_unhandled = tc_break;  // (handed over: that step's sample, tokens[pos + 1], is the constrained loop's to handle)
+    }
+  };
   int clover_blocks = 0;  // Clover's block diffusion: blocks written (req_cycles: its denoising passes)
   if (clover_own && gm) {
     finish = "error";
     res.error = "structured output is not supported with Clover";
+  } else if (full_steps && !g_direct && !tc_direct) {
+    // not batched: other requests' batches do not wait for it (as the constrained loop's)
+    slot.decoding = false;
+    plain_steps();
   } else if (clover_own && clover_own->self_spec()) {
     // Clover, self-speculative (src/model/clover.h): tokens[P] is the pending token (the prompt's prefill sampled the
     // first); a cycle drafts the W - 1 after it with one denoising pass and verifies them with one causal pass, then
@@ -4318,51 +4379,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     e3->commit_and_wait();
     fed_until = P;
   } else {
-    std::unique_ptr<Encoder> next;  // step feeding the newest sampled token
-    int pos = n;                    // position of the newest sampled token
-    auto encode_at = [&](int q) {
-      auto x = model_->grouped_passes() ? g.begin_grouped() : g.begin();
-      model_->encode_step(*x, s, q, sp, uint32_t(q), true);
-      x->commit();
-      return x;
-    };
-    // parked: the step in flight completes (it writes only the slot's state and its next token)
-    auto park = [&] {
-      if (next) next->wait();
-    };
-    if (r.max_tokens > 1) next = encode_at(pos);
-    while (true) {
-      bool go = handle(s.tokens()[pos]);  // available: produced by the previous command buffer
-      if (go && pos + 2 >= s.cap) {
-        // the KV cache grows between steps: the step in flight writes it, so it completes first
-        if (next) next->wait();
-        if (pos + 2 >= s.limit || !grow_kv(std::min(s.limit, pos + 3), park)) {
-          finish = "length";
-          res.context_full = true;
-          go = false;
-        }
-      }
-      if (!go) break;
-      if (contended()) {
-        park();
-        yield_turn(res);
-      }
-      kf_rows = kfw.plan(0);  // KFlash's budget with no proposals: the pending token's row alone, this step (so plain decoding is as before)
-      // the step feeding token `pos` is in flight; queue the one after it, then wait
-      auto cur = std::move(next);
-      next = encode_at(pos + 1);
-      cur->wait();
-      ++pos;
-      cycle_done(1);
-    }
-    // Drain: the step feeding the last token (if encoded) completes, so the live state covers
-    // tokens [0, pos] when it ran, else [0, pos).
-    fed_until = pos;
-    if (next) {
-      next->wait();
-      fed_until = pos + 1;
-      tc_unhandled = tc_break;  // (handed over: that step's sample, tokens[pos + 1], is the constrained loop's to handle)
-    }
+    plain_steps();
   }
   // a speculative loop ended at </think> (structured output) or before the thinking budget's cap: tokens[fed_until] is
   // the newest token, handled (but for the plain loop's hand-over)
