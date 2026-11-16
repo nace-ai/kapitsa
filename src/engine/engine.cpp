@@ -6,6 +6,7 @@
 #include "engine/reasoning_memory.h"
 #include "engine/think_control.h"
 #include "engine/tool_args.h"
+#include "model/flint_kv.h"
 #include "model/qwen4_config.h"
 #include "splash/runtime.h"
 #include "util/json_file.h"
@@ -782,8 +783,14 @@ std::string unsupported_model(const std::string& model_dir) {
   if (!j.is_object()) return model_dir + ": its config.json is not valid JSON.";
   // Qwen 4 (qwen4*): what the Qwen3.8-Flash-Next path does not run, or "" (model/qwen4_config.h)
   if (qwen4_family(j)) return qwen4_refusal(j, model_dir);
+  // (Flint with NI_KV_I8: refused here, not by the constructor's fatal, which exits a running server on a model switch;
+  // #1257)
+  if (Flint::is_model(model_dir)) {
+    const char* why = flint_kv_i8_requested_refusal();
+    return why ? why : "";
+  }
   if (Qwen4Exp::is_model(model_dir) || Dory::is_model(model_dir) || NemotronH::is_model(model_dir) ||
-      Flint::is_model(model_dir) || Clover::is_model(model_dir))
+      Clover::is_model(model_dir))
     return "";
   // the Qwen3.5 family by its model_type (Hugging Face's, and what the GGUF import writes); a config that names none,
   // by the hybrid's shape, as the Hub check reads it (src/hub/fetch.cpp, check_supported)

@@ -1,4 +1,5 @@
 #include "model/flint.h"
+#include "model/flint_kv.h"
 #include "engine/device_profile.h"
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
@@ -227,6 +228,7 @@ FlintConfig Flint::read_config(const std::string& dir) {
 
 // Bytes per (kv head, position) of the attention cache: ni::kv_row_bytes (metal/gpu.h), which follows NI_KV_I8 —
 // 144 int8 or 256 fp16 at head_dim 128 — and matches the kernels' kKvRow.
+// The constructor refuses NI_KV_I8 (flint_kv.h, #1257), so a Flint model's rows are fp16 until the int8 path is fixed.
 
 size_t Flint::kv_per_pos(const FlintConfig& c) {
   const size_t full = size_t(std::count(c.kind.begin(), c.kind.end(), 'F'));
@@ -314,6 +316,7 @@ MemPlan Flint::plan(const std::string& path, int prefill_chunk) {
 
 // ---- load ----
 Flint::Flint(const std::string& path, int prefill_chunk) {
+  if (const char* why = flint_kv_i8_refusal()) fatal("%s", why);
   path_ = path;
   while (path_.size() > 1 && path_.back() == '/') path_.pop_back();
   if (!is_model(path_)) fatal("%s: not a Flint checkpoint folder (config.json)", path.c_str());
