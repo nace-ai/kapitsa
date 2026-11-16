@@ -1,0 +1,7 @@
+ProductName:		macOS
+ProductVersion:		27.2.1
+BuildVersion:		26B131
+Apple M2
+17179869184
+kapitsa 0.2.36 (414adf55)
+kapitsa 0.2.36 (1846c9ce)

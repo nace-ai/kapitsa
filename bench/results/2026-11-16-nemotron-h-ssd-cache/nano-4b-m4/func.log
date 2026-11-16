@@ -1,0 +1,18 @@
+model ~/kapitsa-run/home/models/nemotron-3-nano-4b-fp8, prompts of ~4000 tokens; servers' log: $TMPDIR/kapitsa-disk-cache-test-yy99v4fb/serve.log
+  RAM path: turn 1 4357 tokens (stop), turn 2 4445 tokens, 4416 cached
+PASS RAM path: turn 2 reuses turn 1
+PASS turn 1 writes the same text on a fresh server
+PASS the conversation is on the SSD once the server has stopped
+PASS the next server takes it back
+PASS after the restart turn 2 is cached as from RAM
+PASS ... and writes the RAM path's text, token for token
+PASS the log says what was read
+PASS write-behind: the idle server writes the new conversation
+PASS killed after the write-behind: the conversation is cached after the restart
+PASS its second turn shares the first turn's KV blocks on the SSD (writes only its new ones)
+PASS a third turn after two restarts (blocks shared across turns): the RAM path's text, as many cached tokens
+PASS a conversation another one replaces is copied and written
+PASS the replaced conversation is cached after a restart
+SKIP the drafter step: this server loads no DFlash2 drafter
+kept $TMPDIR/kapitsa-disk-cache-test-yy99v4fb
+ALL PASSED

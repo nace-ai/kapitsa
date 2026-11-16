@@ -1,0 +1,40 @@
+== 2026-11-16 19:59:14 func
+Swapins:                                     1149094.
+Swapouts:                                    1358286.
+ 71.3 /usr/libexec/audiomxd
+ 46.2 /System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/XprotectService.xpc/Contents/
+== 2026-11-16 20:03:47 func-end
+Swapins:                                     1149126.
+Swapouts:                                    1358286.
+ 71.6 /usr/libexec/audiomxd
+ 37.6 /usr/libexec/configd
+== 2026-11-16 20:08:18 ttft-2000
+Swapins:                                     1149130.
+Swapouts:                                    1358286.
+ 77.0 /usr/libexec/audiomxd
+  2.7 /usr/libexec/logd
+== 2026-11-16 20:12:18 ttft-2000-end
+Swapins:                                     1149138.
+Swapouts:                                    1358286.
+ 76.5 /usr/libexec/audiomxd
+ 38.6 /usr/libexec/configd
+== 2026-11-16 20:12:18 ttft-8000
+Swapins:                                     1149138.
+Swapouts:                                    1358286.
+ 76.4 /usr/libexec/audiomxd
+ 38.7 /usr/libexec/configd
+== 2026-11-16 20:22:40 ttft-8000-end
+Swapins:                                     1149145.
+Swapouts:                                    1358286.
+ 76.6 /usr/libexec/audiomxd
+ 38.5 /usr/libexec/configd
+== 2026-11-16 20:22:40 ttft-16000
+Swapins:                                     1149145.
+Swapouts:                                    1358286.
+ 76.6 /usr/libexec/audiomxd
+ 38.5 /usr/libexec/configd
+== 2026-11-16 20:42:07 ttft-16000-end
+Swapins:                                     1149191.
+Swapouts:                                    1358286.
+ 76.5 /usr/libexec/audiomxd
+ 38.6 /usr/libexec/configd

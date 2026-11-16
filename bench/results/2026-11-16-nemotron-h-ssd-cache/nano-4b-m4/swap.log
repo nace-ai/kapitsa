@@ -1,0 +1,40 @@
+== 2026-11-16 19:21:53 func
+Swapins:                                     3351334.
+Swapouts:                                    3682252.
+ 45.9 /System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/XprotectService.xpc/Contents/
+  8.2 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+== 2026-11-16 19:23:49 func-end
+Swapins:                                     3351445.
+Swapouts:                                    3682252.
+ 10.5 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  0.4 /usr/libexec/runningboardd
+== 2026-11-16 19:25:37 ttft-2000
+Swapins:                                     3351453.
+Swapouts:                                    3682252.
+ 11.4 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  0.0 sed -n 2,3p
+== 2026-11-16 19:27:30 ttft-2000-end
+Swapins:                                     3351615.
+Swapouts:                                    3682252.
+ 11.4 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  0.3 /System/Library/CoreServices/WiFiAgent.app/Contents/MacOS/WiFiAgent
+== 2026-11-16 19:27:30 ttft-8000
+Swapins:                                     3351615.
+Swapouts:                                    3682252.
+ 11.4 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  0.3 /System/Library/CoreServices/WiFiAgent.app/Contents/MacOS/WiFiAgent
+== 2026-11-16 19:31:32 ttft-8000-end
+Swapins:                                     3351651.
+Swapouts:                                    3682252.
+ 10.7 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  0.0 sed -n 2,3p
+== 2026-11-16 19:31:32 ttft-16000
+Swapins:                                     3351651.
+Swapouts:                                    3682252.
+ 10.7 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  0.0 sed -n 2,3p
+== 2026-11-16 19:38:31 ttft-16000-end
+Swapins:                                     3351651.
+Swapouts:                                    3682252.
+ 10.0 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  0.1 /usr/libexec/AirPlayXPCHelper

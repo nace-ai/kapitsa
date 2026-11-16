@@ -1,0 +1,20 @@
+batch/logits.f32 identical (100663296 bytes)
+batch/records.txt identical (1296 bytes)
+batch/sequences.txt identical (80333 bytes)
+prefill/logits.f32 identical (4194304 bytes)
+prefill/records.txt identical (54 bytes)
+prefill/sequences.txt identical (80333 bytes)
+step/logits.f32 identical (100663296 bytes)
+step/records.txt identical (1296 bytes)
+step/sequences.txt identical (80333 bytes)
+verify/logits.f32 identical (100663296 bytes)
+verify/records.txt identical (1296 bytes)
+verify/sequences.txt identical (80333 bytes)
+bf4b2da0bace29ea340d5db8117c49994d1a7f88f2dc5ffff9bc97ff89bf1384  /tmp/ssdc-ref/batch/logits.f32
+99859adcc5ace1ad7127424d87edb9b4509d2208aefdf12fae36cf03902bb244  /tmp/ssdc-ref/prefill/logits.f32
+1f46e32de73fb8f56ef3bd5f4b3bf7e9668ac1b234df25cd1bd250fdee08d5b8  /tmp/ssdc-ref/step/logits.f32
+bf4b2da0bace29ea340d5db8117c49994d1a7f88f2dc5ffff9bc97ff89bf1384  /tmp/ssdc-ref/verify/logits.f32
+bf4b2da0bace29ea340d5db8117c49994d1a7f88f2dc5ffff9bc97ff89bf1384  /tmp/ssdc-new/batch/logits.f32
+99859adcc5ace1ad7127424d87edb9b4509d2208aefdf12fae36cf03902bb244  /tmp/ssdc-new/prefill/logits.f32
+1f46e32de73fb8f56ef3bd5f4b3bf7e9668ac1b234df25cd1bd250fdee08d5b8  /tmp/ssdc-new/step/logits.f32
+bf4b2da0bace29ea340d5db8117c49994d1a7f88f2dc5ffff9bc97ff89bf1384  /tmp/ssdc-new/verify/logits.f32

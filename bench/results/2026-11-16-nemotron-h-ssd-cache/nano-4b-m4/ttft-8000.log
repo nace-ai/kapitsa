@@ -1,0 +1,19 @@
+model ~/kapitsa-run/home/models/nemotron-3-nano-4b-fp8, prompts of ~8000 tokens; servers' log: $TMPDIR/kapitsa-disk-cache-test-6lmq63sm/serve.log
+PASS round 1: turn 2 from the SSD writes the RAM path's text
+PASS round 1: as many tokens cached as from RAM
+  round 1: turn 2 cold writes the SSD's text: yes
+round 1: turn 2 of 8715 tokens: cold 18.913 s (0 cached), from the SSD after a restart 0.200 s (8686 cached; read 228 MB in 75 ms), from RAM 0.123 s (8686 cached); written: turn 1 314 MB, turn 2 181 MB; turn 1 (cold too, 8617 tokens) 18.296 s
+PASS round 2: turn 2 from the SSD writes the RAM path's text
+PASS round 2: as many tokens cached as from RAM
+  round 2: turn 2 cold writes the SSD's text: yes
+round 2: turn 2 of 8715 tokens: cold 18.991 s (0 cached), from the SSD after a restart 0.199 s (8686 cached; read 228 MB in 73 ms), from RAM 0.136 s (8686 cached); written: turn 1 314 MB, turn 2 181 MB; turn 1 (cold too, 8617 tokens) 18.565 s
+PASS round 3: turn 2 from the SSD writes the RAM path's text
+PASS round 3: as many tokens cached as from RAM
+  round 3: turn 2 cold writes the SSD's text: yes
+round 3: turn 2 of 8715 tokens: cold 19.056 s (0 cached), from the SSD after a restart 0.197 s (8686 cached; read 228 MB in 72 ms), from RAM 0.123 s (8686 cached); written: turn 1 314 MB, turn 2 181 MB; turn 1 (cold too, 8617 tokens) 18.639 s
+| model | turn 2 tokens | cold TTFT | after a restart (SSD) | from RAM | SSD read | written turn 1 / turn 2 |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| nemotron-3-nano-4b-fp8 | 8715 | 18.913 s | 0.200 s (8686 cached) | 0.123 s | 228 MB in 75 ms | 314 / 181 MB |
+| nemotron-3-nano-4b-fp8 | 8715 | 18.991 s | 0.199 s (8686 cached) | 0.136 s | 228 MB in 73 ms | 314 / 181 MB |
+| nemotron-3-nano-4b-fp8 | 8715 | 19.056 s | 0.197 s (8686 cached) | 0.123 s | 228 MB in 72 ms | 314 / 181 MB |
+ALL PASSED

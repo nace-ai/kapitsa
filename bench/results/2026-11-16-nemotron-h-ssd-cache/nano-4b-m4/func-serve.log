@@ -1,0 +1,186 @@
+
+==== start: slots 2, cache 0
+warning: cannot make its folder: this server has no control socket
+[kapitsa] compiled kernels in 3411 ms
+[kapitsa] compiled the Nemotron-H kernels in 1380 ms
+[kapitsa] Nemotron-H: 42 layers (21 Mamba-2, 4 attention, 17 MLP), 4.44 GB of weights read in 2.0 s (Mamba FP8 17 / BF16 4, MLP FP8, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 46 ms
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (157 ms)
+[kapitsa] Nemotron-H: no block drafter found next to ~/kapitsa-run/home/models/nemotron-3-nano-4b-fp8
+[kapitsa] GPU: Apple M4, 10 cores
+[kapitsa] memory: 5.65 GB allocated (model, buffers, 2 slots' state), budget 12.2 GB (recommended working set 12.7 GB): KV room 6.52 GB = 398109 tokens (16 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] drafter: none (no matching drafter found, prompt lookup only)
+[kapitsa] engine ready: nemotron-3-nano-4b-fp8, context 32768, 2 slots, prompt-lookup speculative decoding (up to 4 drafts per cycle), KFlash (prompt lookup)
+[kapitsa] listening on http://<ip>:8197
+Visible to Kapitsa on this network as <host> at http://<ip>:8197 (no password; --private hides it).
+Ready: chat at http://<ip>:8197, API at http://<ip>:8197/v1 (model "nemotron-3-nano-4b-fp8"). Ctrl+C stops.
+[kapitsa] cluster: visible on the network as "<host>" (port 8197)
+[kapitsa] chat: prompt 4357 (cached 0) in 9129 ms (+7.6 ms template/tokenize; last chunk: encoded by 6021.5 ms, GPU start +3062.0 ms, GPU 45.0 ms, wake +0.2 ms), 60 tokens in 2101 ms (28.1 tok/s), stop, thinking: off, 1.20 tok/cycle, KFlash (prompt lookup): 49 cycles, 89 rows, 10 drafts accepted
+[kapitsa] chat: prompt 4445 (cached 4416) in 188 ms (+3.8 ms template/tokenize; last chunk: encoded by 0.9 ms, GPU start +142.1 ms, GPU 44.9 ms, wake +0.2 ms), 36 tokens in 1385 ms (25.3 tok/s), stop, thinking: off, 1.09 tok/cycle, KFlash (prompt lookup): 32 cycles, 72 rows, 3 drafts accepted
+
+==== start: slots 2, cache 2G
+warning: cannot make its folder: this server has no control socket
+[kapitsa] compiled kernels in 10 ms
+[kapitsa] compiled the Nemotron-H kernels in 2 ms
+[kapitsa] Nemotron-H: 42 layers (21 Mamba-2, 4 attention, 17 MLP), 4.44 GB of weights read in 0.3 s (Mamba FP8 17 / BF16 4, MLP FP8, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 3 ms
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (150 ms)
+[kapitsa] Nemotron-H: no block drafter found next to ~/kapitsa-run/home/models/nemotron-3-nano-4b-fp8
+[kapitsa] GPU: Apple M4, 10 cores
+[kapitsa] memory: 5.65 GB allocated (model, buffers, 2 slots' state), budget 12.2 GB (recommended working set 12.7 GB): KV room 6.52 GB = 398109 tokens (16 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] drafter: none (no matching drafter found, prompt lookup only)
+[kapitsa] engine ready: nemotron-3-nano-4b-fp8, context 32768, 2 slots, prompt-lookup speculative decoding (up to 4 drafts per cycle), KFlash (prompt lookup)
+[kapitsa] listening on http://<ip>:8197
+Visible to Kapitsa on this network as <host> at http://<ip>:8197 (no password; --private hides it).
+Ready: chat at http://<ip>:8197, API at http://<ip>:8197/v1 (model "nemotron-3-nano-4b-fp8"). Ctrl+C stops.
+[kapitsa] SSD prefix cache: $TMPDIR/kapitsa-disk-cache-test-yy99v4fb/home/prefix-cache/90db0c194e3c837db3d49f0d5e55221f, up to 2.0 GiB (--disk-cache 2.0 GiB, within a quarter of the free space beyond 10 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0 MiB)
+[kapitsa] cluster: visible on the network as "<host>" (port 8197)
+[kapitsa] chat: prompt 4357 (cached 0) in 9112 ms (+7.6 ms template/tokenize; last chunk: encoded by 6004.6 ms, GPU start +3062.5 ms, GPU 44.8 ms, wake +0.2 ms), 60 tokens in 2107 ms (28.0 tok/s), stop, thinking: off, 1.20 tok/cycle, KFlash (prompt lookup): 49 cycles, 89 rows, 10 drafts accepted
+[kapitsa] SSD cache: saved slot 0 (4416 tokens, 2 restore points; 9 of 9 KV blocks and 2 states new: 244 MB) in 116 ms
+
+==== start: slots 2, cache 2G
+engine view: http://<ip>:8197/engine (its key: $TMPDIR/kapitsa-disk-cache-test-yy99v4fb/home/run/default.token)
+[kapitsa] compiled kernels in 11 ms
+[kapitsa] compiled the Nemotron-H kernels in 2 ms
+[kapitsa] Nemotron-H: 42 layers (21 Mamba-2, 4 attention, 17 MLP), 4.44 GB of weights read in 0.3 s (Mamba FP8 17 / BF16 4, MLP FP8, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 3 ms
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (153 ms)
+[kapitsa] Nemotron-H: no block drafter found next to ~/kapitsa-run/home/models/nemotron-3-nano-4b-fp8
+[kapitsa] GPU: Apple M4, 10 cores
+[kapitsa] memory: 5.65 GB allocated (model, buffers, 2 slots' state), budget 12.2 GB (recommended working set 12.7 GB): KV room 6.52 GB = 398109 tokens (16 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] drafter: none (no matching drafter found, prompt lookup only)
+[kapitsa] engine ready: nemotron-3-nano-4b-fp8, context 32768, 2 slots, prompt-lookup speculative decoding (up to 4 drafts per cycle), KFlash (prompt lookup)
+[kapitsa] listening on http://<ip>:8197
+Visible to Kapitsa on this network as <host> at http://<ip>:8197 (no password; --private hides it).
+Ready: chat at http://<ip>:8197, API at http://<ip>:8197/v1 (model "nemotron-3-nano-4b-fp8"). Ctrl+C stops.
+[kapitsa] SSD prefix cache: $TMPDIR/kapitsa-disk-cache-test-yy99v4fb/home/prefix-cache/90db0c194e3c837db3d49f0d5e55221f, up to 2.0 GiB (--disk-cache 2.0 GiB, within a quarter of the free space beyond 10 GiB; --disk-cache 0 turns it off): 1 conversation taken back (0.2 GiB)
+[kapitsa] cluster: visible on the network as "<host>" (port 8197)
+[kapitsa] chat: prompt 22 (cached 0) in 173 ms (+3.5 ms template/tokenize; last chunk: encoded by 1.7 ms, GPU start +129.6 ms, GPU 42.0 ms, wake +0.2 ms), 8 tokens in 293 ms (23.9 tok/s), stop, thinking: off, 1.00 tok/cycle, KFlash (prompt lookup): 7 cycles, 7 rows, 0 drafts accepted
+[kapitsa] SSD cache: read 4416 tokens of a stored conversation into slot 1 (158 MB in 57 ms)
+[kapitsa] chat: prompt 4445 (cached 4416) in 114 ms (+1.2 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +68.4 ms, GPU 45.0 ms, wake +0.2 ms), 36 tokens in 1384 ms (25.3 tok/s), stop, thinking: off, 1.09 tok/cycle, KFlash (prompt lookup): 32 cycles, 72 rows, 3 drafts accepted
+[kapitsa] chat: prompt 4288 (cached 0) in 9008 ms (+6.7 ms template/tokenize; last chunk: encoded by 5916.8 ms, GPU start +3046.2 ms, GPU 44.9 ms, wake +0.2 ms), 63 tokens in 2425 ms (25.6 tok/s), stop, thinking: off, 1.11 tok/cycle, KFlash (prompt lookup): 56 cycles, 132 rows, 6 drafts accepted
+[kapitsa] SSD cache: saved slot 0 (4350 tokens, 2 restore points; 9 of 9 KV blocks and 2 states new: 243 MB) in 112 ms
+[kapitsa] SSD cache: saved slot 1 (4439 tokens, 1 restore point; 1 of 9 KV blocks and 1 state new: 91 MB) in 68 ms
+
+==== start: slots 2, cache 2G
+engine view: http://<ip>:8197/engine (its key: $TMPDIR/kapitsa-disk-cache-test-yy99v4fb/home/run/default.token)
+[kapitsa] compiled kernels in 12 ms
+[kapitsa] compiled the Nemotron-H kernels in 2 ms
+[kapitsa] Nemotron-H: 42 layers (21 Mamba-2, 4 attention, 17 MLP), 4.44 GB of weights read in 0.3 s (Mamba FP8 17 / BF16 4, MLP FP8, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 3 ms
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (148 ms)
+[kapitsa] Nemotron-H: no block drafter found next to ~/kapitsa-run/home/models/nemotron-3-nano-4b-fp8
+[kapitsa] GPU: Apple M4, 10 cores
+[kapitsa] memory: 5.65 GB allocated (model, buffers, 2 slots' state), budget 12.2 GB (recommended working set 12.7 GB): KV room 6.52 GB = 398109 tokens (16 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] drafter: none (no matching drafter found, prompt lookup only)
+[kapitsa] engine ready: nemotron-3-nano-4b-fp8, context 32768, 2 slots, prompt-lookup speculative decoding (up to 4 drafts per cycle), KFlash (prompt lookup)
+[kapitsa] listening on http://<ip>:8197
+Visible to Kapitsa on this network as <host> at http://<ip>:8197 (no password; --private hides it).
+Ready: chat at http://<ip>:8197, API at http://<ip>:8197/v1 (model "nemotron-3-nano-4b-fp8"). Ctrl+C stops.
+[kapitsa] SSD prefix cache: $TMPDIR/kapitsa-disk-cache-test-yy99v4fb/home/prefix-cache/90db0c194e3c837db3d49f0d5e55221f, up to 2.0 GiB (--disk-cache 2.0 GiB, within a quarter of the free space beyond 10 GiB; --disk-cache 0 turns it off): 3 conversations taken back (0.5 GiB)
+[kapitsa] SSD cache: read 4350 tokens of a stored conversation into slot 0 (157 MB in 64 ms)
+[kapitsa] cluster: visible on the network as "<host>" (port 8197)
+[kapitsa] chat: prompt 4379 (cached 4350) in 167 ms (+5.6 ms template/tokenize; last chunk: encoded by 0.5 ms, GPU start +120.8 ms, GPU 45.0 ms, wake +0.2 ms), 31 tokens in 1208 ms (24.8 tok/s), stop, thinking: off, 1.07 tok/cycle, KFlash (prompt lookup): 28 cycles, 60 rows, 2 drafts accepted
+[kapitsa] SSD cache: saved slot 0 (4409 tokens, 2 restore points; 1 of 9 KV blocks and 2 states new: 177 MB) in 99 ms
+
+==== start: slots 2, cache 2G
+engine view: http://<ip>:8197/engine (its key: $TMPDIR/kapitsa-disk-cache-test-yy99v4fb/home/run/default.token)
+[kapitsa] compiled kernels in 11 ms
+[kapitsa] compiled the Nemotron-H kernels in 2 ms
+[kapitsa] Nemotron-H: 42 layers (21 Mamba-2, 4 attention, 17 MLP), 4.44 GB of weights read in 0.3 s (Mamba FP8 17 / BF16 4, MLP FP8, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 4 ms
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (147 ms)
+[kapitsa] Nemotron-H: no block drafter found next to ~/kapitsa-run/home/models/nemotron-3-nano-4b-fp8
+[kapitsa] GPU: Apple M4, 10 cores
+[kapitsa] memory: 5.65 GB allocated (model, buffers, 2 slots' state), budget 12.2 GB (recommended working set 12.7 GB): KV room 6.52 GB = 398109 tokens (16 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] drafter: none (no matching drafter found, prompt lookup only)
+[kapitsa] engine ready: nemotron-3-nano-4b-fp8, context 32768, 2 slots, prompt-lookup speculative decoding (up to 4 drafts per cycle), KFlash (prompt lookup)
+[kapitsa] listening on http://<ip>:8197
+Visible to Kapitsa on this network as <host> at http://<ip>:8197 (no password; --private hides it).
+Ready: chat at http://<ip>:8197, API at http://<ip>:8197/v1 (model "nemotron-3-nano-4b-fp8"). Ctrl+C stops.
+[kapitsa] SSD prefix cache: $TMPDIR/kapitsa-disk-cache-test-yy99v4fb/home/prefix-cache/90db0c194e3c837db3d49f0d5e55221f, up to 2.0 GiB (--disk-cache 2.0 GiB, within a quarter of the free space beyond 10 GiB; --disk-cache 0 turns it off): 4 conversations taken back (0.7 GiB)
+[kapitsa] SSD cache: read 4409 tokens of a stored conversation into slot 0 (158 MB in 64 ms)
+[kapitsa] cluster: visible on the network as "<host>" (port 8197)
+[kapitsa] chat: prompt 4434 (cached 4409) in 158 ms (+7.1 ms template/tokenize; last chunk: encoded by 0.6 ms, GPU start +112.3 ms, GPU 44.8 ms, wake +0.2 ms), 41 tokens in 1481 ms (27.0 tok/s), stop, thinking: off, 1.18 tok/cycle, KFlash (prompt lookup): 34 cycles, 57 rows, 6 drafts accepted
+[kapitsa] SSD cache: saved slot 0 (4428 tokens, 1 restore point; 1 of 9 KV blocks and 1 state new: 91 MB) in 26 ms
+[kapitsa] SSD prefix cache: 1 conversation saved as the server stops (91 MB in 26 ms)
+
+==== start: slots 2, cache 0
+warning: cannot make its folder: this server has no control socket
+[kapitsa] compiled kernels in 12 ms
+[kapitsa] compiled the Nemotron-H kernels in 2 ms
+[kapitsa] Nemotron-H: 42 layers (21 Mamba-2, 4 attention, 17 MLP), 4.44 GB of weights read in 0.3 s (Mamba FP8 17 / BF16 4, MLP FP8, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 3 ms
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (153 ms)
+[kapitsa] Nemotron-H: no block drafter found next to ~/kapitsa-run/home/models/nemotron-3-nano-4b-fp8
+[kapitsa] GPU: Apple M4, 10 cores
+[kapitsa] memory: 5.65 GB allocated (model, buffers, 2 slots' state), budget 12.2 GB (recommended working set 12.7 GB): KV room 6.52 GB = 398109 tokens (16 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] drafter: none (no matching drafter found, prompt lookup only)
+[kapitsa] engine ready: nemotron-3-nano-4b-fp8, context 32768, 2 slots, prompt-lookup speculative decoding (up to 4 drafts per cycle), KFlash (prompt lookup)
+[kapitsa] listening on http://<ip>:8197
+Visible to Kapitsa on this network as <host> at http://<ip>:8197 (no password; --private hides it).
+Ready: chat at http://<ip>:8197, API at http://<ip>:8197/v1 (model "nemotron-3-nano-4b-fp8"). Ctrl+C stops.
+[kapitsa] cluster: visible on the network as "<host>" (port 8197)
+[kapitsa] chat: prompt 4288 (cached 0) in 9065 ms (+7.2 ms template/tokenize; last chunk: encoded by 5977.3 ms, GPU start +3042.9 ms, GPU 44.7 ms, wake +0.2 ms), 63 tokens in 2421 ms (25.6 tok/s), stop, thinking: off, 1.11 tok/cycle, KFlash (prompt lookup): 56 cycles, 132 rows, 6 drafts accepted
+[kapitsa] chat: prompt 4379 (cached 4350) in 186 ms (+4.3 ms template/tokenize; last chunk: encoded by 0.7 ms, GPU start +140.0 ms, GPU 45.0 ms, wake +0.2 ms), 31 tokens in 1208 ms (24.8 tok/s), stop, thinking: off, 1.07 tok/cycle, KFlash (prompt lookup): 28 cycles, 60 rows, 2 drafts accepted
+[kapitsa] chat: prompt 4434 (cached 4409) in 183 ms (+4.5 ms template/tokenize; last chunk: encoded by 0.9 ms, GPU start +136.9 ms, GPU 45.1 ms, wake +0.2 ms), 41 tokens in 1457 ms (27.4 tok/s), stop, thinking: off, 1.18 tok/cycle, KFlash (prompt lookup): 34 cycles, 57 rows, 6 drafts accepted
+
+==== start: slots 1, cache 2G
+engine view: http://<ip>:8197/engine (its key: $TMPDIR/kapitsa-disk-cache-test-yy99v4fb/home/run/default.token)
+[kapitsa] compiled kernels in 9 ms
+[kapitsa] compiled the Nemotron-H kernels in 2 ms
+[kapitsa] Nemotron-H: 42 layers (21 Mamba-2, 4 attention, 17 MLP), 4.44 GB of weights read in 0.3 s (Mamba FP8 17 / BF16 4, MLP FP8, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 4 ms
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (148 ms)
+[kapitsa] Nemotron-H: no block drafter found next to ~/kapitsa-run/home/models/nemotron-3-nano-4b-fp8
+[kapitsa] GPU: Apple M4, 10 cores
+[kapitsa] memory: 5.29 GB allocated (model, buffers, 1 slot's state), budget 12.2 GB (recommended working set 12.7 GB): KV room 6.89 GB = 420567 tokens (16 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] drafter: none (no matching drafter found, prompt lookup only)
+[kapitsa] engine ready: nemotron-3-nano-4b-fp8, context 32768, 1 slots, prompt-lookup speculative decoding (up to 4 drafts per cycle), KFlash (prompt lookup)
+[kapitsa] listening on http://<ip>:8197
+Visible to Kapitsa on this network as <host> at http://<ip>:8197 (no password; --private hides it).
+Ready: chat at http://<ip>:8197, API at http://<ip>:8197/v1 (model "nemotron-3-nano-4b-fp8"). Ctrl+C stops.
+[kapitsa] SSD prefix cache: $TMPDIR/kapitsa-disk-cache-test-yy99v4fb/home/prefix-cache/90db0c194e3c837db3d49f0d5e55221f, up to 2.0 GiB (--disk-cache 2.0 GiB, within a quarter of the free space beyond 10 GiB; --disk-cache 0 turns it off): 5 conversations taken back (0.8 GiB)
+[kapitsa] cluster: visible on the network as "<host>" (port 8197)
+[kapitsa] chat: prompt 4279 (cached 0) in 9082 ms (+7.6 ms template/tokenize; last chunk: encoded by 5990.3 ms, GPU start +3046.7 ms, GPU 45.0 ms, wake +0.2 ms), 53 tokens in 1600 ms (32.5 tok/s), stop, thinking: off, 1.41 tok/cycle, KFlash (prompt lookup): 37 cycles, 85 rows, 15 drafts accepted
+[kapitsa] SSD cache: saved the conversation slot 0 held (4273 tokens, 156 MB written) in 61 ms
+[kapitsa] chat: prompt 4276 (cached 0) in 9009 ms (+20.1 ms template/tokenize; last chunk: encoded by 5918.0 ms, GPU start +3046.4 ms, GPU 44.9 ms, wake +0.2 ms), 8 tokens in 303 ms (23.1 tok/s), length, thinking: off, 1.00 tok/cycle, KFlash (prompt lookup): 7 cycles, 15 rows, 0 drafts accepted
+
+==== start: slots 1, cache 2G
+engine view: http://<ip>:8197/engine (its key: $TMPDIR/kapitsa-disk-cache-test-yy99v4fb/home/run/default.token)
+[kapitsa] compiled kernels in 9 ms
+[kapitsa] compiled the Nemotron-H kernels in 2 ms
+[kapitsa] Nemotron-H: 42 layers (21 Mamba-2, 4 attention, 17 MLP), 4.44 GB of weights read in 0.3 s (Mamba FP8 17 / BF16 4, MLP FP8, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 3 ms
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (147 ms)
+[kapitsa] Nemotron-H: no block drafter found next to ~/kapitsa-run/home/models/nemotron-3-nano-4b-fp8
+[kapitsa] GPU: Apple M4, 10 cores
+[kapitsa] memory: 5.29 GB allocated (model, buffers, 1 slot's state), budget 12.2 GB (recommended working set 12.7 GB): KV room 6.89 GB = 420567 tokens (16 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] drafter: none (no matching drafter found, prompt lookup only)
+[kapitsa] engine ready: nemotron-3-nano-4b-fp8, context 32768, 1 slots, prompt-lookup speculative decoding (up to 4 drafts per cycle), KFlash (prompt lookup)
+[kapitsa] listening on http://<ip>:8197
+Visible to Kapitsa on this network as <host> at http://<ip>:8197 (no password; --private hides it).
+Ready: chat at http://<ip>:8197, API at http://<ip>:8197/v1 (model "nemotron-3-nano-4b-fp8"). Ctrl+C stops.
+[kapitsa] SSD prefix cache: $TMPDIR/kapitsa-disk-cache-test-yy99v4fb/home/prefix-cache/90db0c194e3c837db3d49f0d5e55221f, up to 2.0 GiB (--disk-cache 2.0 GiB, within a quarter of the free space beyond 10 GiB; --disk-cache 0 turns it off): 6 conversations taken back (0.9 GiB)
+[kapitsa] SSD cache: read 4273 tokens of a stored conversation into slot 0 (156 MB in 64 ms)
+[kapitsa] cluster: visible on the network as "<host>" (port 8197)
+[kapitsa] chat: prompt 4360 (cached 4273) in 363 ms (+5.9 ms template/tokenize; last chunk: encoded by 0.5 ms, GPU start +317.2 ms, GPU 45.0 ms, wake +0.2 ms), 36 tokens in 1377 ms (25.4 tok/s), stop, thinking: off, 1.09 tok/cycle, KFlash (prompt lookup): 32 cycles, 60 rows, 3 drafts accepted
+[kapitsa] SSD cache: saved slot 0 (4354 tokens, 1 restore point; 1 of 9 KV blocks and 1 state new: 90 MB) in 24 ms
+[kapitsa] SSD prefix cache: 1 conversation saved as the server stops (90 MB in 24 ms)
+
+==== start: slots 2, cache 2G
+warning: cannot make its folder: this server has no control socket
+[kapitsa] compiled kernels in 13 ms
+[kapitsa] compiled the Nemotron-H kernels in 2 ms
+[kapitsa] Nemotron-H: 42 layers (21 Mamba-2, 4 attention, 17 MLP), 4.44 GB of weights read in 0.3 s (Mamba FP8 17 / BF16 4, MLP FP8, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 3 ms
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (151 ms)
+[kapitsa] Nemotron-H: no block drafter found next to ~/kapitsa-run/home/models/nemotron-3-nano-4b-fp8
+[kapitsa] GPU: Apple M4, 10 cores
+[kapitsa] memory: 5.65 GB allocated (model, buffers, 2 slots' state), budget 12.2 GB (recommended working set 12.7 GB): KV room 6.52 GB = 398109 tokens (16 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] drafter: none (no matching drafter found, prompt lookup only)
+[kapitsa] engine ready: nemotron-3-nano-4b-fp8, context 32768, 2 slots, prompt-lookup speculative decoding (up to 4 drafts per cycle), KFlash (prompt lookup)
+[kapitsa] listening on http://<ip>:8197
+Visible to Kapitsa on this network as <host> at http://<ip>:8197 (no password; --private hides it).
+Ready: chat at http://<ip>:8197, API at http://<ip>:8197/v1 (model "nemotron-3-nano-4b-fp8"). Ctrl+C stops.
+[kapitsa] SSD prefix cache: $TMPDIR/kapitsa-disk-cache-test-yy99v4fb/home-dflash/prefix-cache/90db0c194e3c837db3d49f0d5e55221f, up to 2.0 GiB (--disk-cache 2.0 GiB, within a quarter of the free space beyond 10 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0 MiB)

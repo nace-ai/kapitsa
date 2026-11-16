@@ -1,0 +1,11 @@
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (180 ms)
+[kapitsa] compiled kernels in 9 ms
+[kapitsa] compiled the Nemotron-H kernels in 2 ms
+[kapitsa] Nemotron-H: 42 layers (21 Mamba-2, 4 attention, 17 MLP), 4.44 GB of weights read in 0.3 s (Mamba FP8 17 / BF16 4, MLP FP8, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 3 ms
+[kapitsa] NI_ANE: Neural Engine split unavailable (hidden / Mamba sizes are not whole 2048-channel segments); the GPU runs the prefill alone
+prefill 8 rows: next-token NLL 0.7375, top-1 = next token 0.7500 -> /tmp/ssdc-ref/prefill
+step   192 rows: next-token NLL 0.8686, top-1 = next token 0.7969 -> /tmp/ssdc-ref/step
+verify 192 rows: next-token NLL 0.8685, top-1 = next token 0.7969 -> /tmp/ssdc-ref/verify
+batch  192 rows: next-token NLL 0.8685, top-1 = next token 0.7969 -> /tmp/ssdc-ref/batch
+8 windows, 14848 prefilled tokens in 30.1 s; 41.9 s in all
