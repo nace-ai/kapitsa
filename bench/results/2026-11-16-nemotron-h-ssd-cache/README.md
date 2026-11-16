@@ -4,12 +4,14 @@
 | --- | --- | --- | --- |
 | `nano-4b-m4/` | Mac mini M4 (10-core GPU), 16 GB | 26.6.2 (25G83) | `nemotron-3-nano-4b-fp8` |
 | `nano-9b-m2/` | Mac mini M2 (10-core GPU), 16 GB | 27.2.1 (26B131) | `nemotron-nano-9b-v2-nvfp4` |
+| `head-nano-4b-m4/` | the same M4 | 26.6.2 (25G83) | `nemotron-3-nano-4b-fp8`, the branch's head |
 
 **Builds.** The branch's first commit as 414adf55 on main 1846c9ce (`kapitsa`, `logit_dump`) against main 1846c9ce
 (`kapitsa-base`, `logit_dump-base`); Release, Xcode Command Line Tools. The branch was rebased afterwards (the same
-patch). Its last commit came after these runs and was not run on a GPU: `disk_format()` is no longer cut at 255
-bytes and names the Neural Engine split where a model's shapes take it (neither changes the Nano models' string), and
-`--help` lists the models.
+patch). Its last code commit came after these runs: `disk_format()` is no longer cut at 255 bytes and names the Neural
+Engine split where a model's shapes take it, and `--help` lists the models. `head-nano-4b-m4/` is that commit
+(`kapitsa`, ebcb6903 before the first commit's subject was reworded: the same tree) against main a5bd06df
+(`kapitsa-main`), run with `run2.sh` under one hold of the lock.
 
 **How.** `run.sh` ran every step under one hold of the Mac's GPU lock
 (`lockf -k /tmp/kapitsa-gpu.lock env NI_LOCK_HELD=1 NACE_GPU_LOCK_HELD=1 ./run.sh MODEL func logit ttft`).
@@ -26,6 +28,7 @@ Per folder:
 - `swap.log`: swap-ins and swap-outs and the two busiest other processes before and after the `func` step and each
   `ttft` size.
 - `machine.txt`: macOS, chip, RAM, both binaries' `--version`.
+- `head-nano-4b-m4/` only: `ab.log` (`ab.py`, its header says what an arm does) and `ab-serve.log`, its servers' log.
 
 Home and temporary paths are written as `~` and `$TMPDIR`, the Macs' network names and addresses as `<host>` and `<ip>`.
 
@@ -44,3 +47,26 @@ Home and temporary paths are written as `~` and `$TMPDIR`, the Macs' network nam
 - **Load.** No swap-outs in any step; swap-ins per step (`func`, then the three sizes): 111, 162, 36 and 0 on the M4;
   32, 8, 7 and 46 on the M2. On the M2 `audiomxd` held 71 to 77% of a CPU core in every sample and `configd` 38% in six
   of the eight. On both Macs `XprotectService` was at 46% when `func` began; on the M4 nothing was above 12% after.
+
+## The head on the M4 (`head-nano-4b-m4/`)
+
+- **Namespace.** The cache's folder is `90db0c194e3c837db3d49f0d5e55221f` in `func-serve.log` and `ab-serve.log`, as in
+  `nano-4b-m4/func-serve.log`: the Nano 4B's `disk_format()` string did not change.
+- **The same checks.** `func.log` ALL PASSED. Turn 2, lowest to highest of three rounds, cold / from the SSD / from RAM:
+  2,223 tokens 4.656-4.666 / 0.158-0.161 / 0.111 s; 8,715 tokens 18.929-18.933 / 0.196-0.198 / 0.124-0.126 s; 16,479
+  tokens 38.360-38.525 / 0.245-0.246 / 0.138-0.139 s. The SSD's reply is the RAM path's text in all 9 rounds, and the
+  cold one's.
+- **Requests the cache has nothing for** (`ab.log`): main a5bd06df against the head, both started without a
+  `--disk-cache` option, three pairs, main first. Two requests per server, 15 s apart, each after a short warm-up.
+
+  | | Main, rounds 1 / 2 / 3 | Head, rounds 1 / 2 / 3 |
+  | --- | ---: | ---: |
+  | Request 1 (3,982 tokens): first token | 8.340 / 8.338 / 8.343 s | 8.345 / 8.338 / 8.343 s |
+  | Request 1: decode, 157 tokens | 25.0 / 25.1 / 25.1 tok/s | 25.1 / 24.9 / 25.1 tok/s |
+  | Request 2 (3,997 tokens): first token | 8.380 / 8.341 / 8.348 s | 8.346 / 8.338 / 8.381 s |
+  | Request 2: decode, 142 tokens | 26.1 / 26.1 / 26.1 tok/s | 26.1 / 26.2 / 26.2 tok/s |
+
+  Both arms wrote the same text in every round. The head's cache wrote request 1's conversation in the 15 s between
+  the requests (239 MB in 114 to 116 ms) and request 2's as the server stopped (151 MB in 45 to 50 ms).
+- **Load.** No swap-outs; swap-ins per step (`func`, the three sizes, `ab`): 0, 2, 0, 8 and 0. `XprotectService` was at
+  61% when `func` began and `launchd` at 44% when it ended; nothing above 18% after.

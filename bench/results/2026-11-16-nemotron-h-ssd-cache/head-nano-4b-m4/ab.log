@@ -1,0 +1,32 @@
+model ~/kapitsa-run/home/models/nemotron-3-nano-4b-fp8, prompts of ~4000 tokens; servers' log: ~/kapitsa-ssdcache/head/out/head-nemotron-3-nano-4b-fp8-<host>/ab-serve.log
+round 1 main   request 1: 3982 prompt tokens (0 cached), first token 8.340 s, prefill 8333 ms, 157 tokens at 25.0 tok/s
+round 1 main   request 2: 3997 prompt tokens (0 cached), first token 8.380 s, prefill 8377 ms, 142 tokens at 26.1 tok/s
+round 1 main     log: SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models and Dory are)
+round 1 branch request 1: 3982 prompt tokens (0 cached), first token 8.345 s, prefill 8338 ms, 157 tokens at 25.1 tok/s
+round 1 branch request 2: 3997 prompt tokens (0 cached), first token 8.346 s, prefill 8343 ms, 142 tokens at 26.1 tok/s
+round 1 branch   log: SSD prefix cache: <cache>/90db0c194e3c837db3d49f0d5e55221f, up to 32.0 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0
+round 1 branch   log: SSD cache: saved slot 0 (4138 tokens, 2 restore points; 9 of 9 KV blocks and 2 states new: 239 MB) in 116 ms
+round 1 branch   log: SSD cache: saved slot 0 (3991 tokens, 1 restore point; 8 of 8 KV blocks and 1 state new: 151 MB) in 50 ms
+round 1 branch   log: SSD prefix cache: 1 conversation saved as the server stops (151 MB in 50 ms)
+round 1: both arms write the same text: yes
+round 2 main   request 1: 3982 prompt tokens (0 cached), first token 8.338 s, prefill 8331 ms, 157 tokens at 25.1 tok/s
+round 2 main   request 2: 3997 prompt tokens (0 cached), first token 8.341 s, prefill 8338 ms, 142 tokens at 26.1 tok/s
+round 2 main     log: SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models and Dory are)
+round 2 branch request 1: 3982 prompt tokens (0 cached), first token 8.338 s, prefill 8331 ms, 157 tokens at 24.9 tok/s
+round 2 branch request 2: 3997 prompt tokens (0 cached), first token 8.338 s, prefill 8335 ms, 142 tokens at 26.2 tok/s
+round 2 branch   log: SSD prefix cache: <cache>/90db0c194e3c837db3d49f0d5e55221f, up to 32.0 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0
+round 2 branch   log: SSD cache: saved slot 0 (4138 tokens, 2 restore points; 9 of 9 KV blocks and 2 states new: 239 MB) in 114 ms
+round 2 branch   log: SSD cache: saved slot 0 (3991 tokens, 1 restore point; 8 of 8 KV blocks and 1 state new: 151 MB) in 45 ms
+round 2 branch   log: SSD prefix cache: 1 conversation saved as the server stops (151 MB in 45 ms)
+round 2: both arms write the same text: yes
+round 3 main   request 1: 3982 prompt tokens (0 cached), first token 8.343 s, prefill 8337 ms, 157 tokens at 25.1 tok/s
+round 3 main   request 2: 3997 prompt tokens (0 cached), first token 8.348 s, prefill 8345 ms, 142 tokens at 26.1 tok/s
+round 3 main     log: SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models and Dory are)
+round 3 branch request 1: 3982 prompt tokens (0 cached), first token 8.343 s, prefill 8337 ms, 157 tokens at 25.1 tok/s
+round 3 branch request 2: 3997 prompt tokens (0 cached), first token 8.381 s, prefill 8379 ms, 142 tokens at 26.2 tok/s
+round 3 branch   log: SSD prefix cache: <cache>/90db0c194e3c837db3d49f0d5e55221f, up to 32.0 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0
+round 3 branch   log: SSD cache: saved slot 0 (4138 tokens, 2 restore points; 9 of 9 KV blocks and 2 states new: 239 MB) in 115 ms
+round 3 branch   log: SSD cache: saved slot 0 (3991 tokens, 1 restore point; 8 of 8 KV blocks and 1 state new: 151 MB) in 46 ms
+round 3 branch   log: SSD prefix cache: 1 conversation saved as the server stops (151 MB in 46 ms)
+round 3: both arms write the same text: yes
+ALL THE SAME TEXT

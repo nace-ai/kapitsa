@@ -1,0 +1,50 @@
+== 2026-11-16 22:57:33 func
+Swapins:                                     3420224.
+Swapouts:                                    3804012.
+ 60.9 /System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/XprotectService.xpc/Contents/
+ 14.5 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+== 2026-11-16 22:59:28 func-end
+Swapins:                                     3420224.
+Swapouts:                                    3804012.
+ 44.4 /sbin/launchd
+ 17.4 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+== 2026-11-16 22:59:28 ttft-2000
+Swapins:                                     3420224.
+Swapouts:                                    3804012.
+ 44.4 /sbin/launchd
+ 17.4 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+== 2026-11-16 23:01:21 ttft-2000-end
+Swapins:                                     3420226.
+Swapouts:                                    3804012.
+  9.8 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  0.0 sed -n 2,3p
+== 2026-11-16 23:01:21 ttft-8000
+Swapins:                                     3420226.
+Swapouts:                                    3804012.
+  9.8 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  0.0 sed -n 2,3p
+== 2026-11-16 23:05:22 ttft-8000-end
+Swapins:                                     3420226.
+Swapouts:                                    3804012.
+  9.3 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  0.0 sed -n 2,3p
+== 2026-11-16 23:05:22 ttft-16000
+Swapins:                                     3420226.
+Swapouts:                                    3804012.
+  9.3 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  0.0 sed -n 2,3p
+== 2026-11-16 23:12:20 ttft-16000-end
+Swapins:                                     3420234.
+Swapouts:                                    3804012.
+ 12.8 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  4.4 sshd-session: unknown [priv]  
+== 2026-11-16 23:12:20 ab
+Swapins:                                     3420234.
+Swapouts:                                    3804012.
+ 12.8 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  4.4 sshd-session: unknown [priv]  
+== 2026-11-16 23:17:11 ab-end
+Swapins:                                     3420234.
+Swapouts:                                    3804012.
+ 14.4 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  0.8 sshd-session: unknown [priv]  
