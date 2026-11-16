@@ -56,22 +56,15 @@ NI_INLINE bool flint_arrive(device atomic_uint* cnt, uint n, uint tid, threadgro
 #endif
 
 constant constexpr uint kFD = 128;  // head dim
-// int8 KV: a cache row is [kFD int8 codes][kFD / 16 half scales], one scale a 16-dim group (max|x| / 127 of the group,
-// rounded to half: a lane's 4 dims never cross a group, a group is 4 lanes), 144 bytes for a 128-dim row instead of 256
-// (1.78x smaller, so 1.78x more context); 144 % 16 == 0, so kv_regrow moves rows in 16-byte words.
+// int8 KV: a cache row is [kFD int8 codes][kFD / 32 float scales], one scale a 32-dim group (max|x| / 127 of the group:
+// a lane's 4 dims never cross a group, a group is 8 lanes), 144 bytes for a 128-dim row instead of 256 (1.78x smaller,
+// so 1.78x more context); 144 % 16 == 0, so kv_regrow moves rows in 16-byte words.
 #ifdef NI_KV_I8
-constant constexpr uint kKvRow = (kFD + 16) / 16 * 16;  // [kFD int8][8 half scales]: 144 bytes a row
+constant constexpr uint kKvRow = (kFD + 16) / 16 * 16;  // [kFD int8][4 float scales]: 144 bytes a row
 // the scale of dim `dim` of the cache row at `row`
 NI_INLINE float flint_kv_scale(const device char* row, uint dim) {
-  return float(*(const device half*)(row + kFD + (dim / 16) * 2));
+  return *(const device float*)(row + kFD + (dim / 32) * 4);
 }
-// a group's scale from its largest magnitude, as the half it is stored as (a group of ~0 stores 1: its codes are 0), and a
-// value's code under it
-NI_INLINE half flint_kv_scale_of(float mx) {
-  const half sh = half(mx / 127.0f);
-  return float(sh) > 0.0f ? sh : half(1.0f);
-}
-NI_INLINE char flint_kv_code(float v, half sh) { return (char)clamp(rint(v / float(sh)), -127.0f, 127.0f); }
 #else
 constant constexpr uint kKvRow = kFD * 2;               // kFD halves: the layout every earlier build wrote
 #endif
@@ -103,20 +96,16 @@ NI_INLINE size_t flint_kv_index(constant FlintPrepP& p, uint kvh, uint t, uint d
 
 #ifdef NI_KV_I8
 // One K or V row of the cache in the int8 layout ([kFD codes][f32 scale][pad], kKvRow bytes): the threadgroup is the row
-// (kFD threads, one value each, 16 lanes a scale group). The value is rounded to half first, as flint_attn_d2 and
+// (kFD threads, one value each, a simdgroup a scale group). The value is rounded to half first, as flint_attn_d2 and
 // flint_kv_store quantize it.
 NI_INLINE void flint_kv_put_i8(device half* cache, constant FlintPrepP& p, uint kvh, uint t, uint d, float x) {
   const uint pos = p.pos0 + t;
   device char* row = (device char*)cache + (size_t(kvh) * p.rows + (p.ring ? pos % p.rows : pos)) * kKvRow;
   const float h = float(half(x));
-  float mx = fabs(h);  // the thread's 16-dim group: 16 lanes of its simdgroup
-  mx = max(mx, simd_shuffle_xor(mx, 1));
-  mx = max(mx, simd_shuffle_xor(mx, 2));
-  mx = max(mx, simd_shuffle_xor(mx, 4));
-  mx = max(mx, simd_shuffle_xor(mx, 8));
-  const half sh = flint_kv_scale_of(mx);
-  row[d] = flint_kv_code(h, sh);
-  if ((d & 15) == 0) *(device half*)(row + kFD + (d >> 4) * 2) = sh;
+  const float mx = simd_max(fabs(h));  // the thread's 32-dim group is its simdgroup
+  const float sc = mx > 0.0f ? mx / 127.0f : 1.0f;
+  row[d] = (char)rint(h / sc);
+  if ((d & 31) == 0) *(device float*)(row + kFD + (d >> 5) * 4) = sc;
 }
 #endif
 
@@ -349,7 +338,7 @@ FLINT_ATTN_PARTIAL(flint_attn_partial_tree_k16, 16, true)
     const size_t dsto = size_t(p.ring ? pd % p.rows : pd) * kKvRow;
 #ifdef NI_KV_I8
     c[dsto + d] = c[srco + d];
-    if (d < kFD / 16) *(device half*)(c + dsto + kFD + d * 2) = *(const device half*)(c + srco + kFD + d * 2);
+    if (d < kFD / 32) *(device float*)(c + dsto + kFD + d * 4) = *(const device float*)(c + srco + kFD + d * 4);
 #else
     c[dsto + d * 2] = c[srco + d * 2];
     c[dsto + d * 2 + 1] = c[srco + d * 2 + 1];
@@ -545,16 +534,17 @@ FLINT_ATTN_PREFILL(flint_attn_prefill_k16, 16)
   device char* base = isv ? vc : kc;
 #ifdef NI_KV_I8
   float mx = max(max(fabs(float(h.x)), fabs(float(h.y))), max(fabs(float(h.z)), fabs(float(h.w))));
-  mx = max(mx, simd_shuffle_xor(mx, 1));  // the max of the lane's 16-dim group: 4 lanes
+  mx = max(mx, simd_shuffle_xor(mx, 1));  // the max of the lane's 32-dim group: 8 lanes
   mx = max(mx, simd_shuffle_xor(mx, 2));
-  const half sh = flint_kv_scale_of(mx);
+  mx = max(mx, simd_shuffle_xor(mx, 4));
+  const float scale = mx > 0.0f ? mx / 127.0f : 1.0f;
   char4 q;
-  q.x = flint_kv_code(float(h.x), sh);
-  q.y = flint_kv_code(float(h.y), sh);
-  q.z = flint_kv_code(float(h.z), sh);
-  q.w = flint_kv_code(float(h.w), sh);
+  q.x = (char)rint(float(h.x) / scale);
+  q.y = (char)rint(float(h.y) / scale);
+  q.z = (char)rint(float(h.z) / scale);
+  q.w = (char)rint(float(h.w) / scale);
   *(device char4*)(base + dst + lane * 4) = q;
-  if ((lane & 3) == 0) *(device half*)(base + dst + kFD + (lane >> 2) * 2) = sh;
+  if ((lane & 7) == 0) *(device float*)(base + dst + kFD + (lane >> 3) * 4) = scale;
 #else
   *(device half4*)(base + dst + lane * 8) = h;
 #endif
@@ -1012,18 +1002,19 @@ NI_INLINE void flint_attn_d2_impl(const device float* qkv, const device bfloat* 
       own_kv = half4(((const device float4*)(qkv + QD + KD + kvh * kFD))[lane]);
     }
 #ifdef NI_KV_I8
-    // the group's scale: the largest magnitude across its 16 dims, shared by its 4 lanes
+    // the group's scale: the largest magnitude across its 32 dims, shared by its 8 lanes
     float mx = max(max(fabs(float(own_kv.x)), fabs(float(own_kv.y))), max(fabs(float(own_kv.z)), fabs(float(own_kv.w))));
     mx = max(mx, simd_shuffle_xor(mx, 1));
     mx = max(mx, simd_shuffle_xor(mx, 2));
-    const half sh = flint_kv_scale_of(mx);
+    mx = max(mx, simd_shuffle_xor(mx, 4));
+    const float sc = mx > 0.0f ? mx / 127.0f : 1.0f;
     char4 q;
-    q.x = flint_kv_code(float(own_kv.x), sh);
-    q.y = flint_kv_code(float(own_kv.y), sh);
-    q.z = flint_kv_code(float(own_kv.z), sh);
-    q.w = flint_kv_code(float(own_kv.w), sh);
+    q.x = (char)rint(float(own_kv.x) / sc);
+    q.y = (char)rint(float(own_kv.y) / sc);
+    q.z = (char)rint(float(own_kv.z) / sc);
+    q.w = (char)rint(float(own_kv.w) / sc);
     *(device char4*)(cbase + lane * 4) = q;
-    if ((lane & 3) == 0) *(device half*)(cbase + kFD + (lane >> 2) * 2) = sh;
+    if ((lane & 7) == 0) *(device float*)(cbase + kFD + (lane >> 3) * 4) = sc;
 #else
     *(device half4*)(cbase + lane * 8) = own_kv;
 #endif
