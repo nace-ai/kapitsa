@@ -9,7 +9,8 @@ reply alone. With it, while two or more Nano requests decode, one pass over ever
 
 | Folder | Mac | macOS | Model | Builds |
 | --- | --- | --- | --- | --- |
-| `m2-nano4b/` | Mac mini M2 (Mac14,3), 10-core GPU, 16 GB | 27.2.1 (26B131) | `nemotron-3-nano-4b-fp8` | main 1846c9ce, branch ca676e2e (first commit) |
+| `m2-nano4b-pr2/` | Mac mini M2 (Mac14,3), 10-core GPU, 16 GB | 27.2.1 (26B131) | `nemotron-3-nano-4b-fp8` | main 1846c9ce, branch 9ef19349 |
+| `m2-nano4b/` | Mac mini M2 | 27.2.1 | `nemotron-3-nano-4b-fp8` | main 1846c9ce, branch ca676e2e (first commit; the earlier run) |
 | `m4-nano4b/` | Mac mini M4 (Mac16,10), 10-core GPU, 16 GB | 26.6.2 (25G83) | `nemotron-3-nano-4b-fp8` | main 1846c9ce, branch 9ef19349 |
 | `m4-nano9b/` | Mac mini M4 | 26.6.2 | `nemotron-nano-9b-v2-nvfp4` (plain steps, its default) | main 1846c9ce, branch 9ef19349; 256-token replies, `--private` |
 | `m2-nano9b-spec4-probe/` | Mac mini M2 | 27.2.1 | `nemotron-nano-9b-v2-nvfp4` with `--spec 4` | branch ca676e2e, batched against `NI_BATCH=0` |
@@ -20,6 +21,7 @@ the two the 4B's path differs only in the flag that says it batches (`nh_batch_`
 Every GPU step held the Mac's GPU lock (`lockf -k /tmp/kapitsa-gpu.lock`), one pair (or the whole block) under one
 lock; `env.txt` in each arm has `vm_stat`'s swap counters before and after and the two busiest processes (on the M2
 `audiomxd` at ~76% of one core throughout, alike for both builds). No other GPU work ran while the lock was held.
+No arm swapped out; in `m2-nano4b-pr2/` three arms (one main, two branch) saw 4 to 44 swap-ins (16 KB pages).
 
 ## How
 
@@ -42,12 +44,13 @@ branch first, pair 3 main first) and then `scripts/exact.sh`:
 
 ## Throughput (tok/s in all, prefills included; per request in parentheses)
 
-Medians of 3 interleaved pairs; every arm is in each folder's `summary.txt` and its arm folders.
+Medians of 3 interleaved pairs, at 9ef19349 (M2: `m2-nano4b-pr2/`; the earlier ca676e2e run, `m2-nano4b/`, read
+36.55 and 64.78 against 22.47 and 22.01, decode 36.87 against 36.88); every arm is in each folder's `summary.txt` and its arm folders.
 
 | | 1 at once | 2 at once | 4 at once | one request, decode |
 | --- | ---: | ---: | ---: | ---: |
-| M2, 4B FP8, main | 23.46 | 22.47 (11.4-12.0) | 22.01 (5.6-6.0) | 36.88 |
-| M2, 4B FP8, branch | 23.46 | **36.55** (18.8-18.9), 1.63x | **64.78** (17.0-17.2), 2.94x | 36.87 |
+| M2, 4B FP8, main | 23.44 | 22.51 (11.4-12.0) | 22.04 (5.6-6.0) | 36.89 |
+| M2, 4B FP8, branch | 23.48 | **36.58** (18.8-18.9), 1.63x | **64.87** (16.9-17.3), 2.94x | 36.88 |
 | M4, 4B FP8, main | 28.36 | 27.07 (13.7-14.4) | 26.45 (6.7-7.2) | 44.85 |
 | M4, 4B FP8, branch | 28.45 | **44.54** (22.8-22.9), 1.65x | **80.21** (20.8-21.4), 3.03x | 44.71 |
 | M4, 9B v2 NVFP4, main | 15.07 | 15.02 (7.8) | 15.03 (3.9) | 15.70 |
@@ -55,10 +58,11 @@ Medians of 3 interleaved pairs; every arm is in each folder's `summary.txt` and 
 
 "One request, decode": `single`'s 3 prompts x 3 pairs, median (the prompts differ only in a nonce; one of them gets
 fewer prompt-lookup drafts accepted, ~22.7 on the M2 and ~27.3 on the M4 in both builds). Per prompt (mean of its 3
-runs), the branch against main: M2 +0.14%, +0.15%, +0.06%; M4 -0.14%, -0.36%, -0.20%. The M4's second prompt is the
+runs), the branch against main: M2 -0.01%, +0.12%, +0.81% (the third only because one main run read 22.13, the
+other eight runs of that prompt 22.67-22.75; medians 22.71 main, 22.70 branch); M4 -0.14%, -0.36%, -0.20%. The M4's second prompt is the
 one whose runs do not overlap (main 44.75-44.99, branch 44.66-44.74). The 9B (256-token replies): -0.11%, -0.02%,
 -0.02%, every run 15.66-15.72 in both builds. Time to first token is unchanged (prompts
-take turns on the GPU as before; e.g. M2, 4 at once: the last first token at 1.735 s main, 1.734-1.737 s branch).
+take turns on the GPU as before: the `ttft` lists in each arm's `streams*.json`).
 
 The 9B v2 probe (`m2-nano9b-spec4-probe/`, 256-token replies, 2 runs each, order batched / turns / turns / batched):
 with `--spec 4` the 9B decodes with prompt lookup, so ca676e2e batches it. In all, 1 / 2 / 4 at once: batched 13.60
@@ -81,18 +85,18 @@ M4, whose requests alone are one-row steps: batched rows bitwise identical to it
 
 Greedy replies, 8 requests x up to 300 tokens:
 
-| | M2 | M4 |
-| --- | --- | --- |
-| 8 at once (pipelined), texts identical to alone | 7 of 8 (g3 differs at character 674) | 6 of 8 (g1 at character 764, g3 at 674) |
-| 2 at once (pipelined) | 2 of 2 | 1 of 2 (g1, as above) |
-| 8 at once, traced | 8 of 8; 2221 of 2221 tokens | 6 of 8; 1971 of 2221 tokens before the first difference |
+| | M2 (9ef19349) | M2 (ca676e2e) | M4 |
+| --- | --- | --- | --- |
+| 8 at once (pipelined), texts identical to alone | 7 of 8 (g3 differs at character 674) | 7 of 8 (g3 at 674) | 6 of 8 (g1 at character 764, g3 at 674) |
+| 2 at once (pipelined) | 2 of 2 | 2 of 2 | 1 of 2 (g1, as above) |
+| 8 at once, traced | 7 of 8; 2077 of 2221 tokens before the first difference | 8 of 8; 2221 of 2221 tokens | 6 of 8; 1971 of 2221 tokens |
 
 The 9B v2 on the M4 (`m4-nano9b/exact/`): 8 at once and 2 at once, every text identical to alone (8 of 8, 2 of 2).
 Its plain-step loop alone writes no `NI_TRACE_TOKENS` lines (the trace covers the speculative loops and the batch), so
 its trace files hold only the batched side and are not compared.
 
-The traced M4 differences are at single-stream margins of 0.00083 (g1, token 194) and 0.00025 (g3, token 156). The
-M2's pipelined g3 difference is at token 156 too (character 674; decoded from the traced alone run's tokens with the
+The traced M4 differences are at single-stream margins of 0.00083 (g1, token 194) and 0.00025 (g3, token 156); the
+traced M2 one (9ef19349) is g3 at token 156, margin 0.0013. The M2's pipelined g3 difference is at token 156 too (character 674; decoded from the traced alone run's tokens with the
 model's tokenizer), where the alone margin is 0.0013. For scale: 12.8% of all greedy tokens in these replies have a
 margin under 0.5 (both Macs). g3 alone also differs between the two Macs (M2 and M4 alone, same binary, same tokens up to there):
 its alone text on the M4 is the M2's together text. Every difference is a near-tie of that kind.

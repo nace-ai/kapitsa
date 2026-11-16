@@ -1,0 +1,7 @@
+step: 192 records (nemotron-3-nano-4b-fp8)
+  reference: 0.2.36 (9ef19349), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.36 (9ef19349), batch {"members":4,"rows":1}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 0.0128
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 2.105e-07 median 3.971e-08 p99 1.690e-06 max 2.220e-06; top-2 margin change up to 0.008322
+  next-token NLL change +7.501e-05 nats per record (candidate minus reference)

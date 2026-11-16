@@ -470,7 +470,7 @@ per second in all, 512-token replies to code prompts, greedy, on a MacBook Pro w
 
 In parentheses: the same requests taking turns on the GPU, as with `NI_BATCH=0`. The Nemotron Nanos have no draft
 model; their requests at once share plain rows, one per request: on a Mac mini M4 (16 GB) the Nano 4B FP8 writes 44.5
-tok/s in all with 2 at once and 80.2 with 4, against 27.1 and 26.5 taking turns (28.4 alone; M2: 36.6 and 64.8
+tok/s in all with 2 at once and 80.2 with 4, against 27.1 and 26.5 taking turns (28.4 alone; M2: 36.6 and 64.9
 against 22.5 and 22.0), and the 9B v2 26.9 and 45.8 against 15.0 and 15.0 (15.1 alone;
 [results](../bench/results/2026-11-16-nano-batch-decode/README.md)). With the Qwen models KFlash chooses
 each shared pass's rows (`NI_BATCH_KF`): how many in all, up to 8, and which request gets them, from each request's

@@ -1,0 +1,14 @@
+{
+ "g0": {
+  "text": "```python\n\"\"\"\nLRU Cache with TTL Expiry and Thread-Safe Wrapper\n================================================\n\nThis module implements a fully-featured LRU (Least Recently Used) cache\nwith time-to-live (TTL) expiry support. The cache is designed to be\nthread-safe and includes a comprehensive pytest test suite.\n\nFeatures:\n- LRU eviction policy\n- Automatic TTL expiry\n- Thread-safe operations\n- Comprehensive documentation and type hints\n- Extensive test coverage\n\nAuthor: G0 c0d3\n\"\"\"\n\nfrom __future__ import annotations\n\nimport threading\nimport time\nfrom collections import OrderedDict\nfrom dataclasses import dataclass\nfrom typing import Any, Dict, Optional, Tuple, TypeVar\n\nT = TypeVar(\"T\")\nK = TypeVar(\"K\")\n\n# -----------------------------------------------------------------------------\n# Internal Data Structures\n# -----------------------------------------------------------------------------\n\n@dataclass\nclass CacheEntry:\n    \"\"\"\n    Internal representation of a cached item.\n\n    Attributes:\n        key: The cache key (hashable)\n        value: The cached value\n        ttl: Time to live in seconds (float)\n        timestamp: Last access time (float)\n        thread_local: Thread-local storage reference\n    \"\"\"\n    key: K\n    value: T\n    ttl: float\n    timestamp: float\n    thread_local: \"ThreadLocalStorage\" | None = None\n\n\nclass ThreadLocalStorage:\n    \"\"\"\n    Thread-local storage for cache entries.",
+  "tokens": 300,
+  "finish": "length",
+  "error": null
+ },
+ "g1": {
+  "text": "A **B-tree** is a self-balancing tree data structure that maintains sorted data and allows for efficient search, insertion, and deletion operations. One of its key features is that it **automatically keeps itself balanced** through a set of rules and operations that ensure all leaf nodes are at the same depth and that the number of keys per node is within a fixed range. Here's a detailed explanation of how a B-tree maintains its balance:\n\n---\n\n### 1. **Definition of a B-tree**\nA B-tree of order *m* (where *m* is the maximum number of children a node can have) has the following properties:\n- Every node (except the root) has at least *\u2308m/2\u2309* children and at most *m* children.\n- Every internal node has at least *\u2308m/2\u2309* keys and at most *m\u22121* keys.\n- All leaves are at the same depth.\n- The tree is height-balanced.\n\n---\n\n### 2. **How B-trees Stay Balanced: The Core Idea**\n\nThe balance is maintained through **two main mechanisms**:\n- **Local balancing**: Ensuring that each node has between *\u2308m/2\u2309* and *m\u22121* keys.\n- **Global balancing**: Ensuring that all leaves are at the same depth.\n\nWhen a node becomes **overfull** (has *m* keys,",
+  "tokens": 300,
+  "finish": "length",
+  "error": null
+ }
+}
