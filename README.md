@@ -46,16 +46,26 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ### Nace quants
 
-**Downloads closer to the original model, at the same size.** Nace quants are our quantization for MLX packs. `4b`, `9b`, `27b` and `35b` use them.
+**Downloads closer to the original model, at the same size.** Nace quants are our quantization for MLX packs and GGUF files. The [`4b`, `9b`, `27b`, `35b` and `flash-next`](docs/models.md) aliases download them.
 
-| 4-bit | Compared with | KL from bf16 (lower is closer) | GSM8K, 1,319 questions |
+| 4-bit | Compared with | KL from bf16 (lower is closer) | [GSM8K](https://huggingface.co/datasets/openai/gsm8k), 1,319 questions |
 | --- | --- | --- | --- |
-| 4B | lmstudio-community | 0.070 → **0.048** | 0.914 → 0.923 |
-| 9B | lmstudio-community | 0.081 → **0.037** | 0.927 → **0.944** |
-| 27B | the plain 4-bit pack (`27b:4bit`) | 0.054 → **0.035** | 0.950 → 0.953 |
-| 35B-A3B | MTPLX | 0.096 → **0.059** | 0.948 → 0.952 |
+| [4B](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX) | [lmstudio-community](https://huggingface.co/lmstudio-community) | 0.070 → **0.048** | 0.914 → 0.923 |
+| [9B](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit) | [lmstudio-community](https://huggingface.co/lmstudio-community) | 0.081 → **0.037** | 0.927 → **0.944** |
+| [27B](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX) | the plain 4-bit pack ([`27b:4bit`](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-4bit)) | 0.054 → **0.035** | 0.950 → 0.953 |
+| [35B-A3B](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX) | [MTPLX](https://huggingface.co/Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed) | 0.096 → **0.059** | 0.948 → 0.952 |
 
 The 9B row is the legacy pack (`9b` on M3 and M4); on M5 and newer `9b` is Nace Q4, which these numbers do not cover. [How it was measured](docs/benchmarks.md#nace-quants-against-the-packs-they-replace) · [every run](bench/results/2026-11-10-m5-pro-kquant/README.md)
+
+**Download.** The MLX builds for Kapitsa and the GGUF files for llama.cpp, LM Studio and Ollama that [Nace.AI](https://huggingface.co/nace-ai) publishes:
+
+| Model | MLX | GGUF |
+| --- | --- | --- |
+| [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B) · `4b` | [MLX](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX) | — |
+| [Qwen3.5-9B](https://huggingface.co/Qwen/Qwen3.5-9B) · `9b` | [MLX](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX) · [MLX-4bit](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit) · [MLX-Q5](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-Q5) | [GGUF](https://huggingface.co/nace-ai/Qwen3.5-9B-GGUF) |
+| [Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) · `27b` | [MLX](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX) · [MLX-3bit](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-3bit) · [MLX-4bit](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-4bit) · [MLX-Q5](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-Q5) · [MLX-8bit](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-8bit) | [GGUF](https://huggingface.co/nace-ai/Qwen3.8-27B-GGUF) |
+| [Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) · `35b` | [MLX](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX) · [MLX-Q5](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX-Q5) | [GGUF](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-GGUF) |
+| [Qwen3.8-Flash-Next 180B-A7B](https://huggingface.co/Qwen/Qwen3.8-Flash-Next) · `flash-next` | [MLX](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX) · [MLX-4bit](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX-4bit) | [GGUF](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-GGUF) |
 
 ### Drex decision models
 
@@ -69,6 +79,8 @@ kapitsa-systemone --model ~/.cache/kapitsa/models/drex-max-v1 --port 8000 --cont
 ```
 
 [The guide](docs/drex-max.md) has the request, the memory a longer context needs and the encoding.
+
+Drex GGUF files: [drex-dlm-Q8_0](https://huggingface.co/nace-ai/drex-dlm-Q8_0) · [drex-v1.5-Q8_0](https://huggingface.co/nace-ai/drex-v1.5-Q8_0) · [drex-max-v1-Q8_0](https://huggingface.co/nace-ai/drex-max-v1-Q8_0) · [drex-v2.0-Q8_0](https://huggingface.co/nace-ai/drex-v2.0-Q8_0) · [drex-v2.0-Q4_K_M](https://huggingface.co/nace-ai/drex-v2.0-Q4_K_M). The affine Q4 checkpoint is [drex-max-v1-affine-q4](https://huggingface.co/nace-ai/drex-max-v1-affine-q4).
 
 
 ## Benchmarks
