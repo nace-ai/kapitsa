@@ -12,7 +12,7 @@ request's top_k <= 0 or above 64 is sampled over the whole vocabulary in plain s
 engine logs as "sampled over the whole vocabulary". The check: no request without a top_k, or with top_k 40 or 64,
 logs it (each keeps the two-pass sampler and the model's speculative loop), and each explicit top_k 0 does.
 
---review adds the routes the review of #1287 named, each at top_k 40 and 0: structured output (json_schema) and tool
+--review adds the routes the review of #1287 named, each at top_k 40 and 0 (and 100 for structured output and tools): structured output (json_schema) and tool
 calls; a short suffix after 1024+ cached rows (the verify-pass prefill, NI_VPF: a dense target with DFlash2 takes it,
 the 27B; the server's log names it at NI_LOG=2) at top_k 0 and 40, with the server still up after each; a greedy turn
 on the speculative loop after a turn in plain steps (its tok/cycle against the same turn after a re-prefill of the
@@ -139,7 +139,7 @@ def review(a, tmp):
     nt = {"chat_template_kwargs": {"enable_thinking": False}}
     s = Server(a, tmp, 1, "review")
     try:
-        for k in (40, 0):
+        for k in (40, 0, 100):
             m, new = s.chat(dict(nt, messages=[{"role": "user", "content": "Invent a person. Reply with JSON."}],
                                  temperature=0.7, top_k=k, max_tokens=128,
                                  response_format={"type": "json_schema",
@@ -149,14 +149,14 @@ def review(a, tmp):
                 ok = set(obj) == {"name", "age"} and isinstance(obj["age"], int)
             except Exception:
                 ok = False
-            check(ok and (FULL in new) == (k == 0), f"structured output at top_k {k}: {m['content']!r:.80}"
+            check(ok and (FULL in new) == (k != 40), f"structured output at top_k {k}: {m['content']!r:.80}"
                   f"{', whole vocabulary' if FULL in new else ''}")
             m, new = s.chat(dict(nt, messages=[{"role": "user", "content": "Read /etc/hosts with the tool."}],
                                  temperature=0.7, top_k=k, max_tokens=256, tools=TOOLS))
             calls = m.get("tool_calls") or []
             ok = bool(calls) and calls[0]["function"]["name"] == "read_file" and \
                 "path" in json.loads(calls[0]["function"]["arguments"])
-            check(ok and (FULL in new) == (k == 0), f"tool call at top_k {k}: "
+            check(ok and (FULL in new) == (k != 40), f"tool call at top_k {k}: "
                   f"{calls[0]['function'] if calls else m.get('content')!r:.100}")
         # a short suffix after 1024+ cached rows
         conv = [{"role": "user", "content": LONG + "\nSummarize the log in one sentence."}]
