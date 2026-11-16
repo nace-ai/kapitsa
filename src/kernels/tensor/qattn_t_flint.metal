@@ -19,6 +19,20 @@ struct FlintAttnTP {  // = FlintAttnPfP
   float scale;
 };
 
+#ifdef NI_KV_I8
+// NI_KV_I8: Flint's cache rows are int8 (flint/flint.metal's kKvRow): [128 codes][4 f32 scales, one a 32-dim group],
+// 144 bytes. 8 dims at `c` of the row at `row`, dequantized to 8 halves (as flint_attn_prefill: half(code) * scale).
+constant constexpr uint kFlTRow = 144;
+NI_INLINE uint4 flint_t_deq8(const device char* row, uint c) {
+  const float s = *(const device float*)(row + 128 + (c / 32) * 4);
+  const uint2 q = *(const device uint2*)(row + c);
+  const char4 a = as_type<char4>(q.x), b = as_type<char4>(q.y);
+  const half4 lo = half4(half(a.x) * s, half(a.y) * s, half(a.z) * s, half(a.w) * s);
+  const half4 hi = half4(half(b.x) * s, half(b.y) * s, half(b.z) * s, half(b.w) * s);
+  return uint4(as_type<uint2>(lo).x, as_type<uint2>(lo).y, as_type<uint2>(hi).x, as_type<uint2>(hi).y);
+}
+#endif
+
 template <int NS, int BK, int LD>
 NI_INLINE void qattn_flint_impl(const device float* q, const device half* kc, const device half* vc,
                                 const device half* ck, const device half* cv, const device bfloat* sinks,
@@ -76,9 +90,21 @@ NI_INLINE void qattn_flint_impl(const device float* q, const device half* kc, co
       uint4 kv4 = uint4(0), vv4 = uint4(0);
       if (key >= kfirst && key < kend) {  // (keys outside are zeros: a ring slot past the window holds another's)
         const bool own = key >= p.pos0;
+#ifdef NI_KV_I8
+        if (!own) {
+          const size_t rowo = (size_t(kvh) * p.rows + (p.ring ? key % p.rows : key)) * kFlTRow;
+          kv4 = flint_t_deq8((const device char*)kc + rowo, c);
+          vv4 = flint_t_deq8((const device char*)vc + rowo, c);
+        } else {
+          const size_t at = size_t(key - p.pos0) * D + c;
+          kv4 = *(const device uint4*)(ckb + at);
+          vv4 = *(const device uint4*)(cvb + at);
+        }
+#else
         const size_t at = own ? size_t(key - p.pos0) * D + c : size_t(p.ring ? key % p.rows : key) * D + c;
         kv4 = *(const device uint4*)((own ? ckb : kb) + at);
         vv4 = *(const device uint4*)((own ? cvb : vb) + at);
+#endif
       }
       *(threadgroup uint4*)(kt + r * LD + c) = kv4;
       *(threadgroup uint4*)(vt + r * LD + c) = vv4;
@@ -240,9 +266,15 @@ NI_INLINE void flint_attn_t_rows_impl(const device float* q, const device half* 
       const uint r = i / (D / 8), cc = (i % (D / 8)) * 8, key = k0 + r;
       uint4 kv4 = uint4(0), vv4 = uint4(0);
       if (key < ce) {
+#ifdef NI_KV_I8
+        const size_t rowo = (size_t(kvh) * p.rows + (p.ring ? key % p.rows : key)) * kFlTRow;
+        kv4 = flint_t_deq8((const device char*)kc + rowo, cc);
+        vv4 = flint_t_deq8((const device char*)vc + rowo, cc);
+#else
         const size_t at = size_t(p.ring ? key % p.rows : key) * D + cc;
         kv4 = *(const device uint4*)(kb + at);
         vv4 = *(const device uint4*)(vb + at);
+#endif
       }
       *(threadgroup uint4*)(kt + r * LD + cc) = kv4;
       *(threadgroup uint4*)(vt + r * LD + cc) = vv4;
