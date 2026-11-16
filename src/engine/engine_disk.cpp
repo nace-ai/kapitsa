@@ -368,7 +368,15 @@ void Engine::disk_start() {
   if (quota == 0) return;
   const std::string fmt = model_->disk_format();
   if (fmt.empty()) {
-    logi("SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models and Dory are)");
+    logi("SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models, Flint, Dory and "
+         "Nemotron-H are)");
+    return;
+  }
+  // a Nemotron-H block drafter's context ring (LiLiCorr, DSpark) is not saved with the states yet: a slot restored
+  // from the SSD would draft from the ring of the conversation it held before
+  if (lili_) {
+    logi("SSD prefix cache: off: not with a Nemotron-H block drafter (%s) yet; --dflash none runs with it",
+         lili_->name());
     return;
   }
   // one refused-version entry per slot (the store's write-behind skips a slot only while its own entry says so, #467)

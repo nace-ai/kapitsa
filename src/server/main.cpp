@@ -2209,7 +2209,8 @@ int ni::server::run_service(Options o) {
     const auto eng = model_mgr->current_engine();
     if (eng && !eng->disk_cache_supported()) {
       const std::string say = "--disk-cache: " + model_mgr->current_model_id() +
-                              " runs without the SSD prefix cache (only the Qwen3.5-family models and Dory have it yet)";
+                              " runs without the SSD prefix cache (the Qwen3.5-family models, Flint, Dory and "
+                              "Nemotron-H without a block drafter have it)";
       if (tui) ui::warning(say);
       else fprintf(stderr, "%s\n", say.c_str());
     }

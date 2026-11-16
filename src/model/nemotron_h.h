@@ -137,6 +137,11 @@ class NemotronH : public Model {
                       Checkpoint* snap = nullptr, int snap_row = 0) override;
   int prefill_chunk() const override { return tmax_; }
   bool can_snapshot() const override { return false; }
+  // SSD prefix cache (src/engine/engine_disk.cpp): the attention layers' K / V rows, the Mamba-2 layers' conv rings and
+  // states (what save() copies into a checkpoint)
+  std::string disk_format() const override;
+  void disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const override;
+  void disk_state(const Seq& s, const Checkpoint* c, std::vector<Buffer>& out) const override;
   // GPU + Neural Engine prefill split (NI_ANE; nemotron_ane.h)
   bool ane_splits(int T) const override;
   bool ane_split_on() const override { return ane_ != nullptr; }

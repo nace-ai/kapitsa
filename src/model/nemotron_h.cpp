@@ -1576,6 +1576,27 @@ void NemotronH::restore(Encoder& e, Seq& s, const Checkpoint& c) {
     }
 }
 
+std::string NemotronH::disk_format() const {
+  char b[256];
+  snprintf(b, sizeof b, "nemotron_h %s; K, V f16 [%d][cap][%d]; Mamba-2: conv ring f32 [4][%d], state f32 [%d][%d][%d]; %s",
+           std::string(cfg_.kind.begin(), cfg_.kind.end()).c_str(), cfg_.hkv, cfg_.hd, cfg_.conv_ch(), cfg_.n_head,
+           cfg_.head_dim, cfg_.d_state, formats_summary().c_str());
+  return b;
+}
+
+void NemotronH::disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const {
+  (void)mtp;
+  for (int i = 0; i < cfg_.layers; ++i)
+    if (cfg_.kind[size_t(i)] == 'A')
+      for (const Buffer* b : {&s.kc[size_t(i)], &s.vc[size_t(i)]}) out.push_back({*b, cfg_.hkv, size_t(cfg_.hd) * 2});
+}
+
+void NemotronH::disk_state(const Seq& s, const Checkpoint* c, std::vector<Buffer>& out) const {
+  for (int i = 0; i < cfg_.layers; ++i)
+    if (cfg_.kind[size_t(i)] == 'M')
+      out.push_back(c ? c->conv[size_t(i)] : s.conv[size_t(i)]), out.push_back(c ? c->rec[size_t(i)] : s.rec[size_t(i)]);
+}
+
 // ---- encoders ----
 Pipeline NemotronH::pipeline(const std::string& name) { return pipe(name); }
 

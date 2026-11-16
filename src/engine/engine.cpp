@@ -701,7 +701,7 @@ bool Engine::streams_experts() const {
   return st && !st->complete();
 }
 
-bool Engine::disk_cache_supported() const { return model_ && !model_->disk_format().empty(); }
+bool Engine::disk_cache_supported() const { return model_ && !model_->disk_format().empty() && !lili_; }
 
 void Engine::save_kflash() {
   if (kf_budget_) kf_budget_->save();

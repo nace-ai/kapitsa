@@ -375,7 +375,7 @@ def ttft(tmp, log):
         # without the cache: turn 2 cold, then turn 1 and turn 2 from RAM (the warm-up before it takes the other slot)
         s = Server(os.path.join(tmp, f"home-nocache-{rnd}"), log, slots=2, cache="0", ane=True)
         warm_up()
-        _, uc, t_cold, _ = chat(turn2(c1, a1, f1))
+        c2, uc, t_cold, _ = chat(turn2(c1, a1, f1))
         b1, _, _, _ = answer_turn1(s, c1)
         warm_up()
         r2, ur, t_ram, _ = chat(turn2(c1, b1, f1))
@@ -386,6 +386,8 @@ def ttft(tmp, log):
               f"\n RAM:  {r2!r}\n SSD:  {d2!r}")
         check(cached(w2) == cached(ur) and cached(w2) > 0, f"round {rnd + 1}: as many tokens cached as from RAM",
               f"SSD {cached(w2)}, RAM {cached(ur)}")
+        # (said, not checked: a cold prefill cuts its chunks elsewhere, which can move a near-tie, #1158)
+        print(f"  round {rnd + 1}: turn 2 cold writes the SSD's text: {'yes' if c2 == d2 else 'no'}", flush=True)
         rows.append((u2p := w2.get("prompt_tokens"), t_cold, cached(uc), t_ssd, cached(w2), t_ram, cached(ur),
                      w1, float(wb.group(1)) if wb else -1,
                      f"{rd.group(2)} MB in {rd.group(3)} ms" if rd else "-", t1, u1.get("prompt_tokens")))

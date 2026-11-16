@@ -514,9 +514,10 @@ restarted) reads that state back and prefills only what follows it. `usage.promp
   `--disk-cache 16G` caps it at 16 GiB within the same rule; `--disk-cache 0` turns it off. Other models' caches that
   no server uses count against the limit too and go first; one no server has used for 14 days is removed when a server
   starts.
-- **Models.** The Qwen3.5 family (the 4B, 9B, 35B-A3B and 27B), with their draft models or the MTP head; Flint; and Dory (a state is read back only for the loop count that computed it).
-  Nemotron-H models and Qwen3.8-Flash-Next run without it (the log says so, and so does the screen when `--disk-cache`
-  or `NI_DISK_CACHE` asks for it).
+- **Models.** The Qwen3.5 family (the 4B, 9B, 35B-A3B and 27B), with their draft models or the MTP head; Flint; Dory (a state is read back only for the loop count that computed it);
+  and the Nemotron-H models (the Nano 4B and 9B v2; Lightning, Bolt and Super-VL only with `--dflash none`: their
+  block drafters' context is not kept yet). Qwen3.8-Flash-Next and the Nemotron-H models with their block drafter run
+  without it (the log says so, and so does the screen when `--disk-cache` or `NI_DISK_CACHE` asks for it).
 
 The server says at start where the cache is, its limit and how many conversations it took back; each read and write
 has a log line (`SSD cache: ...`).
