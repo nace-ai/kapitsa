@@ -993,7 +993,9 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
     // R > 1: flint_attn_partial_rows, the rows in one threadgroup per (chunk, kv head) reading each K / V tile once
     // (bitwise the per-row kernel's output; NI_FLINT_ATTN_ROWS=0 keeps the per-row grid)
     static const bool rows1 = !getenv("NI_FLINT_ATTN_ROWS") || atoi(getenv("NI_FLINT_ATTN_ROWS")) != 0;
-    const bool shared_rows = rows1 && R > 1;
+    // (the shared-rows kernels, and the matrix-unit ones, read fp16 rows only: an int8 cache (NI_KV_I8) takes the per-row
+    // kernel, which reads both layouts)
+    const bool shared_rows = rows1 && R > 1 && !kv_i8();
     // NI_FLINT_ATTN_T (default on, 0 = off): those rows on the matrix units where the dense GEMMs use them (qmt_: an
     // Apple10 GPU on macOS 26), flint_attn_t_rows (tensor/qattn_t_flint.metal: the same partials, the products as
     // half): one full-attention layer, 8 rows after 262K positions, 1.0 against 11.0 ms; 4 rows 0.93 against 5.8
@@ -1222,7 +1224,7 @@ void Flint::enc_layer_prefill(Encoder& e, Seq& s, int li, int pos0, int T) {
   // NI_FLINT_QATTN: the attention's two products on the matrix units (tensor/qattn_t_flint.metal) where the dense
   // GEMMs use them (qmt_: an Apple10 GPU on macOS 26); NI_FLINT_QATTN=0 keeps flint_attn_prefill
   static const bool qat_env = !getenv("NI_FLINT_QATTN") || atoi(getenv("NI_FLINT_QATTN")) != 0;
-  const bool qat = qat_env && qmt_ && c.hd == 128 && c.hq == 8 * c.hkv;
+  const bool qat = qat_env && qmt_ && c.hd == 128 && c.hq == 8 * c.hkv && !kv_i8();  // (fp16 cache rows only)
   const uint32_t qat_tok = small_tiles() ? 8 : 16;   // 2 tokens a simdgroup, NS 4 or 8 simdgroups
   if (qat) e.use(pipe(small_tiles() ? "qattn_flint_s4k16" : "qattn_flint_s8k32p"));
   else e.use(pipe(small_tiles() ? "flint_attn_prefill_k16" : "flint_attn_prefill"));
