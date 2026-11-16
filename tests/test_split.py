@@ -49,7 +49,7 @@ def gpu_lock():
     if os.environ.get("NACE_GPU_LOCK_HELD") == "1" or os.environ.get("NI_LOCK_HELD") == "1":
         return None
     path = os.environ.get("BENCH_GPU_LOCK") or "/tmp/kapitsa-gpu.lock"
-    f = open(path, "a")
+    f = os.fdopen(os.open(path, os.O_RDONLY | os.O_CREAT, 0o644), "rb")
     print(f"waiting for the GPU lock {path} ...", flush=True)
     fcntl.flock(f, fcntl.LOCK_EX)
     return f

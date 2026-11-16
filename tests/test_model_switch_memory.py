@@ -227,7 +227,7 @@ def main():
         out.mkdir(parents=True, exist_ok=False)
         lock_path = Path(os.environ.get("BENCH_GPU_LOCK", "/tmp/kapitsa-gpu.lock"))
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        with lock_path.open("a") as lock:
+        with os.fdopen(os.open(lock_path, os.O_RDONLY | os.O_CREAT, 0o644), "rb") as lock:
             if os.environ.get("NI_LOCK_HELD") != "1" and os.environ.get("NACE_GPU_LOCK_HELD") != "1":
                 fcntl.flock(lock, fcntl.LOCK_EX)
             run(args, scratch, out)
