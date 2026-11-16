@@ -606,9 +606,10 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   }
   // batched decode for DFlash2 drafters (Qwen3.6 35B-A3B, Qwen3.8 27B) and LiLiCorr on Bolt's 24 GB checkpoint; the
   // 4B's DFlash (v1) drafter, Super-VL's LiLiCorr and Lightning's DSpark take turns today, a narrower gate than the
-  // class (NI_BATCH=1 batches them too)
+  // class (NI_BATCH=1 batches them too). A Nemotron Nano decoding with prompt lookup (nh_ngram_: the Nano 4B, BF16 or
+  // FP8) batches plain rows, one pass for every member's pending token (bench/results/2026-11-16-nano-batch-decode)
   batch_measured_ = (dfl_ && !dfl_->config().v1) ||
-                    (lili_ && std::string(lili_->name()) == "LiLiCorr" && nh_->iq2_experts());
+                    (lili_ && std::string(lili_->name()) == "LiLiCorr" && nh_->iq2_experts()) || nh_ngram_ > 0;
   if (kflash_budget_on() && (nh_ngram_ > 0 || flint_ngram_ > 0)) {
     // what an extra row of a pass costs in decode steps (NI_KFLASH_ROW_COST overrides): Flint 0.6 (an M4 Pro: 2 / 4 / 8
     // rows = 1.6 / 2.8 / 5.2 steps); Nemotron 0.25 is NOT measured here: calibrate it from the request log's "row x
@@ -1533,7 +1534,7 @@ int Engine::batch_rows(int n) const {
     const char* v = getenv("NI_BATCH");
     return v && *v ? atoi(v) : -1;
   }();
-  if (mode == 0 || n < 2 || n > 8 || (!dfl_ && !lili_) || (mode < 0 && !batch_measured_)) return 0;
+  if (mode == 0 || n < 2 || n > 8 || (!dfl_ && !lili_ && nh_ngram_ == 0) || (mode < 0 && !batch_measured_)) return 0;
   // a 16-row drafting block has no batched cycle: it drafts a depth-15 lattice with the pair kernel, and the batch loop
   // drafts 7-token chains (encode_draft with tree = false), so the requests take turns instead
   // (a drafter loaded with 16 rows that a long prompt narrowed to 8, set_block, keeps that: its other requests draft 16)
@@ -1553,6 +1554,9 @@ int Engine::batch_rows(int n) const {
     return t;
   }();
   int rows = env[size_t(n)];
+  // no drafter (a Nemotron Nano's prompt lookup): plain rows, every member's pending token (its lookup drafts wait
+  // for its own loop)
+  if (!dfl_ && !lili_) return rows == 0 ? 0 : 1;
   // KFlash's batch budget (DFlash2 drafters, 2 .. 4 members; NI_BATCH_KF=0 keeps the table below): each cycle, the rows
   // of one verify pass in all and which member gets them, from the members' calibrated drafts and this Mac's measured
   // cost of a batched cycle (KfBatch). Against the table on the M4 Pro (same streams, interleaved): 3 at once 35B
@@ -1583,7 +1587,7 @@ int Engine::batch_rows(int n) const {
 }
 
 bool Engine::batch_wanted() const {
-  if (!dfl_ && !lili_) return false;
+  if (!dfl_ && !lili_ && nh_ngram_ == 0) return false;
   int n = 0;  // requests decoding (not waiting for memory)
   for (const Slot& o : slots_) n += o.busy && o.decoding && o.mem_wait == Slot::MemWait::none;
   // join the running batch: it is to take every decoding request (its runner waits for them when fewer rows do not
@@ -1823,6 +1827,10 @@ void Engine::batch_cycle(int rows) {
     std::vector<NemotronH::VerifyGroup> groups;
     for (BatchJob* j : jobs) {
       Slot& sl = *j->slot;
+      if (!lili_) {  // (no drafter: plain rows, nothing captured)
+        groups.push_back(NemotronH::VerifyGroup{sl.seq.get(), j->P, rows, j->sp});
+        continue;
+      }
       LiliSeq& l = *sl.lseq;
       lili_->stage_init(l);
       if (l.staged > 0 && (k > 0 || l.staged == NhDrafter::kB)) lili_->encode_commit_staged(*e1, l), e1_work = true;
@@ -1879,8 +1887,10 @@ void Engine::batch_cycle(int rows) {
       d.staged = k > 0 ? m : d.staged + 1;  // their captures: positions P .. P + m - 1
     } else {
       nh_->commit_rows(s, m);
-      LiliSeq& l = *j->slot->lseq;
-      l.staged = k > 0 ? m : l.staged + 1;
+      if (lili_) {
+        LiliSeq& l = *j->slot->lseq;
+        l.staged = k > 0 ? m : l.staged + 1;
+      }
     }
     j->P += m;
     ++j->cycles;
@@ -1924,7 +1934,7 @@ void Engine::batch_plain_run() {
         DFlashSeq& d = *j->slot->dseq;
         dfl_->stage_init(d);
         if (d.staged > 0) dfl_->encode_commit_staged(*e1, d), any = true;
-      } else {
+      } else if (lili_) {
         LiliSeq& l = *j->slot->lseq;
         lili_->stage_init(l);
         if (l.staged > 0) lili_->encode_commit_staged(*e1, l), any = true;
@@ -1977,7 +1987,7 @@ void Engine::batch_plain_run() {
       std::vector<NemotronH::VerifyGroup> gr;
       for (size_t i = 0; i < n; ++i) {
         Slot& sl = *jobs[i]->slot;
-        NemotronH::VerifyGroup v{sl.seq.get(), base[i] + c, 1, jobs[i]->sp, &sl.lseq->stage_hook, c};
+        NemotronH::VerifyGroup v{sl.seq.get(), base[i] + c, 1, jobs[i]->sp, lili_ ? &sl.lseq->stage_hook : nullptr, c};
         v.tok_out = true;
         gr.push_back(v);
       }
@@ -2005,7 +2015,7 @@ void Engine::batch_plain_run() {
       ++j->cycles;
       ++j->tokens;
       if (dfl_) j->slot->dseq->staged = c + 1;
-      else j->slot->lseq->staged = c + 1;
+      else if (lili_) j->slot->lseq->staged = c + 1;
       (*j->cycle_done)(1);
       if (!(*j->handle)(j->slot->seq->tokens()[P + 1])) {
         j->stopped = true;
@@ -4260,9 +4270,17 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       ++req_cycles;
       spec_accepted_ += m;
       cycle_done(m);
+      if (trace_path) trace_fn(nh_->logits(), m, tk + P + 1);
       nh_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new pending token
       P += m;
-      if (go && contended()) yield_turn(res);  // (the pending rows are the sequence's own)
+      // another request decodes: join the batch (plain rows, Engine::batch_rows); a request whose reasoning is capped
+      // decodes alone, as LiLiCorr's (Nemotron-H's batched passes take no masks)
+      slot.decoding = !tc.armed();
+      if (go && !tc.armed() && batch_wanted()) {
+        if (batch(P)) go = false;
+      } else if (go && contended()) {
+        yield_turn(res);  // (the pending rows are the sequence's own)
+      }
     }
     auto e3 = g.begin();
     nh_->encode_flush(*e3, s);
