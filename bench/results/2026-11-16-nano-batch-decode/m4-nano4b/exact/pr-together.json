@@ -1,0 +1,50 @@
+{
+ "g0": {
+  "text": "```python\n\"\"\"\nLRU Cache with TTL Expiry and Thread-Safe Wrapper\n================================================\n\nThis module implements a fully-featured LRU (Least Recently Used) cache\nwith time-to-live (TTL) expiry support. The cache is designed to be\nthread-safe and includes a comprehensive pytest test suite.\n\nFeatures:\n- LRU eviction policy\n- Automatic TTL expiry\n- Thread-safe operations\n- Comprehensive documentation and type hints\n- Extensive test coverage\n\nAuthor: G0 c0d3\n\"\"\"\n\nfrom __future__ import annotations\n\nimport threading\nimport time\nfrom collections import OrderedDict\nfrom dataclasses import dataclass\nfrom typing import Any, Dict, Optional, Tuple, TypeVar\n\nT = TypeVar(\"T\")\nK = TypeVar(\"K\")\n\n# -----------------------------------------------------------------------------\n# Internal Data Structures\n# -----------------------------------------------------------------------------\n\n@dataclass\nclass CacheEntry:\n    \"\"\"\n    Internal representation of a cached item.\n\n    Attributes:\n        key: The cache key (hashable)\n        value: The cached value\n        ttl: Time to live in seconds (float)\n        timestamp: Last access time (float)\n        thread_local: Thread-local storage reference\n    \"\"\"\n    key: K\n    value: T\n    ttl: float\n    timestamp: float\n    thread_local: \"ThreadLocalStorage\" | None = None\n\n\nclass ThreadLocalStorage:\n    \"\"\"\n    Thread-local storage for cache entries.",
+  "tokens": 300,
+  "finish": "length",
+  "error": null
+ },
+ "g1": {
+  "text": "A **B-tree** is a self-balancing tree data structure that maintains sorted data and allows for efficient search, insertion, and deletion operations. One of its key features is that it **automatically keeps itself balanced** through a set of rules and operations that ensure all leaf nodes are at the same depth and that the number of keys per node is within a fixed range. Here's a detailed explanation of how a B-tree maintains its balance:\n\n---\n\n### 1. **Definition of a B-tree**\nA B-tree of order *m* (where *m* is the maximum number of children a node can have) has the following properties:\n- Every node (except the root) has at least *\u2308m/2\u2309* children and at most *m* children.\n- Every internal node has at least *\u2308m/2\u2309* keys and at most *m\u22121* keys.\n- All leaf nodes are at the same depth.\n- The tree is height-balanced: the difference in depth between any two leaf nodes is at most 1.\n\n---\n\n### 2. **How B-trees Stay Balanced: Key Mechanisms**\n\n#### A. **Minimum and Maximum Children Rules**\n- **Minimum children**: Each node (except root) must have at least *\u2308m/2\u2309* children.\n- **Maximum children**: Each node can have at most *m* children.\n\nThis ensures",
+  "tokens": 300,
+  "finish": "length",
+  "error": null
+ },
+ "g2": {
+  "text": "**File: `with_pooling.py`**  \nThis file contains the implementation of the `WithPooling` class, which is a custom model wrapper designed to handle multimodal inputs (text and audio) in a single transformer pipeline. Key functionalities include:\n\n1. **Audio Output Generation**:  \n   - Processes audio features through an encoder and projects them into the model's embedding space using `self.projector`.  \n   - Stores the projected embeddings in `audio_outputs.pooler_output`.\n\n2. **Placeholder Mask Creation**:  \n   - `get_placeholder_mask`:  \n     - Checks if input tokens or embeddings contain the special audio token ID (`audio_token_id`).  \n     - Validates that the number of audio tokens matches the number of audio features.  \n     - Raises an error if they don\u2019t match.  \n   - Ensures alignment between audio tokens and features.\n\n3. **Audio Embedding Merging**:  \n   - `get_merged_audio_embeddings`:  \n     - Replaces the special audio token in the input IDs with 0 (to be masked).  \n     - Scatters audio features into the model\u2019s embeddings at the masked positions.  \n     - Returns the updated embeddings.\n\n4. **Forward Pass**:  \n   - Handles both `input_ids` and `inputs_embeds` (mutually exclusive).  \n   - Applies the audio embedding merge",
+  "tokens": 300,
+  "finish": "length",
+  "error": null
+ },
+ "g3": {
+  "text": "The wind howled like a banshee through the cliffs of Blackthorn Point, and the storm was a living thing\u2014dark, relentless, and hungry. Elias, the lighthouse keeper, stood at the top of the spiral staircase, his breath a cloud in the freezing air. Below, the sea churned, a wall of black water crashing against the rocks with a sound like a thousand fists.\n\nHe had tended this lighthouse for thirty-two years. He knew every creak of the lantern room, every groan of the old stone. He knew the storm\u2019s rhythm, the way it built, the way it broke. But this storm was different. It felt ancient, as if the sea itself were angry.\n\nThe lantern room door creaked open. Elias stepped inside, the cold air seeping into his bones. The great brass lantern, its glass clouded with salt and time, flickered weakly. He reached for the oil lamp, but the wind slammed the door shut behind him, slamming it with a thunderous *thud* that rattled the glass.\n\nOutside, the storm roared. Rain lashed the windows, turning the world into a blur of white and gray. Elias lit the lamp, the flame sputtering but holding. He climbed the spiral stairs, his hands numb, his heart pounding. The beam swept across the churning sea, a thin, steady line of light cutting through the darkness.\n\nThen, the beam faltered.\n\nA bolt of lightning",
+  "tokens": 300,
+  "finish": "length",
+  "error": null
+ },
+ "g4": {
+  "text": "1. **Mercury** \u2013 The smallest planet in the solar system and the closest to the Sun.  \n2. **Venus** \u2013 Has the thickest atmosphere of any planet, with clouds of sulfuric acid.  \n3. **Earth** \u2013 The only known planet with liquid water on its surface and life.  \n4. **Mars** \u2013 Known as the \"Red Planet\" due to iron oxide (rust) on its surface.  \n5. **Jupiter** \u2013 The largest planet, made mostly of hydrogen and helium, and has a Great Red Spot storm.  \n6. **Saturn** \u2013 Famous for its stunning ring system made of ice and rock particles.  \n7. **Uranus** \u2013 Rotates on its side, giving it extreme seasonal variations.  \n8. **Neptune** \u2013 The farthest planet from the Sun and the windiest, with supersonic winds.",
+  "tokens": 194,
+  "finish": "stop",
+  "error": null
+ },
+ "g5": {
+  "text": "```python\ndef merge_intervals(intervals):\n    if not intervals:\n        return []\n    intervals.sort(key=lambda x: x[0])\n    merged = [intervals[0]]\n    for start, end in intervals[1:]:\n        if start <= merged[-1][1]:\n            merged[-1][1] = max(merged[-1][1], end)\n        else:\n            merged.append([start, end])\n    return merged\n\n# Test cases\nassert merge_intervals([[1, 3], [2, 6], [8, 10], [15, 18]]) == [[1, 6], [8, 10], [15, 18]]\nassert merge_intervals([[1, 4], [4, 5]]) == [[1, 5]]\nassert merge_intervals([[1, 4], [0, 0]]) == [[0, 4]]\nassert merge_intervals([]) == []\nassert merge_intervals([[5, 5]]) == [[5, 5]]\n```",
+  "tokens": 227,
+  "finish": "stop",
+  "error": null
+ },
+ "g6": {
+  "text": "```python\n\"\"\"\nLRU Cache with TTL Expiry and Thread-Safe Wrapper\n================================================\n\nThis module implements a thread-safe LRU (Least Recently Used) cache with\ntime-to-live (TTL) expiry. The cache stores key-value pairs and evicts\nthe least recently accessed items when the capacity is exceeded or\nwhen items expire due to TTL.\n\nThe implementation includes:\n- A core LRUCache class with TTL support\n- A thread-safe wrapper class LRUCacheThreadSafe\n- Comprehensive unit tests using pytest\n- Extensive documentation and inline comments\n\nThe module is designed to be self-contained and production-ready.\n\"\"\"\n\n# Import standard library modules\nimport threading\nimport time\nfrom collections import OrderedDict\nfrom typing import Any, Dict, Optional, Tuple, Union\n\n# Import for type hints and testing\nfrom __future__ import annotations\n\n# Define the core LRUCache class\nclass LRUCache:\n    \"\"\"\n    A thread-safe LRU cache with TTL expiry.\n\n    This class manages a fixed-size cache of key-value pairs where:\n    - The least recently used item is evicted when capacity is exceeded\n    - Items expire after a specified time-to-live (TTL)\n    - Access patterns are tracked to maintain LRU order\n\n    Attributes:\n        capacity (int): Maximum number of items the cache can hold\n        ttl (int): Time-to-live in seconds for each item",
+  "tokens": 300,
+  "finish": "length",
+  "error": null
+ },
+ "g7": {
+  "text": "A **B-tree** is a self-balancing tree data structure that maintains sorted data and allows for efficient search, insertion, and deletion operations. One of its key features is that it **automatically keeps itself balanced** through a set of rules and operations that ensure all leaf nodes are at the same depth and that the number of keys per node is within a defined range. Here's a detailed explanation of how a B-tree maintains its balance:\n\n---\n\n### 1. **Definition of a B-tree**\nA B-tree of order *m* (where *m* is the maximum number of children a node can have) has the following properties:\n- Every node (except the root) has at least \u2308m/2\u2309 children and at most *m* children.\n- Every internal node has at least \u2308m/2\u2309 keys and at most *m\u22121* keys.\n- All leaves are at the same depth.\n- The tree is height-balanced.\n\n---\n\n### 2. **How B-trees Stay Balanced: The Core Mechanism**\n\nThe balance is maintained through **two main operations**:\n- **Insertion**\n- **Deletion**\n\nThese operations are designed so that the tree never violates the minimum and maximum node occupancy rules, and if it does, **rebalancing** (splitting or merging nodes) occurs to restore balance.\n\n---\n\n### 3. **Insertion Process (How Balance is Main",
+  "tokens": 300,
+  "finish": "length",
+  "error": null
+ }
+}

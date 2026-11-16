@@ -1,0 +1,21 @@
+{
+  "engine": "kapitsa",
+  "build": "0.2.36 (9ef19349)",
+  "model": "nemotron-3-nano-4b-fp8",
+  "model_dir": "~/kapitsa-run/home/models/nemotron-3-nano-4b-fp8",
+  "path": "step",
+  "prefill_chunk": 2048,
+  "ane": {
+    "chunks": 0,
+    "evals": 0,
+    "reruns": 0
+  },
+  "records": 192,
+  "vocab": 131072,
+  "source": "~/kapitsa-batching/out/m4-nano4b/exact/ld-main",
+  "mac": "Mac mini (2024), M4 (10-core GPU), 16 GB",
+  "macos": "26.6.2",
+  "date": "2026-11-16T20:41:37Z",
+  "env": {},
+  "disk_format": ""
+}

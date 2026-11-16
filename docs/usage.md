@@ -468,7 +468,11 @@ per second in all, 512-token replies to code prompts, greedy, on a MacBook Pro w
 | Qwen3.6 35B-A3B, 4-bit | 154 | 196 (160) | 206 (149) | 202 (161) |
 | Nemotron 3.5 Bolt, NVIDIA 24 GB | 65 | 77 (63) | 64 (63) | 75 (62) |
 
-In parentheses: the same requests taking turns on the GPU, as with `NI_BATCH=0`. With the Qwen models KFlash chooses
+In parentheses: the same requests taking turns on the GPU, as with `NI_BATCH=0`. The Nemotron Nanos have no draft
+model; their requests at once share plain rows, one per request: on a Mac mini M4 (16 GB) the Nano 4B FP8 writes 44.5
+tok/s in all with 2 at once and 80.2 with 4, against 27.1 and 26.5 taking turns (28.4 alone; M2: 36.6 and 64.8
+against 22.5 and 22.0), and the 9B v2 26.9 and 45.8 against 15.0 and 15.0 (15.1 alone;
+[results](../bench/results/2026-11-16-nano-batch-decode/README.md)). With the Qwen models KFlash chooses
 each shared pass's rows (`NI_BATCH_KF`): how many in all, up to 8, and which request gets them, from each request's
 drafts and what a row costs on this Mac; three requests now share 8 rows instead of 2 each (or, on the 27B, taking
 turns). A request alone gets the tokens it always gets. Requests decoded
@@ -1360,7 +1364,7 @@ KFlash's knobs are `NI_KFLASH_<NAME>`; each was `NI_DFLASH_<NAME>` before #362 a
 | `NI_KFLASH_SELUPD_TAU` | `1.3` | The softmax temperature of the online selector update's target (`NI_KFLASH_SELUPD`). Only read when the update runs; not tuned. |
 | `NI_KFLASH_GATE` | off | The downward depth gate (an experiment): `NI_KFLASH_GATE=<p>[:<win>]` caps each chain cycle's verify depth at the first proposal position whose rolling marginal acceptance — among the cycles where the shipping tau kept it, over the last `win` cycles (default 64) — fell below the break-even `p`, after a warmup of `win` cycles. Host-only, downward-only (never above the static depth), off by default; without it the behavior is unchanged. It needs the dynamic depth (an MoE target, `NI_KFLASH_DYN > 0`) **and a chain**: under the default KFlash trees it logs as inert — add `NI_KFLASH=0` or `NI_KFLASH_TREE=0` to run it. `NI_KFLASH_GATE_TRACE=1` prints one line per cycle with the observed pair and the cap. |
 | `NI_TURN_MS` | `30` | Requests at once: how long a decoding request keeps the GPU before it gives its turn to a waiting one, in ms; `0` = after every decode step. |
-| `NI_BATCH` | on for the 27B, the 35B and Bolt | Requests decoding at once share one GPU pass ([Requests at once](#requests-at-once)): the 27B, the 35B and Bolt; `1`: the 4B, Lightning and Super-VL too; `0`: they take turns instead, each with the tokens it gets alone. |
+| `NI_BATCH` | on for the 27B, the 35B, Bolt and the Nemotron Nanos | Requests decoding at once share one GPU pass ([Requests at once](#requests-at-once)): the 27B, the 35B, Bolt and the Nemotron Nano 4B and 9B v2 (plain rows: one row per request); `1`: the Qwen3.5 4B, Lightning and Super-VL too; `0`: they take turns instead, each with the tokens it gets alone. |
 | `NI_BATCH_KF` | on | Requests decoding at once with the Qwen draft models (2 to 4 of them): KFlash chooses each shared pass's rows, how many in all and which request gets them, from the draft model's calibrated probabilities and this Mac's measured cost of a shared pass (cached with the KFlash budget). `0`: a fixed number per request, as measured before (two requests 4 rows each, three or four 2 each; the 27B's three take turns). |
 | `NI_BATCH_KF_FLOOR` | `0` | With `NI_BATCH_KF`: `1` gives every request in a shared pass at least one draft row. |
 | `NI_HISTORY_PREFILL` | on | After a reply, while the server is idle, prepare the conversation's next turn so a follow-up starts sooner; `0` turns it off. |

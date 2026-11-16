@@ -1,0 +1,14 @@
+{
+ "g0": {
+  "text": "```python\n\"\"\"\nLRUCacheWithTTL.py\nA thread-safe LRU cache implementation with time-to-live (TTL) expiry.\nThis module provides a cache that evicts least recently used items when the cache is full,\nand automatically removes items that have exceeded their TTL. It is designed to be thread-safe\nusing locks and includes a comprehensive test suite using pytest.\n\"\"\"\n\nimport time\nimport threading\nfrom collections import OrderedDict\nimport pytest\n\n\nclass LRUCacheWithTTL:\n    \"\"\"\n    A thread-safe LRU cache with time-to-live (TTL) expiry.\n    \n    This class implements a cache that stores key-value pairs with an optional TTL.\n    When the cache reaches its maximum size, the least recently used item is evicted.\n    Additionally, items are automatically removed when their TTL expires.\n    \n    Attributes:\n        max_size (int): The maximum number of items the cache can hold.\n        ttl (int): The time-to-live in seconds for all items. If None, items never expire by TTL.\n        lock (threading.Lock): A lock to ensure thread safety.\n        cache (OrderedDict): The cache storage, ordered by access time.\n    \"\"\"\n    \n    def __init__(self, max_size: int = 128, ttl: int = None):\n        \"\"\"\n        Initialize the LRU cache with TTL.\n        \n        Args:\n            max_size",
+  "tokens": 300,
+  "finish": "length",
+  "error": null
+ },
+ "g1": {
+  "text": "A B-tree maintains balance through a combination of structural rules and insertion/deletion algorithms that ensure all leaf nodes are at the same depth. Here's a detailed explanation of how this balance is preserved:\n\n---\n\n### **1. Structural Properties of a B-tree**\nA B-tree is defined by the following key properties:\n- **Node Capacity**: Each node (except the root) must have at least \u2308m/2\u2309 children (where *m* is the maximum number of children a node can have) and at most *m* children.\n- **Leaf Level**: All leaf nodes reside at the same depth, ensuring uniform access time for searches.\n- **Root Exception**: The root can have as few as 2 children (if *m* \u2265 3) or 1 child (if *m* = 2), but it must satisfy the minimum child requirement unless it is a leaf itself.\n\nThese properties inherently enforce balance because:\n- **Uniform Depth**: By requiring all leaves to be at the same level, the tree avoids skewed structures where some paths are significantly longer than others.\n- **Minimum Fill**: The minimum number of children per node ensures that nodes are not overly sparse, preventing the tree from becoming too \"tall\" (i.e., increasing height).\n\n---\n\n### **2. Insertion Algorithm and Balance Maintenance**\nWhen inserting a key into a B-tree, the algorithm ensures balance by splitting nodes that exceed their capacity. Here\u2019s how it works:\n\n#### **",
+  "tokens": 300,
+  "finish": "length",
+  "error": null
+ }
+}

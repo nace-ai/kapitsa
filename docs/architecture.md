@@ -84,7 +84,9 @@ first layer goes to the GPU at once. With LiLiCorr the rows follow a table, as m
 requests verify 3 drafts each, three 1 draft each and four plain rows (`NI_BATCH_KF=0` gives DFlash2 its table too:
 two requests 3 drafts each, three or four 1 draft each, the 27B's three taking turns). The Qwen3.5 4B's DFlash
 drafter, Nemotron 3.5 Lightning and Super-VL take turns today
-(`NI_BATCH=1` batches them too). A member that finishes leaves the batch, and the last one goes back to its own loop.
+(`NI_BATCH=1` batches them too). A Nemotron Nano (no drafter: the 4B decodes with prompt lookup, the 9B v2 with plain
+steps) batches plain rows: one pass over every member's pending token, the 4B's lookup drafts left for when it decodes
+alone again. A member that finishes leaves the batch, and the last one goes back to its own loop.
 One request alone runs the single-stream path unchanged. Requests decoded together can get other tokens than alone where
 two candidates are within the batched pass's rounding of each other, and sampled requests draw other random numbers;
 `NI_BATCH=0` makes them take turns instead.
