@@ -3273,6 +3273,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     const bool vpf = vpf_on && q35_ && dfl_ && !lili_ && !spec_ && !full_steps && (vpf_forced || vpf_default) &&
                      p == start && p >= 1024 && T == n - p && n - p <= vpf_max && pbound <= p && !s.embeds &&
                      s.mask_rows == 0 && !vpf_split;
+    if (!vpf && q35_ && dfl_ && p >= 1024 && n - p <= vpf_max)  // (why a cached short suffix took the prefill path)
+      logd("prefill: %d suffix rows after %d cached, not as verify passes:%s%s%s%s%s%s%s%s", n - p, p, vpf_on ? "" : " NI_VPF=0",
+           full_steps ? " whole vocabulary" : "", vpf_forced || vpf_default ? "" : " not the default (MoE, size, drafter, tile)",
+           p == start ? "" : " not the cache's end", T == n - p ? "" : " more than one chunk", pbound <= p ? "" : " a boundary before",
+           s.embeds || s.mask_rows ? " images or a mask" : "", vpf_split ? " split (a boundary, under NI_VPF_SPLIT_MIN)" : "");
     Checkpoint* snap = nullptr;
     int snap_at = boundary;
     if (pbound > p && pbound < p + T) {

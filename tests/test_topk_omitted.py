@@ -82,8 +82,10 @@ LONG = " ".join(f"Item {i}: the keeper logged wind {i % 9} and swell {i % 5} at 
 class Server:
     def __init__(self, a, tmp, slots, name):
         self.port = a.port + slots
-        self.log_path = Path(tmp) / f"serve-{name}.log"
+        self.log_path = Path(os.environ.get("TOPK_LOG_DIR") or tmp) / f"serve-{name}.log"
         env = dict(os.environ, NI_LOCK_HELD="1", NACE_GPU_LOCK_HELD="1", NI_LOG="2")
+        if a.expect_vpf:  # (forced: the default leaves some dense targets out, Engine::chat's vpf_default)
+            env["NI_VPF"] = "1"
         with open(self.log_path, "w") as log:
             self.p = subprocess.Popen([a.cli, "serve", "--model", a.model, "--port", str(self.port), "--ctx", "8192",
                                        "--slots", str(slots), "--disk-cache", "0"], stdout=log,
@@ -158,16 +160,20 @@ def review(a, tmp):
                   f"{calls[0]['function'] if calls else m.get('content')!r:.100}")
         # a short suffix after 1024+ cached rows
         conv = [{"role": "user", "content": LONG + "\nSummarize the log in one sentence."}]
-        m, new = s.chat(dict(nt, messages=conv, temperature=0.7, top_k=20, max_tokens=24))
+        # (the template drops an earlier reply's think tags, so the cached prefix ends at the user's turn and the
+        # suffix holds the reply too: replies of 8 tokens keep it inside vpf's 25 to 64 rows)
+        m, new = s.chat(dict(nt, messages=conv, temperature=0.7, top_k=20, max_tokens=8))
         conv += [{"role": "assistant", "content": m["content"]}]
         for k in (0, 40):
-            conv += [{"role": "user", "content": "And the wind at hour 5?"}]
-            m, new = s.chat(dict(nt, messages=conv, temperature=0.7, top_k=k, max_tokens=24))
+            # (25 to 64 suffix rows with the turn boundary inside: vpf's window, NI_VPF_SPLIT_MIN / NI_VPF_MAX)
+            conv += [{"role": "user", "content": "And the wind and the swell at hours 5 and 6? One line, numbers only."}]
+            m, new = s.chat(dict(nt, messages=conv, temperature=0.7, top_k=k, max_tokens=8))
             conv += [{"role": "assistant", "content": m["content"]}]
             vp = re.findall(r"prefill: (\d+) suffix rows after (\d+) cached as verify passes", new)
-            check(s.up() and (FULL in new) == (k == 0) and (not vp if k == 0 else True),
+            why = re.findall(r"prefill: \d+ suffix rows after \d+ cached, not as verify passes:.*", new)
+            check(s.up() and (FULL in new) == (k == 0) and (not vp if k == 0 else bool(vp) or not a.expect_vpf),
                   f"short suffix after the cached prompt, top_k {k}: server up, "
-                  f"{'verify-pass prefill ' + str(vp) if vp else 'the prefill path'}"
+                  f"{'verify-pass prefill ' + str(vp) if vp else 'the prefill path'}{' (' + why[-1] + ')' if why else ''}"
                   f"{', whole vocabulary' if FULL in new else ''}")
         # a greedy speculative turn after a turn in plain steps, against the same turn after a re-prefill
         c1 = [{"role": "user", "content": PROMPT}]
@@ -214,6 +220,9 @@ def main():
     ap.add_argument("--port", type=int, default=18590)
     ap.add_argument("--tokens", type=int, default=256)
     ap.add_argument("--review", action="store_true", help="also the routes #1287's review named (see the top)")
+    ap.add_argument("--review-only", action="store_true", help="--review without the omitted-top_k requests")
+    ap.add_argument("--expect-vpf", action="store_true",
+                    help="--review: NI_VPF=1, and the top_k 40 suffix must take the verify-pass prefill (a target with DFlash2)")
     a = ap.parse_args()
     lock = nullcontext() if held_by_caller() else GpuLock(
         path=str(Path(os.environ.get("BENCH_GPU_LOCK") or "/tmp/kapitsa-gpu.lock").expanduser().resolve()))
@@ -233,7 +242,7 @@ def main():
                     if p.poll() is not None:
                         sys.exit(f"server exited: {log_path.read_text()[-2000:]}")
                     time.sleep(1)
-            for name, path, body, full in requests(a.tokens):
+            for name, path, body, full in [] if a.review_only else requests(a.tokens):
                 before = log_path.read_text()
                 post(a.port, path, body)
                 time.sleep(0.5)  # (the request's log lines)
@@ -248,7 +257,7 @@ def main():
         finally:
             p.terminate()
             p.wait(60)
-        if a.review:
+        if a.review or a.review_only:
             failures += review(a, tmp)
     print(f"test_topk_omitted: {failures} failures")
     return 1 if failures else 0
