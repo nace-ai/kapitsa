@@ -2542,7 +2542,7 @@ void Qwen35::enc_sample(Encoder& e, Seq& s, const Buffer& xrow, int out_index, c
   static Pipeline st2 = Gpu::get().pipeline("sample_stage2");
   enc_qmv(e, lm_head_, xrow, logits_, nullptr, final_norm_);
   enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);  // structured output (nothing without masks)
-  if (full_vocab(sp)) {  // top_k <= 0 or above the two passes' 32 (sampler.h)
+  if (full_vocab(sp)) {  // top_k <= 0 or above the two passes' 64 (sampler.h)
     enc_sample_full(e, logits_, uint32_t(cfg_.vocab), s.tok, out_index, sprob_, sp, step);
     return;
   }

@@ -303,7 +303,7 @@ int cpu_checks() {
   check(topk_k(sp(0.0f, 0)) == 1 && topk_k(sp(0.0f, 100)) == 1, "topk_k: greedy keeps 1");
 
   // A request that leaves top_k out keeps the two-pass sampler (and the speculative loops): kapitsa#1286 changes only
-  // what an explicit top_k <= 0 or above 32 does.
+  // what an explicit top_k <= 0 or above 64 does.
   printf("[cpu] omitted top_k\n");
   check(omitted_top_k(20) == 20 && omitted_top_k(32) == 32 && omitted_top_k(1) == 1,
         "generation_config top_k 1..32: the publisher's");
