@@ -46,7 +46,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ### Nace quants
 
-**Downloads closer to the original model, at the same size.** Nace quants are our quantization for MLX packs and GGUF files. The `4b`, `9b`, `27b`, `35b` and `flash-next` [aliases](docs/models.md) download them.
+**Downloads closer to the original model, at the same size.** Nace quants are our quantization for MLX packs and GGUF files. The `4b`, `9b`, `27b` and `35b` [aliases](docs/models.md) download them.
 
 | 4-bit | Compared with | KL from bf16 (lower is closer) | [GSM8K](https://huggingface.co/datasets/openai/gsm8k), 1,319 questions |
 | --- | --- | --- | --- |
