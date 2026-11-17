@@ -151,6 +151,12 @@ target_include_directories(flint_kv_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_test(NAME flint_kv_test COMMAND flint_kv_test)
 set_tests_properties(flint_kv_test PROPERTIES TIMEOUT 30)
 
+# which Nemotron-H models batch requests at once, and their rows per member: header only
+add_executable(nh_batch_test tests/nh_batch_test.cpp)
+target_include_directories(nh_batch_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_test(NAME nh_batch_test COMMAND nh_batch_test)
+set_tests_properties(nh_batch_test PROPERTIES TIMEOUT 30)
+
 # kapitsa serve's one validator (src/server/service_config.cpp): flags and --config's JSON, against the schema in docs/
 add_executable(serve_options_test tests/serve_options_test.cpp src/server/service_config.cpp)
 target_include_directories(serve_options_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

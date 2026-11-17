@@ -73,6 +73,7 @@ build/sample_topk_test --cpu                 # which top_k the two-pass sampler 
 build/qwen4_config_test                      # what a Qwen 4 config asks that Flash-Next's path does not run (src/model/qwen4_config.h)
 build/nh_quant_q8_test                       # Q8 load quantization: code/half-scale bytes, rounding, fallback and guards (CPU only)
 build/flint_kv_test                          # Flint refuses NI_KV_I8 (src/model/flint_kv.h)
+build/nh_batch_test                          # which Nemotron-H models batch requests at once, rows per member (src/engine/nh_batch.h)
 build/json_file_test                         # config.json parsed once per file (src/util/json_file.h)
 build/affine_pack_test                       # MLX affine pack helpers: bit width from shapes, f16 -> bf16 (src/model/affine_pack.h)
 build/ffn_share_test                         # the kernels the split's GPU part runs a dense FFN layer on, and its share (src/model/ffn_share.h)

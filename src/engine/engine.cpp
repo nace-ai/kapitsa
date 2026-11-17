@@ -2,6 +2,7 @@
 #include "model/sampler.h"
 #include "engine/engine.h"
 #include "engine/device_profile.h"
+#include "engine/nh_batch.h"
 #include "engine/output_parser.h"
 #include "engine/stop_filter.h"
 #include "engine/reasoning_memory.h"
@@ -521,10 +522,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       if (k > 0) nh_ngram_ = std::min(k, NemotronH::kMaxRows - 1);
     }
   }
-  if (nh_ && !lili_) {
-    const auto& kind = nh_->config().kind;
-    nh_batch_ = std::find(kind.begin(), kind.end(), 'E') == kind.end();
-  }
+  if (nh_) nh_batch_ = nh_batches(nh_->config().kind, lili_ != nullptr);
 
   // Flint has no drafter: prompt lookup drafts up to K tokens per cycle when asked (--spec K, else NI_FLINT_NGRAM=K),
   // verified in one pass; the reply is the one plain decoding writes up to near-ties (a pass of 2+ rows sums in another
@@ -1560,7 +1558,7 @@ int Engine::batch_rows(int n) const {
   int rows = env[size_t(n)];
   // no drafter (a Nemotron Nano): plain rows, every member's pending token (its lookup drafts wait
   // for its own loop)
-  if (!dfl_ && !lili_) return rows == 0 ? 0 : 1;
+  if (!dfl_ && !lili_) return nh_batch_rows(n, mode, rows);
   // KFlash's batch budget (DFlash2 drafters, 2 .. 4 members; NI_BATCH_KF=0 keeps the table below): each cycle, the rows
   // of one verify pass in all and which member gets them, from the members' calibrated drafts and this Mac's measured
   // cost of a batched cycle (KfBatch). Against the table on the M4 Pro (same streams, interleaved): 3 at once 35B
