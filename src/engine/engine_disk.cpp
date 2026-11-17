@@ -369,11 +369,11 @@ void Engine::disk_start() {
   const std::string fmt = model_->disk_format();
   if (fmt.empty()) {
     logi("SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models, Flint, Dory and "
-         "Nemotron-H are)");
+         "the Nemotron Nano models are)");
     return;
   }
   // a Nemotron-H block drafter's context ring (LiLiCorr, DSpark) is not saved with the states yet: a slot restored
-  // from the SSD would draft from the ring of the conversation it held before
+  // from the SSD would draft from the ring the conversation it held before left there
   if (lili_) {
     logi("SSD prefix cache: off: not with a Nemotron-H block drafter (%s) yet; --dflash none runs with it",
          lili_->name());

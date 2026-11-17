@@ -1577,16 +1577,14 @@ void NemotronH::restore(Encoder& e, Seq& s, const Checkpoint& c) {
 }
 
 std::string NemotronH::disk_format() const {
-  char b[128];
-  snprintf(b, sizeof b, "; K, V f16 [%d][cap][%d]; Mamba-2: conv ring f32 [4][%d], state f32 [%d][%d][%d]; ", cfg_.hkv,
-           cfg_.hd, cfg_.conv_ch(), cfg_.n_head, cfg_.head_dim, cfg_.d_state);
-  // (the layers and the formats beside the buffer: Bolt's and Super-VL's 88 layers with their formats pass 256 bytes)
-  std::string format = "nemotron_h " + std::string(cfg_.kind.begin(), cfg_.kind.end()) + b + formats_summary();
-  // As Qwen35's: a prefill the Neural Engine shares in (W8A8) leaves other KV and recurrent values than the GPU's
-  // alone. A model whose shapes take the split (the memory plan's rule, whole 2048-channel segments: Bolt and
-  // Super-VL, neither Nano) keeps its prefixes apart from NI_ANE=0's, even if a particular chunk stays on the GPU.
-  if (ane_plan_bytes(cfg_, 0)) format += "; prefill: ANE W8A8 split";
-  return format;
+  // the dense models only (the Nanos): the MoE ones (Lightning, Bolt, Super-VL) are left out until a run shows their
+  // states read back right (#1301: Super-VL's plain decoding; LatentMoE, the Neural Engine split, #1158's near-ties)
+  if (!dense_model(cfg_)) return "";
+  char b[256];
+  snprintf(b, sizeof b, "nemotron_h %s; K, V f16 [%d][cap][%d]; Mamba-2: conv ring f32 [4][%d], state f32 [%d][%d][%d]; %s",
+           std::string(cfg_.kind.begin(), cfg_.kind.end()).c_str(), cfg_.hkv, cfg_.hd, cfg_.conv_ch(), cfg_.n_head,
+           cfg_.head_dim, cfg_.d_state, formats_summary().c_str());
+  return b;
 }
 
 void NemotronH::disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const {

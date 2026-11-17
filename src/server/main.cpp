@@ -414,8 +414,8 @@ static void print_serve_help() {
          "  --disk-cache SIZE      SSD prefix cache: conversations kept on the SSD, also across restarts, in\n"
          "                         %s/prefix-cache. auto (default): a quarter of the free space beyond\n"
          "                         10 GiB, at most 32 GiB; a size (16G) caps it; 0 turns it off. Not every model\n"
-         "                         has it yet (the Qwen3.5-family models, Flint, Dory and Nemotron-H without a\n"
-         "                         block drafter do)\n"
+         "                         has it yet (the Qwen3.5-family models, Flint, Dory and the Nemotron Nano\n"
+         "                         models do)\n"
          "  --loops N              Dory: the shared block's loops per token, 1-4 (default 2, NVIDIA's recommendation;\n"
          "                         more is latent thinking: slower, more accurate). Requests choose their own with\n"
          "                         \"loops\" or a reasoning effort (low 1, medium 2, high 4)\n"
@@ -2211,7 +2211,7 @@ int ni::server::run_service(Options o) {
     if (eng && !eng->disk_cache_supported()) {
       const std::string say = "--disk-cache: " + model_mgr->current_model_id() +
                               " runs without the SSD prefix cache (the Qwen3.5-family models, Flint, Dory and "
-                              "Nemotron-H without a block drafter have it)";
+                              "the Nemotron Nano models have it)";
       if (tui) ui::warning(say);
       else fprintf(stderr, "%s\n", say.c_str());
     }

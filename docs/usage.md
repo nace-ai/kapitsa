@@ -515,9 +515,9 @@ restarted) reads that state back and prefills only what follows it. `usage.promp
   no server uses count against the limit too and go first; one no server has used for 14 days is removed when a server
   starts.
 - **Models.** The Qwen3.5 family (the 4B, 9B, 35B-A3B and 27B), with their draft models or the MTP head; Flint; Dory (a state is read back only for the loop count that computed it);
-  and the Nemotron-H models (the Nano 4B and 9B v2; Lightning, Bolt and Super-VL only with `--dflash none`: their
-  block drafters' context is not kept yet). Qwen3.8-Flash-Next and the Nemotron-H models with their block drafter run
-  without it (the log says so, and so does the screen when `--disk-cache` or `NI_DISK_CACHE` asks for it).
+  and the Nemotron Nano models (the 4B and 9B v2, without a block drafter: a drafter's context is not kept yet).
+  Qwen3.8-Flash-Next and the MoE Nemotron-H models (Lightning, Bolt, Super-VL) run without it (the log says so, and so
+  does the screen when `--disk-cache` or `NI_DISK_CACHE` asks for it).
 
 The server says at start where the cache is, its limit and how many conversations it took back; each read and write
 has a log line (`SSD cache: ...`).
