@@ -176,7 +176,8 @@ class Qwen4Exp : public Qwen35 {
   q20::ExpertStore* expert_store() { return store_.get(); }
 
  protected:
-  void grow_kv(Seq& s, int cap) override;
+  void grow_kv(Seq& s, int cap, size_t batch_max = size_t(256) << 20) override;
+  size_t kv_unit_bytes_per_pos() const override;
 
  private:
   void load(const std::string& dir);

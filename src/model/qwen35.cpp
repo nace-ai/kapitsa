@@ -11,6 +11,7 @@
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
 #include "model/kparams.h"
+#include "model/kv_grow.h"
 #include "util/bf16.h"
 #include "util/json_file.h"
 #include "util/log.h"
@@ -1538,6 +1539,18 @@ size_t Qwen35::kv_bytes_per_pos() const {
   return size_t(att + (mtp_loaded_ ? 1 : 0)) * 2 * cfg_.hkv * kv_row_bytes(cfg_.head_dim);
 }
 
+size_t Qwen35::kv_unit_bytes_per_pos() const { return size_t(cfg_.hkv) * kv_row_bytes(cfg_.head_dim); }
+
+size_t Qwen35::kv_room() const {
+  if (!mem_budget_) return SIZE_MAX;
+  const size_t used = Gpu::get().allocated_bytes();
+  return mem_budget_ > used ? mem_budget_ - used : 0;
+}
+
+size_t Qwen35::kv_grow_held(const Seq& s) const {
+  return kvgrow::held(s.cap, kv_bytes_per_pos(), kv_unit_bytes_per_pos());
+}
+
 // Copies positions [0, old_cap) of every kv head of a [Hkv, old_cap, D] cache into a [Hkv, new_cap, D] one.
 void Qwen35::enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int old_cap, int new_cap) {
   const uint32_t n16 = uint32_t(kv_row_bytes(cfg_.head_dim)) / 16;  // 16-byte words per position
@@ -1549,7 +1562,7 @@ void Qwen35::enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int
   e.dispatch((p[0] + 255) / 256, uint32_t(cfg_.hkv), 1, 256);
 }
 
-void Qwen35::grow_kv(Seq& s, int cap) {
+void Qwen35::grow_kv(Seq& s, int cap, size_t batch_max) {
   Gpu& g = Gpu::get();
   const int old = s.cap;
   std::vector<std::pair<Buffer*, const char*>> bufs;  // every attention cache of the sequence
@@ -1563,12 +1576,13 @@ void Qwen35::grow_kv(Seq& s, int cap) {
     bufs.push_back({&s.mtp_vc, "mtp_v_cache"});
   }
   const size_t nb = size_t(cfg_.hkv) * cap * kv_row_bytes(cfg_.head_dim);
-  // In batches of ~256 MB: a batch's new buffers are filled from the old ones, then the old ones are
-  // released, so growing never holds two copies of the whole cache.
+  // In batches of at most batch_max bytes of new buffers (and at least one buffer): a batch's new buffers are filled
+  // from the old ones, then the old ones are released, so growing never holds two copies of the whole cache, only
+  // one batch's old buffers (kv_grow.h)
   for (size_t i = 0; i < bufs.size();) {
     std::vector<Buffer> olds;
     std::unique_ptr<Encoder> e;
-    for (size_t batch = 0; i < bufs.size() && (batch == 0 || batch + nb <= (size_t(256) << 20)); ++i, batch += nb) {
+    for (size_t batch = 0; i < bufs.size() && (batch == 0 || batch + nb <= batch_max); ++i, batch += nb) {
       Buffer& b = *bufs[i].first;
       Buffer nbuf = g.alloc(nb, bufs[i].second);
       if (old > 0 && b) {
@@ -1588,20 +1602,12 @@ bool Qwen35::reserve(Seq& s, int need) {
   if (need <= s.cap) return true;
   if (need > s.limit) return false;
   const size_t per = kv_bytes_per_pos();
-  auto round_up = [](int v, int m) { return (v + m - 1) / m * m; };
-  auto fits = [&](int c) {
-    // final size; the batched copy holds a batch's old buffers a moment longer (at most ~256 MB, and at most the old
-    // cache: nothing when the cache starts empty)
-    const size_t copy = std::min(size_t(256) << 20, size_t(s.cap) * per);
-    return !mem_budget_ || Gpu::get().allocated_bytes() + size_t(c - s.cap) * per + copy <= mem_budget_;
-  };
-  // at least a quarter more (fewer copies while a conversation fills), in 1024-position steps
-  int target = std::min(s.limit, round_up(std::max(need, s.cap + s.cap / 4), 1024));
-  if (!fits(target)) target = std::min(s.limit, round_up(need, 256));
-  if (!fits(target)) return false;
+  const kvgrow::Plan p = kvgrow::plan(s.cap, need, s.limit, per, kv_unit_bytes_per_pos(), kv_room());
+  if (!p.target) return false;
+  const int target = p.target;
   const double t0 = now_ms();
   const int old = s.cap;
-  grow_kv(s, target);
+  grow_kv(s, target, p.batch);
   logd("KV cache %d -> %d positions (%.0f MB) in %.1f ms", old, target, double(per) * target / 1e6, now_ms() - t0);
   return true;
 }
