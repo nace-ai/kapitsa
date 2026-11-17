@@ -32,4 +32,4 @@ Request 2's first token, rounds 1 / 2 / 3:
 
 Both arms wrote the same text in every round. On main the Nano runs without the cache and saves nothing; the
 branch's extra time is the save, which a later follow-up to request 1's conversation reads back instead of prefilling
-it again (16K tokens: about 38 s on the 4B, 113 s on the 9B v2).
+it again (16K tokens: about 38 s on the 4B, 114 s on the 9B v2).
