@@ -1,0 +1,10 @@
+== 2026-11-17 09:29:59 nohit
+Swapins:                                     4332358.
+Swapouts:                                    4765025.
+ 26.2 /System/Library/PrivateFrameworks/XprotectFramework.framework/Versions/A/XPCServices/XprotectService.xpc/Contents/
+ 14.1 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+== 2026-11-17 09:35:52 nohit-end
+Swapins:                                     4332362.
+Swapouts:                                    4765025.
+ 12.7 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  1.7 log stream --process screensharingd --predicate composedMessage contains "FAILED" --style syslog

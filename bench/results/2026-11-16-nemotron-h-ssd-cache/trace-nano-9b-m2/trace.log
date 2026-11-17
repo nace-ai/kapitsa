@@ -1,0 +1,12 @@
+model ~/kapitsa-run/home/models/nemotron-nano-9b-v2-nvfp4, prompts of ~16000 tokens; servers' log: $TMPDIR/kapitsa-disk-cache-test-d2t3r1q1/serve.log
+PASS round 1: turn 2 from the SSD writes the RAM path's text
+PASS round 1: as many tokens cached as from RAM
+  round 1: turn 2 cold writes the SSD's text: yes
+round 1: turn 2 of 16530 tokens: cold 114.503 s (0 cached), from the SSD after a restart 1.399 s (16396 cached; read 416 MB in 299 ms), from RAM 1.082 s (16396 cached); written: turn 1 416 MB, turn 2 149 MB; turn 1 (cold too, 16404 tokens) 114.046 s
+| model | turn 2 tokens | cold TTFT | after a restart (SSD) | from RAM | SSD read | written turn 1 / turn 2 |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| nemotron-nano-9b-v2-nvfp4 | 16530 | 114.503 s | 1.399 s (16396 cached) | 1.082 s | 416 MB in 299 ms | 416 / 149 MB |
+ALL PASSED
+round 1: turn 2 (16530 prompt tokens, 39 traced tokens), SSD against RAM: same prompt True, same tokens True, every margin identical True
+round 1: turn 2 (16530 prompt tokens, 39 traced tokens), SSD against cold: same prompt True, same tokens True, every margin identical True
+TRACE: SSD == RAM in every round

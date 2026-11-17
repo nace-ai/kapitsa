@@ -1,0 +1,23 @@
+diff --git a/src/engine/engine.cpp b/src/engine/engine.cpp
+index 33b962fb..1c20d02a 100644
+--- a/src/engine/engine.cpp
++++ b/src/engine/engine.cpp
+@@ -3680,6 +3680,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const
+       kf_rows = kfw.plan(0);  // KFlash's budget with no proposals: the pending token's row alone, this step (so plain decoding is as before)
+       // the step feeding token `pos` is in flight; queue the one after it, then wait
+       auto cur = std::move(next);
++      if (trace_path && nh_) {  // (trace instrumentation, not in the PR: the step completes before the next is queued)
++        cur->wait();
++        trace_fn(nh_->logits(), 1, s.tokens() + pos + 1);
++      }
+       next = encode_at(pos + 1);
+       cur->wait();
+       ++pos;
+@@ -4260,6 +4264,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const
+       ++req_cycles;
+       spec_accepted_ += m;
+       cycle_done(m);
++      if (trace_path) trace_fn(nh_->logits(), m, tk + P + 1);  // (trace instrumentation, not in the PR)
+       nh_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new pending token
+       P += m;
+       if (go && contended()) yield_turn(res);  // (the pending rows are the sequence's own)

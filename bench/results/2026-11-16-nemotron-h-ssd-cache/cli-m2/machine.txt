@@ -1,0 +1,4 @@
+kapitsa 0.2.36 (49b176d8)
+ProductName:		macOS
+ProductVersion:		27.2.1
+BuildVersion:		26B131

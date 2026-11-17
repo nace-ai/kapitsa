@@ -1,0 +1,13 @@
+M4 (build-trace-m4.sh):
+build b681cde3 rc 0
+build 49b176d8 rc 0
+prefix_cache_test rc 0 180 passed, 0 failed
+api_test rc 0 497 passed, 0 failed
+kflash_cache_test rc 0 kflash_cache_test: all passed
+M2 (build-trace-m2.sh):
+build b681cde3 rc 0
+build 49b176d8 rc 0
+prefix_cache_test rc 0 180 passed, 0 failed
+api_test rc 0 497 passed, 0 failed
+kflash_cache_test rc 0 kflash_cache_test: all passed
+cli rc 0

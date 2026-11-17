@@ -1,0 +1,10 @@
+== 2026-11-17 09:29:59 nohit
+Swapins:                                     1159396.
+Swapouts:                                    1367694.
+ 76.0 /usr/libexec/audiomxd
+ 37.4 /usr/libexec/configd
+== 2026-11-17 09:45:41 nohit-end
+Swapins:                                     1159435.
+Swapouts:                                    1367694.
+ 75.9 /usr/libexec/audiomxd
+ 39.0 /usr/libexec/configd
