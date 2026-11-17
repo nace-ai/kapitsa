@@ -1,0 +1,26 @@
+model ~/kapitsa-run/home/models/nemotron-nano-9b-v2-nvfp4, request 1 ~16000 tokens, request 2 ~2000 tokens 3 s later; servers' log: ~/kapitsa-ssdcache/v3/out/SSD-n9b-m2/ab_nohit-serve.log
+round 1 main   request 1: 16808 prompt tokens (0 cached), first token 117.912 s, last 122.940 s; server: prefill 117884 ms, 64 tokens at 12.5 tok/s
+round 1 main   request 2: 2378 prompt tokens (0 cached), first token 15.926 s, last 20.737 s; server: prefill 15904 ms, 64 tokens at 13.1 tok/s
+round 1 main     log: SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models and Dory are)
+round 1 branch request 1: 16808 prompt tokens (0 cached), first token 117.824 s, last 122.894 s; server: prefill 117795 ms, 64 tokens at 12.4 tok/s
+round 1 branch request 2: 2378 prompt tokens (0 cached), first token 16.033 s, last 20.829 s; server: prefill 15822 ms, 64 tokens at 13.1 tok/s
+round 1 branch   log: SSD prefix cache: <cache>/9db703122a0b128940895fd4e2c1afa8, up to 20.1 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0 MiB)
+round 1 branch   log: SSD cache: slot 0's conversation (16800 tokens, 422 MB) is more than the 179 MB the Mac has free to copy it in: written to the SSD straight from the slot before it is replaced, in 195 ms (the request waited 196 ms)
+round 1: both arms write the same text: yes
+round 2 main   request 1: 16808 prompt tokens (0 cached), first token 117.923 s, last 122.951 s; server: prefill 117883 ms, 64 tokens at 12.5 tok/s
+round 2 main   request 2: 2378 prompt tokens (0 cached), first token 15.943 s, last 20.802 s; server: prefill 15924 ms, 64 tokens at 13.0 tok/s
+round 2 main     log: SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models and Dory are)
+round 2 branch request 1: 16808 prompt tokens (0 cached), first token 117.892 s, last 122.915 s; server: prefill 117851 ms, 64 tokens at 12.6 tok/s
+round 2 branch request 2: 2378 prompt tokens (0 cached), first token 16.086 s, last 20.885 s; server: prefill 15873 ms, 64 tokens at 13.1 tok/s
+round 2 branch   log: SSD prefix cache: <cache>/9db703122a0b128940895fd4e2c1afa8, up to 20.1 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0 MiB)
+round 2 branch   log: SSD cache: slot 0's conversation (16800 tokens, 422 MB) is more than the 174 MB the Mac has free to copy it in: written to the SSD straight from the slot before it is replaced, in 197 ms (the request waited 198 ms)
+round 2: both arms write the same text: yes
+round 3 main   request 1: 16808 prompt tokens (0 cached), first token 117.941 s, last 122.963 s; server: prefill 117903 ms, 64 tokens at 12.6 tok/s
+round 3 main   request 2: 2378 prompt tokens (0 cached), first token 16.007 s, last 20.793 s; server: prefill 15983 ms, 64 tokens at 13.2 tok/s
+round 3 main     log: SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models and Dory are)
+round 3 branch request 1: 16808 prompt tokens (0 cached), first token 117.962 s, last 122.987 s; server: prefill 117921 ms, 64 tokens at 12.5 tok/s
+round 3 branch request 2: 2378 prompt tokens (0 cached), first token 16.125 s, last 20.921 s; server: prefill 15909 ms, 64 tokens at 13.1 tok/s
+round 3 branch   log: SSD prefix cache: <cache>/9db703122a0b128940895fd4e2c1afa8, up to 20.1 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0 MiB)
+round 3 branch   log: SSD cache: slot 0's conversation (16800 tokens, 422 MB) is more than the 160 MB the Mac has free to copy it in: written to the SSD straight from the slot before it is replaced, in 199 ms (the request waited 200 ms)
+round 3: both arms write the same text: yes
+ALL THE SAME TEXT

@@ -1,0 +1,129 @@
+
+==== round 1 main  
+engine view: http://127.0.0.1:8197/engine (its key: $TMPDIR/kapitsa-ab-1o512s07/run/default.token)
+[kapitsa] compiled kernels in 24 ms
+[kapitsa] compiled the Nemotron-H kernels in 8 ms
+[kapitsa] Nemotron-H: 56 layers (27 Mamba-2, 4 attention, 25 MLP), 6.66 GB of weights read in 1.6 s (Mamba BF16 2 / NVFP4 25, MLP BF16 2 / NVFP4 23, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 5 ms
+[kapitsa] NI_ANE: compiling the Neural Engine program in the background; prefill uses the GPU alone until it is ready
+[kapitsa] NI_ANE: Neural Engine split unavailable (hidden / Mamba sizes are not whole 2048-channel segments); the GPU runs the prefill alone
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (173 ms)
+[kapitsa] Nemotron-H: no block drafter found next to ~/kapitsa-run/home/models/nemotron-nano-9b-v2-nvfp4
+[kapitsa] GPU: Apple M2, 10 cores
+[kapitsa] memory: 7.95 GB allocated (model, buffers, 1 slot's state), budget 12.2 GB (recommended working set 12.7 GB): KV room 4.23 GB = 258039 tokens (16 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] drafter: none (no matching drafter found)
+[kapitsa] engine ready: nemotron-nano-9b-v2-nvfp4, context 32768, 1 slots, plain decoding, KFlash (none)
+[kapitsa] SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models and Dory are)
+[kapitsa] listening on http://127.0.0.1:8197
+Ready: chat at http://127.0.0.1:8197, API at http://127.0.0.1:8197/v1 (model "nemotron-nano-9b-v2-nvfp4"). Ctrl+C stops.
+[kapitsa] chat: prompt 20 (cached 0) in 305 ms (+5.5 ms template/tokenize; last chunk: encoded by 1.5 ms, GPU start +214.2 ms, GPU 88.7 ms, wake +0.2 ms), 7 tokens in 521 ms (11.5 tok/s), stop, thinking: off, KFlash (none): 6 cycles, 6 rows, 0 drafts accepted
+[kapitsa] chat: prompt 16808 (cached 0) in 117894 ms (+42.1 ms template/tokenize; last chunk: encoded by 103741.8 ms, GPU start +14037.3 ms, GPU 114.6 ms, wake +0.2 ms), 64 tokens in 5024 ms (12.5 tok/s), length, thinking: off, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
+[kapitsa] chat: prompt 2378 (cached 0) in 15887 ms (+17.0 ms template/tokenize; last chunk: encoded by 7909.5 ms, GPU start +7883.3 ms, GPU 94.1 ms, wake +0.1 ms), 64 tokens in 4844 ms (13.0 tok/s), length, thinking: off, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
+
+==== round 1 branch
+engine view: http://127.0.0.1:8197/engine (its key: $TMPDIR/kapitsa-ab-xdjji8k9/run/default.token)
+[kapitsa] compiled kernels in 23 ms
+[kapitsa] compiled the Nemotron-H kernels in 7 ms
+[kapitsa] Nemotron-H: 56 layers (27 Mamba-2, 4 attention, 25 MLP), 6.66 GB of weights read in 2.0 s (Mamba BF16 2 / NVFP4 25, MLP BF16 2 / NVFP4 23, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 15 ms
+[kapitsa] NI_ANE: compiling the Neural Engine program in the background; prefill uses the GPU alone until it is ready
+[kapitsa] NI_ANE: Neural Engine split unavailable (hidden / Mamba sizes are not whole 2048-channel segments); the GPU runs the prefill alone
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (174 ms)
+[kapitsa] Nemotron-H: no block drafter found next to ~/kapitsa-run/home/models/nemotron-nano-9b-v2-nvfp4
+[kapitsa] GPU: Apple M2, 10 cores
+[kapitsa] memory: 7.95 GB allocated (model, buffers, 1 slot's state), budget 12.2 GB (recommended working set 12.7 GB): KV room 4.23 GB = 258039 tokens (16 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] drafter: none (no matching drafter found)
+[kapitsa] engine ready: nemotron-nano-9b-v2-nvfp4, context 32768, 1 slots, plain decoding, KFlash (none)
+[kapitsa] listening on http://127.0.0.1:8197
+Ready: chat at http://127.0.0.1:8197, API at http://127.0.0.1:8197/v1 (model "nemotron-nano-9b-v2-nvfp4"). Ctrl+C stops.
+[kapitsa] SSD prefix cache: $TMPDIR/kapitsa-ab-xdjji8k9/prefix-cache/9db703122a0b128940895fd4e2c1afa8, up to 20.1 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0 MiB)
+[kapitsa] chat: prompt 20 (cached 0) in 353 ms (+5.4 ms template/tokenize; last chunk: encoded by 2.2 ms, GPU start +261.3 ms, GPU 89.0 ms, wake +0.2 ms), 7 tokens in 521 ms (11.5 tok/s), stop, thinking: off, KFlash (none): 6 cycles, 6 rows, 0 drafts accepted
+[kapitsa] chat: prompt 16808 (cached 0) in 117916 ms (+49.3 ms template/tokenize; last chunk: encoded by 103657.0 ms, GPU start +14143.9 ms, GPU 114.5 ms, wake +0.2 ms), 64 tokens in 5021 ms (12.5 tok/s), length, thinking: off, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
+[kapitsa] SSD cache: slot 0's conversation (16800 tokens, 422 MB) is more than the 190 MB the Mac has free to copy it in: written to the SSD straight from the slot before it is replaced, in 199 ms (the request waited 201 ms)
+[kapitsa] chat: prompt 2378 (cached 0) in 15878 ms (+209.2 ms template/tokenize; last chunk: encoded by 7898.3 ms, GPU start +7886.9 ms, GPU 92.1 ms, wake +0.2 ms), 64 tokens in 4800 ms (13.1 tok/s), length, thinking: off, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
+
+==== round 2 main  
+engine view: http://127.0.0.1:8197/engine (its key: $TMPDIR/kapitsa-ab-9wwpjnn8/run/default.token)
+[kapitsa] compiled kernels in 24 ms
+[kapitsa] compiled the Nemotron-H kernels in 8 ms
+[kapitsa] Nemotron-H: 56 layers (27 Mamba-2, 4 attention, 25 MLP), 6.66 GB of weights read in 1.1 s (Mamba BF16 2 / NVFP4 25, MLP BF16 2 / NVFP4 23, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 5 ms
+[kapitsa] NI_ANE: compiling the Neural Engine program in the background; prefill uses the GPU alone until it is ready
+[kapitsa] NI_ANE: Neural Engine split unavailable (hidden / Mamba sizes are not whole 2048-channel segments); the GPU runs the prefill alone
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (174 ms)
+[kapitsa] Nemotron-H: no block drafter found next to ~/kapitsa-run/home/models/nemotron-nano-9b-v2-nvfp4
+[kapitsa] GPU: Apple M2, 10 cores
+[kapitsa] memory: 7.95 GB allocated (model, buffers, 1 slot's state), budget 12.2 GB (recommended working set 12.7 GB): KV room 4.23 GB = 258039 tokens (16 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] drafter: none (no matching drafter found)
+[kapitsa] engine ready: nemotron-nano-9b-v2-nvfp4, context 32768, 1 slots, plain decoding, KFlash (none)
+[kapitsa] SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models and Dory are)
+[kapitsa] listening on http://127.0.0.1:8197
+Ready: chat at http://127.0.0.1:8197, API at http://127.0.0.1:8197/v1 (model "nemotron-nano-9b-v2-nvfp4"). Ctrl+C stops.
+[kapitsa] chat: prompt 20 (cached 0) in 300 ms (+5.5 ms template/tokenize; last chunk: encoded by 1.5 ms, GPU start +210.1 ms, GPU 88.7 ms, wake +0.2 ms), 7 tokens in 519 ms (11.6 tok/s), stop, thinking: off, KFlash (none): 6 cycles, 6 rows, 0 drafts accepted
+[kapitsa] chat: prompt 16808 (cached 0) in 117982 ms (+38.5 ms template/tokenize; last chunk: encoded by 103825.8 ms, GPU start +14041.5 ms, GPU 114.4 ms, wake +0.2 ms), 64 tokens in 5019 ms (12.6 tok/s), length, thinking: off, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
+[kapitsa] chat: prompt 2378 (cached 0) in 15965 ms (+22.3 ms template/tokenize; last chunk: encoded by 7892.9 ms, GPU start +7980.0 ms, GPU 92.4 ms, wake +0.2 ms), 64 tokens in 4810 ms (13.1 tok/s), length, thinking: off, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
+
+==== round 2 branch
+engine view: http://127.0.0.1:8197/engine (its key: $TMPDIR/kapitsa-ab-yrcqouvm/run/default.token)
+[kapitsa] compiled kernels in 23 ms
+[kapitsa] compiled the Nemotron-H kernels in 7 ms
+[kapitsa] Nemotron-H: 56 layers (27 Mamba-2, 4 attention, 25 MLP), 6.66 GB of weights read in 1.0 s (Mamba BF16 2 / NVFP4 25, MLP BF16 2 / NVFP4 23, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 5 ms
+[kapitsa] NI_ANE: compiling the Neural Engine program in the background; prefill uses the GPU alone until it is ready
+[kapitsa] NI_ANE: Neural Engine split unavailable (hidden / Mamba sizes are not whole 2048-channel segments); the GPU runs the prefill alone
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (174 ms)
+[kapitsa] Nemotron-H: no block drafter found next to ~/kapitsa-run/home/models/nemotron-nano-9b-v2-nvfp4
+[kapitsa] GPU: Apple M2, 10 cores
+[kapitsa] memory: 7.95 GB allocated (model, buffers, 1 slot's state), budget 12.2 GB (recommended working set 12.7 GB): KV room 4.23 GB = 258039 tokens (16 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] drafter: none (no matching drafter found)
+[kapitsa] engine ready: nemotron-nano-9b-v2-nvfp4, context 32768, 1 slots, plain decoding, KFlash (none)
+[kapitsa] SSD prefix cache: $TMPDIR/kapitsa-ab-yrcqouvm/prefix-cache/9db703122a0b128940895fd4e2c1afa8, up to 20.1 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0 MiB)
+[kapitsa] listening on http://127.0.0.1:8197
+Ready: chat at http://127.0.0.1:8197, API at http://127.0.0.1:8197/v1 (model "nemotron-nano-9b-v2-nvfp4"). Ctrl+C stops.
+[kapitsa] chat: prompt 20 (cached 0) in 299 ms (+5.4 ms template/tokenize; last chunk: encoded by 1.8 ms, GPU start +208.4 ms, GPU 88.9 ms, wake +0.2 ms), 7 tokens in 520 ms (11.5 tok/s), stop, thinking: off, KFlash (none): 6 cycles, 6 rows, 0 drafts accepted
+[kapitsa] chat: prompt 16808 (cached 0) in 117970 ms (+33.3 ms template/tokenize; last chunk: encoded by 103715.3 ms, GPU start +14140.0 ms, GPU 114.6 ms, wake +0.2 ms), 64 tokens in 5027 ms (12.5 tok/s), length, thinking: off, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
+[kapitsa] SSD cache: slot 0's conversation (16800 tokens, 422 MB) is more than the 147 MB the Mac has free to copy it in: written to the SSD straight from the slot before it is replaced, in 201 ms (the request waited 202 ms)
+[kapitsa] chat: prompt 2378 (cached 0) in 15940 ms (+214.1 ms template/tokenize; last chunk: encoded by 7938.9 ms, GPU start +7908.4 ms, GPU 92.2 ms, wake +0.2 ms), 64 tokens in 4800 ms (13.1 tok/s), length, thinking: off, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
+
+==== round 3 main  
+engine view: http://127.0.0.1:8197/engine (its key: $TMPDIR/kapitsa-ab-i9c9fss6/run/default.token)
+[kapitsa] compiled kernels in 24 ms
+[kapitsa] compiled the Nemotron-H kernels in 8 ms
+[kapitsa] Nemotron-H: 56 layers (27 Mamba-2, 4 attention, 25 MLP), 6.66 GB of weights read in 1.0 s (Mamba BF16 2 / NVFP4 25, MLP BF16 2 / NVFP4 23, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 5 ms
+[kapitsa] NI_ANE: compiling the Neural Engine program in the background; prefill uses the GPU alone until it is ready
+[kapitsa] NI_ANE: Neural Engine split unavailable (hidden / Mamba sizes are not whole 2048-channel segments); the GPU runs the prefill alone
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (173 ms)
+[kapitsa] Nemotron-H: no block drafter found next to ~/kapitsa-run/home/models/nemotron-nano-9b-v2-nvfp4
+[kapitsa] GPU: Apple M2, 10 cores
+[kapitsa] memory: 7.95 GB allocated (model, buffers, 1 slot's state), budget 12.2 GB (recommended working set 12.7 GB): KV room 4.23 GB = 258039 tokens (16 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] drafter: none (no matching drafter found)
+[kapitsa] engine ready: nemotron-nano-9b-v2-nvfp4, context 32768, 1 slots, plain decoding, KFlash (none)
+[kapitsa] SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models and Dory are)
+[kapitsa] listening on http://127.0.0.1:8197
+Ready: chat at http://127.0.0.1:8197, API at http://127.0.0.1:8197/v1 (model "nemotron-nano-9b-v2-nvfp4"). Ctrl+C stops.
+[kapitsa] chat: prompt 20 (cached 0) in 300 ms (+5.7 ms template/tokenize; last chunk: encoded by 1.4 ms, GPU start +209.1 ms, GPU 88.9 ms, wake +0.2 ms), 7 tokens in 520 ms (11.5 tok/s), stop, thinking: off, KFlash (none): 6 cycles, 6 rows, 0 drafts accepted
+[kapitsa] chat: prompt 16808 (cached 0) in 117881 ms (+29.0 ms template/tokenize; last chunk: encoded by 103718.6 ms, GPU start +14047.9 ms, GPU 114.7 ms, wake +0.2 ms), 64 tokens in 5030 ms (12.5 tok/s), length, thinking: off, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
+[kapitsa] chat: prompt 2378 (cached 0) in 15962 ms (+21.0 ms template/tokenize; last chunk: encoded by 8001.4 ms, GPU start +7867.7 ms, GPU 92.3 ms, wake +0.2 ms), 64 tokens in 4791 ms (13.1 tok/s), length, thinking: off, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
+
+==== round 3 branch
+engine view: http://127.0.0.1:8197/engine (its key: $TMPDIR/kapitsa-ab-11cut_2e/run/default.token)
+[kapitsa] compiled kernels in 24 ms
+[kapitsa] compiled the Nemotron-H kernels in 7 ms
+[kapitsa] Nemotron-H: 56 layers (27 Mamba-2, 4 attention, 25 MLP), 6.66 GB of weights read in 1.1 s (Mamba BF16 2 / NVFP4 25, MLP BF16 2 / NVFP4 23, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 5 ms
+[kapitsa] NI_ANE: compiling the Neural Engine program in the background; prefill uses the GPU alone until it is ready
+[kapitsa] NI_ANE: Neural Engine split unavailable (hidden / Mamba sizes are not whole 2048-channel segments); the GPU runs the prefill alone
+[kapitsa] tokenizer: 131072 tokens, 269443 merges, 1000 added (175 ms)
+[kapitsa] Nemotron-H: no block drafter found next to ~/kapitsa-run/home/models/nemotron-nano-9b-v2-nvfp4
+[kapitsa] GPU: Apple M2, 10 cores
+[kapitsa] memory: 7.95 GB allocated (model, buffers, 1 slot's state), budget 12.2 GB (recommended working set 12.7 GB): KV room 4.23 GB = 258039 tokens (16 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] drafter: none (no matching drafter found)
+[kapitsa] engine ready: nemotron-nano-9b-v2-nvfp4, context 32768, 1 slots, plain decoding, KFlash (none)
+[kapitsa] SSD prefix cache: $TMPDIR/kapitsa-ab-11cut_2e/prefix-cache/9db703122a0b128940895fd4e2c1afa8, up to 20.1 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0 MiB)
+[kapitsa] listening on http://127.0.0.1:8197
+Ready: chat at http://127.0.0.1:8197, API at http://127.0.0.1:8197/v1 (model "nemotron-nano-9b-v2-nvfp4"). Ctrl+C stops.
+[kapitsa] chat: prompt 20 (cached 0) in 301 ms (+5.3 ms template/tokenize; last chunk: encoded by 2.0 ms, GPU start +210.5 ms, GPU 88.7 ms, wake +0.2 ms), 7 tokens in 521 ms (11.5 tok/s), stop, thinking: off, KFlash (none): 6 cycles, 6 rows, 0 drafts accepted
+[kapitsa] chat: prompt 16808 (cached 0) in 117987 ms (+39.6 ms template/tokenize; last chunk: encoded by 103833.0 ms, GPU start +14038.9 ms, GPU 114.6 ms, wake +0.2 ms), 64 tokens in 5030 ms (12.5 tok/s), length, thinking: off, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
+[kapitsa] SSD cache: slot 0's conversation (16800 tokens, 422 MB) is more than the 177 MB the Mac has free to copy it in: written to the SSD straight from the slot before it is replaced, in 191 ms (the request waited 193 ms)
+[kapitsa] chat: prompt 2378 (cached 0) in 15917 ms (+206.3 ms template/tokenize; last chunk: encoded by 7926.2 ms, GPU start +7898.5 ms, GPU 92.4 ms, wake +0.2 ms), 64 tokens in 4800 ms (13.1 tok/s), length, thinking: off, KFlash (none): 63 cycles, 63 rows, 0 drafts accepted
