@@ -324,6 +324,15 @@ struct Engine::Disk {
 
 void Engine::DiskFree::operator()(Disk* d) const { delete d; }
 
+// View::ssd: from any thread, without the turn (the store's own mutex covers its counters). Absent until the cache's
+// files are open, and for a model or option that has none
+void Engine::disk_view(View& v) const {
+  if (!disk_ || !disk_->ready.load(std::memory_order_acquire)) return;
+  const pcache::Store::Stats st = disk_->store.stats();
+  v.ssd = {true, st.entries, st.held, st.limit, st.read, st.written, ssd_hits_.load(std::memory_order_relaxed),
+           ssd_hit_tokens_.load(std::memory_order_relaxed)};
+}
+
 int Engine::reuse_start(const Slot& slot, size_t common, int n) {
   if (common == slot.tokens.size() && int(common) < n) return int(common);
   int best = 0;
@@ -472,6 +481,7 @@ std::unique_ptr<Engine::DiskPlan> Engine::disk_plan(const Slot& slot) const {
   if (d.mtp && q35_) e.vocab = q35_->draft_vocab_ids(*slot.seq, &e.vocab_scanned);
   e.tag = dory_ ? uint32_t(slot.loops) : 0;  // (a looped model's KV holds the loop count that computed it)
   e.attach = dc::images_of(slot.img_spans, slot.img_digests, N);
+  e.conv = pcache::conversation_key(slot.key);  // (its last request's: chat() sets the next one's after disk_leaving)
   return p;
 }
 
@@ -597,7 +607,15 @@ void Engine::disk_confirm(int i, uint64_t version) {
   turn_.unlock();
 }
 
-void Engine::disk_leaving(Slot& slot, int start, bool wait_write) {
+void Engine::disk_replaced(const Slot& slot) {
+  if (!disk_ || !disk_->ready) return;
+  // (the slot's own state is among them if the write-behind saved it; disk_leaving marks the copy it writes now)
+  const int n = disk_->store.demote(pcache::conversation_key(slot.key));
+  logi("SSD cache: a new conversation with slot %d's prompt_cache_key replaces its conversation: %d stored entr%s of "
+       "that key go%s first when room is needed", int(&slot - slots_.data()), n, n == 1 ? "y" : "ies", n == 1 ? "es" : "");
+}
+
+void Engine::disk_leaving(Slot& slot, int start, bool wait_write, bool replaced) {
   if (!disk_ || !disk_->ready || slot.version == slot.disk_version) return;
   Disk& d = *disk_;
   if (!d.room()) return;
@@ -611,6 +629,7 @@ void Engine::disk_leaving(Slot& slot, int start, bool wait_write) {
   if (start >= deep) return;
   std::unique_ptr<DiskPlan> p = disk_plan(slot);
   if (!p) return;
+  p->entry.replaced = replaced;
   if (wait_write && skip_retry(now_ms() < d.refused_until.load(std::memory_order_relaxed),
                                d.refused_all.load(std::memory_order_relaxed), d.refused(p->slot) == slot.version))
     return;  // (a save of this slot, or of any slot for lack of room, was refused a moment ago)

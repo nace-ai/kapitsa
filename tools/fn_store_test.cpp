@@ -23,6 +23,7 @@
 #include "model/ngram.h"
 #include "util/bf16.h"
 #include "model/expert_store_test.h"
+#include "loader/load_stop.h"
 #include "util/log.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -68,7 +69,7 @@ constexpr char admission_constructed[] = "ADMISSION_CONSTRUCTED\n";
 constexpr char admission_cold[] = "ADMISSION_COLD_WORKERS_2_READS_0\n";
 constexpr char admission_bytes[] = "ADMISSION_ROUTED_BYTES_OK\n";
 std::atomic<bool> admission_observing{false};
-std::atomic<int> fail_stage{0}, fail_read{0};
+std::atomic<int> fail_stage{0}, fail_read{0}, reads_done{0};
 std::atomic<const char*> truncate_before_read{nullptr};
 std::atomic<int> admission_workers{0}, admission_reads{0};
 
@@ -113,6 +114,7 @@ void ExpertCacheTestAccess::observe(const ExpertCache& cache, Point point) {
       admission_mark(admission_read);
     }
   }
+  if (point == Point::ReadDone) ++reads_done;
   ShutdownProbe* p = shutdown_probe.load();
   if (!p) return;
   if (p->returned) fatal("shutdown test: reader callback after destruction returned");
@@ -2090,6 +2092,40 @@ void case_shutdown_waiting(const Pack& p) {
   printf("shutdown waiting/idle: joined without a synthetic go\n");
 }
 
+// A stop asked during the first load (src/loader/load_stop.h) ends the fill from a reader before any expert is read;
+// with none asked the fill reads everything. Each in a child: the action ends the process.
+void case_load_stop(const std::string& dir) {
+  char executable[4096]; uint32_t size = sizeof executable;
+  CHECK(_NSGetExecutablePath(executable, &size) == 0, "resolve executable");
+  for (const char* c : {"ask", "no-ask"}) {
+    const std::string out = dir + "/load-stop.out", sub = dir + "/load-stop-" + c;
+    mkdir(sub.c_str(), 0755);
+    posix_spawn_file_actions_t actions;
+    CHECK(posix_spawn_file_actions_init(&actions) == 0, "spawn actions");
+    CHECK(posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, out.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600) == 0,
+          "redirect stop output");
+    char* args[] = {executable, const_cast<char*>("--load-stop"), const_cast<char*>(sub.c_str()), const_cast<char*>(c),
+                    nullptr};
+    pid_t child = -1;
+    const int spawned = posix_spawn(&child, executable, &actions, nullptr, args, environ);
+    posix_spawn_file_actions_destroy(&actions);
+    CHECK(spawned == 0, "spawn load stop child");
+    if (spawned != 0) continue;
+    int status = 0;
+    CHECK(waitpid(child, &status, 0) == child, "wait load stop child");
+    char buf[8] = {};
+    if (FILE* f = fopen(out.c_str(), "r")) { (void)fread(buf, 1, sizeof(buf) - 1, f); fclose(f); }
+    const bool ask = !strcmp(c, "ask");
+    CHECK(WIFEXITED(status) && WEXITSTATUS(status) == (ask ? 42 : 0) && !strcmp(buf, ask ? "S" : "R"),
+          "load stop, %s: status %d, output '%s' (want %s)", c, status, buf, ask ? "exit 42, 'S': stopped before any read"
+                                                                             : "exit 0, 'R': the fill read everything");
+    unlink(out.c_str());
+    for (const char* f : {"/a.safetensors", "/b.safetensors"}) unlink((sub + f).c_str());
+    rmdir(sub.c_str());
+  }
+  printf("a stop asked during the first load ends the expert fill before any read; none asked reads it all\n");
+}
+
 void case_load_recovery(const std::string& dir) {
   alarm(20);
   auto fds = [] {
@@ -2165,6 +2201,18 @@ int main(int argc, char** argv) {
     ExpertCache c(p.files, p.layers, p.E, p.lay, 3 * p.E, a.m, ev.sync(), {});
     return 93;
   }
+  if (argc == 4 && !strcmp(argv[1], "--load-stop")) {  // case_load_stop's child: a filling cache, a stop asked or not
+    set_load_stop_action([] { (void)!write(STDOUT_FILENO, reads_done ? "X" : "S", 1); _exit(42); });
+    if (!strcmp(argv[3], "ask")) ask_load_stop();
+    Pack p = make_pack(argv[2], 4, 2);
+    Arena a(p.lay, 3 * p.E, 4, p.E);
+    Event ev;
+    ExpertCache::Options o;
+    o.readers = 2;
+    ExpertCache c(p.files, p.layers, p.E, p.lay, 3 * p.E, a.m, ev.sync(), o);
+    (void)!write(STDOUT_FILENO, reads_done ? "R" : "0", 1);
+    _exit(0);
+  }
   if (argc > 1 && !strcmp(argv[1], "--admission-probe")) {
     if (argc != 4) fatal("usage: fn_store_test --admission-probe CASE DIR");
     for (const AdmissionSpec& spec : admission_cases)
@@ -2206,6 +2254,7 @@ int main(int argc, char** argv) {
       mkdir(dir.c_str(), 0755);
     }
     case_load_recovery(dir);
+    case_load_stop(dir);
     Pack p = make_pack(dir, shutdown_only ? 4 : 6, shutdown_only ? 2 : 64);
     case_shutdown_demand(p, false);
     case_shutdown_demand(p, true);

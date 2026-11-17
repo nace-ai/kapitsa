@@ -17,6 +17,7 @@
 //   as the model's processor makes that image; its <img> / </img> marks already in the ids); --skip N[,N2,...]:
 //   statistics from position N on (e.g. an answer after an image prompt), per sequence or one for all
 #include "metal/gpu.h"
+#include "model/sampler.h"
 #include "model/dspark.h"
 #include "model/lilicorr.h"
 #include "model/nh_drafter.h"
@@ -354,7 +355,7 @@ int main(int argc, char** argv) {
               const float* l = m.logits() + size_t(r) * V;
               std::vector<int> idx{}; idx.resize(size_t(V));
               for (int i = 0; i < V; ++i) idx[size_t(i)] = i;
-              const int kk = std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32);
+              const int kk = int(topk_k(sp));
               std::partial_sort(idx.begin(), idx.begin() + kk, idx.end(),
                                 [&](int x, int y) { return l[x] > l[y] || (l[x] == l[y] && x < y); });
               std::vector<double> pr{}; pr.resize(size_t(kk));

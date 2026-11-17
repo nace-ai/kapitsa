@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <fstream>
+#include <queue>
 
 namespace ni {
 
@@ -517,6 +518,54 @@ void Tokenizer::load(const std::string& path) {
        now_ms() - t0);
 }
 
+// Keep positions stable while only the two edges around a merge change. A rank's
+// new edges are queued after its whole batch, preserving left-to-right pair merging
+// even when a tokenizer's merge ranks are not in dependency order.
+// Keep the heap stack frame out of short-piece and cache-hit calls.
+__attribute__((noinline)) static void merge_long_piece(std::vector<int>& sym,
+                             const std::unordered_map<uint64_t, std::pair<int, int>>& merges) {
+  struct Node { int token, prev, next; };
+  std::vector<Node> nodes;
+  nodes.reserve(sym.size());
+  for (int i = 0; i < int(sym.size()); ++i)
+    nodes.push_back({sym[i], i - 1, i + 1 < int(sym.size()) ? i + 1 : -1});
+  using Edge = std::pair<int, int>;  // rank, left position; ties merge from the left
+  std::priority_queue<Edge, std::vector<Edge>, std::greater<Edge>> edges;
+  auto lookup = [&](int left) {
+    const auto& a = nodes[left];
+    if (a.next < 0) return merges.end();  // -1 is the end, -2 a removed node
+    return merges.find((uint64_t(uint32_t(a.token)) << 32) | uint32_t(nodes[a.next].token));
+  };
+  auto queue = [&](int left) {
+    if (left < 0) return;
+    auto it = lookup(left);
+    if (it != merges.end()) edges.push({it->second.first, left});
+  };
+  for (int i = 0; i < int(nodes.size()); ++i) queue(i);
+  std::vector<int> changed;
+  while (!edges.empty()) {
+    const int rank = edges.top().first;
+    changed.clear();
+    do {
+      const int left = edges.top().second;
+      edges.pop();
+      auto it = lookup(left);
+      if (it == merges.end() || it->second.first != rank) continue;  // stale edge
+      auto& a = nodes[left];
+      auto& b = nodes[a.next];
+      a.token = it->second.second;
+      a.next = b.next;
+      if (a.next >= 0) nodes[a.next].prev = left;
+      b.next = -2;
+      changed.push_back(a.prev);
+      changed.push_back(left);
+    } while (!edges.empty() && edges.top().first == rank);
+    for (int left : changed) queue(left);
+  }
+  sym.clear();
+  for (int i = 0; i >= 0; i = nodes[i].next) sym.push_back(nodes[i].token);
+}
+
 void Tokenizer::bpe(const std::string& word, std::vector<int>& out) const {
   {
     std::lock_guard<std::mutex> lk(cache_mu_);
@@ -547,7 +596,14 @@ void Tokenizer::bpe(const std::string& word, std::vector<int>& out) const {
   std::vector<int> sym;
   sym.reserve(word.size());
   for (unsigned char b : word) sym.push_back(byte_id_[b]);
+  int rounds = 0;
   while (sym.size() > 1) {
+    // Short pieces and repetitive runs usually finish in a few cheap linear passes.
+    // Bound those scans before switching a still-long piece to local edge updates.
+    if (sym.size() > 64 && rounds++ == 8) {
+      merge_long_piece(sym, merges_);
+      break;
+    }
     int best_rank = INT32_MAX, best_i = -1, best_id = -1;
     for (size_t i = 0; i + 1 < sym.size(); ++i) {
       auto it = merges_.find((uint64_t(uint32_t(sym[i])) << 32) | uint32_t(sym[i + 1]));

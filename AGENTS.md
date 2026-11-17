@@ -49,13 +49,14 @@ cmake --build build -j --target kapitsa                  # the CLI only; drop --
 SDK build the named targets, as CI does.
 
 CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
-update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test drafter_attach_test tokenizer_test iq_layout_test
-exl3_test remote_test cluster_test split_place_test gemm_slices_test device_profile_test qwen4_config_test nh_quant_q8_test json_file_test systemone systemone_test
+update_test prefix_cache_test kflash_cache_test grammar_test structured_check fn_store_test fn_dflash_test drafter_attach_test tokenizer_test iq_layout_test
+exl3_test remote_test cluster_test split_place_test gemm_slices_test ffn_share_test device_profile_test sample_topk_test qwen4_config_test nh_quant_q8_test json_file_test serve_options_test events_test control_test engine_view_test think_control_test systemone systemone_test
 systemone_codes_probe_test systemone_codes_driver splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump`:
 
 ```bash
 build/api_test
 build/prefix_cache_test
+build/kflash_cache_test                      # the KFlash budget cache loads only into the build that wrote it (src/model/kflash_budget.cpp)
 build/fn_store_test                          # the streamed-expert cache (src/model/expert_store.h)
 build/fn_dflash_test                         # DFlash2's stream_mean reduction checks (Flash-Next drafts)
 build/drafter_attach_test                    # kapitsa import's drafter attach: which shape gets which drafter (offline; --net also fetches the 4B one)
@@ -67,20 +68,34 @@ build/cluster_test                           # several Macs (src/cluster/): TXT,
 build/split_place_test                       # where a split model's layers go (src/cluster/place.h)
 build/gemm_slices_test                       # a large GEMM's 2048-row slices and their bounds (src/model/gemm_slices.h)
 build/device_profile_test                    # chip class and the default table from injected facts (src/engine/device_profile.h)
+build/sample_topk_test --cpu                 # which top_k the two-pass sampler takes and which the whole vocabulary (src/model/sampler.h); without --cpu: the GPU draws
 build/qwen4_config_test                      # what a Qwen 4 config asks that Flash-Next's path does not run (src/model/qwen4_config.h)
 build/nh_quant_q8_test                       # Q8 load quantization: code/half-scale bytes, rounding, fallback and guards (CPU only)
+build/flint_kv_test                          # Flint refuses NI_KV_I8 (src/model/flint_kv.h)
 build/json_file_test                         # config.json parsed once per file (src/util/json_file.h)
 build/affine_pack_test                       # MLX affine pack helpers: bit width from shapes, f16 -> bf16 (src/model/affine_pack.h)
+build/ffn_share_test                         # the kernels the split's GPU part runs a dense FFN layer on, and its share (src/model/ffn_share.h)
 build/systemone_test                         # System One's pointer heads, readout (Drex Max v1) and projected (Drex v2.0) (src/systemone/systemone.cpp)
 build/systemone_codes_probe_test             # controlled option-code regression, built and run explicitly in CI
 build/execution_session_test                 # one-shot sessions: start, cancel, terminal order, join (src/engine/execution_session.h)
+build/think_control_test                     # thinking budget masks: trees, a drafted <think>, fill() vs push() (src/engine/think_control.h)
+build/serve_options_test docs/serve-config.schema.json  # kapitsa serve's one validator: flags and --config JSON (src/server/service_config.cpp)
+python3 tests/test_serve_schema.py build/serve_options_test  # needs: jsonschema; the schema and the validator agree, --config - survives a restart
+build/events_test                            # the server's event bus: replay, resets, slow readers, the log ring (src/server/events.h, activity.h)
+python3 tests/test_events_schema.py build/events_test  # needs: jsonschema; every event the bus publishes matches schema/control/event.schema.json
+build/control_test                           # the control socket over a real Unix socket: lock, endpoints, errors, peer check, event streams (src/server/control.h)
+python3 tests/test_control_socket.py build/control_test build/kapitsa  # needs: jsonschema; every answer matches schema/control/; serve stops while starting
+build/engine_view_test                       # the engine view's /engine routes: stop and switch only with this run's key and a JSON body, Host, Origin, proxy and peer checks, the stream cap (src/server/engine_view.h)
+python3 tests/test_events_schema.py tools/engine_replay.py  # the engine view's stand-in server's events, the same check
+python3 tests/test_engine_view.py            # needs: jsonschema; that stand-in's answers: the run's key, stop and switch, Host/Origin/proxy refusals, resume and resets, 3 streams at most
+node tests/test_engine_page.mjs              # Node 18+: the page's own script (src/server/engine.html) on that stand-in: key, live view, Switch and Stop, disconnect, no key
 build/http_stream_test                       # HTTP streaming: framing, keepalive, disconnect, meters (src/server/http_stream.cpp)
 build/ws_upgrade_test                        # a WebSocket upgrade on /v1/responses gets 426, the rest passes through (src/server/ws_upgrade.h)
 build/splash_protocol_test                   # Splash protocol v11 frames against Splash 1.4.0's goldens (src/splash/protocol.h)
 build/splash_runtime_test                    # the Splash engine child: start, requests, cancel, death (src/splash/runtime.h)
 build/splash_discover_test                   # finding Splash's engine and model on a throwaway tree (src/splash/discover.h)
 build/splash_plan_test                       # what Kapitsa adds to `splash serve-native`, and when (src/splash/plan.h)
-python3 tests/test_server.py --cli build/kapitsa
+python3 tests/test_server.py --cli build/kapitsa  # its `kapitsa doctor` cases wait on the GPU: with a model run on it they time out (300 s; 9 Nov 2026, #1113)
 python3 tests/test_sidecar.py build/kapitsa
 python3 tests/test_bench.py build            # needs: jsonschema; on a real Mac only (CI's VM runners fail it)
 python3 tests/test_update.py build
@@ -132,7 +147,7 @@ interleaved speed gates below, and does not establish an inference speedup.
 Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `tests/vision/check_cpu.py`, `logit_dump`,
 `batch_check`, `ni_v8check`, `tests/test_server.py URL`, `tests/test_disk_cache.py`, `tests/test_draft.py`,
 `tests/test_structured.py URL`, `logit_mask_check`, `split_check`, `tests/test_split.py`, `tests/test_pair.py`,
-`tests/test_ane_split_abort.py`, `tests/test_systemone.py`, `tests/test_sampled_tokens.py`): run it only when allowed, and report it as run.
+`tests/test_ane_split_abort.py`, `tests/test_systemone.py`, `tests/test_sampled_tokens.py`, `tests/test_topk_omitted.py`): run it only when allowed, and report it as run.
 
 Lint: `uv tool install prek && prek install` once, then `prek run --all-files` (the same hooks CI runs).
 
@@ -201,11 +216,20 @@ sense.
 Here a feature means a kernel path, a decode, drafting or verify strategy, a cache or memory policy, or a new user-facing
 flag or environment variable. Three things are not features, so this rule does not apply to them: a kill switch for an
 existing default (`NI_X=0`), a debug or profiling switch, and a measuring tool. The output check still gates every
-default change.
+default change, with one exception: a default that only switches which published pack a catalog name downloads (`27b`
+from the plain 4-bit pack to its Nace Q4 pack). That changes which weights a catalog name loads, not the loader or the
+kernels. A pack whose tensors need a different kernel path (for example 6-bit group-64 dense weights on `NI_QMT6`) goes
+back to the floor gate. The floors in `tools/logit_floors/` cover code paths on one pack, so
+`tools/logit_compare.py` between two packs can only report "moved". It gates on KL to BF16 for both packs on the
+same token set (name the corpus and the tool), a task score (GSM8K or the like) and the interleaved A/B on the setups
+above. The switch passes when the new pack's mean KL to BF16
+on those tokens is at most the old pack's, its task score is not below the old pack's by more than that score's
+run-to-run spread, and the interleaved speed A/B shows it no slower than the old pack beyond noise (3%). Otherwise it
+does not switch (precedent: #1228).
 
 **Changing speed or numerics.** One change per PR. Measure only on an idle GPU (nothing else running), interleave old
 and new builds (A B A B), report every run with the Mac, macOS version and commit. A default changes only after an
-interleaved A/B *and* the output check of CONTRIBUTING.md ("Output check"): `build/logit_dump` of the old and the new
+interleaved A/B *and* the output check of CONTRIBUTING.md ("Output check"; a pack-only switch has its own rule above): `build/logit_dump` of the old and the new
 build, `tools/logit_compare.py` between them, gated at twice the model's noise floor on this Mac
 (`tools/logit_floors/<model>.json`). Put its output in the PR. "The same outputs to the bit" is a claim with evidence
 ("every row bitwise identical") or it is not made; a change that fails the gate on purpose says it moves outputs.
@@ -256,7 +280,15 @@ hardest: a run script that tees `transcripts/<label>.out` overwrites that label'
 re-run, so commit the new run under a new label, or say in the subject that the transcript is replaced.
 
 **Docs follow numbers.** When a measured number, a default, a flag or a catalog entry changes, grep the repo for the old
-value (README, docs/usage.md, docs/benchmarks.md, `tests/`, the catalog in `src/hub/catalog.cpp`) and update every copy.
+value (README, docs/usage.md, docs/benchmarks.md, `tests/`, the catalog in `src/hub/catalog.cpp`) and update every copy. A catalog change also regenerates
+`docs/models.md` (`python3 tools/models_table.py`); CI fails on a stale one.
+
+**A test fix is proved by running the test's own file, not by a script that copies its logic.** A standalone repro of one
+`check()` plus one `stop()` showed the guard working, but the real `tests/test_engine_page.mjs` with a stand-in that never
+starts still stalls before its summary line (12 Nov 2026, #1214/#1215): the harness has a dozen sections and something in
+a later one does not return. State in the PR exactly which file you ran and what it printed at the end
+(`engine page: N failures`), and when a suite has branches you cannot drive from outside, say which ones you did not run
+rather than generalising from a script that mirrored them.
 
 ## Pull requests
 
@@ -268,9 +300,12 @@ value (README, docs/usage.md, docs/benchmarks.md, `tests/`, the catalog in `src/
   checked how. A separate "Not verified" section lists what was not run, above all anything needing a GPU.
 - Benchmark submissions carry the `benchmark` label, the results table, `Kapitsa version (commit)`, `Flags:`, and say
   `kapitsa bench` produced them. Results come only as pull requests from a fork, never as issues. A result file and the
-  regenerated `bench/community/RESULTS.md` (`python3 tools/community_table.py`) ride in the same pull request: the
-  `community-table` check reads the merge commit, so a row without its rewrite is red and, once merged, leaves main
-  stale until someone regenerates it. Bringing a bench pull request up to date re-runs the command before the merge.
+  two files generated from it ride in the same pull request: `bench/community/RESULTS.md` and
+  `docs/site/leaderboard-data.js`. One command writes both (`python3 tools/community_table.py` also runs
+  `python3 tools/build_leaderboard_data.py`), then `git add bench/community/RESULTS.md docs/site/leaderboard-data.js`.
+  The `community-table` check reads the merge commit and fails on either one, so a row without its rewrite is red and,
+  once merged, leaves main stale until someone regenerates it. Bringing a bench pull request up to date re-runs the
+  command before the merge.
 
 - PRs of more than ~1000 changed lines (generated data and vendored code excluded) fail the `PR size` check. Split them.
   Only a reviewer overrides it (`size/override` label and a `Size override: <why>` line in the description); an author

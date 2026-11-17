@@ -302,10 +302,10 @@ void restore_cursor() {
   }
 }
 
-// A signal that ends the process (Ctrl+C): the status block off the screen, the cursor back (write() only)
-void on_signal(int sig) {
+// The status block off the screen, the cursor back (write() only: safe in a signal handler)
+void clear_screen_state() {
   const int n = g_rows_on_screen;
-  if (n > 0 && (sig == SIGINT || sig == SIGTERM || sig == SIGHUP)) {
+  if (n > 0) {
     char b[32];
     int k = 0;
     b[k++] = '\r';
@@ -322,6 +322,14 @@ void on_signal(int sig) {
     }
   }
   restore_cursor();
+}
+
+// A signal that ends the process (Ctrl+C): the status block off the screen, the cursor back
+void on_signal(int sig) {
+  if (sig == SIGINT || sig == SIGTERM || sig == SIGHUP)
+    clear_screen_state();
+  else
+    restore_cursor();
   signal(sig, SIG_DFL);
   raise(sig);
 }
@@ -370,6 +378,8 @@ void redraw(const std::string& before = "") {
 }
 
 }  // namespace
+
+void clear_for_exit() { clear_screen_state(); }
 
 void guard_signals() {
   static bool once = [] {

@@ -1,4 +1,6 @@
 #include "model/flint.h"
+#include "model/sampler.h"
+#include "model/flint_kv.h"
 #include "engine/device_profile.h"
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
@@ -227,6 +229,7 @@ FlintConfig Flint::read_config(const std::string& dir) {
 
 // Bytes per (kv head, position) of the attention cache: ni::kv_row_bytes (metal/gpu.h), which follows NI_KV_I8 —
 // 144 int8 or 256 fp16 at head_dim 128 — and matches the kernels' kKvRow.
+// The constructor refuses NI_KV_I8 (flint_kv.h, #1257), so a Flint model's rows are fp16 until the int8 path is fixed.
 
 size_t Flint::kv_per_pos(const FlintConfig& c) {
   const size_t full = size_t(std::count(c.kind.begin(), c.kind.end(), 'F'));
@@ -314,6 +317,7 @@ MemPlan Flint::plan(const std::string& path, int prefill_chunk) {
 
 // ---- load ----
 Flint::Flint(const std::string& path, int prefill_chunk) {
+  if (const char* why = flint_kv_i8_refusal()) fatal("%s", why);
   path_ = path;
   while (path_.size() > 1 && path_.back() == '/') path_.pop_back();
   if (!is_model(path_)) fatal("%s: not a Flint checkpoint folder (config.json)", path.c_str());
@@ -675,26 +679,40 @@ bool Flint::reserve(Seq& s, int need) {
   if (!fits(target)) target = std::min(s.limit, round_up(need, 256));
   if (!fits(target)) return false;
   const int old = s.cap;
+  const size_t nb = row * size_t(target);
+  std::vector<Buffer> olds;
+  std::unique_ptr<Encoder> e;
+  size_t batch = 0;
+  auto flush = [&] {
+    if (e) e->commit_and_wait();
+    e.reset();
+    for (auto& b : olds) g.release(b);
+    olds.clear();
+    batch = 0;
+  };
+  // Wait for each copy batch, then release its old buffers before allocating the next batch.
   for (int l = 0; l < cfg_.layers; ++l) {
     if (cfg_.kind[size_t(l)] != 'F') continue;
     for (Buffer* b : {&s.kc[size_t(l)], &s.vc[size_t(l)]}) {
-      Buffer nbuf = g.alloc(row * size_t(target), "flint_kv");
+      if (batch && batch + nb > (size_t(256) << 20)) flush();
+      Buffer nbuf = g.alloc(nb, "flint_kv");
       memset(nbuf.ptr(), 0, nbuf.size);  // (as the rings: flint_attn_dec reads past the last position)
       if (old > 0 && *b) {
         const uint32_t n16 = uint32_t(kv_row_bytes(cfg_.hd) / 16);
         const uint32_t p[4] = {uint32_t(old) * n16, uint32_t(target) * n16, uint32_t(cfg_.hkv), 0};
-        auto e = g.begin();
+        if (!e) e = g.begin();
         e->use(pipe("kv_regrow"));
         e->buf(0, *b);
         e->buf(1, nbuf);
         e->bytes(2, p, sizeof p);
         e->dispatch((p[0] + 255) / 256, uint32_t(cfg_.hkv), 1, 256);
-        e->commit_and_wait();
       }
-      if (*b) g.release(*b);
+      if (*b) olds.push_back(*b);
       *b = nbuf;
+      batch += nb;
     }
   }
+  flush();
   s.cap = target;
   return ensure_rings(s);
 }
@@ -1486,15 +1504,19 @@ void Flint::enc_head(Encoder& e, const Buffer& x, int R, const Buffer& out, size
 
 void Flint::enc_sample(Encoder& e, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
                        uint32_t step) {
-  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
-  const kp::TopkStage ts{uint32_t(cfg_.vocab), K, 2048};
-  const uint32_t ntg = (uint32_t(cfg_.vocab) + 2047) / 2048;
+  if (full_vocab(sp)) {  // top_k <= 0 or above the two passes' 64 (sampler.h)
+    enc_sample_full(e, lrow, uint32_t(cfg_.vocab), tokens, out_index, sprob_, sp, step);
+    return;
+  }
+  const uint32_t K = topk_k(sp);
+  const kp::TopkStage ts{uint32_t(cfg_.vocab), K, topk_chunk(K)};
+  const uint32_t ntg = topk_lists(uint32_t(cfg_.vocab), K);
   e.use(pipe("topk_stage1"));
   e.buf(0, lrow);
   e.buf(1, cand_v_);
   e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, 1, 1, 256);
+  e.dispatch(ntg, 1, 1, topk_threads(K));
   const kp::Sample p2{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, uint32_t(out_index)};
   e.use(pipe("sample_stage2"));
   e.buf(0, cand_v_);

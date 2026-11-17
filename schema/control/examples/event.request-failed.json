@@ -1,0 +1,17 @@
+{
+  "id": "7f3a9c2e5b1d4e60.931",
+  "type": "request_finished",
+  "data": {
+    "request_id": "req-41",
+    "finish_reason": "error",
+    "prompt_tokens": 2310,
+    "cached_tokens": 2048,
+    "completion_tokens": 0,
+    "queue_ms": 3,
+    "prefill_ms": 180,
+    "decode_ms": 0,
+    "tokens_per_second": 0,
+    "prefill_tokens_per_second": 1455.6,
+    "error": "the client closed the connection"
+  }
+}

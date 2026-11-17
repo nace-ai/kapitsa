@@ -1,0 +1,111 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "quick",
+  "time_utc": "2026-11-10T12:32:09Z",
+  "kapitsa": {
+    "version": "0.2.32",
+    "commit": "e728524"
+  },
+  "mac": {
+    "identifier": "Mac17,8",
+    "name": "MacBook Pro (16-inch, M5 Pro or M5 Max)",
+    "year": 2026,
+    "chip": "Apple M5 Pro",
+    "cpu_cores": 18,
+    "gpu_cores": 20,
+    "memory_gb": 48,
+    "macos": "26.5.2",
+    "macos_build": "25F84"
+  },
+  "model": {
+    "name": "kq-35b-4bit",
+    "title": "kq-35b-4bit",
+    "variant": null,
+    "precision": "4-bit (mixed)",
+    "catalog": false,
+    "revision": null,
+    "decoding": "unknown",
+    "decoding_detail": "a server kapitsa bench did not start (KAPITSA_BENCH_SERVER)",
+    "drafter": null,
+    "drafter_kind": "unknown",
+    "drafter_source": null,
+    "drafter_reason": null
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 3,
+    "greedy_runs": 3,
+    "sizes": [
+      4000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 221.75,
+      "runs_tps": [
+        220.94,
+        221.75,
+        234.89
+      ],
+      "median_accepted_draft_tps": 164.15,
+      "median_accepted_draft_share": 0.7422
+    },
+    "decode_greedy": {
+      "median_tps": 236.55,
+      "runs_tps": [
+        219.95,
+        236.55,
+        245.47
+      ],
+      "median_accepted_draft_tps": 182.03,
+      "median_accepted_draft_share": 0.7695
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4134,
+        "ttft_s": 1.2689,
+        "tps": 3257.9,
+        "followup_s": [
+          0.0567,
+          0.0653,
+          0.0567
+        ],
+        "followup_median_s": 0.0567,
+        "followup_suffix_tps": 405.4
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": null
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "high",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 0.0,
+    "gpu_other_mean_pct": 85.1,
+    "gpu_other_max_pct": 98.49,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [
+      "kapitsa",
+      "com.apple.WebKit.GPU"
+    ],
+    "contention": [
+      "decode",
+      "decode_greedy",
+      "prefill_4000",
+      "tools"
+    ]
+  },
+  "flags": [
+    "CONTENTION: sustained foreign GPU load > 5% in ['decode', 'decode_greedy', 'prefill_4000', 'tools'] (mean 85.1%, top ['kapitsa'])"
+  ],
+  "invalid": [
+    "server: a server kapitsa bench did not start (KAPITSA_BENCH_SERVER), so its settings are unknown"
+  ]
+}

@@ -1708,10 +1708,11 @@ constant constexpr uint kDflSaltRes = 0xA54FF53Au;
 // Target distribution of every verify row, exactly the plain sampler's (sample_stage2 /
 // sample_stage2_rows, verify.metal): the K best stage-1 candidates ordered (value desc, id asc), the
 // top-p prefix on the untempered probabilities, then exp((l - l0) / T) normalized over that prefix.
-// dist_id / dist_p [R][32] (zero past keep), dist_keep [R]. grid: R threadgroups x 1024.
+// dist_id / dist_p [R][kDflDistW] (zero past keep), dist_keep [R]. grid: R threadgroups x 1024.
+constant constexpr uint kDflDistW = 64;  // the most candidates a row holds (sampler.h's kTopkMax)
 struct DflDistParams {
   uint n;  // stage-1 candidates per row
-  uint K;  // top-k (<= 32)
+  uint K;  // top-k (<= kDflDistW)
   float temp;
   float top_p;
 };
@@ -1722,8 +1723,8 @@ struct DflDistParams {
                               uint ntg [[threads_per_threadgroup]]) {
   threadgroup float sv[32];
   threadgroup uint si[32];
-  threadgroup float topv[32];
-  threadgroup uint topi[32];
+  threadgroup float topv[kDflDistW];
+  threadgroup uint topi[kDflDistW];
   constexpr int PER = 4;
   float v[PER];
   uint id[PER];
@@ -1732,7 +1733,7 @@ struct DflDistParams {
     v[j] = k < p.n ? cv[r * p.n + k] : -INFINITY;
     id[j] = k < p.n ? ci[r * p.n + k] : 0xffffffff;
   }
-  const uint K = max(1u, min(p.K, 32u));
+  const uint K = max(1u, min(p.K, kDflDistW));
   for (uint q = 0; q < K; ++q) {  // the selection loop of sample_stage2_rows
     float bv = -INFINITY;
     uint bi = 0xffffffff;
@@ -1747,7 +1748,7 @@ struct DflDistParams {
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
   if (tid == 0) {
-    float probs[32];
+    float probs[kDflDistW];
     uint keep = 1;
     float kt = 1.0f;
     probs[0] = 1.0f;
@@ -1769,9 +1770,9 @@ struct DflDistParams {
         kt += probs[q];
       }
     }
-    for (uint q = 0; q < 32; ++q) {
-      dist_id[r * 32 + q] = q < keep ? int(topi[q]) : -1;
-      dist_p[r * 32 + q] = q < keep ? probs[q] / kt : 0.0f;
+    for (uint q = 0; q < kDflDistW; ++q) {
+      dist_id[r * kDflDistW + q] = q < keep ? int(topi[q]) : -1;
+      dist_p[r * kDflDistW + q] = q < keep ? probs[q] / kt : 0.0f;
     }
     dist_keep[r] = keep;
   }
@@ -1785,7 +1786,8 @@ struct DflDistParams {
 //         u_i * q_i(d_i) < p_i(d_i), stop at the first rejection; then the token is drawn from
 //         max(0, p_a - q_a) normalized (or p_a if that is empty), or from p_K after K acceptances.
 //         p = dfl_dist_rows, q = the walk's distribution over its 16 candidates (qprob, walk_k).
-// grid: 1 x 32 (one simdgroup; lane q holds candidate q of the current row).
+// grid: 1 x 32 (one simdgroup; lane q holds candidates q and q + 32 of the current row, in that order: the sums and
+// the draw take candidates 0..31, then 32..63, which are all zero for a top_k of 32 or less).
 struct DflAcceptParams {
   uint P;   // anchor position
   uint K;   // proposals verified (verify rows 0..K)
@@ -1817,32 +1819,42 @@ struct DflAcceptParams {
   uint a = 0;
   for (; a < K; ++a) {
     const int d = tokens[p.P + 1 + a];
-    const float pd = simd_sum(dist_id[a * 32 + lane] == d ? dist_p[a * 32 + lane] : 0.0f);
+    const uint o = a * kDflDistW + lane;
+    const float pd = simd_sum(dist_id[o] == d ? dist_p[o] : 0.0f) + simd_sum(dist_id[o + 32] == d ? dist_p[o + 32] : 0.0f);
     const float qd = qprob[a * 16 + uint(walk_k[a])];
     const float u = dfl_uniform(p.seed, p.P + 1 + a, kDflSaltAcc);
     if (!(u * qd < pd)) break;
   }
-  const int x = dist_id[a * 32 + lane];
-  const float px = dist_p[a * 32 + lane];
-  float w = px;
+  const uint o = a * kDflDistW + lane;
+  const int x = dist_id[o], x2 = dist_id[o + 32];
+  const float px = dist_p[o], px2 = dist_p[o + 32];
+  float w = px, w2 = px2;
   if (a < K) {  // residual max(0, p_a - q_a): q_a(x) from the walk's 16 candidates of proposal a
     const int cid = lane < 16 ? cand_i[a * 16 + lane] : -2;
     const float cq = lane < 16 ? qprob[a * 16 + lane] : 0.0f;
-    float qx = 0.0f;
+    float qx = 0.0f, qx2 = 0.0f;
     for (ushort k = 0; k < 16; ++k) {
       const int c = simd_shuffle(cid, k);
       const float cv = simd_shuffle(cq, k);
       if (c == x) qx = cv;
+      if (c == x2) qx2 = cv;
     }
     w = x >= 0 ? max(0.0f, px - qx) : 0.0f;
-    if (!(simd_sum(w) > 0.0f)) w = px;  // p_a <= q_a everywhere (rejection only by rounding)
+    w2 = x2 >= 0 ? max(0.0f, px2 - qx2) : 0.0f;
+    if (!(simd_sum(w) + simd_sum(w2) > 0.0f)) w = px, w2 = px2;  // p_a <= q_a everywhere (rejection only by rounding)
   }
   const float cum = simd_prefix_inclusive_sum(w);
-  const float tot = simd_shuffle(cum, 31);
+  const float tot1 = simd_shuffle(cum, 31);
+  const float cum2 = tot1 + simd_prefix_inclusive_sum(w2);
+  const float tot = simd_shuffle(cum2, 31);
   const float u = dfl_uniform(p.seed, p.P + 1 + a, kDflSaltRes) * tot;
-  uint sel = simd_min(cum > u && w > 0.0f ? lane : 32u);
-  if (sel == 32u) sel = uint(simd_max(w > 0.0f ? int(lane) : -1));  // u above the rounded total
-  const int y = simd_shuffle(x, ushort(sel));
+  uint sel = simd_min(cum > u && w > 0.0f ? lane : 64u);
+  if (sel == 64u) sel = simd_min(cum2 > u && w2 > 0.0f ? lane + 32 : 64u);
+  if (sel == 64u) {  // u above the rounded total: the last candidate with weight
+    const int hi = simd_max(w2 > 0.0f ? int(lane) + 32 : -1);
+    sel = uint(hi >= 0 ? hi : simd_max(w > 0.0f ? int(lane) : -1));
+  }
+  const int y = sel < 32 ? simd_shuffle(x, ushort(sel)) : simd_shuffle(x2, ushort(sel - 32));
   if (lane == 0) {
     tokens[p.P + 1 + a] = y;
     res[0] = int(a);

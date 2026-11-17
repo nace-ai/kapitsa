@@ -1,0 +1,1347 @@
+{
+  "kind": "Redacted derived evidence, not raw logs. Private paths, resource telemetry and application/process names omitted; every timing sample, flag, invalid result and failed assertion is retained.",
+  "source": {
+    "reference": "4f564ecb87d4ff1375fb72b9d45ae945092cc215",
+    "candidate": "2389fd0459750efbaed1d699bc4c6e62e94de2f6"
+  },
+  "setup": {
+    "chip": "M5 Pro",
+    "gpu_cores": 20,
+    "memory_GiB": 48,
+    "macos": "26.6.2",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "model": {
+    "repo": "Acnoryx/Airy",
+    "revision": "ba4ce94d5e7bcdd4997f4dbf6275848c99c7fbb5",
+    "filename": "Airy-0.8b-Q2_K.gguf",
+    "repository_file": "gguf/Airy-0.8b-Q2_K.gguf",
+    "source_sha256": "aeee3f24905dbff1dac952e1b38ac2377230fc75c82be7ef75808d18a6a9a3fe",
+    "expected_vocab": 248320
+  },
+  "imports": {
+    "independent_executions": 2,
+    "files_literal_equal": {
+      "model.safetensors": true,
+      "tokenizer_config.json": true,
+      "config.json": true,
+      "tokenizer.json": true,
+      "generation_config.json": true,
+      "chat_template.jinja": true,
+      "model.safetensors.index.json": true,
+      ".kapitsa/manifest.json": true
+    }
+  },
+  "output": {
+    "paths": {
+      "prefill": {
+        "arms": [
+          {
+            "records": 8,
+            "float32_elements": 1986560,
+            "finite_float32_elements": 1986560,
+            "logits_sha256": "b6eaa00c38024716d8e59745b81076dd9fe014d3210a872fa898dd559a010f97",
+            "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          },
+          {
+            "records": 8,
+            "float32_elements": 1986560,
+            "finite_float32_elements": 1986560,
+            "logits_sha256": "b6eaa00c38024716d8e59745b81076dd9fe014d3210a872fa898dd559a010f97",
+            "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          }
+        ],
+        "all_finite": true,
+        "complete_fp32_bytes_equal": true,
+        "recorded_inputs_bytes_equal": true
+      },
+      "step": {
+        "arms": [
+          {
+            "records": 192,
+            "float32_elements": 47677440,
+            "finite_float32_elements": 47677440,
+            "logits_sha256": "234dec0cd6a4749b8a80c86ff3ac8c944250695fb721c54d1b0cb85b78a569cb",
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          },
+          {
+            "records": 192,
+            "float32_elements": 47677440,
+            "finite_float32_elements": 47677440,
+            "logits_sha256": "234dec0cd6a4749b8a80c86ff3ac8c944250695fb721c54d1b0cb85b78a569cb",
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          }
+        ],
+        "all_finite": true,
+        "complete_fp32_bytes_equal": true,
+        "recorded_inputs_bytes_equal": true
+      },
+      "verify": {
+        "arms": [
+          {
+            "records": 192,
+            "float32_elements": 47677440,
+            "finite_float32_elements": 47677440,
+            "logits_sha256": "6bfcfdeea8cf382f7d16186c68df703568e8499e323abcae9a38729c659c4574",
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          },
+          {
+            "records": 192,
+            "float32_elements": 47677440,
+            "finite_float32_elements": 47677440,
+            "logits_sha256": "6bfcfdeea8cf382f7d16186c68df703568e8499e323abcae9a38729c659c4574",
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          }
+        ],
+        "all_finite": true,
+        "complete_fp32_bytes_equal": true,
+        "recorded_inputs_bytes_equal": true
+      },
+      "batch": {
+        "arms": [
+          {
+            "records": 192,
+            "float32_elements": 47677440,
+            "finite_float32_elements": 47677440,
+            "logits_sha256": "4c8f48ed6f394aef188ae4d45a2f061c55efc209519e69eeecf22abcee1c9c8a",
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          },
+          {
+            "records": 192,
+            "float32_elements": 47677440,
+            "finite_float32_elements": 47677440,
+            "logits_sha256": "4c8f48ed6f394aef188ae4d45a2f061c55efc209519e69eeecf22abcee1c9c8a",
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          }
+        ],
+        "all_finite": true,
+        "complete_fp32_bytes_equal": true,
+        "recorded_inputs_bytes_equal": true
+      }
+    },
+    "rows_each_arm": 584,
+    "float32_elements_each_arm": 145018880,
+    "criterion": "Complete fp32 bytes and recorded inputs equal; all values finite; no floor modification.",
+    "prefill_independent_literal_gate": true
+  },
+  "native": {
+    "A1": {
+      "produced_by": "kapitsa bench --quick --json",
+      "commit": "4f564ecb",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "results": {
+        "decode": {
+          "median_tps": null,
+          "runs_tps": []
+        },
+        "decode_greedy": {
+          "median_tps": null,
+          "runs_tps": []
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4131,
+            "ttft_s": 0.2662,
+            "tps": 15516.4,
+            "followup_s": [],
+            "followup_median_s": null
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      },
+      "flags": [
+        "decode: completion_tokens=62 != 512",
+        "decode: finish_reason=stop (expected length)",
+        "decode: repetition loop (distinct-4-gram 0.0421)",
+        "decode_greedy: completion_tokens=29 != 512",
+        "decode_greedy: finish_reason=stop (expected length)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.056)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.2704)"
+      ],
+      "invalid": [
+        "decode: reasoning text returned (1022 chars)",
+        "decode: reasoning text returned (155 chars)",
+        "decode: reasoning text returned (331 chars)",
+        "decode_greedy: reasoning text returned (1044 chars)",
+        "decode_greedy: reasoning text returned (75 chars)",
+        "decode_greedy: reasoning text returned (818 chars)",
+        "prefill_4000: reasoning text returned (5 chars)",
+        "cached_4000: turn 1 returned no content; not substituting text, cached test skipped"
+      ],
+      "rc": 1
+    },
+    "B1": {
+      "produced_by": "kapitsa bench --quick --json",
+      "commit": "2389fd04",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "results": {
+        "decode": {
+          "median_tps": null,
+          "runs_tps": []
+        },
+        "decode_greedy": {
+          "median_tps": null,
+          "runs_tps": []
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4131,
+            "ttft_s": 0.2665,
+            "tps": 15499.0,
+            "followup_s": [],
+            "followup_median_s": null
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      },
+      "flags": [
+        "decode: completion_tokens=66 != 512",
+        "decode: finish_reason=stop (expected length)",
+        "decode: repetition loop (distinct-4-gram 0.1077)",
+        "decode: repetition loop (distinct-4-gram 0.3867)",
+        "decode_greedy: completion_tokens=61 != 512",
+        "decode_greedy: finish_reason=stop (expected length)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.0958)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.2096)"
+      ],
+      "invalid": [
+        "decode: reasoning text returned (1078 chars)",
+        "decode: reasoning text returned (138 chars)",
+        "decode: reasoning text returned (722 chars)",
+        "decode_greedy: reasoning text returned (150 chars)",
+        "decode_greedy: reasoning text returned (542 chars)",
+        "decode_greedy: reasoning text returned (597 chars)",
+        "prefill_4000: reasoning text returned (32 chars)",
+        "cached_4000: turn 1 returned no content; not substituting text, cached test skipped"
+      ],
+      "rc": 1
+    },
+    "A2": {
+      "produced_by": "kapitsa bench --quick --json",
+      "commit": "4f564ecb",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "results": {
+        "decode": {
+          "median_tps": null,
+          "runs_tps": []
+        },
+        "decode_greedy": {
+          "median_tps": null,
+          "runs_tps": []
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4130,
+            "ttft_s": 0.2729,
+            "tps": 15135.1,
+            "followup_s": [
+              0.0254
+            ],
+            "followup_median_s": 0.0254,
+            "followup_suffix_tps": 787.5
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      },
+      "flags": [
+        "decode: completion_tokens=70 != 512",
+        "decode: finish_reason=stop (expected length)",
+        "decode: repetition loop (distinct-4-gram 0.2645)",
+        "decode: repetition loop (distinct-4-gram 0.4713)",
+        "decode_greedy: completion_tokens=91 != 512",
+        "decode_greedy: finish_reason=stop (expected length)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.1351)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.4061)",
+        "cached_4000: follow-up returned no content; stopping the cached series"
+      ],
+      "invalid": [
+        "decode: reasoning text returned (171 chars)",
+        "decode: reasoning text returned (240 chars)",
+        "decode: reasoning text returned (553 chars)",
+        "decode_greedy: reasoning text returned (1071 chars)",
+        "decode_greedy: reasoning text returned (211 chars)",
+        "decode_greedy: reasoning text returned (651 chars)",
+        "prefill_4000: reasoning text returned (37 chars)",
+        "cached_4000: follow-up: reasoning text returned (19 chars)"
+      ],
+      "rc": 1
+    },
+    "B2": {
+      "produced_by": "kapitsa bench --quick --json",
+      "commit": "2389fd04",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "results": {
+        "decode": {
+          "median_tps": null,
+          "runs_tps": []
+        },
+        "decode_greedy": {
+          "median_tps": null,
+          "runs_tps": []
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4131,
+            "ttft_s": 0.2663,
+            "tps": 15512.0,
+            "followup_s": [],
+            "followup_median_s": null
+          }
+        ],
+        "tool_calls": "fail",
+        "tool_calls_failed": [
+          "thinking off: stream",
+          "thinking off: nonstream",
+          "thinking off: round_trip",
+          "thinking on: stream",
+          "thinking on: nonstream",
+          "thinking on: round_trip"
+        ]
+      },
+      "flags": [
+        "decode: completion_tokens=138 != 512",
+        "decode: completion_tokens=61 != 512",
+        "decode: finish_reason=stop (expected length)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.0512)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.0776)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.2128)"
+      ],
+      "invalid": [
+        "decode: reasoning text returned (129 chars)",
+        "decode: reasoning text returned (230 chars)",
+        "decode: reasoning text returned (685 chars)",
+        "decode_greedy: reasoning text returned (253 chars)",
+        "decode_greedy: reasoning text returned (62 chars)",
+        "decode_greedy: reasoning text returned (917 chars)",
+        "prefill_4000: reasoning text returned (26 chars)",
+        "cached_4000: turn 1 returned no content; not substituting text, cached test skipped"
+      ],
+      "rc": 1
+    }
+  },
+  "fixed": {
+    "A1": {
+      "rows": [
+        {
+          "greedy": false,
+          "seed": 1,
+          "request_sha256": "d44a2ef21abd7c830f954ae4ecb330f67e0664cb5142be5bd765332e6deb72ab",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 101,
+          "finish_reason": "stop",
+          "ttft_s": 0.041344667,
+          "total_s": 0.326249125,
+          "flags": [
+            "completion token count differs from requested 512",
+            "finish reason differs from length"
+          ],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (261 chars)"
+          ],
+          "middle_window_tps": 366.0555115885214,
+          "rate_method": {
+            "events": 83,
+            "rate_method": "chars",
+            "tokens_per_event": 1.217,
+            "window_tokens": 80.5,
+            "window_s": 0.2199
+          },
+          "e2e_tps": 362.21051732496187,
+          "distinct4": null
+        },
+        {
+          "greedy": false,
+          "seed": 2,
+          "request_sha256": "a80355f02ea3484b784437d91b206a0509f5f9e1e7d739f96ee41db265730a01",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 14,
+          "finish_reason": "stop",
+          "ttft_s": 0.020096625,
+          "total_s": 0.06004525,
+          "flags": [
+            "completion token count differs from requested 512",
+            "finish reason differs from length"
+          ],
+          "invalid": [
+            "empty generated content",
+            "too few streamed events for middle-window rate",
+            "reasoning text returned (27 chars)"
+          ],
+          "middle_window_tps": null,
+          "rate_method": {
+            "events": 12,
+            "rate_method": "chars",
+            "tokens_per_event": 1.167
+          },
+          "e2e_tps": 380.6284591624165,
+          "distinct4": null
+        },
+        {
+          "greedy": false,
+          "seed": 3,
+          "request_sha256": "a90b2538bfcedbbe2111c2df178ec1f24e06eead943a54f13ef3b49b0cec0eb0",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.019789042,
+          "total_s": 1.466222292,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (942 chars)"
+          ],
+          "middle_window_tps": 350.9881351863694,
+          "rate_method": {
+            "events": 460,
+            "rate_method": "chars",
+            "tokens_per_event": 1.113,
+            "window_tokens": 490.8,
+            "window_s": 1.3983
+          },
+          "e2e_tps": 353.9983836170557,
+          "distinct4": null
+        },
+        {
+          "greedy": true,
+          "seed": 1,
+          "request_sha256": "cc53749e195a348878adfc1814cb6a3982872428e8de90c1404e142d37aa8ec3",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.020694042,
+          "total_s": 1.415895083,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (587 chars)"
+          ],
+          "middle_window_tps": 360.4183223264955,
+          "rate_method": {
+            "events": 354,
+            "rate_method": "chars",
+            "tokens_per_event": 1.446,
+            "window_tokens": 490.2,
+            "window_s": 1.3601
+          },
+          "e2e_tps": 367.98823982751077,
+          "distinct4": null
+        },
+        {
+          "greedy": true,
+          "seed": 2,
+          "request_sha256": "1c6004ed78cf92da9d8038a2d8e158a131732fbb46393096be50d52fbed6e18f",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.020585083,
+          "total_s": 1.450034833,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (532 chars)"
+          ],
+          "middle_window_tps": 350.8693691139591,
+          "rate_method": {
+            "events": 338,
+            "rate_method": "chars",
+            "tokens_per_event": 1.515,
+            "window_tokens": 489.9,
+            "window_s": 1.3961
+          },
+          "e2e_tps": 358.19640042801404,
+          "distinct4": null
+        },
+        {
+          "greedy": true,
+          "seed": 3,
+          "request_sha256": "b9d26741987aaffa7e7cf343412bff3977528857b007671883d040f31ab15d77",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.019947,
+          "total_s": 1.433506291,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (1041 chars)"
+          ],
+          "middle_window_tps": 356.32155856022496,
+          "rate_method": {
+            "events": 505,
+            "rate_method": "chars",
+            "tokens_per_event": 1.014,
+            "window_tokens": 490.9,
+            "window_s": 1.3776
+          },
+          "e2e_tps": 362.2407282810853,
+          "distinct4": null
+        }
+      ],
+      "prefill_greedy": {
+        "target": 4000,
+        "invalid": [
+          "reasoning text returned (94 chars)",
+          "no monitor samples for phase"
+        ],
+        "flags": [],
+        "prompt_tokens": 4128,
+        "expected_prompt_tokens": 4133,
+        "ttft_s": 0.268284209,
+        "prefill_tps": 15386.667800489146,
+        "cold_cached_tokens": 0,
+        "finish": "stop",
+        "reasoning_chars": 94,
+        "cached": {
+          "samples": [],
+          "invalid": [
+            "turn 1 returned no content; not substituting text, cached test skipped"
+          ],
+          "flags": []
+        }
+      },
+      "warmup": {
+        "adaptive": false,
+        "steps": [
+          {
+            "name": "prefill~2.9k+decode64",
+            "ok": true,
+            "s": 0.26,
+            "prompt_tokens": 2920,
+            "completion_tokens": 18,
+            "finish": "stop",
+            "thinking_leak": [
+              "reasoning text returned (48 chars)"
+            ]
+          },
+          {
+            "name": "tools",
+            "ok": true,
+            "s": 0.47,
+            "prompt_tokens": 425,
+            "completion_tokens": 159,
+            "finish": "stop",
+            "thinking_leak": [
+              "reasoning text returned (99 chars)"
+            ]
+          }
+        ],
+        "ok": true
+      },
+      "quiet_gate": true,
+      "rc": 0
+    },
+    "B1": {
+      "rows": [
+        {
+          "greedy": false,
+          "seed": 1,
+          "request_sha256": "d44a2ef21abd7c830f954ae4ecb330f67e0664cb5142be5bd765332e6deb72ab",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 101,
+          "finish_reason": "stop",
+          "ttft_s": 0.037952875,
+          "total_s": 0.316379833,
+          "flags": [
+            "completion token count differs from requested 512",
+            "finish reason differs from length"
+          ],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (261 chars)"
+          ],
+          "middle_window_tps": 375.4618746068986,
+          "rate_method": {
+            "events": 83,
+            "rate_method": "chars",
+            "tokens_per_event": 1.217,
+            "window_tokens": 80.5,
+            "window_s": 0.2144
+          },
+          "e2e_tps": 370.7700357509075,
+          "distinct4": null
+        },
+        {
+          "greedy": false,
+          "seed": 2,
+          "request_sha256": "a80355f02ea3484b784437d91b206a0509f5f9e1e7d739f96ee41db265730a01",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 14,
+          "finish_reason": "stop",
+          "ttft_s": 0.020838917,
+          "total_s": 0.0596815,
+          "flags": [
+            "completion token count differs from requested 512",
+            "finish reason differs from length"
+          ],
+          "invalid": [
+            "empty generated content",
+            "too few streamed events for middle-window rate",
+            "reasoning text returned (27 chars)"
+          ],
+          "middle_window_tps": null,
+          "rate_method": {
+            "events": 12,
+            "rate_method": "chars",
+            "tokens_per_event": 1.167
+          },
+          "e2e_tps": 391.46358840578796,
+          "distinct4": null
+        },
+        {
+          "greedy": false,
+          "seed": 3,
+          "request_sha256": "a90b2538bfcedbbe2111c2df178ec1f24e06eead943a54f13ef3b49b0cec0eb0",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.019259625,
+          "total_s": 1.432615875,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (942 chars)"
+          ],
+          "middle_window_tps": 359.14464136376625,
+          "rate_method": {
+            "events": 460,
+            "rate_method": "chars",
+            "tokens_per_event": 1.113,
+            "window_tokens": 490.8,
+            "window_s": 1.3666
+          },
+          "e2e_tps": 362.2929383659865,
+          "distinct4": null
+        },
+        {
+          "greedy": true,
+          "seed": 1,
+          "request_sha256": "cc53749e195a348878adfc1814cb6a3982872428e8de90c1404e142d37aa8ec3",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.019959834,
+          "total_s": 1.424673125,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (587 chars)"
+          ],
+          "middle_window_tps": 357.36785682477176,
+          "rate_method": {
+            "events": 354,
+            "rate_method": "chars",
+            "tokens_per_event": 1.446,
+            "window_tokens": 490.2,
+            "window_s": 1.3717
+          },
+          "e2e_tps": 365.21287789092844,
+          "distinct4": null
+        },
+        {
+          "greedy": true,
+          "seed": 2,
+          "request_sha256": "1c6004ed78cf92da9d8038a2d8e158a131732fbb46393096be50d52fbed6e18f",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.020014709,
+          "total_s": 1.424993375,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (532 chars)"
+          ],
+          "middle_window_tps": 357.04348771556937,
+          "rate_method": {
+            "events": 338,
+            "rate_method": "chars",
+            "tokens_per_event": 1.515,
+            "window_tokens": 489.9,
+            "window_s": 1.372
+          },
+          "e2e_tps": 364.4799001995545,
+          "distinct4": null
+        },
+        {
+          "greedy": true,
+          "seed": 3,
+          "request_sha256": "b9d26741987aaffa7e7cf343412bff3977528857b007671883d040f31ab15d77",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.020003458,
+          "total_s": 1.427390166,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (1041 chars)"
+          ],
+          "middle_window_tps": 358.01486516606474,
+          "rate_method": {
+            "events": 505,
+            "rate_method": "chars",
+            "tokens_per_event": 1.014,
+            "window_tokens": 490.9,
+            "window_s": 1.371
+          },
+          "e2e_tps": 363.8470811325952,
+          "distinct4": null
+        }
+      ],
+      "prefill_greedy": {
+        "target": 4000,
+        "invalid": [
+          "reasoning text returned (94 chars)",
+          "no monitor samples for phase"
+        ],
+        "flags": [],
+        "prompt_tokens": 4128,
+        "expected_prompt_tokens": 4133,
+        "ttft_s": 0.271490875,
+        "prefill_tps": 15204.930920790615,
+        "cold_cached_tokens": 0,
+        "finish": "stop",
+        "reasoning_chars": 94,
+        "cached": {
+          "samples": [],
+          "invalid": [
+            "turn 1 returned no content; not substituting text, cached test skipped"
+          ],
+          "flags": []
+        }
+      },
+      "warmup": {
+        "adaptive": false,
+        "steps": [
+          {
+            "name": "prefill~2.9k+decode64",
+            "ok": true,
+            "s": 0.25,
+            "prompt_tokens": 2920,
+            "completion_tokens": 12,
+            "finish": "stop",
+            "thinking_leak": [
+              "reasoning text returned (44 chars)"
+            ]
+          },
+          {
+            "name": "tools",
+            "ok": true,
+            "s": 0.2,
+            "prompt_tokens": 425,
+            "completion_tokens": 56,
+            "finish": "stop",
+            "thinking_leak": [
+              "reasoning text returned (115 chars)"
+            ]
+          }
+        ],
+        "ok": true
+      },
+      "quiet_gate": true,
+      "rc": 0
+    },
+    "A2": {
+      "rows": [
+        {
+          "greedy": false,
+          "seed": 1,
+          "request_sha256": "d44a2ef21abd7c830f954ae4ecb330f67e0664cb5142be5bd765332e6deb72ab",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 101,
+          "finish_reason": "stop",
+          "ttft_s": 0.044161792,
+          "total_s": 0.317760084,
+          "flags": [
+            "completion token count differs from requested 512",
+            "finish reason differs from length"
+          ],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (261 chars)"
+          ],
+          "middle_window_tps": 381.0208738176798,
+          "rate_method": {
+            "events": 83,
+            "rate_method": "chars",
+            "tokens_per_event": 1.217,
+            "window_tokens": 80.5,
+            "window_s": 0.2112
+          },
+          "e2e_tps": 376.81649052360973,
+          "distinct4": null
+        },
+        {
+          "greedy": false,
+          "seed": 2,
+          "request_sha256": "a80355f02ea3484b784437d91b206a0509f5f9e1e7d739f96ee41db265730a01",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 14,
+          "finish_reason": "stop",
+          "ttft_s": 0.01929925,
+          "total_s": 0.057400166,
+          "flags": [
+            "completion token count differs from requested 512",
+            "finish reason differs from length"
+          ],
+          "invalid": [
+            "empty generated content",
+            "too few streamed events for middle-window rate",
+            "reasoning text returned (27 chars)"
+          ],
+          "middle_window_tps": null,
+          "rate_method": {
+            "events": 12,
+            "rate_method": "chars",
+            "tokens_per_event": 1.167
+          },
+          "e2e_tps": 398.66345928624895,
+          "distinct4": null
+        },
+        {
+          "greedy": false,
+          "seed": 3,
+          "request_sha256": "a90b2538bfcedbbe2111c2df178ec1f24e06eead943a54f13ef3b49b0cec0eb0",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.019209625,
+          "total_s": 1.432531292,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (942 chars)"
+          ],
+          "middle_window_tps": 359.18339809813824,
+          "rate_method": {
+            "events": 460,
+            "rate_method": "chars",
+            "tokens_per_event": 1.113,
+            "window_tokens": 490.8,
+            "window_s": 1.3664
+          },
+          "e2e_tps": 362.31742764552877,
+          "distinct4": null
+        },
+        {
+          "greedy": true,
+          "seed": 1,
+          "request_sha256": "cc53749e195a348878adfc1814cb6a3982872428e8de90c1404e142d37aa8ec3",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.020563375,
+          "total_s": 1.438842208,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (587 chars)"
+          ],
+          "middle_window_tps": 353.8284237307534,
+          "rate_method": {
+            "events": 354,
+            "rate_method": "chars",
+            "tokens_per_event": 1.446,
+            "window_tokens": 490.2,
+            "window_s": 1.3854
+          },
+          "e2e_tps": 361.71338178475827,
+          "distinct4": null
+        },
+        {
+          "greedy": true,
+          "seed": 2,
+          "request_sha256": "1c6004ed78cf92da9d8038a2d8e158a131732fbb46393096be50d52fbed6e18f",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.020297458,
+          "total_s": 1.433268792,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (532 chars)"
+          ],
+          "middle_window_tps": 354.89728386726205,
+          "rate_method": {
+            "events": 338,
+            "rate_method": "chars",
+            "tokens_per_event": 1.515,
+            "window_tokens": 489.9,
+            "window_s": 1.3803
+          },
+          "e2e_tps": 362.4053179671247,
+          "distinct4": null
+        },
+        {
+          "greedy": true,
+          "seed": 3,
+          "request_sha256": "b9d26741987aaffa7e7cf343412bff3977528857b007671883d040f31ab15d77",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.020012333,
+          "total_s": 1.4095775,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (1041 chars)",
+            "no monitor samples for phase"
+          ],
+          "middle_window_tps": 362.565414939057,
+          "rate_method": {
+            "events": 505,
+            "rate_method": "chars",
+            "tokens_per_event": 1.014,
+            "window_tokens": 490.9,
+            "window_s": 1.3538
+          },
+          "e2e_tps": 368.4983543937979,
+          "distinct4": null
+        }
+      ],
+      "prefill_greedy": {
+        "target": 4000,
+        "invalid": [
+          "reasoning text returned (94 chars)",
+          "no monitor samples for phase"
+        ],
+        "flags": [],
+        "prompt_tokens": 4128,
+        "expected_prompt_tokens": 4133,
+        "ttft_s": 0.266498375,
+        "prefill_tps": 15489.775500507272,
+        "cold_cached_tokens": 0,
+        "finish": "stop",
+        "reasoning_chars": 94,
+        "cached": {
+          "samples": [],
+          "invalid": [
+            "turn 1 returned no content; not substituting text, cached test skipped"
+          ],
+          "flags": []
+        }
+      },
+      "warmup": {
+        "adaptive": false,
+        "steps": [
+          {
+            "name": "prefill~2.9k+decode64",
+            "ok": true,
+            "s": 0.4,
+            "prompt_tokens": 2920,
+            "completion_tokens": 64,
+            "finish": "length",
+            "thinking_leak": [
+              "reasoning text returned (31 chars)"
+            ]
+          },
+          {
+            "name": "tools",
+            "ok": true,
+            "s": 1.44,
+            "prompt_tokens": 425,
+            "completion_tokens": 512,
+            "finish": "length",
+            "thinking_leak": [
+              "reasoning text returned (169 chars)"
+            ]
+          }
+        ],
+        "ok": true
+      },
+      "quiet_gate": true,
+      "rc": 0
+    },
+    "B2": {
+      "rows": [
+        {
+          "greedy": false,
+          "seed": 1,
+          "request_sha256": "d44a2ef21abd7c830f954ae4ecb330f67e0664cb5142be5bd765332e6deb72ab",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 101,
+          "finish_reason": "stop",
+          "ttft_s": 0.042916583,
+          "total_s": 0.326861625,
+          "flags": [
+            "completion token count differs from requested 512",
+            "finish reason differs from length"
+          ],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (261 chars)"
+          ],
+          "middle_window_tps": 364.87892774453036,
+          "rate_method": {
+            "events": 83,
+            "rate_method": "chars",
+            "tokens_per_event": 1.217,
+            "window_tokens": 80.5,
+            "window_s": 0.2206
+          },
+          "e2e_tps": 362.7298687189923,
+          "distinct4": null
+        },
+        {
+          "greedy": false,
+          "seed": 2,
+          "request_sha256": "a80355f02ea3484b784437d91b206a0509f5f9e1e7d739f96ee41db265730a01",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 14,
+          "finish_reason": "stop",
+          "ttft_s": 0.019364542,
+          "total_s": 0.057769709,
+          "flags": [
+            "completion token count differs from requested 512",
+            "finish reason differs from length"
+          ],
+          "invalid": [
+            "empty generated content",
+            "too few streamed events for middle-window rate",
+            "reasoning text returned (27 chars)"
+          ],
+          "middle_window_tps": null,
+          "rate_method": {
+            "events": 12,
+            "rate_method": "chars",
+            "tokens_per_event": 1.167
+          },
+          "e2e_tps": 395.97979382124095,
+          "distinct4": null
+        },
+        {
+          "greedy": false,
+          "seed": 3,
+          "request_sha256": "a90b2538bfcedbbe2111c2df178ec1f24e06eead943a54f13ef3b49b0cec0eb0",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.019339084,
+          "total_s": 1.470228334,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (942 chars)"
+          ],
+          "middle_window_tps": 349.5853887675447,
+          "rate_method": {
+            "events": 460,
+            "rate_method": "chars",
+            "tokens_per_event": 1.113,
+            "window_tokens": 490.8,
+            "window_s": 1.404
+          },
+          "e2e_tps": 352.9150644121307,
+          "distinct4": null
+        },
+        {
+          "greedy": true,
+          "seed": 1,
+          "request_sha256": "cc53749e195a348878adfc1814cb6a3982872428e8de90c1404e142d37aa8ec3",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.020373333,
+          "total_s": 1.461766833,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (587 chars)"
+          ],
+          "middle_window_tps": 348.1601652053685,
+          "rate_method": {
+            "events": 354,
+            "rate_method": "chars",
+            "tokens_per_event": 1.446,
+            "window_tokens": 490.2,
+            "window_s": 1.408
+          },
+          "e2e_tps": 355.86812721418096,
+          "distinct4": null
+        },
+        {
+          "greedy": true,
+          "seed": 2,
+          "request_sha256": "1c6004ed78cf92da9d8038a2d8e158a131732fbb46393096be50d52fbed6e18f",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.020172125,
+          "total_s": 1.432606083,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (532 chars)"
+          ],
+          "middle_window_tps": 355.1358225792876,
+          "rate_method": {
+            "events": 338,
+            "rate_method": "chars",
+            "tokens_per_event": 1.515,
+            "window_tokens": 489.9,
+            "window_s": 1.3794
+          },
+          "e2e_tps": 362.5417939120076,
+          "distinct4": null
+        },
+        {
+          "greedy": true,
+          "seed": 3,
+          "request_sha256": "b9d26741987aaffa7e7cf343412bff3977528857b007671883d040f31ab15d77",
+          "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "content_nonempty": false,
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "ttft_s": 0.020683417,
+          "total_s": 1.511741,
+          "flags": [],
+          "invalid": [
+            "empty generated content",
+            "reasoning text returned (1041 chars)"
+          ],
+          "middle_window_tps": 337.1775383625277,
+          "rate_method": {
+            "events": 505,
+            "rate_method": "chars",
+            "tokens_per_event": 1.014,
+            "window_tokens": 490.9,
+            "window_s": 1.4558
+          },
+          "e2e_tps": 343.357973301758,
+          "distinct4": null
+        }
+      ],
+      "prefill_greedy": {
+        "target": 4000,
+        "invalid": [
+          "reasoning text returned (94 chars)",
+          "no monitor samples for phase"
+        ],
+        "flags": [],
+        "prompt_tokens": 4128,
+        "expected_prompt_tokens": 4133,
+        "ttft_s": 0.274809709,
+        "prefill_tps": 15021.30334121492,
+        "cold_cached_tokens": 0,
+        "finish": "stop",
+        "reasoning_chars": 94,
+        "cached": {
+          "samples": [],
+          "invalid": [
+            "turn 1 returned no content; not substituting text, cached test skipped"
+          ],
+          "flags": []
+        }
+      },
+      "warmup": {
+        "adaptive": false,
+        "steps": [
+          {
+            "name": "prefill~2.9k+decode64",
+            "ok": true,
+            "s": 0.39,
+            "prompt_tokens": 2920,
+            "completion_tokens": 64,
+            "finish": "length",
+            "thinking_leak": [
+              "reasoning text returned (141 chars)"
+            ]
+          },
+          {
+            "name": "tools",
+            "ok": true,
+            "s": 0.11,
+            "prompt_tokens": 425,
+            "completion_tokens": 28,
+            "finish": "stop",
+            "thinking_leak": [
+              "reasoning text returned (60 chars)"
+            ]
+          }
+        ],
+        "ok": true
+      },
+      "quiet_gate": true,
+      "rc": 0
+    }
+  },
+  "HTTP": {
+    "reference": {
+      "pass": 39,
+      "fail": 15,
+      "failed_assertions": [
+        "thinking: correct answer",
+        "thinking: finish=stop + usage",
+        "tool call: finish=tool_calls",
+        "tool call: read_file or run_shell on /etc/hosts",
+        "tool result: final answer mentions 3",
+        "next turn: answer",
+        "non-stream tool call + int arg",
+        "thinking + tools: a call on /etc/hosts returned as a tool call",
+        "a side request sent beside a first request does not evict it (it called a tool)",
+        "anthropic: non-streamed tool call (stop_reason tool_use, tool_use on /etc/hosts, usage)",
+        "anthropic stream: final answer mentions 3",
+        "responses stream: a function_call on /etc/hosts",
+        "responses: the tool loop's next request is answered (mentions 3)",
+        "responses: its prompt is cached (input_tokens_details.cached_tokens >= the first prompt)",
+        "chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees"
+      ],
+      "rc": 1
+    },
+    "candidate": {
+      "pass": 40,
+      "fail": 14,
+      "failed_assertions": [
+        "thinking: correct answer",
+        "thinking: finish=stop + usage",
+        "tool call: finish=tool_calls",
+        "tool call: read_file or run_shell on /etc/hosts",
+        "tool result: final answer mentions 3",
+        "non-stream tool call + int arg",
+        "thinking + tools: a call on /etc/hosts returned as a tool call",
+        "a side request sent beside a first request does not evict it (it called a tool)",
+        "anthropic: non-streamed tool call (stop_reason tool_use, tool_use on /etc/hosts, usage)",
+        "anthropic stream: final answer mentions 3",
+        "responses stream: a function_call on /etc/hosts",
+        "responses: the tool loop's next request is answered (mentions 3)",
+        "responses: its prompt is cached (input_tokens_details.cached_tokens >= the first prompt)",
+        "chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees"
+      ],
+      "rc": 1
+    }
+  },
+  "builds": {
+    "reference": {
+      "binary_sha256": {
+        "kapitsa": "924bf1ae68625dcf25c06ec42fa7f139319d00e38886400152737322f648cace",
+        "logit_dump": "e9c4ff7977b8e6e9573e6c398731b7be25c0cb47d3509448716ff95c9b47b181",
+        "ni_run": "ea67d4bc0bc5a3e5abb1f73c49a11fe615ebcbc94db31d5636507a7901815cf1",
+        "libnaceinfer.a": "e8491119e455b2706615560ea5b46f9b49cea97ea8bd79bc92ef14c1006601e6"
+      },
+      "source_sha256_by_path": {
+        "src/gguf/quant.cpp": "b8ad97f19670bbde965e5cd933d62ab0380b31b4c845943fecd13b5c3ba85877"
+      }
+    },
+    "candidate": {
+      "binary_sha256": {
+        "kapitsa": "7bb777580de65fae572fd5d8c456fc6af086d074c7416d37c752a77c2ccfa427",
+        "logit_dump": "47357bf81db6e06a37072d1f3807a3eb6639f65db27d1e0f86b1c4fa2f2fc665",
+        "ni_run": "3b6fdbcf7d58d40aa1ac05843f601ffc3b21a6d35441b11d90e5eb7eb3a7fde0",
+        "libnaceinfer.a": "7334c5797bd7969a9bd26678d5cb14f0ea2e41a9e6da7488c77d9ab599a47913"
+      },
+      "source_sha256_by_path": {
+        "src/gguf/quant.cpp": "b06eabc34ea77176e1919066c5517ef81ecf614b95f73c9f40bb1557761dbfb7"
+      }
+    }
+  },
+  "checks": {
+    "report_only": 0,
+    "strict_zero": 0
+  },
+  "limitations": [
+    "Teacher-forced verification is not free-running MTP equivalence.",
+    "All native/fixed flags and invalid results are retained below. No valid inference-performance or universal non-regression claim.",
+    "Matching empty-content SHA256 values do not establish meaningful continuation equivalence; full-logit and independent-import equality are separate evidence.",
+    "Failed HTTP assertions remain failed; matching counts do not imply identical responses.",
+    "No complete-model runtime on M3; the launched M3 CPU job has not yet been collected. No floor changes."
+  ],
+  "fixed_request_content_hashes_equal_all_legs": true,
+  "reference_source_note": "Fresh exact pre-change main reference4f564ecb; own independent imports and output runs for this Q2_K change."
+}

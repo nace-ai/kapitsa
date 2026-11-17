@@ -1,0 +1,13 @@
+# M5 full-model completion
+
+Redacted derived evidence, not raw execution logs. Raw records and measured binaries are retained privately. This supplement adds to the frozen CPU-stage evidence; it does not replace it or relabel its results.
+
+Reference source: 20d9db6cd30d45a8ccff41bca001610a5d7e1e7e. Candidate model source: cf6bd3c98d2018035868d79ca65cb11491553e42 (production d22d5e25 plus CPU evidence). Fresh Release configuration and builds for both arms; exact binary hashes are in M5-MODEL-VALIDATION.json. Runs: Apple M5 Pro, 20 GPU cores, 48 GiB, macOS 26.6.2, Apple clang 17.0.0 (clang-1700.0.13.5). The pinned Qwen3.5-0.8B Q5_0 repository revision and full-file SHA are unchanged from CPU-VALIDATION.json.
+
+- Two independent full-model imports: all eight files literally equal.
+- Each arm: 584 rows / 145,018,880 fp32 values. Prefill 8, step 192, teacher-forced verify 192, batch 192. Every output value finite; complete output arrays and recorded inputs literally equal. Both report-only and explicit strict-zero comparisons pass. No noise floor was changed.
+- Native `kapitsa bench --quick --json`, actual A/B/A/B decode medians: 320.23 / 320.43 / 308.89 / 309.30 tok/s. All four rc0 with no invalid entries; repetition-flag counts are 1 / 3 / 3 / 3. Every original sample is retained, including candidate greedy median 319.97 versus reference 325.38 in the first pair, and candidate second-pair prefill follow-up median 0.0241s versus reference 0.0131s. Native prompts vary by run; these results do not establish fixed-input equality or universal non-regression, and no inference gain is claimed.
+- Fixed 24x512 requests: six complete request/content SHA pairs match across A/B/A/B. All24 responses have nonempty content and512 completion tokens. Each leg retains three repetition flags, no invalid entries; no measurement contention was flagged. These are hash comparisons of full request/content bytes, not a literal comparison claim or free-generating MTP evidence.
+- HTTP: reference49 PASS/6 FAIL, candidate49 PASS/6 FAIL. The failed assertions match: separately streamed reasoning; correct thinking answer; short in-flight request finishing before a long one; every queued request answered in full; neighboring/next request after a disconnect; immediate keepalive streaming while slots are busy. These remain failures, not a full HTTP pass and not proof of identical HTTP responses.
+
+The decoder speed evidence is CPU-only on M3 Ultra and M5 Pro; full-model runtime here is M5 only. Other chips, non-AArch64, ASan and free-generating MTP are unverified. No Metal kernel changed. All task workers and owned servers exited and the benchmark lock was released.

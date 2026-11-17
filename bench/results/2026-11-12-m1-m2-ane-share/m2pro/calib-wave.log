@@ -1,0 +1,27 @@
+[kapitsa] read 15.13 GB of weights in 15606 ms (1.0 GB/s)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 4270 ms
+[kapitsa] prewarmed 93 prefill pipelines in 4273 ms
+[kapitsa] loaded /Users/ec2-user/.cache/kapitsa/models/qwen3.8-27b-4bit: 64 layers, dense, 15.1 GB mapped in 20108 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: no calibration for Apple M2 Pro (run ane_calib) and no default share; GPU only
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+ane_calib --wave: Apple M2 Pro, macOS 25G332, 2048-row prefill chunks, 2 reps (median)
+GPU alone: 23405 ms per chunk (87.5 tok/s)
+ 4 units: 23759 ms per chunk (86.2 tok/s, 0.99x the GPU alone); build 2.0 s
+ 6 units: 22823 ms per chunk (89.7 tok/s, 1.03x the GPU alone); build 3.1 s
+ 8 units: 21754 ms per chunk (94.1 tok/s, 1.08x the GPU alone); build 3.6 s
+10 units: 20715 ms per chunk (98.9 tok/s, 1.13x the GPU alone); build 4.2 s
+12 units: 19707 ms per chunk (103.9 tok/s, 1.19x the GPU alone); build 5.0 s
+14 units: 18687 ms per chunk (109.6 tok/s, 1.25x the GPU alone); build 5.6 s
+16 units: 17643 ms per chunk (116.1 tok/s, 1.33x the GPU alone); build 6.5 s
+20 units: 15569 ms per chunk (131.5 tok/s, 1.50x the GPU alone); build 7.6 s
+24 units: 13530 ms per chunk (151.4 tok/s, 1.73x the GPU alone); build 8.7 s
+28 units: 11507 ms per chunk (178.0 tok/s, 2.03x the GPU alone); build 9.9 s
+[kapitsa] NI_ANE: Neural Engine split unavailable (ANE compile failed: Error Domain=com.apple.appleneuralengine.compiler Code=1 "_ANECompiler : ANECCompile() FAILED" UserInfo={NSLocalizedDescription=_ANECompiler : ANECCompile() FAILED, NSUnderlyingError=0x708c64c30 {Error Domain=com.apple.appleneuralengine.compiler Code=1 "ANECCompile(/var/folders/lr/r001x7rs11b40qqw5k415yf40000gn/C/nace-infer-ane/4f21981f4a83ce47/) FAILED: err=(
+    CompilationFailure
+)" UserInfo={NSLocalizedDescription=ANECCompile(/var/folders/lr/r001x7rs11b40qqw5k415yf40000gn/C/nace-infer-ane/4f21981f4a83ce47/) FAILED: err=(
+    CompilationFailure
+)}}}); the GPU runs the prefill FFN alone
+best: 28 units, 11507 ms per 2048-row chunk vs 23405 GPU alone (2.03x)
+rc=0

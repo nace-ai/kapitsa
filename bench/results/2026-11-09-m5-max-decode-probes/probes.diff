@@ -1,0 +1,548 @@
+diff --git a/src/kernels/tensor/v8attn_t.metal b/src/kernels/tensor/v8attn_t.metal
+index ee416f48..b8b595f5 100644
+--- a/src/kernels/tensor/v8attn_t.metal
++++ b/src/kernels/tensor/v8attn_t.metal
+@@ -68,7 +68,7 @@ NI_INLINE nhf_h8 v8t_load_tg(const threadgroup half* base, uint r0, uint c0, sho
+ // products and order, so the same partials to the bit (one layer of the 35B's heads, 8 rows, after 32K / 64K / 128K /
+ // 256K positions on the M5 Max: 0.35 / 0.36 / 0.73 / 1.40 ms against 0.46 / 0.43 / 0.84 / 1.58). At G 6 (3 pairs, the
+ // 27B) the 32 KB it holds cost more than the reads it saves (4.56 -> 5.41 ms at 256K): not instantiated there.
+-template <int G, int TREE, bool STAGE>
++template <int G, int TREE, int STAGE>
+ NI_INLINE void attn8t_impl(const device float* q, const device half* kc, const device half* vc,
+                            device float* part_o, device float* part_ml, constant V8tAttnP& p, uint R,
+                            const device int* tree, threadgroup float* xs, threadgroup half* kvt, uint2 tg, uint ntgx,
+@@ -120,13 +120,15 @@ NI_INLINE void attn8t_impl(const device float* q, const device half* kc, const d
+   for (uint k0 = start; k0 < kend; k0 += BK) {
+     if (STAGE) {
+       threadgroup_barrier(mem_flags::mem_threadgroup);  // (the previous step is done with both tiles and the exchange)
+-      for (uint i = sg * 32 + lane; i < BK * (D / 8); i += NTH) {  // 32 rows x 32 half8 of K, and of V
++      for (uint i = sg * 32 + lane; i < BK * (D / 8); i += NTH) {  // 32 rows x 32 half8 of K, and of V (STAGE 1)
+         const uint r = i / (D / 8), c = i % (D / 8) * 8, key = k0 + r;
+         const bool ok = key <= last;
+         const uint4 kx = ok ? *(const device uint4*)(kb + size_t(key) * D + c) : uint4(0);
+-        const uint4 vx = ok ? *(const device uint4*)(vb + size_t(key) * D + c) : uint4(0);
+         *(threadgroup uint4*)(kvt + r * D + c) = kx;
+-        *(threadgroup uint4*)(kvt + (BK + r) * D + c) = vx;
++        if (STAGE == 1) {
++          const uint4 vx = ok ? *(const device uint4*)(vb + size_t(key) * D + c) : uint4(0);
++          *(threadgroup uint4*)(kvt + (BK + r) * D + c) = vx;
++        }
+       }
+       threadgroup_barrier(mem_flags::mem_threadgroup);
+     }
+@@ -201,10 +203,10 @@ NI_INLINE void attn8t_impl(const device float* q, const device half* kc, const d
+       if (TREE == 1) pl = nhf_h8(sf[f] - nhf_f8(pf));
+       _Pragma("clang loop unroll(full)")
+       for (short id = 0; id < DH / 16; id += 2) {
+-        const nhf_h8 v0 = STAGE ? v8t_load_tg(vt, 16 * f, d0 + id * 16, fm, fn)
+-                                : v8t_load_kv(vb, k0 + 16 * f, d0 + id * 16, last, fm, fn);
+-        const nhf_h8 v1 = STAGE ? v8t_load_tg(vt, 16 * f, d0 + id * 16 + 16, fm, fn)
+-                                : v8t_load_kv(vb, k0 + 16 * f, d0 + id * 16 + 16, last, fm, fn);
++        const nhf_h8 v0 = STAGE == 1 ? v8t_load_tg(vt, 16 * f, d0 + id * 16, fm, fn)
++                                     : v8t_load_kv(vb, k0 + 16 * f, d0 + id * 16, last, fm, fn);
++        const nhf_h8 v1 = STAGE == 1 ? v8t_load_tg(vt, 16 * f, d0 + id * 16 + 16, fm, fn)
++                                     : v8t_load_kv(vb, k0 + 16 * f, d0 + id * 16 + 16, last, fm, fn);
+         if (TREE == 1) nhf_mma<half, half, false>(o[id], o[id + 1], pl, v0, v1);
+         nhf_mma<half, half, false>(o[id], o[id + 1], pf, v0, v1);
+       }
+@@ -236,7 +238,7 @@ NI_INLINE void attn8t_impl(const device float* q, const device half* kc, const d
+       uint2 tg [[threadgroup_position_in_grid]], uint2 ntg [[threadgroups_per_grid]],                               \
+       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                        \
+     threadgroup float xs[2 * ((8 * G + 15) / 16) * 32 * 16];                                                         \
+-    attn8t_impl<G, TREE, false>(q, kc, vc, part_o, part_ml, p, R, tree, xs, nullptr, tg, ntg.x, sg, ushort(lane));   \
++    attn8t_impl<G, TREE, 0>(q, kc, vc, part_o, part_ml, p, R, tree, xs, nullptr, tg, ntg.x, sg, ushort(lane));   \
+   }
+ ATTN8T(attn8t_partial_zone_g8, 8, 3)  // Qwen3.6 35B-A3B, Clover: 16 query heads over 2 KV heads, 4 tiles
+ ATTN8T(attn8t_partial_tree_g6, 6, 1)  // Qwen3.8 27B's wide verify: 24 query heads over 4 KV heads, 3 tiles, P as hi + lo
+@@ -250,6 +252,17 @@ ATTN8T(attn8t_partial_tree_g6, 6, 1)  // Qwen3.8 27B's wide verify: 24 query hea
+     uint2 ntg [[threadgroups_per_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+     uint lane [[thread_index_in_simdgroup]]) {
+   threadgroup half kvt[2 * 32 * 256];
+-  attn8t_impl<8, 3, true>(q, kc, vc, part_o, part_ml, p, R, tree, (threadgroup float*)kvt, kvt, tg, ntg.x, sg,
+-                          ushort(lane));
++  attn8t_impl<8, 3, 1>(q, kc, vc, part_o, part_ml, p, R, tree, (threadgroup float*)kvt, kvt, tg, ntg.x, sg,
++                       ushort(lane));
++}
++// (probe) K staged alone (16 KB, the score exchange inside it as STAGE 1), V fragments from the cache
++[[kernel, max_total_threads_per_threadgroup(256)]] void attn8tk_partial_zone_g8(
++    const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]],
++    device float* part_o [[buffer(3)]], device float* part_ml [[buffer(4)]], constant V8tAttnP& p [[buffer(5)]],
++    constant uint& R [[buffer(6)]], const device int* tree [[buffer(7)]], uint2 tg [[threadgroup_position_in_grid]],
++    uint2 ntg [[threadgroups_per_grid]], uint sg [[simdgroup_index_in_threadgroup]],
++    uint lane [[thread_index_in_simdgroup]]) {
++  threadgroup half kvt[32 * 256];
++  attn8t_impl<8, 3, 2>(q, kc, vc, part_o, part_ml, p, R, tree, (threadgroup float*)kvt, kvt, tg, ntg.x, sg,
++                       ushort(lane));
+ }
+diff --git a/src/kernels/verify8.metal b/src/kernels/verify8.metal
+index eb8d3b5b..f1102b61 100644
+--- a/src/kernels/verify8.metal
++++ b/src/kernels/verify8.metal
+@@ -1265,7 +1265,7 @@ NI_INLINE uint v8e_tile_rows(const device uint* sm, uint s, thread uint (&t)[RT]
+ 
+ // gate/up + SwiGLU: grid (N / 64, max(tiles, 1)) x 32 NSG threads; simdgroup sg owns columns 64 / NSG sg ..
+ // (the tile kernel's column slices of 8), 2 per pass: gate and up rows of both = 4 weight rows, 4 RT chains per lane.
+-template <uint RT, uint NSG>
++template <uint RT, uint NSG, bool ONE = false>
+ NI_INLINE void moe8e_gu_t(const device uint32_t* Wg, const device ushort* Sg, const device ushort* Bg,
+                           const device uint32_t* Wu, const device ushort* Su, const device ushort* Bu,
+                           const device half* table, const device float* sums, device float* hs, device float* hsum,
+@@ -1326,6 +1326,33 @@ NI_INLINE void moe8e_gu_t(const device uint32_t* Wg, const device ushort* Sg, co
+       for (uint q = 0; q < RT; ++q) d[r][q] = 0.0f;
+     // MMAs 0-3 take the group's even words, 4-7 the odd ones; a code pair (one shift + AND) is slots 2j, 2j + 1
+     // (a rolled loop: the fully unrolled 32 steps made 3x the code and ran slower)
++    // ONE (moe8e_gu_r2o): a tile of one live row runs row 0's chains alone; its dead rows' inputs are row 0's
++    // (v8e_tile_rows), so their sums are row 0's, the same values in the same order
++    if (ONE && nr == 1) {
++      for (uint mh = 0; mh < 2; ++mh) {
++        uint4 wv[4];
++        _Pragma("clang loop unroll(full)")
++        for (int r = 0; r < 4; ++r)
++          wv[r] = mh ? uint4(w[r][0].y, w[r][0].w, w[r][1].y, w[r][1].w) : uint4(w[r][0].x, w[r][0].z, w[r][1].x, w[r][1].z);
++        for (uint m4 = 0; m4 < 4; ++m4) {
++          const uint m = mh * 4 + m4, sh = 4 * m4;
++          _Pragma("clang loop unroll(full)")
++          for (uint j = 0; j < 4; ++j) {
++            const float x0 = float(xa[(m * 4 + j) * 32 + lane][0]), x1 = float(xb[(m * 4 + j) * 32 + lane][0]);
++            _Pragma("clang loop unroll(full)")
++            for (int r = 0; r < 4; ++r) {
++              const half2 c = as_type<half2>((wv[r][j] >> sh) & 0x000F000Fu);
++              d[r][0] = fma(float(c.x), x0, d[r][0]);
++              d[r][0] = fma(float(c.y), x1, d[r][0]);
++            }
++          }
++        }
++      }
++      _Pragma("clang loop unroll(full)")
++      for (int r = 0; r < 4; ++r)
++        _Pragma("clang loop unroll(full)")
++        for (uint q = 1; q < RT; ++q) d[r][q] = d[r][0];
++    } else
+     for (uint mh = 0; mh < 2; ++mh) {
+       uint4 wv[4];
+       _Pragma("clang loop unroll(full)")
+@@ -1395,7 +1422,7 @@ NI_INLINE void moe8e_gu_t(const device uint32_t* Wg, const device ushort* Sg, co
+     if (lane < nr) hsum[(RT * tg.y + lane) * (p.N / 64) + tg.x] = s;
+   }
+ }
+-#define NI_MOE8E_GU_T(NAME, RT, NSG)                                                                            \
++#define NI_MOE8E_GU_T(NAME, RT, NSG, ONE)                                                                       \
+   [[kernel]] void NAME(const device uint32_t* Wg [[buffer(0)]], const device ushort* Sg [[buffer(1)]],          \
+                        const device ushort* Bg [[buffer(2)]], const device uint32_t* Wu [[buffer(3)]],          \
+                        const device ushort* Su [[buffer(4)]], const device ushort* Bu [[buffer(5)]],            \
+@@ -1413,15 +1440,16 @@ NI_INLINE void moe8e_gu_t(const device uint32_t* Wg, const device ushort* Sg, co
+     threadgroup float hv[64 * RT];                                                                              \
+     threadgroup float red[8 * kV8];                                                                             \
+     threadgroup float tsx[RT * 32];                                                                             \
+-    moe8e_gu_t<RT, NSG>(Wg, Sg, Bg, Wu, Su, Bu, table, sums, hs, hsum, p, sm, ntiles, SWg, SSg, SBg, SWu, SSu, SBu, tg,  \
++    moe8e_gu_t<RT, NSG, ONE>(Wg, Sg, Bg, Wu, Su, Bu, table, sums, hs, hsum, p, sm, ntiles, SWg, SSg, SBg, SWu, SSu, SBu, tg,  \
+                         tid, sg, lane, xa, xb, dots, hv, red, tsx);                                             \
+   }
+-NI_MOE8E_GU_T(moe8e_gu_r2, 2, 8)
++NI_MOE8E_GU_T(moe8e_gu_r2, 2, 8, false)
++NI_MOE8E_GU_T(moe8e_gu_r2o, 2, 8, true)  // one-row tiles run one row's chains (bitwise moe8e_gu_r2)
+ 
+ // down (K == 512): grid (N / 128, max(tiles, 1)) x 128 threads; lane = (column c of 4, group g of 8), columns
+ // n0 + 4 i + c (i < 4) per pass (4 RT chains), two passes of 16 columns per simdgroup. Codes as 1024 + q (the down
+ // tile's CM 0 operands), inputs h from moe8e_gu_t; writes out[(t * k + slot) * N] as moe8_down does.
+-template <uint RT>
++template <uint RT, bool ONE = false>
+ NI_INLINE void moe8e_down_t(const device uint32_t* W, const device ushort* S, const device ushort* B,
+                             const device float* hs, const device float* hsum, device float* out,
+                             constant Moe8eParams& p, const device uint* sm, const device uint* ntiles,
+@@ -1475,6 +1503,31 @@ NI_INLINE void moe8e_down_t(const device uint32_t* W, const device ushort* S, co
+     for (int c = 0; c < 4; ++c)
+       _Pragma("clang loop unroll(full)")
+       for (uint q = 0; q < RT; ++q) d[c][q] = 0.0f;
++    if (ONE && nr == 1) {  // moe8e_down_r2o: row 0's chains alone (its dead rows' inputs and sums are row 0's)
++      for (uint mh = 0; mh < 2; ++mh) {
++        uint4 wv[4];
++        _Pragma("clang loop unroll(full)")
++        for (int c = 0; c < 4; ++c)
++          wv[c] = mh ? uint4(w[c][0].y, w[c][0].w, w[c][1].y, w[c][1].w) : uint4(w[c][0].x, w[c][0].z, w[c][1].x, w[c][1].z);
++        for (uint m4 = 0; m4 < 4; ++m4) {
++          const uint m = mh * 4 + m4, sh = 4 * m4;
++          _Pragma("clang loop unroll(full)")
++          for (uint j = 0; j < 4; ++j) {
++            const float x0 = float(xa[(m * 4 + j) * 8 + g][0]), x1 = float(xb[(m * 4 + j) * 8 + g][0]);
++            _Pragma("clang loop unroll(full)")
++            for (int c = 0; c < 4; ++c) {
++              const half2 a = as_type<half2>(((wv[c][j] >> sh) & 0x000F000Fu) | 0x64006400u);
++              d[c][0] = fma(float(a.x), x0, d[c][0]);
++              d[c][0] = fma(float(a.y), x1, d[c][0]);
++            }
++          }
++        }
++      }
++      _Pragma("clang loop unroll(full)")
++      for (int c = 0; c < 4; ++c)
++        _Pragma("clang loop unroll(full)")
++        for (uint q = 1; q < RT; ++q) d[c][q] = d[c][0];
++    } else
+     for (uint mh = 0; mh < 2; ++mh) {
+       uint4 wv[4];
+       _Pragma("clang loop unroll(full)")
+@@ -1520,7 +1573,7 @@ NI_INLINE void moe8e_down_t(const device uint32_t* W, const device ushort* S, co
+     simdgroup_barrier(mem_flags::mem_threadgroup);
+   }
+ }
+-#define NI_MOE8E_DOWN_T(NAME, RT)                                                                               \
++#define NI_MOE8E_DOWN_T(NAME, RT, ONE)                                                                          \
+   [[kernel]] void NAME(const device uint32_t* W [[buffer(0)]], const device ushort* S [[buffer(1)]],           \
+                        const device ushort* B [[buffer(2)]], const device float* hs [[buffer(3)]],             \
+                        const device float* hsum [[buffer(4)]], device float* out [[buffer(5)]],                \
+@@ -1533,9 +1586,10 @@ NI_INLINE void moe8e_down_t(const device uint32_t* W, const device ushort* S, co
+     threadgroup vec<half, RT> xa[32 * 8], xb[32 * 8];                                                          \
+     threadgroup float dots[4 * 16 * RT * 8];                                                                   \
+     threadgroup float tsx[RT * 8];                                                                             \
+-    moe8e_down_t<RT>(W, S, B, hs, hsum, out, p, sm, ntiles, SW, SS, SB, sh_out, tg, tid, sg, lane, xa, xb, dots, tsx); \
++    moe8e_down_t<RT, ONE>(W, S, B, hs, hsum, out, p, sm, ntiles, SW, SS, SB, sh_out, tg, tid, sg, lane, xa, xb, dots, tsx); \
+   }
+-NI_MOE8E_DOWN_T(moe8e_down_r2, 2)
++NI_MOE8E_DOWN_T(moe8e_down_r2, 2, false)
++NI_MOE8E_DOWN_T(moe8e_down_r2o, 2, true)  // one-row tiles run one row's chains (bitwise moe8e_down_r2)
+ 
+ // GPU self-check of the MMA rounding the moe8e passes rely on: grid (64) x 32 threads; threadgroup i chains two
+ // MMAs on pseudo-random operands (A: 4-bit codes as subnormal halves for even i, as 1024 + q for odd i; B: halves
+@@ -2237,7 +2291,7 @@ NI_INLINE float4 gdn_update(float4 st_g, float4 k, float d) { return fma(k, floa
+ // with: back_k / back_g / back_d, p.nback rows) fold first, then the pending rows; with p.lazy the folded state is not
+ // stored, the pending rows' k / g / d join the backlog, and the jumping rows rebuild from a register copy of the folded
+ // state (the stored state is stale). The next verify (p.lazy 0) stores it: the same updates in the same order.
+-template <bool TREE, bool LAZY = false, bool DEFER = false>
++template <bool TREE, bool LAZY = false, bool DEFER = false, bool PF = false>
+ NI_INLINE void gdn_step_verify8s_impl(const device float* q, const device float* k, const device float* v,
+                                       const device float* g, const device float* beta, device float* state,
+                                       device float* out, device float* pend_k, device float* pend_g,
+@@ -2299,7 +2353,27 @@ NI_INLINE void gdn_step_verify8s_impl(const device float* q, const device float*
+   const uint R = TREE && p.tree ? kf_live_rows(tree, p.R) : p.R;
+   // tree: a jumping row restarts from the base state, re-read from the state rows this thread holds (just stored by the
+   // fold, or unchanged when nothing was pending) instead of a register copy (16 registers fewer: more threads resident)
++  // PF (gdn_step_verify8s_tree_pf): row t + 1's inputs requested before row t's arithmetic (they read nothing the step
++  // writes), the same arithmetic in the same order
++  float4 nq4 = 0.0f, nk4 = 0.0f, nv4 = 0.0f;
++  float ngg = 0.0f, nbe = 0.0f;
++  if (PF && R > 0) {
++    nq4 = *(const device float4*)(q + (0 * p.Hk + hk) * D + lane * 4);
++    nk4 = *(const device float4*)(k + (0 * p.Hk + hk) * D + lane * 4);
++    ngg = g[0 * p.Hv + h];
++    nbe = beta[0 * p.Hv + h];
++    nv4 = *(const device float4*)(v + (0 * p.Hv + h) * D + row0);
++  }
+   for (uint t = 0; t < R; ++t) {
++    float4 pq4 = nq4, pk4 = nk4, pv4 = nv4;
++    float pgg = ngg, pbe = nbe;
++    if (PF && t + 1 < R) {
++      nq4 = *(const device float4*)(q + ((t + 1) * p.Hk + hk) * D + lane * 4);
++      nk4 = *(const device float4*)(k + ((t + 1) * p.Hk + hk) * D + lane * 4);
++      ngg = g[(t + 1) * p.Hv + h];
++      nbe = beta[(t + 1) * p.Hv + h];
++      nv4 = *(const device float4*)(v + ((t + 1) * p.Hv + h) * D + row0);
++    }
+     if (TREE && ((rebuild >> t) & 1u)) {
+       simdgroup_barrier(mem_flags::mem_device);  // this simdgroup's tape rows of the earlier rows
+       for (int r = 0; r < 4; ++r) st[r] = DEFER ? stl[r] : *(device float4*)(S + (row0 + r) * D + lane * 4);
+@@ -2319,10 +2393,10 @@ NI_INLINE void gdn_step_verify8s_impl(const device float* q, const device float*
+         }
+       }
+     }
+-    const float4 q4 = *(const device float4*)(q + (t * p.Hk + hk) * D + lane * 4);
+-    const float4 k4 = *(const device float4*)(k + (t * p.Hk + hk) * D + lane * 4);
+-    const float gg = g[t * p.Hv + h], be = beta[t * p.Hv + h];
+-    const float4 v4 = *(const device float4*)(v + (t * p.Hv + h) * D + row0);
++    const float4 q4 = PF ? pq4 : *(const device float4*)(q + (t * p.Hk + hk) * D + lane * 4);
++    const float4 k4 = PF ? pk4 : *(const device float4*)(k + (t * p.Hk + hk) * D + lane * 4);
++    const float gg = PF ? pgg : g[t * p.Hv + h], be = PF ? pbe : beta[t * p.Hv + h];
++    const float4 v4 = PF ? pv4 : *(const device float4*)(v + (t * p.Hv + h) * D + row0);
+     if (writer && sg == 0) *(device float4*)(pend_k + (t * p.Hv + h) * D + lane * 4) = k4;
+     if (writer && sg == 0 && lane == 0) pend_g[t * p.Hv + h] = gg;
+     float o[4], dl[4];
+@@ -2370,6 +2444,22 @@ NI_INLINE void gdn_step_verify8s_impl(const device float* q, const device float*
+                                sg, nsg, lane, tid);
+ }
+ 
++[[kernel]] void gdn_step_verify8s_tree_pf(const device float* q [[buffer(0)]], const device float* k [[buffer(1)]],
++                                          const device float* v [[buffer(2)]], const device float* g [[buffer(3)]],
++                                          const device float* beta [[buffer(4)]], device float* state [[buffer(5)]],
++                                          device float* out [[buffer(6)]], device float* pend_k [[buffer(9)]],
++                                          device float* pend_g [[buffer(10)]], device float* pend_d [[buffer(11)]],
++                                          constant GdnVerifyParams& p [[buffer(12)]],
++                                          device atomic_uint* cnt [[buffer(13)]], const device int* tree [[buffer(14)]],
++                                          const device int* path [[buffer(15)]], uint2 tg [[threadgroup_position_in_grid]],
++                                          uint2 ntg [[threadgroups_per_grid]], uint sg [[simdgroup_index_in_threadgroup]],
++                                          uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]],
++                                          uint tid [[thread_index_in_threadgroup]]) {
++  threadgroup uint last;
++  gdn_step_verify8s_impl<true, false, false, true>(q, k, v, g, beta, state, out, pend_k, pend_g, pend_d, p, cnt, tree,
++                                                   path, last, tg, ntg, sg, nsg, lane, tid);
++}
++
+ [[kernel]] void gdn_step_verify8s_tree_lazy(const device float* q [[buffer(0)]], const device float* k [[buffer(1)]],
+                                             const device float* v [[buffer(2)]], const device float* g [[buffer(3)]],
+                                             const device float* beta [[buffer(4)]], device float* state [[buffer(5)]],
+diff --git a/src/kernels/verify8_fuse.metal b/src/kernels/verify8_fuse.metal
+index 4856487a..8627f672 100644
+--- a/src/kernels/verify8_fuse.metal
++++ b/src/kernels/verify8_fuse.metal
+@@ -311,3 +311,27 @@ NI_INLINE void gdn_prep_verify8_impl(const device float* qkv, const device float
+     }
+   }
+ }
++
++// ---- weight prefetch (V8Knobs::pf, probe) ----
++// Reads up to 6 byte ranges (whole 16-byte words) through the GPU's caches and feeds nothing: dispatched beside a
++// latency-bound step (a grouped encoder's group), it leaves the next projection's weights in the system-level cache.
++[[kernel]] void v8_touch(const device uint4* r0 [[buffer(0)]], const device uint4* r1 [[buffer(1)]],
++                         const device uint4* r2 [[buffer(2)]], const device uint4* r3 [[buffer(3)]],
++                         const device uint4* r4 [[buffer(4)]], const device uint4* r5 [[buffer(5)]],
++                         device uint* sink [[buffer(6)]], constant uint* n [[buffer(7)]],
++                         uint gid [[thread_position_in_grid]], uint gsz [[threads_per_grid]]) {
++  const device uint4* rs[6] = {r0, r1, r2, r3, r4, r5};
++  uint4 a = 0, b = 0;
++  for (int j = 0; j < 6; ++j) {
++    const device uint4* p = rs[j];
++    const uint m = n[j];
++    uint i = gid;
++    for (; i + gsz < m; i += 2 * gsz) {
++      a ^= p[i];
++      b ^= p[i + gsz];
++    }
++    if (i < m) a ^= p[i];
++  }
++  a ^= b;
++  if (all(a == uint4(0x9e3779b9u, 0x7f4a7c15u, 0x85ebca6bu, 0xc2b2ae35u))) sink[0] = 1u;
++}
+diff --git a/src/model/dflash2.cpp b/src/model/dflash2.cpp
+index 288a88f1..04e84ba8 100644
+--- a/src/model/dflash2.cpp
++++ b/src/model/dflash2.cpp
+@@ -1528,7 +1528,12 @@ void DFlash2::enc_qmm8(Encoder& e, const std::vector<DflSeg8>& segs, const Buffe
+   uint32_t Ntot = 0;
+   for (auto& sg : segs) Ntot += sg.L->N;
+   const uint32_t gpr = K / 64;
+-  const int nt = ((Ntot + 15) / 16 > 8192 || gpr > 64) ? 32 : 16;
++  // probe: V8Knobs::dfl 256 = the target's rule (16 rows a simdgroup unless the grid passes 8192 threadgroups of 16);
++  // NI_DFL_NT=16|32 forces one
++  static const int nt_env = env_int("NI_DFL_NT", 0);
++  int nt = ((Ntot + 15) / 16 > 8192 || gpr > 64) ? 32 : 16;
++  if (v8_knobs().dfl & 256) nt = (Ntot + 15) / 16 > 8192 ? 32 : 16;
++  if (nt_env == 16 || nt_env == 32) nt = nt_env;
+   uint32_t ks = gpr > 32 && gpr <= 64 ? 4 : 8;
+   while (ks > 1 && gpr < ks) ks /= 2;
+   const bool pf = nt == 32 || gpr > 32;
+diff --git a/src/model/qwen35.h b/src/model/qwen35.h
+index 1ca5f823..56baf6eb 100644
+--- a/src/model/qwen35.h
++++ b/src/model/qwen35.h
+@@ -175,6 +175,12 @@ struct V8Knobs {
+   int shs = -1;  // NI_V8_MOE_SHS: the shared expert as small tiles (with split 8; -1 = the environment's)
+   int split = -1;  // NI_V8_MOE_SPLIT: experts with 3..split rows as 2-row small tiles (-1 = the environment's)
+   int dfl = 0;  // drafter experiments (DFlash2::encode_draft_impl): variant bits, A/B'd per cycle with NI_AB
++  // weight prefetch (probe): bits 1 = the next projection's weights read beside the latency-bound step before it, 2 = the
++  // router and shared expert beside it too, 4 = a grouped encoder with no prefetch (its own cost)
++  int pf = 0;
++  int pf_tgs = 2;  // the prefetch's threadgroups per GPU core
++  int r1 = 0;  // (probe) the exact MoE passes' one-row tiles run one row's chains (moe8e_*_r2o)
++  int gpf = 0;  // (probe) the tree DeltaNet step requests the next row's inputs ahead (gdn_step_verify8s_tree_pf)
+ };
+ V8Knobs& v8_knobs();
+ // "key=value,..." over a copy of `base` (keys: cm, pair, kplan, gusplit, gdnsplit, prepu, skip, pad, tw, twm, fuse, emu, shs,
+@@ -432,6 +438,8 @@ class Qwen35 : public Model {
+   // the 8-row verify can run a tree (its attention on attn8m, the split GDN step)
+   // the lazy GDN fold's backlog folded into the recurrent states (encode_verify8 defers storing them)
+   void flush_backlog(Encoder& e, Seq& s);
++  // weight prefetch (V8Knobs::pf): reads the linears' weights, scales and biases through the GPU's caches
++  void enc_touch(Encoder& e, std::initializer_list<const QLinear*> ls);
+   bool verify_tree_ok() const;
+   // Tree verifies wider than 8 rows (16 or 32: 2 or 4 tiles of 8 rows; KFlash's size rule picks the rows per cycle):
+   // encode_verify with a tree set and R = 16 or 32 encodes that capacity, and the GPU runs the tiles of the tree's live
+diff --git a/src/model/qwen35_v8.cpp b/src/model/qwen35_v8.cpp
+index 026ed442..94716b4a 100644
+--- a/src/model/qwen35_v8.cpp
++++ b/src/model/qwen35_v8.cpp
+@@ -100,6 +100,29 @@ uint32_t Qwen35::v8_packed_rg(uint32_t N) {
+   return rg;
+ }
+ 
++void Qwen35::enc_touch(Encoder& e, std::initializer_list<const QLinear*> ls) {
++  // up to 6 ranges a dispatch (buffers 0-5), whole 16-byte words
++  std::vector<Buffer> r;
++  for (const QLinear* q : ls)
++    if (q && *q)
++      for (const Tensor* t : {q->w, q->s, q->b})
++        if (t && t->buf.size >= 16) r.push_back(t->buf);
++  static const Buffer sink = Gpu::get().alloc(64, "v8_touch_sink");
++  const uint32_t tgs = uint32_t(std::max(1, v8_knobs().pf_tgs) * std::max(1, Gpu::get().core_count()));
++  for (size_t i = 0; i < r.size(); i += 6) {
++    uint32_t n[8] = {};
++    e.use(pipe8("v8_touch"));
++    for (size_t j = 0; j < 6; ++j) {
++      const size_t k = std::min(i + j, r.size() - 1);
++      e.buf(int(j), r[k]);
++      n[j] = i + j < r.size() ? uint32_t(r[k].size / 16) : 0u;
++    }
++    e.buf(6, sink);
++    e.bytes(7, n, sizeof(n));
++    e.dispatch(tgs, 1, 1, 256);
++  }
++}
++
+ void Qwen35::flush_backlog(Encoder& e, Seq& s) {
+   if (s.n_back <= 0) return;
+   static const bool tree_pin = env_int("NI_V8_TREE_PIN", 1) != 0;
+@@ -201,6 +224,9 @@ V8Knobs& v8_knobs() {
+     d.tw = env_int("NI_V8_TW", tw_supported() ? d.tw : 0);
+     d.twm = env_int("NI_V8_TWM", d.twm);
+     d.fuse = env_int("NI_V8_FUSE", d.fuse);
++    d.pf = env_int("NI_V8_PF", d.pf);
++    d.pf_tgs = env_int("NI_V8_PF_TGS", d.pf_tgs);
++    d.r1 = env_int("NI_V8_MOE_R1", d.r1);
+     return d;
+   }();
+   return k;
+@@ -233,6 +259,10 @@ V8Knobs v8_knobs_parse(const char* spec, V8Knobs k) {
+     else if (key == "shs") k.shs = v;
+     else if (key == "tkp") k.tkp = v;
+     else if (key == "dfl") k.dfl = v;
++    else if (key == "pf") k.pf = v;
++    else if (key == "pf_tgs") k.pf_tgs = v;
++    else if (key == "r1") k.r1 = v;
++    else if (key == "gpf") k.gpf = v;
+     else fatal("knobs: unknown key '%s'", key.c_str());
+     a = b + 1;
+   }
+@@ -876,14 +906,15 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
+   // NI_V8T_STAGE (default on, 0 = off): that kernel with its K / V tiles staged once a threadgroup
+   // (attn8ts_partial_zone_g8: the same partials to the bit; 0.35 / 0.73 / 1.40 ms after 32K / 128K / 256K positions
+   // against 0.46 / 0.84 / 1.58). Its 32 KB of threadgroup memory read as 64 KB under shader validation: not there
+-  static const bool stage = env_int("NI_V8T_STAGE", 1) != 0 && !getenv("MTL_SHADER_VALIDATION");
++  static const int stage_k = env_int("NI_V8T_STAGE", 1);
++  static const bool stage = stage_k != 0 && !getenv("MTL_SHADER_VALIDATION");
+   // and the 27B's tree verify (6 query heads per KV head; its 16-row wide verify's tiles): attn8t_partial_tree_g6, the
+   // keys, masks and partials of attn8m_partial_tree, P as a half pair (one layer, 16 rows: 1.07 / 2.36 / 4.59 ms after
+   // 32K / 128K / 256K positions against attn8m_partial_tree's 2.07 / 4.33 / 8.59; within 1.5e-6 of it)
+   const bool wt = tree && !zone && !block && attn_t && G == 6 && tw_supported() && !kv_i8();
+   if (mma) {
+     e.use(pipe8(wt     ? "attn8t_partial_tree_g6"
+-                : zt   ? (stage ? "attn8ts_partial_zone_g8" : "attn8t_partial_zone_g8")
++                : zt   ? (stage ? (stage_k == 2 ? "attn8tk_partial_zone_g8" : "attn8ts_partial_zone_g8") : "attn8t_partial_zone_g8")
+                 : zone ? "attn8m_partial_zone"
+                 : block ? "attn8m_partial_hist"
+                 : tree  ? "attn8m_partial_tree"
+@@ -894,9 +925,16 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
+     if (zone || (tree && !block)) e.buf(7, *v8_tree_);
+     // a wide tree verify: the chunks x the live row tiles along x (a chunk's tiles side by side)
+     const uint32_t tt = 64 * ((8 * G + 15) / 16);  // attn8t: a pair of simdgroups a 16-row tile
++    const int pfk = Encoder::profiling() ? 0 : v8_knobs().pf;
++    if ((pfk & 3) && e.grouped()) e.group_begin();
+     if (v8w_R_) v8_disp(e, nch, uint32_t(cfg_.hkv), 1, kV8wX, wt ? tt : 64 * G);
+     else if (zt || wt) e.dispatch(nch, cfg_.hkv, 1, tt);
+     else e.dispatch(nch, cfg_.hkv, 1, 64 * G);
++    if ((pfk & 3) && e.grouped()) {  // the o projection's weights (and the MoE's router and shared expert) beside it
++      if ((pfk & 2) && cfg_.moe) enc_touch(e, {&L.o, &L.router, &L.shared_gate, &L.sg, &L.su, &L.sd});
++      else enc_touch(e, {&L.o});
++      e.group_end();
++    }
+     if (block || zone) {
+       e.use(pipe8(fused ? "attn8_tree_zone_reduce" : zone ? "attn8_tree_zone" : "attn8_tree_block"));
+       e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, part_o_); e.buf(4, part_ml_);
+@@ -1118,7 +1156,7 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
+   // moe8e passes over a tile list (sm, h, h sums, tile count ntiles[1] at byte offset nt_off, grids at args_off)
+   auto moe8e = [&](const Buffer& sm, const Buffer& h, const Buffer& hsum, size_t nt_off, size_t args_off) {
+     kp::Moe8e ep{uint32_t(D), I, wstride, sstride, uint32_t(k)};
+-    e.use(pipe8("moe8e_gu_r2"));
++    e.use(pipe8(v8_knobs().r1 ? "moe8e_gu_r2o" : "moe8e_gu_r2"));
+     e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
+     e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
+     e.buf(6, v8t_); e.buf(7, v8s_); e.buf(8, h); e.buf(9, hsum);
+@@ -1128,7 +1166,7 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
+     e.buf(16, L.su.w->buf); e.buf(17, L.su.s->buf); e.buf(18, L.su.b->buf);
+     e.dispatch_indirect(v8args_, args_off, 256);
+     kp::Moe8e dq{I, uint32_t(D), dw, ds, uint32_t(k)};
+-    e.use(pipe8("moe8e_down_r2"));
++    e.use(pipe8(v8_knobs().r1 ? "moe8e_down_r2o" : "moe8e_down_r2"));
+     e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
+     e.buf(3, h); e.buf(4, hsum); e.buf(5, v8out_);
+     e.val(6, dq);
+@@ -1234,7 +1272,7 @@ void Qwen35::moe8_replay(Encoder& e, int li, int mask) {
+         e.dispatch(I / 32, S, 1, 256);
+       } else {
+         kp::Moe8e ep{uint32_t(D), I, wstride, sstride, uint32_t(k)};
+-        e.use(pipe8("moe8e_gu_r2"));
++        e.use(pipe8(v8_knobs().r1 ? "moe8e_gu_r2o" : "moe8e_gu_r2"));
+         e.buf(6, v8t_); e.buf(7, v8s_); e.buf(8, v8hsc_); e.buf(9, v8hse_);
+         e.val(10, ep);
+         e.buf(11, v8sm_); e.buf(12, v8nt_);
+@@ -1254,7 +1292,7 @@ void Qwen35::moe8_replay(Encoder& e, int li, int mask) {
+         e.dispatch(uint32_t(D) / 32, S, 1, 256);
+       } else {
+         kp::Moe8e dq{I, uint32_t(D), dw, ds, uint32_t(k)};
+-        e.use(pipe8("moe8e_down_r2"));
++        e.use(pipe8(v8_knobs().r1 ? "moe8e_down_r2o" : "moe8e_down_r2"));
+         e.buf(3, v8hsc_); e.buf(4, v8hse_); e.buf(5, v8out_);
+         e.val(6, dq);
+         e.buf(7, v8sm_); e.buf(8, v8nt_);
+@@ -1276,6 +1314,10 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
+           wide ? verify_rows_max() : 8);
+   if (pos + R + 1 >= s.cap) fatal("context full (%d)", s.cap);
+   v8_alloc();
++  // weight prefetch (probe, V8Knobs::pf): the verify on a grouped encoder (a barrier before every dispatch, except the
++  // prefetch beside the step it is paired with)
++  const int pfk = Encoder::profiling() ? 0 : v8_knobs().pf;
++  if (pfk) e.set_grouped(true);
+   const int D = cfg_.hidden;
+   const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
+   const int VD = cfg_.lin_hv * cfg_.lin_dv;
+@@ -1361,7 +1403,9 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
+       if (!(skip & 1) && split) {
+         // value-row blocks of split_thr / 32 simdgroups x 4 rows, then the gated norm into the table
+         const bool lz = lazy_path && (lazy || s.n_back > 0);  // the lazy kernel: deferring, or folding a backlog
+-        e.use(pipe8(lz ? "gdn_step_verify8s_tree_lazy" : tree || ptree ? "gdn_step_verify8s_tree" : "gdn_step_verify8s"));
++        e.use(pipe8(lz ? "gdn_step_verify8s_tree_lazy"
++                    : tree || ptree ? (v8_knobs().gpf ? "gdn_step_verify8s_tree_pf" : "gdn_step_verify8s_tree")
++                                    : "gdn_step_verify8s"));
+         e.buf(0, gq_); e.buf(1, gk_); e.buf(2, gv_); e.buf(3, gg_); e.buf(4, gbeta_);
+         e.buf(5, s.rec[i]); e.buf(6, gout_);
+         e.buf(9, s.pend_k[i]); e.buf(10, s.pend_g[i]); e.buf(11, s.pend_d[i]);
+@@ -1374,7 +1418,13 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
+         if (lz) {
+           e.buf(16, s.back_k[i]); e.buf(17, s.back_g[i]); e.buf(18, s.back_d[i]);
+         }
++        if (pfk & 3) e.group_begin();
+         e.dispatch(cfg_.lin_hv, 128 / (split_thr / 8), 1, uint32_t(split_thr));
++        if (pfk & 3) {  // the out projection's weights (and the MoE's router and shared expert) beside the step
++          if ((pfk & 2) && cfg_.moe) enc_touch(e, {&L.out, &L.router, &L.shared_gate, &L.sg, &L.su, &L.sd});
++          else enc_touch(e, {&L.out});
++          e.group_end();
++        }
+         // gdn_gnorm_x8t: also the T table of qmm8t
+         e.use(pipe8(tgn ? "gdn_gnorm_x8t" : "gdn_gnorm_x8"));
+         e.buf(0, gout_); e.buf(1, zb_); e.buf(2, L.gnorm->buf); e.buf(3, v8t_); e.buf(4, v8s_);
+@@ -1408,6 +1458,7 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
+   const bool tl = table_ready ? v8_tw() : enc_x8(e, x_, R, D, final_norm_, false, 0, nullptr, true);
+   if (v8_knobs().skip & 128) {
+     if (wide) v8_wide_end();
++    if (pfk) e.set_grouped(false);
+     return;
+   }
+   enc_qmm8(e, {{&lm_head_, logits_}}, R, v8t_, v8s_, false, tl ? &v8tt_ : nullptr);
+@@ -1433,6 +1484,7 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
+   if (wide) v8_disp(e, 1, 1, 1, kV8wXrows, 1024);
+   else e.dispatch(R, 1, 1, 1024);
+   if (wide) v8_wide_end();
++  if (pfk) e.set_grouped(false);
+ }
+ 
+ bool Qwen35::verify_tree_ok() const { return v8_tree_ok_c(cfg_); }
+diff --git a/tools/bench_verify8.cpp b/tools/bench_verify8.cpp
+index ed6dfd23..539a8fd9 100644
+--- a/tools/bench_verify8.cpp
++++ b/tools/bench_verify8.cpp
+@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
+         auto e = getenv("BENCH_GROUPED") ? g.begin_grouped() : g.begin();
+         for (int i = 0; i < inner; ++i)
+           for (int li = 0; li < L; ++li)
+-            if (m.config().moe) m.moe8_replay(*e, li, mask);
++            if (m.config().moe) m.moe8_replay(*e, getenv("BENCH_REPLAY_LAYER") ? atoi(getenv("BENCH_REPLAY_LAYER")) : li, mask);
+         e->commit_and_wait();
+         if (r >= 0) ms[v].push_back(e->gpu_ms() / inner);
+       }

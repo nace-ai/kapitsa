@@ -1,0 +1,29 @@
+prefill: 8 records (qwen3.8-27b-kquant)
+  reference: 0.2.35, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35, prefill_chunk 2048, ane {"chunks":7,"evals":896,"reruns":0}
+  bitwise identical rows 2 of 8; max |logit diff| 0.5376
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 3.461e-05 median 1.189e-06 p99 2.461e-04 max 2.642e-04; top-2 margin change up to 0.09897
+  next-token NLL change +3.389e-03 nats per record (candidate minus reference)
+batch: 192 records (qwen3.8-27b-kquant)
+  reference: 0.2.35, batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35, batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":7,"evals":896,"reruns":0}
+  bitwise identical rows 48 of 192; max |logit diff| 1.048
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 4.173e-05 median 2.215e-07 p99 6.072e-04 max 1.935e-03; top-2 margin change up to 0.196
+  next-token NLL change +1.197e-03 nats per record (candidate minus reference)
+step: 192 records (qwen3.8-27b-kquant)
+  reference: 0.2.35, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35, prefill_chunk 2048, ane {"chunks":7,"evals":896,"reruns":0}
+  bitwise identical rows 48 of 192; max |logit diff| 1.047
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 4.066e-05 median 1.898e-07 p99 5.933e-04 max 1.888e-03; top-2 margin change up to 0.1938
+  next-token NLL change +1.152e-03 nats per record (candidate minus reference)
+verify: 192 records (qwen3.8-27b-kquant)
+  reference: 0.2.35, verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.35, verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":7,"evals":896,"reruns":0}
+  bitwise identical rows 48 of 192; max |logit diff| 1.04
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 4.072e-05 median 2.172e-07 p99 5.940e-04 max 1.883e-03; top-2 margin change up to 0.1936
+  next-token NLL change +1.131e-03 nats per record (candidate minus reference)
+no noise floor for this model and no bounds given: reported only (tools/logit_floor.py measures one)

@@ -60,6 +60,10 @@ def fsrc(kl):
 FAKE_DUMP = r'''#!/usr/bin/env python3
 import array, json, os, random, sys
 a = sys.argv[1:]
+if "--list-paths" in a:  # as logit_dump decides it from config.json (here: Flint has no batch path)
+    print("step,verify" if json.load(open(os.path.join(a[0], "config.json")))["model_type"] == "flint"
+          else "step,verify,batch")
+    sys.exit(0)
 out, paths = a[1], a[a.index("--paths") + 1].split(",")
 rows = int(a[a.index("--rows") + 1]) if "--rows" in a else 24
 env = {k: os.environ.get(k, "") for k in ("NI_QMT", "NI_MATH_SAFE")}
@@ -79,6 +83,8 @@ for p in ["prefill"] + paths:
             if name:
                 q = random.Random(f"{name} {w} {k}")
                 row = [x + amp * q.gauss(0, 1) for x in row]
+        if os.environ.get("FAKE_NONFINITE") and p == "verify" and (w, k) == (0, 4):
+            row[0] = float("nan")
         data += row
     with open(os.path.join(d, "sequences.txt"), "w") as f:
         f.write("".join(" ".join(map(str, s)) + "\n" for s in seqs))
@@ -121,8 +127,33 @@ t2 = max((i for i in range(V) if i != t1), key=ref[NEAR].__getitem__)
 ref[NEAR][t2] = f32(ref[NEAR][t1] - 0.002)
 
 with tempfile.TemporaryDirectory() as tmp:
+    # Two observations at the same prefix still carry two independently scored rows.
+    sequences = [[1, 2], [1, 3], [2, 1]]
+    records = [(0, 1), (1, 1), (2, 1)]
+    same, flipped = [0., 1., 2., 3.], [3., 2., 1., 0.]
+    repeated = write_dump(os.path.join(tmp, "repeated"), sequences, records, [same] * 3)
+    changed = write_dump(os.path.join(tmp, "changed"), sequences,
+                         [records[2], records[0], records[1]], [same, flipped, same])
+    rc, out = run(repeated, changed, "--min-top1", "1")
+    check(rc == 1 and "1 flip" in out, "a changed duplicate prefix row reaches the gate", out)
+    short = write_dump(os.path.join(tmp, "short"), sequences, records[1:], [same] * 2)
+    rc, out = run(repeated, short, "--min-top1", "1")
+    check(rc == 2, "a missing occurrence of a prefix cannot be scored twice", out)
     meta = {"model": "test-model-without-floor", "build": "test", "path": "verify"}
     R = write_dump(os.path.join(tmp, "ref"), seqs, recs, ref, meta)
+
+    # A constant offset on just one row leaves its softmax unchanged.
+    a = write_dump(os.path.join(tmp, "offset"), [[0, 0]], [(0, 1)], [[2**60, 2**60]])
+    b = write_dump(os.path.join(tmp, "small"), [[0, 0]], [(0, 1)], [[0., 4.]])
+    metrics = lc.compare(lc.Dump(a), lc.Dump(b))
+    expected_nll = math.log1p(math.exp(4)) - math.log(2)
+    check(abs(metrics["kl_mean"] - (expected_nll - 2)) < 1e-12
+          and abs(metrics["nll_change_mean"] - expected_nll) < 1e-12
+          and metrics["max_abs_diff"] == 2**60,
+          "large row offset preserves KL, NLL and raw logit distance", metrics)
+    rc, out = run(a, b, "--max-mean-kl", "1", "--max-nll-change", "1")
+    check(rc == 1 and "FAIL: mean KL" in out and "FAIL: mean NLL change" in out,
+          "both bounds reject the offset row", out)
 
     # ---- identical ----
     rc, out = run(R, write_dump(os.path.join(tmp, "same"), seqs, recs, ref, meta))
@@ -423,6 +454,14 @@ with tempfile.TemporaryDirectory() as tmp:
                            capture_output=True, text=True)
         with open(out) as f:
             check(p.returncode == 0 and json.load(f)["reorder_gate"] == rg, "--rescore derives the reorder gate again")
+    with open(out, "rb") as f:
+        saved_floor = f.read()
+    p = subprocess.run([sys.executable, os.path.join(TOOLS, "logit_floor.py"), mdir, "--bin", fake,
+                        "--work", os.path.join(tmp, "bad-work"), "--out", out, "--rows", "6"],
+                       capture_output=True, text=True, env={**os.environ, "FAKE_NONFINITE": "1"})
+    with open(out, "rb") as f:
+        check(p.returncode != 0 and "non-finite" in p.stderr and "sequence 0 prefix 4" in p.stderr
+              and f.read() == saved_floor, "non-finite logits cannot replace a measured floor", p.stderr)
     lc_saved, lf_mac = lc.FLOORS, lf.this_mac
     try:  # --rescore without --out: this Mac's file
         lc.FLOORS = os.path.join(tmp, "floors2")

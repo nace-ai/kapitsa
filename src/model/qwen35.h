@@ -5,6 +5,7 @@
 #include <thread>
 #include "loader/safetensors.h"
 #include "metal/gpu.h"
+#include "model/ffn_share.h"
 #include "model/model.h"
 #include "model/moe_exl3.h"
 #include "model/moe_q20.h"
@@ -21,6 +22,7 @@ namespace ni {
 
 namespace ane {
 class FfnSplit;
+class ProjSplit;
 struct FfnConfig;
 struct FfnLayer;
 }
@@ -462,6 +464,9 @@ class Qwen35 : public Model {
   // target's own chain passes may run wider (pass_rows). NI_VPF's default is for a target whose drafter drafts
   // 16 rows, so the default keys on this and not on the capacity the pass raised.
   bool drafter_wide() const { return drafter_wide_; }
+  // A prefill pass of `rows` rows runs its dense GEMMs on the 64-row tensor tile (a dense model, the tile on, rows at
+  // or above NI_QMT_MIN's): the engine's NI_VPF default leaves such a suffix to the prefill path
+  bool tile_pass(int rows) const;
   // The rows one chain pass of a cached suffix runs (8, 16 or 32: vpf_pass_rows at load; a 24-row tail of a ladder
   // still runs inside the 32-row capacity).
   int pass_rows() const { return pass_rows_; }
@@ -659,16 +664,32 @@ class Qwen35 : public Model {
   // NI_ANE wavefront: the first half's rows (0 = not used for a chunk of T rows)
   int ane_wave_rows(int T) const;
   void enc_prefill_wave(Encoder& e, Seq& s, int pos0, int T, int h);
+  // NI_ANE_PROJ: the wavefront with the token mixers' input projections on the Neural Engine too (ane_proj_). Per layer
+  // the Neural Engine runs I_A(i), F_B(i-1), I_B(i), F_A(i) (I: input projection, F: FFN; half B a step behind half A).
+  void enc_prefill_wave2(Encoder& e, Seq& s, int pos0, int T, int h);
+  void enc_mixer_in(Encoder& e, int li, const Layer& L, int T, const Buffer& x, int lane);  // in-norm, pack, launch
+  void enc_gdn_ab(Encoder& e, const Layer& L, int T);  // DeltaNet's a / b from xh_ (GPU; tiny)
+  // unpack, then DeltaNet's scan and out_proj, or attention's (enc_attn_post)
+  void enc_mixer_out(Encoder& e, Seq& s, int li, const Layer& L, int T, const Buffer& x, int lane, int pos0);
+  void enc_attn_post(Encoder& e, Seq& s, int i, const Layer& L, int pos0, int T, const Buffer& xbuf);
+  bool gdn_par_on() const;
+  void ane_proj_build();
+  static bool proj_on(const Qwen35Config& c, bool log);  // NI_ANE_PROJ through the profile and ane_proj_fast
+  double ane_proj_verify();  // startup check: relative error against the GPU's projections
   // NI_PF_WAVE: a MoE chunk in two halves on the GPU alone, half B's token mixer beside half A's MoE layer and half A's
   // next mixer beside half B's MoE (Encoder tapes, play_pair): the first half's rows, 0 = not for a chunk of T rows
   int gpu_wave_rows(int T) const;
   void enc_prefill_gpu_wave(Encoder& e, Seq& s, int pos0, int T, int h);
   Buffer xh2_, hh2_;  // the MoE chain's xh_ / hh_ while a mixer uses those (gpu_wave_rows)
-  bool gpu_wave_model_ = true;  // false: the wavefront is off on this model today (Clover), only NI_PF_WAVE=1
   void enc_mlp_gpu_part(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x);
   // the same on the tensor_ops GEMMs (NI_QMT, 4-bit group 64); false: not applicable
   bool enc_mlp_gpu_part_qmt(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x);
   static bool qmt_ready();  // NI_QMT's tensor_ops GEMMs are on
+  static ffn_share::Qmtf qmtf_formats();  // the formats NI_QMTF's tensor_ops GEMMs take in this process
+  // the kernels the split's GPU part runs layer L's FFN on (ffn_share::gpu_part: plan(), init_ane() and
+  // enc_mlp_gpu_part_qmt decide by it)
+  static ffn_share::Path ffn_gpu_part(const Layer& L);
+  static ffn_share::Fmt ffn_fmt(const QLinear& q);  // an affine projection's format ({} for GGUF blocks, Q2_0, EXL3)
   // the M5 default share of the split (default_units' gpu_mma) applies to this model (NI_ANE_MMA)
   static bool mma_share_measured(const Qwen35Config& c);
   void enc_mlp_prefill_split(Encoder& e, int li, const Layer& L, int T, const Buffer& x);
@@ -824,6 +845,8 @@ class Qwen35 : public Model {
   void enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int old_cap, int new_cap);
 
   std::unique_ptr<ane::FfnSplit> ane_;
+  std::unique_ptr<ane::ProjSplit> ane_proj_;  // NI_ANE_PROJ (see enc_prefill_wave2)
+  bool ane_proj_chunk_ = false;               // the chunk being encoded runs it
   bool ane_chunk_ = false;  // the chunk being encoded runs the split
   bool ane_on_ = true;      // benchmarks: false runs the GPU alone
   AneStats ane_stats_;

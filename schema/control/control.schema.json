@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nace-ai/kapitsa/blob/main/schema/control/control.schema.json",
+  "title": "Kapitsa control socket, protocol 1",
+  "description": "The shared definitions and one entry per message of the control socket (docs/control-socket.md). Every message file refers back here for the shared types; the instance configuration's fields are step 1's docs/serve-config.schema.json, referred to, never copied.",
+  "$defs": {
+    "messages": {
+      "status": {"$ref": "status.schema.json"},
+      "event": {"$ref": "event.schema.json"},
+      "models": {"$ref": "models.schema.json"},
+      "stop_request": {"$ref": "stop-request.schema.json"},
+      "stop_response": {"$ref": "stop-response.schema.json"},
+      "model_switch_request": {"$ref": "model-switch-request.schema.json"},
+      "model_switch_response": {"$ref": "model-switch-response.schema.json"},
+      "error": {"$ref": "error.schema.json"}
+    },
+    "protocol": {"const": 1, "description": "The control protocol's version. A server speaks exactly one."},
+    "instance_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,32}$",
+      "description": "Names the socket: $KAPITSA_HOME/run/<instance_id>.sock"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16,64}$",
+      "description": "New at every process start; a different run_id means the instance restarted"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16,64}\\.[0-9]{1,19}$",
+      "description": "<run_id>.<seq>: the SSE id and the Last-Event-ID cursor; seq starts at 1 for each run"
+    },
+    "state": {"enum": ["starting", "loading", "ready", "switching", "released", "stopping"]},
+    "lifecycle": {
+      "enum": ["attached", "keep_running", "foreground"],
+      "description": "attached: a child of the app, exits with it; keep_running: a LaunchAgent, launchd owns it; foreground: a terminal's kapitsa serve"
+    },
+    "api": {"enum": ["openai", "anthropic", "ollama"]},
+    "count": {"type": "integer", "minimum": 0},
+    "rate": {"type": "number", "minimum": 0, "description": "tokens per second"},
+    "model": {
+      "description": "The loaded model; null before the first load finishes",
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "context_length", "slots"],
+          "properties": {
+            "id": {"type": "string", "minLength": 1},
+            "context_length": {"type": "integer", "minimum": 1},
+            "slots": {"type": "integer", "minimum": 1}
+          }
+        }
+      ]
+    },
+    "request_progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_id", "api", "phase", "prompt_tokens", "cached_tokens", "prefilled_tokens",
+        "completion_tokens", "elapsed_ms", "tokens_per_second"],
+      "properties": {
+        "request_id": {"type": "string", "minLength": 1, "maxLength": 64},
+        "api": {"$ref": "#/$defs/api"},
+        "client": {"type": "string", "maxLength": 128, "description": "the request's User-Agent, cut to 128 bytes"},
+        "phase": {"enum": ["waiting", "prefill", "writing"]},
+        "prompt_tokens": {"$ref": "#/$defs/count"},
+        "cached_tokens": {"$ref": "#/$defs/count"},
+        "prefilled_tokens": {"$ref": "#/$defs/count", "description": "prompt tokens this request has read, the cached ones excluded: prompt_tokens - cached_tokens once the prefill ends"},
+        "completion_tokens": {"$ref": "#/$defs/count"},
+        "elapsed_ms": {"$ref": "#/$defs/count"},
+        "tokens_per_second": {"$ref": "#/$defs/rate", "description": "completion tokens written during the last tick, divided by tick_ms"}
+      }
+    },
+    "error_code": {
+      "enum": ["bad_request", "unknown_field", "invalid_value", "forbidden_peer", "not_found", "model_not_found",
+        "method_not_allowed", "run_id_mismatch", "busy", "stopping", "load_failed", "internal"]
+    },
+    "engine": {
+      "description": "What the engine holds, sampled once per tick. Absent while no model is in memory and in Splash mode.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["memory", "slots", "cache"],
+      "properties": {
+        "memory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["budget_bytes", "allocated_bytes", "weights_bytes", "kv_bytes"],
+          "properties": {
+            "budget_bytes": {"type": "integer", "minimum": 1, "description": "GPU memory the engine may hold (mem_budget)"},
+            "allocated_bytes": {"type": "integer", "minimum": 0, "description": "GPU memory the engine holds now"},
+            "weights_bytes": {"type": "integer", "minimum": 0, "description": "of it, what the engine held before its slots: the model's weights, the drafter's and the buffers they run in"},
+            "kv_bytes": {"type": "integer", "minimum": 0, "description": "of it, the slots' KV caches as allocated: each slot's capacity in positions times the bytes per position"}
+          }
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["index", "busy", "tokens"],
+            "properties": {
+              "index": {"type": "integer", "minimum": 0},
+              "busy": {"type": "boolean"},
+              "tokens": {"type": "integer", "minimum": 0, "description": "positions in the slot's live state"},
+              "request_id": {"type": "string", "minLength": 1, "maxLength": 128}
+            },
+            "if": {"properties": {"busy": {"const": true}}},
+            "then": {"required": ["request_id"]},
+            "else": {"not": {"required": ["request_id"]}}
+          }
+        },
+        "cache": {
+          "description": "The prefix caches: what a follow-up request can continue from instead of reading its prompt again.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ram"],
+          "properties": {
+            "ram": {
+              "description": "The conversations the slots keep in memory, their KV rows and recurrent-state checkpoints. Counters since the model loaded.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["entries", "bytes", "hits", "hit_tokens"],
+              "properties": {
+                "entries": {"type": "integer", "minimum": 0, "description": "slots that hold a conversation"},
+                "bytes": {"type": "integer", "minimum": 0, "description": "GPU memory those slots hold for it: their KV capacity and their checkpoints' buffers"},
+                "hits": {"type": "integer", "minimum": 0, "description": "requests that continued from a slot's state or a checkpoint"},
+                "hit_tokens": {"type": "integer", "minimum": 0, "description": "prompt positions those requests did not read again"}
+              }
+            },
+            "ssd": {
+              "description": "The SSD prefix cache (--disk-cache). Absent when it is off, when the model has none and until its files are open. Counters since the model loaded, except entries, bytes and limit_bytes, which describe the cache.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["entries", "bytes", "limit_bytes", "read_bytes", "written_bytes", "hits", "hit_tokens"],
+              "properties": {
+                "entries": {"type": "integer", "minimum": 0, "description": "conversations stored"},
+                "bytes": {"type": "integer", "minimum": 0, "description": "disk space this model's cache holds"},
+                "limit_bytes": {"type": "integer", "minimum": 0, "description": "most the cache may hold now (--disk-cache, and a quarter of the volume's free space beyond 10 GiB for auto)"},
+                "read_bytes": {"type": "integer", "minimum": 0, "description": "read from the cache since it opened"},
+                "written_bytes": {"type": "integer", "minimum": 0, "description": "written to the cache since it opened"},
+                "hits": {"type": "integer", "minimum": 0, "description": "requests that resumed from a stored state"},
+                "hit_tokens": {"type": "integer", "minimum": 0, "description": "prompt positions those requests did not read again"}
+              }
+            }
+          }
+        },
+        "drafts": {
+          "description": "Speculative decoding counters since the model loaded. Absent when the model decodes without drafts.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cycles", "tokens"],
+          "properties": {
+            "cycles": {"type": "integer", "minimum": 0, "description": "decode cycles that verified a draft"},
+            "tokens": {"type": "integer", "minimum": 0, "description": "tokens those cycles wrote: the accepted draft tokens and each cycle's own token"}
+          }
+        }
+      }
+    },
+    "engine_state": {
+      "description": "engine is present only while state is ready: a switch frees the old engine before the new one loads",
+      "if": {"required": ["state"], "properties": {"state": {"const": "ready"}}},
+      "else": {"not": {"required": ["engine"]}}
+    },
+    "state_model": {"description": "Which states name a model: a ready, switching or released instance always does, a starting one never", "allOf": [{"if": {"required": ["state"], "properties": {"state": {"enum": ["ready", "switching", "released"]}}}, "then": {"properties": {"model": {"type": "object"}}}}, {"if": {"required": ["state"], "properties": {"state": {"const": "starting"}}}, "then": {"properties": {"model": {"type": "null"}}}}]}
+  }
+}

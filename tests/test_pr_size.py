@@ -47,13 +47,14 @@ with tempfile.TemporaryDirectory() as repo:
     write(repo, "tests/test_x.py", 50)            # tests count: a change without them is not smaller
     write(repo, "third_party/lib/big.h", 5000)    # not counted
     write(repo, "bench/results/run/out.json", 700)  # not counted
+    write(repo, "bench/community/uncensored/run/bench.json", 100)  # not counted
     write(repo, "docs/assets/pic.svg", 300)       # not counted
     git(repo, "add", "-A"); git(repo, "commit", "-qm", "change")
     head = git(repo, "rev-parse", "HEAD")
 
     rc, out = run(repo, base, head)
     check(rc == 0 and "70 counted lines" in out, "counts code and tests, skips third-party, results and images", out)
-    check("third-party sources (5000)" in out and "recorded results (700)" in out, "lists what it skipped", out)
+    check("third-party sources (5000)" in out and "recorded results (800)" in out, "lists what it skipped", out)
 
     rc, out = run(repo, base, head, LIMIT="50")
     check(rc == 1 and "src/a.cpp" in out and "Over the cap" in out, "over the cap fails and names the files", out)

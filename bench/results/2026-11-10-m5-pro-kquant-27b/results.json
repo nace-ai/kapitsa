@@ -1,0 +1,169 @@
+{
+ "kquant": {
+  "reference": "Qwen/Qwen3.8-27B @ 37561816 (bf16)",
+  "kl_tokens": 32704,
+  "standard": {
+   "label": "Kapitsa catalog 4-bit (lmstudio-community)",
+   "repo": "lmstudio-community/Qwen3.8-27B-MLX-4bit",
+   "revision": "6067b15",
+   "size_gb": 15.13,
+   "kl": 0.0544,
+   "top1": 0.912,
+   "gsm8k": 0.95,
+   "gsm8k_n": 1319,
+   "decode_t06": [
+    77.57,
+    78.52,
+    83.76
+   ],
+   "decode_t0": [
+    82.07,
+    82.47,
+    83.92
+   ],
+   "prefill_4k": [
+    744.7,
+    736.5,
+    676.8
+   ]
+  },
+  "kquant": {
+   "repo": "nace-ai/Qwen3.8-27B-MLX-4bit-KQuant",
+   "size_gb": 15.13,
+   "kl": 0.0349,
+   "top1": 0.929,
+   "gsm8k": 0.953,
+   "gsm8k_n": 1319,
+   "revision": "cf91c446",
+   "decode_t06": [
+    76.66,
+    72.18,
+    68.53
+   ],
+   "decode_t0": [
+    90.44,
+    92.03,
+    90.47
+   ],
+   "prefill_4k": [
+    737.3,
+    740.5,
+    727.3
+   ]
+  },
+  "gsm8k_pair": {
+   "only_kquant": 17,
+   "only_standard": 13
+  },
+  "sibling": {
+   "model": "Qwen3.5-9B",
+   "repo": "nace-ai/Qwen3.5-9B-MLX-4bit-KQuant"
+  },
+  "readme_url": "https://github.com/nace-ai/kapitsa#kquant",
+  "record_url": "https://github.com/nace-ai/kapitsa/blob/main/bench/results/2026-11-10-m5-pro-kquant-27b/README.md",
+  "quality_note": "the text weights of both packs (15.13 GB each); the repos also carry the vision tower, which neither run exercised",
+  "scored_with": "mlx-lm 0.32.2 on a Modal H100 (mlx with CUDA), on the text weights",
+  "text_caveat": "Quality was measured on text workloads; the vision tower is included but was not evaluated.",
+  "catalog_pinned": false,
+  "min_kapitsa": "This needs Kapitsa 0.2.34 or later (or a build from main until 0.2.34 is out).",
+  "credits": "The MTP head (`mtp.safetensors`) and `mtplx_runtime.json` are from [Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed](https://huggingface.co/Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed) at `1d5087d2` (MTPLX, apache-2.0), unchanged. Tokenizer and chat template as in [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B). Thanks to Youssofal.",
+  "tokenizer_note": "this repo ships the tokenizer of Qwen3.8-27B; every run here used the catalog pack's tokenizer, whose ids are identical on English, code, math, CJK, emoji and RTL text; Devanagari and Thai were not measured",
+  "speed_headline": false,
+  "standard_role": "the pack `kapitsa serve --model 27b` serves",
+  "mac": {
+   "name": "MacBook Pro",
+   "chip": "M5 Pro",
+   "ram_gb": 48,
+   "macos": "26.5.2"
+  },
+  "kapitsa_version": "0.2.32",
+  "speed_caveat": "Two of the three KQuant legs ran before `mtplx_runtime.json` was in the pack directory; the third leg has it, as this repo ships it.",
+  "catalog_pinned_note": "false on main until the opt-in catalog variant 27b:kquant lands (a separate Kapitsa PR); the published model card is generated with true so its run line is correct on the day the repo goes public",
+  "engine_note": "the DFlash2 drafter [incoai/Qwen3.8-27B-DFlash2](https://huggingface.co/incoai/Qwen3.8-27B-DFlash2) at `015e7956` for both packs; speeds with another drafter will differ",
+  "speed_claim": false
+ },
+ "model": "Qwen3.8-27B",
+ "base_repo": "Qwen/Qwen3.8-27B",
+ "date": "2026-11-10",
+ "license": "apache-2.0",
+ "pipeline_tag": "image-text-to-text",
+ "kapitsa_commit": "e728524",
+ "source": "k436 kq/res/q38-27b (cat27_4 = /vol/packs/q38-27b/lms-4bit, kq27_4 = kq-4bit-text, both on Modal H100); repo file list from nace-ai/Qwen3.8-27B-MLX-4bit-KQuant @ cf91c446 (private; shards equal to the test repo k436-test-qwen3.8-27b-mlx-4bit-kquant @566dc4e8, tokenizer and chat template files equal to Qwen/Qwen3.8-27B @37561816, mtp.safetensors and mtplx_runtime.json equal to Youssofal @1d5087d2); scored_with, the text-only quality note and the baseline identity (speed legs: the Mac plain-leg copy of lmstudio @6067b15c is hash-proven against the Hub; quality: the Modal copy is the same pack by construction, a snapshot_download at that revision, not re-hashed) confirmed by B 10 Nov (k436/res/results.kquant-qwen3.8-27b.json notes); speed legs: mac/runs/27b-six4 (1-B, 3-B KQuant; 2-A, 4-A, 6-A standard) and mac/runs/27b-top2 (third KQuant leg), per-leg medians from the leg files; the run line `kapitsa serve --model 27b:kquant` needs the opt-in catalog variant (B's PR, after kapitsa#1149)",
+ "variants": [
+  {
+   "name": "mlx-4bit-kquant",
+   "format": "mlx",
+   "bits": 4,
+   "size_gb": 15.13,
+   "repo": "nace-ai/Qwen3.8-27B-MLX-4bit-KQuant",
+   "kapitsa_model": "27b:kquant",
+   "kquant": true,
+   "files": [
+    {
+     "name": "chat_template.jinja",
+     "bytes": 9004
+    },
+    {
+     "name": "config.json",
+     "bytes": 4156
+    },
+    {
+     "name": "generation_config.json",
+     "bytes": 202
+    },
+    {
+     "name": "merges.txt",
+     "bytes": 3353259
+    },
+    {
+     "name": "model-00001-of-00003.safetensors",
+     "bytes": 5343268960
+    },
+    {
+     "name": "model-00002-of-00003.safetensors",
+     "bytes": 5354185240
+    },
+    {
+     "name": "model-00003-of-00003.safetensors",
+     "bytes": 5357087824
+    },
+    {
+     "name": "model.safetensors.index.json",
+     "bytes": 209549
+    },
+    {
+     "name": "mtp.safetensors",
+     "bytes": 238934249
+    },
+    {
+     "name": "mtplx_runtime.json",
+     "bytes": 6566
+    },
+    {
+     "name": "preprocessor_config.json",
+     "bytes": 390
+    },
+    {
+     "name": "processor_config.json",
+     "bytes": 991
+    },
+    {
+     "name": "tokenizer.json",
+     "bytes": 12809320
+    },
+    {
+     "name": "tokenizer_config.json",
+     "bytes": 9984
+    },
+    {
+     "name": "video_preprocessor_config.json",
+     "bytes": 385
+    },
+    {
+     "name": "vocab.json",
+     "bytes": 6722759
+    }
+   ]
+  }
+ ]
+}

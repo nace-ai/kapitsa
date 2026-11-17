@@ -1,0 +1,234 @@
+{
+  "kind": "Redacted derived evidence, not raw logs. Raw command paths are replaced by reproducible placeholders; measurements and source/binary identities are unchanged.",
+  "reference_commit": "104fae247dde8f999e45fde3d706bc5a02561890",
+  "candidate_source_sha256": {
+    "src/gguf/quant.cpp": "78b4392dcc1c51854f2d71aae38e9ea40e30be75b910ce331c80fb191dcb3b7c",
+    "tools/gguf_iq2_xxs_test.h": "7414f91f24fbeaeb87d8f80fffa0c91c441e2b6136957422e60457af8d5552de",
+    "tools/iq_layout_test.cpp": "53c1bd6780e3eb3d23e04e32515a7a50c15aa3a364e522478df09b1449cfcb0f"
+  },
+  "reference_quant_source_sha256": "f09ffcfccefdb98365a8cdfd6e88fe3dc3bcb5436a729790eb663dcc0d117b59",
+  "measurement_identity": "Pre-commit standalone builds; not relabeled as post-commit CLI measurements.",
+  "setup": {
+    "chip": "M5 Pro",
+    "gpu_cores": 20,
+    "memory_GiB": 48,
+    "macos": "26.6.2",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "model": {
+    "repo": "Acnoryx/Airy",
+    "revision": "ba4ce94d5e7bcdd4997f4dbf6275848c99c7fbb5",
+    "repository_file": "gguf/Airy-0.8b-IQ1_S.gguf",
+    "sha256": "8065a5ec831f74f8e38e12b219abb61aa564bf677b97c70cd049747bcda90711",
+    "inventory": {
+      "architecture": "qwen35",
+      "file_bytes": 329943456,
+      "sample": {
+        "K": 2048,
+        "bytes": 540672,
+        "rows": 1024,
+        "tensor": "blk.3.attn_output.weight"
+      },
+      "types": {
+        "F32": 133,
+        "IQ1_S": 153,
+        "IQ2_XXS": 6,
+        "Q2_K": 3,
+        "Q4_K": 24,
+        "Q5_K": 1
+      },
+      "version": 3
+    }
+  },
+  "sample_sha256": "2e9baf32fb432e57b5e36271e4fb36b283803b3e690d1b64f05d223d1cca0e38",
+  "method": "Same C++20 -O3 benchmark driver and type stubs; only quant.cpp differs. Exclusive GPU lock; A B A B, 16 measured full decodes per leg after one untimed decode. Reference full output is the byte oracle for every pass.",
+  "legs": {
+    "A1": {
+      "ns_per_row": [
+        559.082031,
+        623.820312,
+        651.489258,
+        585.164062,
+        534.545898,
+        550.537109,
+        534.667969,
+        542.358398,
+        564.65625,
+        590.373047,
+        549.357422,
+        555.908203,
+        543.334961,
+        538.655273,
+        544.392578,
+        551.391602
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 550.9643555
+    },
+    "B1": {
+      "ns_per_row": [
+        327.311523,
+        305.013672,
+        300.821289,
+        302.896484,
+        304.525391,
+        305.378906,
+        310.668945,
+        278.767578,
+        277.791992,
+        297.607422,
+        284.341797,
+        288.085938,
+        273.885742,
+        266.479492,
+        259.399414,
+        255.004883
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 292.84668
+    },
+    "A2": {
+      "ns_per_row": [
+        434.977539,
+        417.154297,
+        414.265625,
+        427.856445,
+        414.224609,
+        419.474609,
+        445.84082,
+        419.473633,
+        414.266602,
+        414.265625,
+        415.486328,
+        416.870117,
+        414.144531,
+        395.956055,
+        399.414062,
+        395.344727
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 414.876465
+    },
+    "B2": {
+      "ns_per_row": [
+        269.491211,
+        213.623047,
+        217.977539,
+        204.264648,
+        219.563477,
+        203.083984,
+        205.648438,
+        203.207031,
+        202.026367,
+        203.083984,
+        206.379883,
+        217.814453,
+        206.257812,
+        203.450195,
+        202.433594,
+        208.210938
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 205.953125
+    }
+  },
+  "complete_output_files_literal_equal": true,
+  "actual_complete_output_bytes_per_pass": 8388608,
+  "reporting_correction": "The original driver JSON hardcodes complete_bytes_per_pass=4194304. Its actual memcmp uses the whole 1024*2048*sizeof(float)=8388608 bytes; every saved leg file is 8388608 bytes and was compared literally. The original driver and reported field are retained unchanged here, with this explicit correction. This is a reporting-field correction, not a new measurement.",
+  "benchmark_binaries_sha256": {
+    "reference": "5a11e9320a9891b83e27529c248ca00485a5ee65f0777fe3c1278e37a6e08b16",
+    "candidate": "dc44b8eeb001d8ba76c43aaa0ebc698747e3db581b761f57fa2fba282efae57a"
+  },
+  "correctness_binaries_sha256": {
+    "check-ubsan": "131a3646e2e958920eaeddd3cd7c1a6b095e975533509bb804bdb6a1b38eb7f8",
+    "check-candidate": "2be7debbdb2ec11ab53d6e32f467ee9a05077a4878f96cddf3a14d35620aa7e4",
+    "check-mutant": "f50219e039770a84468e3c55e26eee057d30a8c26da0d1ba9dfbce0c1ef49e10",
+    "check-reference": "308f1635fc00f68e3f89d35f77e11d4dac39cedc009edefcc22deb60bf9c23a6"
+  },
+  "checks": {
+    "reference": "942282 oracle/overlap cases and guarded blocks PASS",
+    "candidate": "942282 oracle/overlap cases and guarded blocks PASS",
+    "ubsan": "same full focused harness PASS",
+    "mutation": "Masking grid index bit 7 fails the oracle, expected rc 1.",
+    "vk_cpu_tests": {
+      "pass": 23,
+      "fail": 0,
+      "base": "104fae247dde8f999e45fde3d706bc5a02561890",
+      "candidate_sources": {
+        "src/gguf/quant.cpp": "78b4392dcc1c51854f2d71aae38e9ea40e30be75b910ce331c80fb191dcb3b7c",
+        "tools/gguf_iq2_xxs_test.h": "7414f91f24fbeaeb87d8f80fffa0c91c441e2b6136957422e60457af8d5552de",
+        "tools/iq_layout_test.cpp": "53c1bd6780e3eb3d23e04e32515a7a50c15aa3a364e522478df09b1449cfcb0f"
+      }
+    },
+    "prek": "PASS",
+    "git_diff_check": "PASS",
+    "post_rebase": {
+      "head": "799df67b136b2ad2e7996fa2bfa7c0502b3a82cc",
+      "steps": [
+        {
+          "label": "configure",
+          "rc": 0
+        },
+        {
+          "label": "build",
+          "rc": 0
+        },
+        {
+          "label": "iq-layout",
+          "rc": 0
+        },
+        {
+          "label": "prek",
+          "rc": 0
+        },
+        {
+          "label": "diff",
+          "rc": 0
+        }
+      ],
+      "iq2_xxs_decoder_unchanged_after_rebase": true,
+      "rc": 0
+    }
+  },
+  "not_verified": [
+    "Complete-model independent imports and GPU outputs on this source pair",
+    "Second-chip A/B",
+    "Whole-import or inference speedup",
+    "ASan",
+    "non-AArch64 execution",
+    "Free-running MTP"
+  ],
+  "source_files": {
+    "benchmark-driver.cpp": "eec313c6b16f88b8319f373545b9dd6897e30232af387724b30e8d3fa790991c",
+    "stubs.cpp": "55f2d1dcbdb8b80cedc393d5321c66500a0fccc4c2c97ac1de6f8e87ccee5287",
+    "focused.cpp": "15a1e6b07ed61f8d6896d53e6fd5238325b4579defcebffe6a56ccdeed58630c"
+  },
+  "publication_production_commit": "799df67b136b2ad2e7996fa2bfa7c0502b3a82cc",
+  "publication_base": "fd98ce47e96df885371883dbc8510e6e118ca977",
+  "publication_note": "Rebased after the measurements onto newer main, which adds the independent IQ2_S decoder and README changes. IQ2_XXS implementation is unchanged; original timed source hashes remain authoritative. This record does not relabel the standalone measurements.",
+  "publication_source_sha256": {
+    "src/gguf/quant.cpp": "02bf989e59819ae2dcf68365195411c4c8d03b371a7315986032bee97adbf0c8",
+    "tools/gguf_iq2_xxs_test.h": "7414f91f24fbeaeb87d8f80fffa0c91c441e2b6136957422e60457af8d5552de",
+    "tools/iq_layout_test.cpp": "a850bc5ba7bdc6a6b3f81956dfad05af08d42205643bcfe6006dd6369c27c8a3"
+  }
+}

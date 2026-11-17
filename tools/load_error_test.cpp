@@ -3,6 +3,7 @@
 // through the real loader using tiny Metal buffers, without dispatching a kernel.
 #include "util/load_threads.h"
 #include "loader/safetensors.h"
+#include "loader/load_stop.h"
 #include "gguf/gguf.h"
 #include "gguf_split_cleanup_test.h"
 #include "model/expert_store.h"
@@ -588,7 +589,62 @@ static void gpu() {
   g.release(sentinel);
   std::cout << "PASS real Metal compile/pipeline retry and buffer rollback after GPU work\n";
 }
+// A stop asked during the load (src/loader/load_stop.h), in a child per case: argv = --load-stop DIR CASE.
+// "ask": the action ends the child from a reader, once, before every piece is read; "ask-index" and "ask-deferred"
+// the same through SafetensorsIndex::read and read_deferred(); "no-ask" (action set) and "no-action" (asked) read all.
+[[noreturn]] static void load_stop_child(const std::string& dir, const std::string& c) {
+  if (c != "no-action") set_load_stop_action([] { (void)!write(STDOUT_FILENO, "S", 1); _exit(42); });
+  if (c != "no-ask") ask_load_stop();
+  if (c == "ask-index") {
+    SafetensorsIndex idx(dir);
+    std::vector<uint8_t> b(4096);
+    for (const auto& [name, e] : idx.all()) idx.read(e, 0, b.data(), e.len);
+  } else if (c == "ask-deferred") {
+    WeightStore ws;
+    ws.open_dir(dir, {}, {}, [](const std::string&) { return true; });
+    std::vector<uint8_t> b(4096);
+    for (const auto& [name, t] : ws.all()) ws.read_deferred(name, b.data());
+  } else {
+    WeightStore ws;
+    ws.open_dir(dir);
+    CHECK(ws.all().size() == 64);
+  }
+  (void)!write(STDOUT_FILENO, "R", 1);
+  _exit(0);
+}
+static void load_stop(const char* self) {
+  const auto dir = std::filesystem::temp_directory_path() / ("load_stop_test." + std::to_string(getpid()));
+  std::filesystem::create_directories(dir);
+  for (const char* f : {"a.safetensors", "b.safetensors"}) {  // 2 files, 32 tensors of 4 KB each: 64 reads, 8 readers
+    std::string hdr = "{";
+    for (int i = 0; i < 32; ++i)
+      hdr += (i ? ",\"" : "\"") + std::string(f, 1) + std::to_string(i) + "\":{\"dtype\":\"U8\",\"shape\":[4096],"
+             "\"data_offsets\":[" + std::to_string(i * 4096) + "," + std::to_string((i + 1) * 4096) + "]}";
+    hdr += "}";
+    std::vector<uint8_t> file(8 + hdr.size() + 32 * 4096, 7);
+    const uint64_t hlen = hdr.size(); memcpy(file.data(), &hlen, 8); memcpy(file.data() + 8, hdr.data(), hdr.size());
+    std::ofstream(dir / f, std::ios::binary).write(reinterpret_cast<const char*>(file.data()), std::streamsize(file.size()));
+  }
+  for (const std::string c : {"ask", "ask-index", "ask-deferred", "no-ask", "no-action"}) {
+    int out[2]; CHECK(pipe(out) == 0);
+    const pid_t pid = fork(); CHECK(pid >= 0);
+    if (!pid) {
+      close(out[0]); dup2(out[1], STDOUT_FILENO); close(out[1]);
+      execl(self, self, "--load-stop", dir.c_str(), c.c_str(), nullptr); _exit(127);
+    }
+    close(out[1]);
+    std::string text; char buf[64]; ssize_t n;
+    while ((n = read(out[0], buf, sizeof buf)) > 0) text.append(buf, size_t(n));
+    close(out[0]); int status = 0; CHECK(waitpid(pid, &status, 0) == pid);
+    const bool stops = c.rfind("ask", 0) == 0;
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != (stops ? 42 : 0) || text != (stops ? "S" : "R"))
+      throw std::runtime_error("load stop, " + c + ": status " + std::to_string(status) + ", output '" + text + "'");
+  }
+  std::filesystem::remove_all(dir);
+  std::cout << "PASS a stop asked during the load ends it from one reader; none asked or no action reads it all\n";
+}
 int main(int argc, char** argv) {
+  if (argc > 3 && std::string(argv[1]) == "--load-stop") load_stop_child(argv[2], argv[3]);
   if (argc > 1 && std::string(argv[1]) == "--fatal") fatal("outside SDK recovery");
   if (argc > 1 && std::string(argv[1]) == "--unscoped-thread") {
     FatalRecovery recover;
@@ -600,6 +656,9 @@ int main(int argc, char** argv) {
     else if (argc > 1 && std::string(argv[1]) == "--safetensors-read-bounds") safetensors_read_bounds();
     else if (argc > 1 && std::string(argv[1]) == "--mtp-gpu") mtp_gpu();
     else if (argc > 1 && std::string(argv[1]) == "--gpu") gpu();
-    else cpu(argv[0]);
+    else {
+      cpu(argv[0]);
+      load_stop(argv[0]);
+    }
   } catch (const std::exception& e) { std::cerr << "FAIL " << e.what() << '\n'; return 1; }
 }

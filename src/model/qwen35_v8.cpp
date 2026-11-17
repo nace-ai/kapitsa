@@ -7,6 +7,7 @@
 // touched expert once for all its rows; the shared expert is one more 8-row tile.
 // Taken by encode_verify for R >= 5 (NI_V8=1: R >= 2); MTP verifies with R <= 4 keep their kernels.
 #include "kernels/kflash.h"
+#include "model/sampler.h"
 #include "model/kparams.h"
 #include "model/affine_coeff_fixed.h"
 #include "model/qwen35.h"
@@ -1411,8 +1412,7 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
     return;
   }
   enc_qmm8(e, {{&lm_head_, logits_}}, R, v8t_, v8s_, false, tl ? &v8tt_ : nullptr);
-  const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
-  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
+  const uint32_t V = uint32_t(cfg_.vocab), K = topk_k(sp), chunk = topk_chunk(K), ntg = topk_lists(V, K);
   // structured output: each row's mask (a tree's row r: node r's, after its path), nothing without masks
   enc_logit_mask(e, s, logits_, R, int(V), int(V));
   kp::TopkStage ts{V, K, chunk};
@@ -1421,8 +1421,8 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);
   e.val(3, ts);
   if (tree) e.buf(4, *v8_tree_);
-  if (wide) v8_disp(e, ntg, 1, 1, kV8wYrows, 256);
-  else e.dispatch(ntg, R, 1, 256);
+  if (wide) v8_disp(e, ntg, 1, 1, kV8wYrows, topk_threads(K));
+  else e.dispatch(ntg, R, 1, topk_threads(K));
   kp::SampleRows sr{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, 0, 0, 0};
   // a tree's row r draws with the uniform of its token's position, step + depth(r)
   e.use(pipe8(tree ? "sample_stage2_rows_tree" : "sample_stage2_rows"));
@@ -1695,8 +1695,8 @@ void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& gro
   // per group with its parameters
   uint32_t Kmax = 1;
   for (const VerifyGroup& gr : groups)
-    if (gr.sp.temperature > 0) Kmax = std::max(Kmax, uint32_t(std::clamp(gr.sp.top_k <= 0 ? 32 : gr.sp.top_k, 1, 32)));
-  const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
+    Kmax = std::max(Kmax, topk_k(gr.sp));
+  const uint32_t V = uint32_t(cfg_.vocab), chunk = topk_chunk(Kmax), ntg = topk_lists(V, Kmax);
   // structured output: the masked members' rows, after one GPU wait for the host's masks (it signals every member's at
   // once: the latest value covers them all); nothing without masks
   {
@@ -1718,11 +1718,11 @@ void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& gro
   e.use(pipe8("topk_stage1_rows"));
   e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, R, 1, 256);
+  e.dispatch(ntg, R, 1, topk_threads(Kmax));
   e.group_begin();
   for (size_t g = 0; g < groups.size(); ++g) {
     const SamplingParams& sp = groups[g].sp;
-    const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
+    const uint32_t K = topk_k(sp);
     const bool own = groups[g].tok_out;
     const kp::SampleRows sr{ntg * Kmax, K, sp.temperature, sp.top_p, sp.seed, uint32_t(groups[g].pos),
                             own ? uint32_t(groups[g].pos + 1) : uint32_t(r0[g]), 0, 0};

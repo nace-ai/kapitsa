@@ -1,0 +1,276 @@
+{
+  "evidence_kind": "Redacted derived evidence, not original execution logs",
+  "production_sources": {
+    "A": "903cdfcebafb3d138d50c9c83e7787912ee26b81",
+    "B": "cbbf2dcf614761d834e1e4129e6a621ace3a3d6e"
+  },
+  "hardware": {
+    "chip": "Apple M3 Ultra",
+    "gpu_cores": 60,
+    "physical_memory_gib": 96,
+    "macos": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "order": "ABAB",
+  "runs": [
+    {
+      "ordinal": 0,
+      "arm": "A",
+      "time_utc": "2026-11-10T19:50:03Z",
+      "binary_sha256": "fac35c9a161611cc70a758e141b212e355ff21f85df309d9281fafa2795756b0",
+      "version_reported": {
+        "version": "0.2.33",
+        "commit": null
+      },
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decoding": "MTP speculative decoding depth 2, KFlash (MTP)",
+      "results": {
+        "decode": {
+          "median_tps": 54.16,
+          "runs_tps": [
+            53.79,
+            54.16,
+            58.92
+          ],
+          "median_accepted_draft_tps": 31.31,
+          "median_accepted_draft_share": 0.582
+        },
+        "decode_greedy": {
+          "median_tps": 57.49,
+          "runs_tps": [
+            56.17,
+            57.85,
+            57.49
+          ],
+          "median_accepted_draft_tps": 33.91,
+          "median_accepted_draft_share": 0.5898
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4132,
+            "ttft_s": 4.9885,
+            "tps": 828.3,
+            "followup_s": [
+              0.1911,
+              0.2144,
+              0.1758
+            ],
+            "followup_median_s": 0.1911,
+            "followup_suffix_tps": 120.4
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.4017)"
+      ],
+      "invalid": []
+    },
+    {
+      "ordinal": 1,
+      "arm": "B",
+      "time_utc": "2026-11-10T19:52:09Z",
+      "binary_sha256": "42a3976e05cedeecf5da80e577e189fc50cc889db3b8ac514f6c0c9b7b7456a1",
+      "version_reported": {
+        "version": "0.2.33",
+        "commit": null
+      },
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decoding": "MTP speculative decoding depth 2, KFlash (MTP)",
+      "results": {
+        "decode": {
+          "median_tps": 57.28,
+          "runs_tps": [
+            59.74,
+            54.33,
+            57.28
+          ],
+          "median_accepted_draft_tps": 34.46,
+          "median_accepted_draft_share": 0.6016
+        },
+        "decode_greedy": {
+          "median_tps": 57.49,
+          "runs_tps": [
+            57.2,
+            57.69,
+            57.49
+          ],
+          "median_accepted_draft_tps": 33.91,
+          "median_accepted_draft_share": 0.5898
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4133,
+            "ttft_s": 5.0203,
+            "tps": 823.3,
+            "followup_s": [
+              0.1813,
+              0.1931,
+              0.1651
+            ],
+            "followup_median_s": 0.1813,
+            "followup_suffix_tps": 127.2
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [],
+      "invalid": []
+    },
+    {
+      "ordinal": 2,
+      "arm": "A",
+      "time_utc": "2026-11-10T19:54:13Z",
+      "binary_sha256": "fac35c9a161611cc70a758e141b212e355ff21f85df309d9281fafa2795756b0",
+      "version_reported": {
+        "version": "0.2.33",
+        "commit": null
+      },
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decoding": "MTP speculative decoding depth 2, KFlash (MTP)",
+      "results": {
+        "decode": {
+          "median_tps": 53.65,
+          "runs_tps": [
+            52.87,
+            53.65,
+            56.85
+          ],
+          "median_accepted_draft_tps": 30.5,
+          "median_accepted_draft_share": 0.5684
+        },
+        "decode_greedy": {
+          "median_tps": 57.77,
+          "runs_tps": [
+            57.98,
+            57.77,
+            56.74
+          ],
+          "median_accepted_draft_tps": 34.19,
+          "median_accepted_draft_share": 0.5918
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4135,
+            "ttft_s": 4.9923,
+            "tps": 828.3,
+            "followup_s": [
+              0.1701,
+              0.2016,
+              0.1651
+            ],
+            "followup_median_s": 0.1701,
+            "followup_suffix_tps": 135.2
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [],
+      "invalid": []
+    },
+    {
+      "ordinal": 3,
+      "arm": "B",
+      "time_utc": "2026-11-10T19:56:18Z",
+      "binary_sha256": "42a3976e05cedeecf5da80e577e189fc50cc889db3b8ac514f6c0c9b7b7456a1",
+      "version_reported": {
+        "version": "0.2.33",
+        "commit": null
+      },
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decoding": "MTP speculative decoding depth 2, KFlash (MTP)",
+      "results": {
+        "decode": {
+          "median_tps": 56.46,
+          "runs_tps": [
+            51.2,
+            56.46,
+            57.83
+          ],
+          "median_accepted_draft_tps": 33.08,
+          "median_accepted_draft_share": 0.5859
+        },
+        "decode_greedy": {
+          "median_tps": 57.93,
+          "runs_tps": [
+            58.27,
+            57.07,
+            57.93
+          ],
+          "median_accepted_draft_tps": 34.4,
+          "median_accepted_draft_share": 0.5938
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4135,
+            "ttft_s": 4.9929,
+            "tps": 828.2,
+            "followup_s": [
+              0.1731,
+              0.2885,
+              0.2133
+            ],
+            "followup_median_s": 0.2133,
+            "followup_suffix_tps": 98.5
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [],
+      "invalid": []
+    }
+  ],
+  "method": "Unmodified kapitsa bench --quick --json with its own server; GPU lock held by each run",
+  "limits": [
+    "Native benchmark requests vary; this is not the fixed-input output comparison.",
+    "The A1 repetition flag and slower B2 cached follow-up remain in the records.",
+    "No overall inference speedup or universal absence of regressions is claimed.",
+    "Archived builds report no embedded commit; source file audit and binary SHA256 establish identity."
+  ],
+  "provenance": [
+    {
+      "private_record_name": "m3-final-byte-audit2.private.json",
+      "sha256": "09b181a6023367cad7837844b0bb77ffa02417edbb1a634cdd95eb0edf8e3b68"
+    }
+  ]
+}

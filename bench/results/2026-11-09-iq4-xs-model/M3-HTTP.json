@@ -1,0 +1,45 @@
+{
+  "evidence_type": "Explicitly redacted derived summary; not original execution logs",
+  "setup": {
+    "chip": "M3 Ultra",
+    "GPU_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17 (clang-1700.6.4.2)"
+  },
+  "sources": {
+    "reference": "b1be7d4f644b3e58d56499404b38b46cf2d2a5ef",
+    "candidate": "d5589c4259b35a3bd5d5cc711b20975705118956"
+  },
+  "arms": {
+    "http_reference": {
+      "rc": 1,
+      "pass_count": 54,
+      "fail_count": 1,
+      "failure": "Queued streaming keepalive assertion requires two keepalives; only one was observed before first content."
+    },
+    "http_candidate": {
+      "rc": 1,
+      "pass_count": 54,
+      "fail_count": 1,
+      "failure": "Queued streaming keepalive assertion requires two keepalives; only one was observed before first content."
+    }
+  },
+  "observed_timing_s": {
+    "reference": {
+      "first_chunk": 0.002536296844482422,
+      "keepalives": [
+        15.111270189285278
+      ],
+      "first_token": 24.114894151687622
+    },
+    "candidate": {
+      "first_chunk": 0.0028870105743408203,
+      "keepalives": [
+        15.109774112701416
+      ],
+      "first_token": 24.031073093414307
+    }
+  },
+  "assessment": "Same failure set in both arms; the cause of the early slot availability is unresolved. Neither arm passes all HTTP checks; this does not establish a decoder regression."
+}

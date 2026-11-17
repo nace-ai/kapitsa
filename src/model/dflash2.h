@@ -19,7 +19,7 @@ namespace ni {
 
 struct DFlash2Config {
   int H = 0, NL = 0, I = 0, vocab = 0, mask_id = 0;
-  int nq = 32, nkv = 8, hd = 128, block = 8, window = 2048, conv_gs = 16, rank = 256, topk = 16;
+  int nq = 32, nkv = 8, hd = 128, block = 8, conv_gs = 16, rank = 256, topk = 16;
   float eps = 1e-6f, theta = 1e7f;
   std::vector<int> target_layers;  // target layer ids whose outputs feed fc, in slot order
   // the target's layer outputs reach the draft as their hyper-connection streams' mean (target_hidden_reduction
@@ -82,6 +82,9 @@ void dfl_attn_plan(int P, uint32_t max_splits, uint32_t min_chunk, uint32_t* lo,
 
 class DFlash2 {
  public:
+  // kWin is the context ring's slots, a compile-time size in the Metal kernels (kDflRing: slot = position mod
+  // kWin): a drafter trained with a longer window (jzinno's Ornith draft, 4096) drafts over these slots and its
+  // context past kCtxKeep tokens sees kCtxKeep positions, recorded in DFlash2Config::trained_window
   static constexpr int kB = 8, kWin = 2048, kTopK = 16, kRank = 256, kCtxKeep = 2047;
   // The drafting block's rows: kB (8, the tile), or 16 (the anchor + 15 mask rows, two 8-row tiles; KFlash tree cycles
   // only). NI_KFLASH_BLOCK picks it (8, 16, or `auto` for the default); where that says nothing it is 8, and Engine asks
@@ -120,12 +123,18 @@ class DFlash2 {
   // 8-row verify scratch and the prompt-capture buffers of the first prefill (*at_prefill, included); *per_slot:
   // one context ring (a slot holds three: the live state and its two checkpoints' snapshots).
   // The drafting block the engine will load for `target` with `slots` slots: NI_KFLASH_BLOCK if it names 8 or 16, else
-  // 16 on a one-slot engine whose target has a wide tree verify, else 8 (the load-time checks repeat this in full).
+  // 16 on a one-slot engine (or any slot count with multi16) whose target has a wide tree verify, else 8 (the load-time
+  // checks repeat this in full).
   // block_env: NI_KFLASH_BLOCK's value to decide from (nullptr: the environment; "" or "auto": the default), so the
   // decision can be asked several times in one process (a --allow-switch server decides each model at its load).
   // tw_ok: whether this Mac has the matrix-unit drafting pass (dfl_tw_supported(): M5-class GPU, macOS 26): the
   // caller asks the GPU, so that the decision stays a pure function a CPU test can drive both ways.
-  static int plan_block_rows(const Qwen35Config& target, int slots, const char* block_env, bool tw_ok);
+  // multi16: a server of more than one slot drafts 16 rows too (the device profile's kflash_block16 row, which the
+  // caller reads: default_on(Knob::kKflashBlock16)); false keeps such a server at 8.
+  static int plan_block_rows(const Qwen35Config& target, int slots, const char* block_env, bool tw_ok,
+                             bool multi16 = false);
+  // The device profile's answer for multi16 on this Mac (kflash_block16: the matrix class).
+  static bool multi_slot16_default();
   // Whether this Mac and these knobs run the drafting pass on the matrix units (dfl_tw_supported() and V8Knobs):
   // plan_block_rows takes the answer as an argument so that the decision itself is left with the environment alone.
   static bool tensor_path_ok();
@@ -203,8 +212,8 @@ class DFlash2 {
   void encode_accept(Encoder& e, Seq& s, int P, int K, const SamplingParams& sp);
   // The target's sampler distribution of verify rows 0..R-1 (dist_ids() / dist_probs()), T > 0.
   void encode_dist(Encoder& e, int R, const SamplingParams& sp);
-  const int* dist_ids() const { return dist_id_.as<int>(); }       // [8][32], -1 past the kept prefix
-  const float* dist_probs() const { return dist_p_.as<float>(); }  // [8][32]
+  const int* dist_ids() const { return dist_id_.as<int>(); }       // [8][kTopkMax], -1 past the kept prefix
+  const float* dist_probs() const { return dist_p_.as<float>(); }  // [8][kTopkMax]
   // One whole cycle into `e`, no host round trip inside: ring commit of the previous cycle's m_prev
   // kept rows, the drafting pass from the anchor tokens[P], the target's verify of the first K
   // proposals with captures, the acceptance. Afterwards tokens[P+1 .. P+1+accepted()] are the next

@@ -128,10 +128,7 @@ bool q20_experts_in(const json& root) {
 bool Qwen4Exp::is_model(const std::string& dir) {
   const auto rp = json_file(dir + "/config.json");
   const json& r = *rp;
-  if (!r.is_object()) return false;
-  if (r.value("model_type", std::string()) == "qwen4_exp") return true;
-  return r.contains("text_config") && r["text_config"].is_object() &&
-         r["text_config"].value("model_type", std::string()) == "qwen4_exp_text";
+  return qwen_layout(r) == QwenLayout::qwen4exp;
 }
 
 float Qwen4Exp::norm_offset(double m) { return m <= 0.25 ? 1.0f : m >= 0.75 ? 0.0f : -1.0f; }
@@ -574,12 +571,14 @@ static size_t qwen4_act_bytes(const Qwen35Config& c, const Qwen4ExpConfig& c4, i
                               int group = 1) {
   const size_t D = size_t(c.hidden), SD = size_t(c4.hc) * D, Tz = size_t(T), V = size_t(maxv), R = size_t(c4.hc_rank);
   const size_t IQ = size_t(c4.ix_heads + 1) * c4.ix_dim;
+  const size_t qidx_ld = size_t((c4.ix_budget + c4.ix_ratio + 3) / 4) * 4;
+  const size_t parts = (SD / 1024 + 1) * V;
   return Tz * SD * 4 - Tz * D * 4  // x_ grows from [T, D] to [T, S*D]
          + Tz * D * 4 + 2 * Tz * c4.hc * 4 + V * SD * 4 + Tz * SD * 2 + Tz * R * 4 + Tz * R * 2 + Tz * SD * 4 +
          Tz * IQ * 4 + Tz * c4.ix_heads * c4.ix_dim * 4 + Tz * SD * 4 + Tz * D * 4 + 2 * Tz * D * 2 + 4 * V * D * 4 +
          (mtp ? Tz * SD * 4 + V * SD * 4 - V * D * 4 : 0)  // the MTP head's state; mtp_post_ widened
-         + Tz * size_t(c4.ix_budget + c4.ix_ratio + 3) / 4 * 4 * 4 + Tz * 4  // sparse attention's key lists
-         + SD * 4 + 64 + (SD / 1024 + 1) * V * R * 4  // the one-row gated residual's row, hc_down_sk's partials
+         + Tz * qidx_ld * 4 + Tz * 4 + 16  // sparse attention's key lists
+         + SD * 4 + 64 + parts * R * 2 * 4 + V * SD * 4 + parts * 10 * 4  // hc_row, hc_inv, hc_part, hc_rows, hc_stat
          + q20::group_slot_bytes(group, Tz, D, size_t(c4.hc));  // the chunks' slots, staging (NI_PREFILL_GROUP)
 }
 
@@ -682,19 +681,26 @@ void Qwen4Exp::grow_kv(Seq& s, int cap) {
     bufs.push_back({&s.mtp_ixk, kb});
     bufs.push_back({&s.mtp_ixb, bb});
   }
-  std::vector<Buffer> olds;
-  std::unique_ptr<Encoder> e;
-  for (auto& [b, n] : bufs) {
-    Buffer nb = g.alloc(n, "index_cache");
-    if (old > 0 && *b) {
-      if (!e) e = g.begin();
-      enc_copy(*e, *b, nb);
-    }
-    olds.push_back(*b);
-    *b = nb;
+  // Match the attention cache's bounded copy batches before releasing the old index rows.
+  for (size_t i = 0; i < bufs.size();) {
+    std::vector<Buffer> olds;
+    std::unique_ptr<Encoder> e;
+    size_t batch = 0;
+    do {
+      auto& [b, n] = bufs[i];
+      Buffer nb = g.alloc(n, "index_cache");
+      if (old > 0 && *b) {
+        if (!e) e = g.begin();
+        enc_copy(*e, *b, nb);
+      }
+      olds.push_back(*b);
+      *b = nb;
+      batch += n;
+      ++i;
+    } while (i < bufs.size() && batch + bufs[i].second <= (size_t(256) << 20));
+    if (e) e->commit_and_wait();
+    for (Buffer& b : olds) g.release(b);
   }
-  if (e) e->commit_and_wait();
-  for (Buffer& b : olds) g.release(b);
 }
 
 void Qwen4Exp::drop_kv(Seq& s) {

@@ -1,0 +1,438 @@
+{
+  "evidence_type": "Explicitly redacted derived summary; not original execution logs",
+  "setup": {
+    "chip": "M3 Ultra",
+    "GPU_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17 (clang-1700.6.4.2)"
+  },
+  "sources": {
+    "reference": "b1be7d4f644b3e58d56499404b38b46cf2d2a5ef",
+    "candidate": "d5589c4259b35a3bd5d5cc711b20975705118956"
+  },
+  "binaries": {
+    "reference": {
+      "kapitsa": "7c7f91b7db3d8c20c277f192ac03498eccde958742c0fe73b514f82918e87d94",
+      "logit_dump": "1ca412d8835ea9eac41362c88f5bb929a8cf22eff5e2c425ba0c9f0826f45bd9",
+      "ni_run": "ff86054b2afedddea8fd555af9ebee5d8caf57c0be81ddb17a52d57f5f7a7f68",
+      "libnaceinfer.a": "7143a5f5b46f6b1b88658b5e443098dcac029c39ea629f1a281c901793319a48"
+    },
+    "candidate": {
+      "kapitsa": "d2bfbd8475a38b64e088635115217454812374b82327e62c634b6288d7f79eb2",
+      "logit_dump": "8c787c9bb2bf7432e95b9ef450b39d1c8fc9f80ac96b2dab9dbf5c445f8c881d",
+      "ni_run": "0e6e7d92b359a6e77e1fe12f125c344cc2f67a0d89e81f9cc6530c34d6a5ce3b",
+      "libnaceinfer.a": "fbf27157b718d4c13e196edcf8cb69ec33fd796a4aa1cd7dd7b92dd3f22836b9"
+    }
+  },
+  "model_source": {
+    "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "filename": "Qwen_Qwen3.5-4B-IQ4_XS.gguf",
+    "bytes": 2671339488,
+    "sha256": "628124c61a806897d3f28dcd416be6daff94f62f731eb900d4381875eac9e412"
+  },
+  "imports": {
+    "converted_weight_config_tokenizer_bytes_equal": true,
+    "all_files_raw_bytes_equal": true,
+    "manifest_order_only_differences": [],
+    "files_with_complete_literal_byte_comparison": [
+      ".kapitsa/manifest.json",
+      "chat_template.jinja",
+      "config.json",
+      "generation_config.json",
+      "model.safetensors",
+      "model.safetensors.index.json",
+      "mtp.safetensors",
+      "tokenizer.json",
+      "tokenizer_config.json"
+    ],
+    "inventories": {
+      "reference": [
+        {
+          "path": ".kapitsa/manifest.json",
+          "bytes": 1187,
+          "sha256": "b4d0620e6c8276aefa8e4d9b7c813b181a78d04e328e32f82a1c68725525ad54"
+        },
+        {
+          "path": "chat_template.jinja",
+          "bytes": 7756,
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+          "path": "config.json",
+          "bytes": 7606,
+          "sha256": "4f5af45f8246c6d15585404d8e0588f55067b70b248205a6b9715c77f747000f"
+        },
+        {
+          "path": "generation_config.json",
+          "bytes": 51,
+          "sha256": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 3222879600,
+          "sha256": "6f8279d7c4747a46ec69858017e84203e7213dcc735b46329ee7e7245e8b11b2"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "bytes": 68845,
+          "sha256": "78c58ba33448de276b4a1248cc9702f3215e0a78a2caf49c834256730490fc1b"
+        },
+        {
+          "path": "mtp.safetensors",
+          "bytes": 128152856,
+          "sha256": "c4921328785b7e08bc0fa211ff83f0250d5ac556f1eb78a3e3dea2c1e18ba002"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 9089350,
+          "sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 12388,
+          "sha256": "0b99b211f407646a3515f39fa06159ae80431cf46267a9b48778a8e1f0da1381"
+        }
+      ],
+      "candidate": [
+        {
+          "path": ".kapitsa/manifest.json",
+          "bytes": 1187,
+          "sha256": "b4d0620e6c8276aefa8e4d9b7c813b181a78d04e328e32f82a1c68725525ad54"
+        },
+        {
+          "path": "chat_template.jinja",
+          "bytes": 7756,
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+          "path": "config.json",
+          "bytes": 7606,
+          "sha256": "4f5af45f8246c6d15585404d8e0588f55067b70b248205a6b9715c77f747000f"
+        },
+        {
+          "path": "generation_config.json",
+          "bytes": 51,
+          "sha256": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 3222879600,
+          "sha256": "6f8279d7c4747a46ec69858017e84203e7213dcc735b46329ee7e7245e8b11b2"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "bytes": 68845,
+          "sha256": "78c58ba33448de276b4a1248cc9702f3215e0a78a2caf49c834256730490fc1b"
+        },
+        {
+          "path": "mtp.safetensors",
+          "bytes": 128152856,
+          "sha256": "c4921328785b7e08bc0fa211ff83f0250d5ac556f1eb78a3e3dea2c1e18ba002"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 9089350,
+          "sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 12388,
+          "sha256": "0b99b211f407646a3515f39fa06159ae80431cf46267a9b48778a8e1f0da1381"
+        }
+      ]
+    },
+    "source_backed_format_checks": {
+      "reference": {
+        "global": {
+          "bits": 5,
+          "group_size": 64,
+          "mode": "affine"
+        },
+        "measured_module": "language_model.model.layers.0.mlp.up_proj",
+        "effective_measured_module": {
+          "bits": 5,
+          "group_size": 64,
+          "mode": "affine"
+        },
+        "packed_tensors": {
+          "weight": {
+            "dtype": "U32",
+            "shape": [
+              9216,
+              400
+            ],
+            "payload_bytes": 14745600
+          },
+          "scales": {
+            "dtype": "BF16",
+            "shape": [
+              9216,
+              40
+            ],
+            "payload_bytes": 737280
+          },
+          "biases": {
+            "dtype": "BF16",
+            "shape": [
+              9216,
+              40
+            ],
+            "payload_bytes": 737280
+          }
+        }
+      },
+      "candidate": {
+        "global": {
+          "bits": 5,
+          "group_size": 64,
+          "mode": "affine"
+        },
+        "measured_module": "language_model.model.layers.0.mlp.up_proj",
+        "effective_measured_module": {
+          "bits": 5,
+          "group_size": 64,
+          "mode": "affine"
+        },
+        "packed_tensors": {
+          "weight": {
+            "dtype": "U32",
+            "shape": [
+              9216,
+              400
+            ],
+            "payload_bytes": 14745600
+          },
+          "scales": {
+            "dtype": "BF16",
+            "shape": [
+              9216,
+              40
+            ],
+            "payload_bytes": 737280
+          },
+          "biases": {
+            "dtype": "BF16",
+            "shape": [
+              9216,
+              40
+            ],
+            "payload_bytes": 737280
+          }
+        }
+      }
+    },
+    "format_scope": "Global format and measured trunk ffn_up only; other per-module/MTP formats are not asserted to be 5-bit."
+  },
+  "numerical": {
+    "prefill": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 8,
+          "float32_elements": 1986560,
+          "finite_float32_elements": 1986560,
+          "logits_sha256": "f6618d476ceb76cdcaddf41224e340a4b9ca692d83231d4588cfe53c317c7b57",
+          "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+        },
+        {
+          "records": 8,
+          "float32_elements": 1986560,
+          "finite_float32_elements": 1986560,
+          "logits_sha256": "f6618d476ceb76cdcaddf41224e340a4b9ca692d83231d4588cfe53c317c7b57",
+          "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+        }
+      ],
+      "comparison": {
+        "records": 8,
+        "bitwise": 8,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": "flags"
+        }
+      }
+    },
+    "step": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "5303e56bc7d6dfe6f31642e36a1281107d66c282524616ba05b9441fd9ce55f3",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+        },
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "5303e56bc7d6dfe6f31642e36a1281107d66c282524616ba05b9441fd9ce55f3",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+        }
+      ],
+      "comparison": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        }
+      }
+    },
+    "verify": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "e169b8439c00c1f7b43841e53a828bdc9a88e4a5d642d83512a8febccfa5c2f3",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+        },
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "e169b8439c00c1f7b43841e53a828bdc9a88e4a5d642d83512a8febccfa5c2f3",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+        }
+      ],
+      "comparison": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        }
+      }
+    },
+    "batch": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "5bd96aaf82efc830d70f58493580b2838b773d156c0455af0898ee44b4827240",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+        },
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "5bd96aaf82efc830d70f58493580b2838b773d156c0455af0898ee44b4827240",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+        }
+      ],
+      "comparison": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        }
+      }
+    }
+  },
+  "report_only_rc": 0,
+  "strict_zero_rc": 0,
+  "limitations": [
+    "Verify is teacher-forced KFlash tree, a chain of eight live rows, not free MTP generation.",
+    "Prefill is separately finite/literal-byte compared; the tool does not apply decoding thresholds to prefill.",
+    "No inference speed or universal API qualification."
+  ],
+  "rows_each_arm": 584,
+  "float32_each_arm": 145018880
+}

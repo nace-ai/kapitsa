@@ -1,0 +1,195 @@
+{
+  "evidence_kind": "Redacted derived evidence, not original execution logs",
+  "production_sources": {
+    "A": "903cdfcebafb3d138d50c9c83e7787912ee26b81",
+    "B": "cbbf2dcf614761d834e1e4129e6a621ace3a3d6e"
+  },
+  "hardware": {
+    "chip": "Apple M3 Ultra",
+    "gpu_cores": 60,
+    "physical_memory_gib": 96,
+    "macos": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "identities": {
+    "A": {
+      "src/model/qwen4_exp.cpp": "84dfceb45896a6aa8ca51435f9ab36124a27c786a8858218de6989e851f6dac4",
+      "tools/index_growth_check.cpp": "92e2082e11b0947861f05f46140f6a383d09c0754c1c7ecfb032939e64f3f240",
+      "build/index_growth_check": "e438a54837ae2f3b0527b5742d34d44929e0ce0aefb1e1c711812256d087c824",
+      "build/logit_dump": "50da52717a991f1a4889dc2bc1c47a25fe90084bdd0a5371b47c644041633204",
+      "build/kapitsa": "fac35c9a161611cc70a758e141b212e355ff21f85df309d9281fafa2795756b0"
+    },
+    "B": {
+      "src/model/qwen4_exp.cpp": "022b9909a8bd852fdfeac8031ee921ad2784ed779aaa3e59ed657f83f4803060",
+      "tools/index_growth_check.cpp": "92e2082e11b0947861f05f46140f6a383d09c0754c1c7ecfb032939e64f3f240",
+      "build/index_growth_check": "64611df0398b43ad44f7c61d180a920bf68a69b876d5ecd40f0ded0859dc1a38",
+      "build/logit_dump": "d9df2ea06f08258888fd97fcafd10b749fa7181a6984d0b304b83c55277bb4c9",
+      "build/kapitsa": "42a3976e05cedeecf5da80e577e189fc50cc889db3b8ac514f6c0c9b7b7456a1"
+    }
+  },
+  "method": "Full file byte comparison plus independent finite check of every float32 value; not hash-only comparison. Original files remain on M3.",
+  "paths": {
+    "prefill": {
+      "records": 8,
+      "vocab": 248320,
+      "files": {
+        "logits.f32": {
+          "bytes": 7946240,
+          "sha256_A": "444fb1fb136d9df8f3eb41645cda6399d8eb1c290018f33e100573b1254e06f6",
+          "sha256_B": "444fb1fb136d9df8f3eb41645cda6399d8eb1c290018f33e100573b1254e06f6",
+          "literal_equal": true
+        },
+        "records.txt": {
+          "bytes": 54,
+          "sha256_A": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+          "sha256_B": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+          "literal_equal": true
+        },
+        "sequences.txt": {
+          "bytes": 68379,
+          "sha256_A": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "sha256_B": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "literal_equal": true
+        }
+      },
+      "all_finite_both_arms": true,
+      "finite_inference": "every A float checked finite; B complete bytes equal A"
+    },
+    "step": {
+      "records": 192,
+      "vocab": 248320,
+      "files": {
+        "logits.f32": {
+          "bytes": 190709760,
+          "sha256_A": "c49e22ec61f712b5839f75c3c02bd1c0da1bcfc4993982be4b29c608881a1bf2",
+          "sha256_B": "c49e22ec61f712b5839f75c3c02bd1c0da1bcfc4993982be4b29c608881a1bf2",
+          "literal_equal": true
+        },
+        "records.txt": {
+          "bytes": 1296,
+          "sha256_A": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sha256_B": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "literal_equal": true
+        },
+        "sequences.txt": {
+          "bytes": 68379,
+          "sha256_A": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "sha256_B": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "literal_equal": true
+        }
+      },
+      "all_finite_both_arms": true,
+      "finite_inference": "every A float checked finite; B complete bytes equal A"
+    },
+    "verify": {
+      "records": 192,
+      "vocab": 248320,
+      "files": {
+        "logits.f32": {
+          "bytes": 190709760,
+          "sha256_A": "c49e22ec61f712b5839f75c3c02bd1c0da1bcfc4993982be4b29c608881a1bf2",
+          "sha256_B": "c49e22ec61f712b5839f75c3c02bd1c0da1bcfc4993982be4b29c608881a1bf2",
+          "literal_equal": true
+        },
+        "records.txt": {
+          "bytes": 1296,
+          "sha256_A": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sha256_B": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "literal_equal": true
+        },
+        "sequences.txt": {
+          "bytes": 68379,
+          "sha256_A": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "sha256_B": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "literal_equal": true
+        }
+      },
+      "all_finite_both_arms": true,
+      "finite_inference": "every A float checked finite; B complete bytes equal A"
+    }
+  },
+  "rows_each": 392,
+  "comparison": {
+    "prefill": {
+      "records": 8,
+      "bitwise": 8,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "source": null
+      }
+    },
+    "step": {
+      "records": 192,
+      "bitwise": 192,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "source": null
+      }
+    },
+    "verify": {
+      "records": 192,
+      "bitwise": 192,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "source": null
+      }
+    }
+  },
+  "command_examples": [
+    "$REF_BUILD/logit_dump \"$MODEL\" \"$A_OUT\" --paths step,verify",
+    "$NEW_BUILD/logit_dump \"$MODEL\" \"$B_OUT\" --paths step,verify --from \"$A_OUT\"",
+    "python3 tools/logit_compare.py \"$A_OUT\" \"$B_OUT\" --json \"$REPORT\""
+  ],
+  "command_note": "Illustrative redacted commands; prefill is emitted automatically, all eight default corpus windows were used.",
+  "limits": [
+    "No floor file exists for this pack: comparator is reports-only. The result is independently verified exact zero difference, not an exit-code floor verdict.",
+    "Verify rows are teacher-forced coverage, not free-running MTP equality.",
+    "Flash-Next has no batch path; batch is not an executed pass."
+  ],
+  "provenance": [
+    {
+      "private_record_name": "m3-final-byte-audit2.private.json",
+      "sha256": "09b181a6023367cad7837844b0bb77ffa02417edbb1a634cdd95eb0edf8e3b68"
+    },
+    {
+      "private_record_name": "trained-after-native-audit.private.json",
+      "sha256": "356dc55cc8aa768ade4f7f197368b7206a151063a8701d9f4655e27da4db926f"
+    }
+  ]
+}

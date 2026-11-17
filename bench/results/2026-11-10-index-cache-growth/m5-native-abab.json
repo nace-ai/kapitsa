@@ -1,0 +1,277 @@
+{
+  "evidence_kind": "Redacted derived evidence, not original execution logs",
+  "production_sources": {
+    "A": "903cdfcebafb3d138d50c9c83e7787912ee26b81",
+    "B": "cbbf2dcf614761d834e1e4129e6a621ace3a3d6e"
+  },
+  "hardware": {
+    "chip": "Apple M5 Pro",
+    "gpu_cores": 20,
+    "physical_memory_gib": 48,
+    "macos": "26.6.2",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "order": "ABAB",
+  "runs": [
+    {
+      "ordinal": 0,
+      "arm": "A",
+      "time_utc": "2026-11-10T20:40:45Z",
+      "binary_sha256": "885fad4a4b4b8036a2fe7363bc646a179a15594b201b9db34e2be642954b2aeb",
+      "version_reported": {
+        "version": "0.2.33",
+        "commit": "903cdfce"
+      },
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decoding": "MTP speculative decoding depth 2, KFlash (MTP)",
+      "results": {
+        "decode": {
+          "median_tps": 44.64,
+          "runs_tps": [
+            45.74,
+            44.64,
+            42.26
+          ],
+          "median_accepted_draft_tps": 25.89,
+          "median_accepted_draft_share": 0.5801
+        },
+        "decode_greedy": {
+          "median_tps": 46.9,
+          "runs_tps": [
+            46.9,
+            47.4,
+            46.28
+          ],
+          "median_accepted_draft_tps": 27.94,
+          "median_accepted_draft_share": 0.5957
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4132,
+            "ttft_s": 12.9267,
+            "tps": 319.6,
+            "followup_s": [
+              0.3227,
+              0.368,
+              0.2764
+            ],
+            "followup_median_s": 0.3227,
+            "followup_suffix_tps": 76.0
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [],
+      "invalid": []
+    },
+    {
+      "ordinal": 1,
+      "arm": "B",
+      "time_utc": "2026-11-10T20:43:33Z",
+      "binary_sha256": "2ab69af935a2e98f375e49787653cd11bd2abb2f5f3d3e871f892a85075026c3",
+      "version_reported": {
+        "version": "0.2.33",
+        "commit": "cbbf2dcf"
+      },
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decoding": "MTP speculative decoding depth 2, KFlash (MTP)",
+      "results": {
+        "decode": {
+          "median_tps": 44.15,
+          "runs_tps": [
+            44.15,
+            41.85,
+            44.56
+          ],
+          "median_accepted_draft_tps": 25.09,
+          "median_accepted_draft_share": 0.5684
+        },
+        "decode_greedy": {
+          "median_tps": 47.18,
+          "runs_tps": [
+            45.99,
+            47.18,
+            47.38
+          ],
+          "median_accepted_draft_tps": 28.01,
+          "median_accepted_draft_share": 0.5938
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4134,
+            "ttft_s": 12.9179,
+            "tps": 320.0,
+            "followup_s": [
+              0.337,
+              0.3758,
+              0.3085
+            ],
+            "followup_median_s": 0.337,
+            "followup_suffix_tps": 68.2
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [
+        "decode_greedy: resource-pressure warning (resource-usage details redacted)",
+        "prefill_4000: resource-pressure warning (resource-usage details redacted)"
+      ],
+      "invalid": []
+    },
+    {
+      "ordinal": 2,
+      "arm": "A",
+      "time_utc": "2026-11-10T20:46:02Z",
+      "binary_sha256": "885fad4a4b4b8036a2fe7363bc646a179a15594b201b9db34e2be642954b2aeb",
+      "version_reported": {
+        "version": "0.2.33",
+        "commit": "903cdfce"
+      },
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decoding": "MTP speculative decoding depth 2, KFlash (MTP)",
+      "results": {
+        "decode": {
+          "median_tps": 45.43,
+          "runs_tps": [
+            43.07,
+            46.58,
+            45.43
+          ],
+          "median_accepted_draft_tps": 26.71,
+          "median_accepted_draft_share": 0.5879
+        },
+        "decode_greedy": {
+          "median_tps": 46.62,
+          "runs_tps": [
+            45.78,
+            46.62,
+            47.5
+          ],
+          "median_accepted_draft_tps": 27.41,
+          "median_accepted_draft_share": 0.5879
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4132,
+            "ttft_s": 12.9759,
+            "tps": 318.4,
+            "followup_s": [
+              0.3035,
+              0.341,
+              0.2781
+            ],
+            "followup_median_s": 0.3035,
+            "followup_suffix_tps": 75.8
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [],
+      "invalid": []
+    },
+    {
+      "ordinal": 3,
+      "arm": "B",
+      "time_utc": "2026-11-10T20:48:27Z",
+      "binary_sha256": "2ab69af935a2e98f375e49787653cd11bd2abb2f5f3d3e871f892a85075026c3",
+      "version_reported": {
+        "version": "0.2.33",
+        "commit": "cbbf2dcf"
+      },
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decoding": "MTP speculative decoding depth 2, KFlash (MTP)",
+      "results": {
+        "decode": {
+          "median_tps": 41.61,
+          "runs_tps": [
+            41.6,
+            41.61,
+            43.54
+          ],
+          "median_accepted_draft_tps": 22.83,
+          "median_accepted_draft_share": 0.5488
+        },
+        "decode_greedy": {
+          "median_tps": 47.08,
+          "runs_tps": [
+            46.59,
+            47.56,
+            47.08
+          ],
+          "median_accepted_draft_tps": 27.86,
+          "median_accepted_draft_share": 0.5918
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4133,
+            "ttft_s": 13.023,
+            "tps": 317.4,
+            "followup_s": [
+              0.3352,
+              0.3754,
+              0.2758
+            ],
+            "followup_median_s": 0.3352,
+            "followup_suffix_tps": 74.6
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [],
+      "invalid": []
+    }
+  ],
+  "method": "Unmodified kapitsa bench --quick --json with its own server and exclusive GPU lock",
+  "limits": [
+    "Native requests vary; this is not the fixed-input output comparison.",
+    "All samples and warning categories are retained. Resource-usage details in warnings are redacted; original records remain private.",
+    "Slower samples and resource-pressure warnings prevent a clean inference-speed conclusion.",
+    "No overall inference speedup or universal absence of regressions is claimed."
+  ],
+  "provenance": [
+    {
+      "private_record_name": "m5-final-byte-audit.private.json",
+      "sha256": "a4925ff2cbdb06f60062f509dedc132ae15856e5638a8ab03a0ad3c8397f6300"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"base": "event.engine.json", "merge_patch": {"data": {"slots": [{"index": 0, "busy": true, "tokens": 5}]}}}

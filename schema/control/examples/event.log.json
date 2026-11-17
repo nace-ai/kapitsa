@@ -1,0 +1,8 @@
+{
+  "id": "7f3a9c2e5b1d4e60.933",
+  "type": "log",
+  "data": {
+    "level": "warn",
+    "message": "disk cache: 12 GB free, below the 16G asked; using 8G"
+  }
+}

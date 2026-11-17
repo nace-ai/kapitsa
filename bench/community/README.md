@@ -85,9 +85,12 @@ Every pull request that adds files under `results/` runs [the check](../../.gith
 - not a copy of a result already in the table.
 
 The pull request is labeled `benchmark`, plus `quick`, `contention`, `flagged` or `invalid` as they apply, and the
-job's summary lists what passed and why anything failed. Results with flags are accepted and shown with them. Once
-results reach `main`, the workflow rewrites RESULTS.md (`python3 tools/community_table.py`) and the
-[community leaderboard](https://kapitsa.vercel.app/leaderboard.html) data (`python3 tools/build_leaderboard_data.py`).
+job's summary lists what passed and why anything failed. Results with flags are accepted and shown with them. A pull request
+that adds a result carries the two files generated from it: RESULTS.md and the
+[community leaderboard](https://kapitsa.vercel.app/leaderboard.html)'s data, `docs/site/leaderboard-data.js`. One command
+writes both, `python3 tools/community_table.py` (it also runs `python3 tools/build_leaderboard_data.py`); then
+`git add bench/community/RESULTS.md docs/site/leaderboard-data.js` and push. The `community-table` check fails on either
+one stale. Once results reach `main` the workflow rewrites both again.
 
 ## Files
 

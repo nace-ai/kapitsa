@@ -18,8 +18,23 @@ static std::string lower(std::string s) {
   return s;
 }
 
+// Variants renamed on 13 Nov 2026 (#530): the old names still select them, in saved configs and scripts. Not listed.
+static const char* const kRenamed[][2] = {{"kquant", "q4"}, {"kquant5", "q5"}};
+
+std::string current_variant_name(const std::string& v) {
+  for (const auto& r : kRenamed)
+    if (v == r[0]) return r[1];
+  return v;
+}
+
+std::string legacy_dir_name(const CatalogModel& m, const Variant& v) {
+  for (const auto& r : kRenamed)
+    if (v.name == r[1]) return m.name + "-" + r[0];
+  return "";
+}
+
 const Variant* CatalogModel::variant(const std::string& v) const {
-  const std::string want = v.empty() ? default_variant : lower(v);
+  const std::string want = current_variant_name(v.empty() ? default_variant : lower(v));
   for (const auto& x : variants)
     if (x.name == want) return &x;
   return nullptr;
@@ -143,7 +158,46 @@ static ModelRef catalog_ref(const CatalogModel& m, const Variant& v) {
   r.name = full_name(m, v);
   r.id = v.name == m.default_variant ? m.name : full_name(m, v);
   r.dir = models_dir() + "/" + m.name + "-" + v.name;
+  // a pack downloaded under the old variant name is read where it is (never renamed or moved), so it is not downloaded again
+  const std::string was = legacy_dir_name(m, v);
+  if (!was.empty() && !is_dir(r.dir) && is_dir(models_dir() + "/" + was)) r.dir = models_dir() + "/" + was;
   return r;
+}
+
+// A combined Nace repo, `org/name[/folder][@revision]` (Hugging Face URL prefixes too): the catalog variant pinning
+// the same pack, or nullptr when `arg` names no combined repo. A folder or revision it does not pin is refused, so the
+// id never becomes a plain download without the variant's drafter and MTP head (#1210).
+static const Variant* combined_variant(std::string s, const CatalogModel** model) {
+  for (const char* p : {"https://huggingface.co/", "http://huggingface.co/", "huggingface.co/", "hf.co/"})
+    if (s.rfind(p, 0) == 0) s = s.substr(strlen(p));
+  const size_t at = s.find('@');
+  const std::string rev = at == std::string::npos ? "" : s.substr(at + 1);
+  std::string path = at == std::string::npos ? s : s.substr(0, at);
+  while (!path.empty() && path.back() == '/') path.pop_back();
+  const size_t slash = path.find('/');
+  if (slash == std::string::npos) return nullptr;
+  const size_t second = path.find('/', slash + 1);
+  const std::string repo = lower(path.substr(0, second));
+  const std::string folder = second == std::string::npos ? "" : path.substr(second + 1);
+  const CombinedPack* hit = nullptr;
+  bool known = false;
+  for (const auto& c : combined_packs()) {
+    if (lower(c.repo) != repo) continue;
+    known = true;
+    // no folder: the repo's root row, else its Q4 pack
+    if (!hit && (folder.empty() ? c.folder.empty() || c.folder == "Q4" : lower(c.folder) == lower(folder))) hit = &c;
+    if (folder.empty() && c.folder.empty()) hit = &c;
+  }
+  if (!known) return nullptr;
+  if (!hit)
+    throw Error(path.substr(0, second) + " has no pack in folder \"" + folder + "\" that Kapitsa pins. Use a catalog name (" +
+                choices() + ").");
+  const Variant* v = find_variant_by_repo(hit->pinned_repo, "", model);
+  if (!v) throw Error("internal: no catalog variant pins " + hit->pinned_repo);
+  // the revision the variant downloads is the repo's own too, when the variant's repo is this one
+  if (!rev.empty() && rev != hit->revision && !(lower(v->repo) == repo && rev == v->revision))
+    throw Error(s + ": Kapitsa pins this pack at " + hit->revision + ". Use the repo without a revision, or a catalog name.");
+  return v;
 }
 
 ModelRef resolve(const std::string& arg0) {
@@ -183,6 +237,14 @@ ModelRef resolve(const std::string& arg0) {
     return c;
   }
   if (arg.find('/') != std::string::npos && is_dir(arg)) return local(arg);
+  {
+    const CatalogModel* m = nullptr;
+    if (const Variant* v = combined_variant(arg, &m)) {  // with its companions
+      ModelRef c = catalog_ref(*m, *v);
+      c.variant_given = true;
+      return c;
+    }
+  }
   std::string repo, rev;
   if (parse_repo(arg, repo, rev)) {
     const CatalogModel* m = nullptr;

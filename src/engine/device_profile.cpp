@@ -19,10 +19,41 @@ bool qwen35_a3b(const ModelFacts& m) {
   return qwen35_shape(m) && !m.clover && m.experts == 256 && m.top_k == 8 && m.moe_i == 512 && m.shared_i == 512;
 }
 
+// The Qwen3.8 27B's shape (ModelClass::kQwen27bDense)
+bool qwen27b_dense(const ModelFacts& m) { return !m.moe && m.hidden == 5120 && m.layers == 64; }
+
 }  // namespace
 
-bool ane_builtin_share(const std::string& chip) {
-  return chip.find("M4") != std::string::npos || chip.find("M5") != std::string::npos;
+// The generation N of an "Apple M<N>" chip name ("Apple M6 Pro": 6), or 0 for any other name.
+int ane_generation(const std::string& chip) {
+  const std::string prefix = "Apple M";
+  if (chip.compare(0, prefix.size(), prefix) != 0) return 0;
+  size_t i = prefix.size();
+  int gen = 0;
+  while (i < chip.size() && chip[i] >= '0' && chip[i] <= '9' && gen < 1000) gen = gen * 10 + (chip[i++] - '0');
+  if (i == prefix.size() || (i < chip.size() && chip[i] != ' ')) return 0;
+  return gen;
+}
+
+// The M4 and every later generation ("Apple M4", "Apple M5 Pro", "Apple M6", "Apple M10 Max"). A substring test on
+// "M4"/"M5" left the M6 and later with no default share, so their Neural Engine prefill split stayed off without a
+// calibration, while the GPU half (matrix units, apple_family >= 10) already treats them as M5-class.
+bool ane_builtin_share(const std::string& chip) { return ane_generation(chip) >= 4; }
+
+// The plain split's default share (no wavefront: Drex Max's noncausal pass, or NI_ANE_WAVE=0) was output-checked on
+// the M4 Pro and the M5 Pro only; the M6 and later keep that pass on the GPU until it is measured there (review of
+// nace-ai/kapitsa#1259), as M1 and M2 do. Their wavefront share (every causal prefill) is unaffected.
+bool ane_plain_share(const std::string& chip) {
+  const int gen = ane_generation(chip);
+  return gen >= 4 && gen <= 5;
+}
+
+int ane_pre_m3_share(const std::string& chip) {
+  for (int family : {1, 2}) {
+    const std::string name = "Apple M" + std::to_string(family);
+    if (chip.compare(0, name.size(), name) == 0 && (chip.size() == name.size() || chip[name.size()] == ' ')) return family;
+  }
+  return 0;
 }
 
 bool ane_segmented_default(const DeviceFacts& facts) {
@@ -34,6 +65,7 @@ bool model_class_matches(ModelClass c, const ModelFacts& m) {
     case ModelClass::kOther: return true;
     case ModelClass::kQwen35Shape: return qwen35_shape(m);
     case ModelClass::kQwen35A3b: return qwen35_a3b(m);
+    case ModelClass::kQwen27bDense: return qwen27b_dense(m);
   }
   return false;
 }
@@ -41,16 +73,21 @@ bool model_class_matches(ModelClass c, const ModelFacts& m) {
 namespace {
 
 const DefaultRow kDefaults[] = {
+    // Mixed 4/5-bit 9B uses the matrix path. The SIMD packed-coefficient path accepts only 4-bit weights.
+    // #493 keeps the legacy pack on non-matrix Macs; this is a format policy, not an M3/M4 speed measurement.
+    {"qwen9b_q4", Knob::kQwen9bQ4, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 0, 0, false,
+     "#493: matrix mixed-format path; non-matrix keeps legacy 4-bit", true},
     // Dense Qwen 2048-channel inputs through hidden 8192: built-in ANE share, non-matrix GPUs (M4 today).
     // M4 Pro -61.94% loaded TTFT and all-path bar pass: bench/results/2026-11-07-pr775-rebase-3f3b.
     // Calibrated M3 prefill exceeds MLX (mean KL 1.846e-4 vs 1.472e-4); calibration-only chips stay off.
     // Matrix GPUs stay off per #775 review 6690600497; built-in-share restriction: review 6698446394.
     {"ane_segmented_fast", Knob::kNone, ModelClass::kOther, DefaultScope::kAneBuiltinNonMatrix, nullptr, "fast profile", 61, 0, false,
      "M4 built-in share; M3 prefill bar failure excludes calibration-only chips; matrix GPUs excluded", false},
-    // Wide class, not a chip name: apple10 and 40 cores or more. M5 Max, 16,288 ids, 2,767 -> 2,620 ms (-5.3%).
+    // Matrix class (any M5). M5 Max, 16,288 ids, 2,767 -> 2,620 ms (-5.3%); M5 Pro (#393), 16,288 ids in 8,192-row
+    // chunks against 4,096: the 35B-A3B 5,874 -> 5,618 ms (-4.4%), Clover 5,699 -> 5,526 (-3.0%), the same text.
     // The call site also wants one slot and a 4-bit group-64 expert pack; those stay at the call site.
-    {"pf_wave", Knob::kPfWave, ModelClass::kQwen35Shape, DefaultScope::kWide, nullptr, "on", 5, 0, false, "M5 Max",
-     true},
+    {"pf_wave", Knob::kPfWave, ModelClass::kQwen35Shape, DefaultScope::kMatrix, nullptr, "on", 3, 5, false,
+     "M5 Max, M5 Pro", true},
     // Matrix class (any M5): +12 to +15% on the M5 Pro, no measured miss on the others, so the class takes it, not the
     // name. The selector update reads the same row.
     {"kflash_hist", Knob::kKflashHist, ModelClass::kQwen35A3b, DefaultScope::kMatrix, nullptr, "on", 12, 15, false,
@@ -72,6 +109,15 @@ const DefaultRow kDefaults[] = {
     // 32K 80.5 -> 85.6. The 16-row drafting block it applies to stays at the call site.
     {"kflash_narrow", Knob::kKflashNarrow, ModelClass::kOther, DefaultScope::kWide, nullptr, "on", 24, 0, false,
      "M5 Max", true},
+    // NI_KFLASH_BLOCK's default on a server of more than one slot: the 16-row drafting block, as one slot has it, where
+    // the drafting pass runs on the matrix units. Requests decoding together then take turns instead of sharing an
+    // 8-row batched pass (Engine::batch_rows). Mac mini M6 (12 cores), 27B KQuant, serve's default 2 slots, the opencode agent replay:
+    // writing 36.2 -> 44.3 tok/s (+22%), the session 159.8 -> 147.7 s (-7.6%); two sessions at once 294.3 -> 279.0 s
+    // (-5.2%); the 2 slots' drafter rings 0.25 -> 0.46 GB. M5 Pro (#1262's review lane), 27B 4-bit, serve's default
+    // 4 slots: writing 68.7 -> 79.8 tok/s (+16%), the session 88.6 -> 82.0 s (-7.4%). One slot already drafts 16 rows;
+    // the call site keeps its checks (DFlash2::plan_block_rows).
+    {"kflash_block16", Knob::kKflashBlock16, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 22, 0, false,
+     "Mac mini M6, M5 Pro", true},
     // Capability classes the call sites still read. Not a name gate: the predicate is the class. The site count is
     // calls outside this module; tests/test_profile_gates.py checks the where string against that count.
     {"matrix_units", Knob::kNone, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "class", 0, 0, false,
@@ -79,7 +125,7 @@ const DefaultRow kDefaults[] = {
     {"legacy_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kLegacy, nullptr, "class", 0, 0, false,
      "11 sites; capability class: apple_family <= 7, the M1 path", false},
     {"wide_cores", Knob::kNone, ModelClass::kOther, DefaultScope::kWide, nullptr, "class", 0, 0, false,
-     "2 sites; capability class: matrix units and 40 cores or more", false},
+     "1 site; capability class: matrix units and 40 cores or more", false},
     // Capability class: apple_family == 9 (M3, M4; not M2 which is family 8). Fold of m4_10, m4_pro_gpu, m4_pro_20,
     // m4_ten_core (#393): low-rank 768, GDN 128, tree-fuse, lazy GDN, DFS, packed coeff, VIT prepack, NORM X8,
     // SHARE X8 widened from narrow M4 gates. m1_max_32 kept as its own guard row.
@@ -98,6 +144,16 @@ const DefaultRow kDefaults[] = {
     // tattn() in qwen4_exp.cpp, whose matrix-unit check predates this table. Knob::kNone: not a default_on lookup.
     {"tattn_fast", Knob::kNone, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "fast profile", 8, 10, false,
      "M5 Pro", false},
+    // Fast profile only (docs/profiles.md): the token mixers' input projections on the Neural Engine beside the FFN
+    // split's wavefront (NI_ANE_PROJ, Qwen35::proj_on). A narrow row on a measured miss: the gain needs a GPU slower than
+    // the Neural Engine at the projections, so it is the chip and model measured, not the matrix class. Mac mini M6
+    // (12 cores), the 27B: 4K and 16K prefill +20%, 1024-row chunks +3.5% (ni_run, 3 interleaved pairs); 192 step rows
+    // 0 flips, mean KL 2.2e-4 against precise, inside its bar (mlx-lm: 0 flips, 2.9e-4). M5 Pro (48 GB, review of
+    // #1275): 4K 750 -> 563 tok/s (-25%), 16K 688 -> 542 (-21%), 3 rounds: slower on the wider class. The 4B on the
+    // M6: faster (+6 to +9%) but over its bar (4 flips, 7.7e-4 against mlx-lm's 2, 7.1e-4). Not measured: the M5 Max,
+    // the M5, the M6 Pro and Max (their GPUs are faster than the M6's), and the Macs without matrix units.
+    {"ane_proj_fast", Knob::kAneProjFast, ModelClass::kQwen27bDense, DefaultScope::kName, "Apple M6", "on", 20, 0, true,
+     "Mac mini M6 (27B); slower on the M5 Pro (-21 to -25%); fast profile only", true},
 };
 
 bool guard_matches(const char* id, const DeviceProfile& dev) {
@@ -133,6 +189,7 @@ DeviceProfile resolve_device(const DeviceFacts& f) {
 ModelClass resolve_model(const ModelFacts& m) {
   if (qwen35_a3b(m)) return ModelClass::kQwen35A3b;
   if (qwen35_shape(m)) return ModelClass::kQwen35Shape;
+  if (qwen27b_dense(m)) return ModelClass::kQwen27bDense;
   return ModelClass::kOther;
 }
 
@@ -150,6 +207,7 @@ const char* model_class_name(ModelClass m) {
   switch (m) {
     case ModelClass::kQwen35A3b: return "qwen35-a3b";
     case ModelClass::kQwen35Shape: return "qwen35-shape";
+    case ModelClass::kQwen27bDense: return "qwen-27b-dense";
     case ModelClass::kOther: return "other";
   }
   return "other";

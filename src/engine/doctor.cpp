@@ -87,6 +87,10 @@ bool is_model_dir(const std::string& d) {
   }
 }
 
+// A plan's folder. hub::is_plan() answers for plans under this run's KAPITSA_HOME; --models-dir covers folders of
+// another home too, and a plan anywhere says it is only planned.
+bool is_a_plan(const std::string& dir) { return hub::is_plan(dir) || dir.find("/plans/") != std::string::npos; }
+
 std::vector<std::string> scan(const std::string& root) {
   std::vector<std::string> out;
   if (DIR* d = opendir(root.c_str())) {
@@ -344,6 +348,8 @@ int run_doctor(int argc, char** argv) {
     } catch (const hub::Error&) {
     }
   }
+  // no --model given: the folders --models-dir names (when given), else the catalog, the store and the folders other
+  // tools keep models in
   if (models.empty()) {
     if (roots.empty()) {
       // the catalog's models first (downloaded or not: what fits this Mac before a download), then the store and the
@@ -360,9 +366,80 @@ int run_doctor(int argc, char** argv) {
       roots = {hub::models_dir(), home + "/.cache/nace-infer-models", home + "/.cache/nace-agent-models",
                home + "/.nace/models"};
     }
+    // the store is read beside the folders --models-dir names: a plan whose model is in the store is that copy, and the
+    // report names the copy the engine loads
+    if (std::find(roots.begin(), roots.end(), hub::models_dir()) == roots.end()) roots.push_back(hub::models_dir());
     for (const std::string& r : roots)
       for (const std::string& m : scan(r))
         if (std::find(models.begin(), models.end(), m) == models.end()) models.push_back(m);
+    // the store's copy of every folder the report covers comes with it, by name: a --models-dir folder holds a plan's
+    // files and the copy the engine loads of that model sits in the store under the same name. Read by name, so it keeps
+    // scan()'s filter (is_model_dir): a folder the store has not finished downloading is not a model, and listing it
+    // would fail to read it.
+    for (const std::string& r : roots) {
+      if (DIR* dh = opendir(r.c_str())) {
+        while (dirent* e = readdir(dh)) {
+          if (e->d_name[0] == '.') continue;
+          const std::string store = hub::models_dir() + "/" + e->d_name;
+          if (std::filesystem::is_directory(store) && is_model_dir(store) &&
+              std::find(models.begin(), models.end(), store) == models.end())
+            models.push_back(store);
+        }
+        closedir(dh);
+      }
+    }
+  }
+  // Once each, with the copy that holds the model standing for its name: a model planned from its headers and then
+  // downloaded into its plan is beside the store's folder, the catalogue's plan of a model is named after it without
+  // the variant (`qwen3.5-4b-4bit` for qwen3.5-4b-8bit), and a --model or a second store can name one model again.
+  // Two folders holding one model would split its lines, and an empty plan listed first would label the copy this Mac
+  // has as not downloaded. A plan that is only planned stays listed beside a model whose name starts the same way:
+  // which variants hold the same weights is not this loop's call.
+  {
+    std::stable_sort(models.begin(), models.end(), [](const std::string& a, const std::string& b) {
+      return hub::plan_has_model(a) && !hub::plan_has_model(b);  // a folder with the model before one without it
+    });
+    std::vector<std::string> kept;
+    for (const std::string& d : models) {
+      const std::string name = d.substr(d.find_last_of('/') + 1);
+      // the catalogue's plan of a model is named after it: every catalogue variant name ends in a suffix of 4 or more
+      // characters after a dash ("-4bit", "-24gb", "-nvfp4")
+      // (a plan holding its weights keeps a name of its own: only a plan that is only planned is named after a model)
+      std::string base = name;
+      if (!hub::plan_has_model(d))
+        if (const size_t dash = name.rfind('-'); dash != std::string::npos && name.size() - dash - 1 >= 4)
+          base = name.substr(0, dash);
+      const bool seen = std::any_of(kept.begin(), kept.end(), [&](const std::string& k) {
+        if (k == d) return true;
+        const std::string kn = k.substr(k.find_last_of('/') + 1);
+        if (kn == name) return true;
+        if (!hub::plan_has_model(d)) return false;  // an empty plan stands only for its own name
+        if (is_a_plan(k) && !hub::plan_has_model(k)) return false;
+        // the same model under another name: a plan holding its weights and the store's copy, a partial plan and the
+        // store's, or the catalogue's plan of another variant of the store's model. A name prefix only says two folders
+        // hold one model when one of them is a plan: the store's own `foo` and `foo-8bit` both with weights are two
+        // models, and folding one into the other would drop it from the report in whatever order they came in.
+        if (!is_a_plan(d) && !is_a_plan(k)) return false;
+        return kn.rfind(name, 0) == 0 || (kn.size() > base.size() && kn.rfind(base, 0) == 0);
+      });
+      if (!seen) kept.push_back(d);
+    }
+    // two folders that both hold one model: the store's own folder stands for it, so every name a user copies out of
+    // the report resolves to the copy the engine loads
+    // "the store's own folder" is a folder that is not a plan: is_a_plan() also knows the plans a --models-dir names,
+    // and a --models-dir under the home holds a store copy whose path starts like the plans folder's
+    const std::string store_root = hub::models_dir() + "/";
+    const auto in_store = [&](const std::string& d) { return d.rfind(store_root, 0) == 0 && !is_a_plan(d); };
+    std::vector<std::string> once;
+    std::map<std::string, std::string> store_of;  // the store's folder for a model's name
+    for (const std::string& d : kept)
+      if (in_store(d)) store_of[d.substr(d.find_last_of('/') + 1)] = d;
+    for (const std::string& d : kept) {
+      const std::string name = d.substr(d.find_last_of('/') + 1);
+      const auto it = is_a_plan(d) && hub::plan_has_model(d) ? store_of.find(name) : store_of.end();
+      if (it == store_of.end() || it->second == d) once.push_back(d);
+    }
+    models = once;
   }
 
   Gpu& g = Gpu::get();
@@ -584,7 +661,7 @@ int run_doctor(int argc, char** argv) {
     if (tty) {
       Row r;
       r.name = dir.substr(dir.find_last_of('/') + 1);
-      r.planned = dir.rfind(hub::home_dir() + "/plans/", 0) == 0;
+      r.planned = is_a_plan(dir) && !hub::plan_has_model(dir);
       if (!r.planned && dir.rfind(hub::models_dir() + "/", 0) != 0) r.where = hub::tilde(dir.substr(0, dir.find_last_of('/')));
       r.dense = m.dense, r.layers = m.layers, r.formats = m.formats, r.slots = slots;
       r.starts = start_need <= budget, r.all_fit = full_need <= budget;
@@ -602,7 +679,9 @@ int run_doctor(int argc, char** argv) {
     }
     if (as_json) continue;
     std::string name = dir.substr(dir.find_last_of('/') + 1);
-    if (dir.rfind(hub::home_dir() + "/plans/", 0) == 0) name += ", not downloaded: planned from its headers";
+    // a plan with its files is the model downloaded (the store's copy under other names, and `kapitsa list` shows it);
+    // one only planned is sized from its headers, and says so
+    if (is_a_plan(dir) && !hub::plan_has_model(dir)) name += ", not downloaded: planned from its headers";
     printf("  %s (%s, %d layers, hidden %d; weights %s)\n", name.c_str(), m.dense ? "dense" : "MoE", m.layers, m.hidden,
            m.formats.c_str());
     printf("    memory: weights %.2f GB, MTP head %.2f, %d-row prefill buffers %.2f, %d %s state %.2f, KV %.0f KB/token%s%s\n",
@@ -655,11 +734,16 @@ int run_doctor(int argc, char** argv) {
              : dory   ? "loops other than the default"
                       : "MTP / Neural Engine");
   }
-  // every catalog variant: fits (one --ctx conversation beside it, its drafter kept) or what it needs
+  // every catalog variant: fits (one --ctx conversation beside it, its drafter kept) or what it needs (planned
+  // offline: a variant not on this Mac says so rather than waiting on the hub)
   EngineOptions eo;
   eo.context = ctx, eo.slots = slots_opt, eo.prefill_chunk = chunk, eo.dflash = dflash;
   const int slots = fit_slots(slots_opt);  // a variant fits with the slots asked for, else with two (auto's fewest)
   nlohmann::ordered_json cv = nlohmann::ordered_json::array();
+  // A variant is left out of this report, never planned to be in it: a plan of one this Mac lacks would cost a trip to
+  // the hub for its headers (and, on the way, could start its download). A variant not planned says so, and `kapitsa
+  // doctor --model <name>` plans the one a person asks for. The visit nests inside the report's own and closes below.
+  hub::set_offline(true);
   if (!as_json && !tty) printf("\nCatalog variants on this Mac (--context %s, --slots %d; `--model <name>` takes the first that fits of its default and fallbacks):\n", term::context(ctx).c_str(), slots);
   for (const auto& c : hub::catalog()) {
     bool fits = false;
@@ -695,6 +779,7 @@ int run_doctor(int argc, char** argv) {
     }
     if (!as_json && !tty) printf("  %s: %s\n", c.name.c_str(), line.c_str());
   }
+  hub::leave_offline();
   spin.reset();
   if (tty)
     print_tty(J, budget, budget_gb > 0 ? "--mem-budget" : getenv("NI_MEM_BUDGET") ? "NI_MEM_BUDGET" : "",

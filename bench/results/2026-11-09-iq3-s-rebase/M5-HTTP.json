@@ -1,0 +1,35 @@
+{
+  "notice": "Explicitly redacted derived summary, not a raw execution log. Original commands and complete records retained privately.",
+  "source_versions": {
+    "reference": "1ea325c87b0302db86fea7c5d0bddfc2c72257ad",
+    "candidate": "60d312d1ee278cc0b07f2f6cc1ae3162c6265a36"
+  },
+  "setup": {
+    "chip": "Apple M5 Pro",
+    "gpu_cores": 20,
+    "memory_capacity_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "arms": {
+    "reference": {
+      "rc": 1,
+      "pass_count": 54,
+      "fail_count": 1,
+      "sha256": "f9a4a9f1d805f4e65519b08d7f0052fb731f9a7290df569cac4238ed0beafada"
+    },
+    "candidate": {
+      "rc": 0,
+      "pass_count": 55,
+      "fail_count": 0,
+      "sha256": "747bb26839a2c288041ff7a9a90493cdfaace8e141d18edf581735f0892eb960"
+    }
+  },
+  "failures": {
+    "reference": [
+      "next turn: answer \u2014 response began another run_shell tool call rather than textual content; assertion failed."
+    ],
+    "candidate": []
+  },
+  "scope": "Executed API cases on this model/setup only. Reference limitation retained; cause unresolved. No all-pass or universal API claim."
+}

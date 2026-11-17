@@ -1,0 +1,20 @@
+# Cold prompts of 600 and 900 tokens (the first 600 / 900 ids of bench/corpus.txt), main c399c549 against this branch,
+# A B A B per model and size. Each line: NI_LOG=1 build/ni_run MODEL IDS 1 0 --pf-reps 5 (five cold prefills,
+# state reset in between), median and every rep in ms; [split] / [GPU alone] from the run's NI_ANE log line.
+# The Neural Engine calibration on this Mac was moved aside for these runs (main reads it too).
+qwen3.5-4b-4bit 600 main1: median 309.2 ms of 5 (327 310 309 309 309) [GPU alone]
+qwen3.5-4b-4bit 600 pr1: median 268.8 ms of 5 (330 270 268 269 268) [split]
+qwen3.5-4b-4bit 600 main2: median 308.4 ms of 5 (321 305 307 308 309) [GPU alone]
+qwen3.5-4b-4bit 600 pr2: median 295.8 ms of 5 (290 297 266 296 515) [split]
+qwen3.5-4b-4bit 900 main1: median 468.5 ms of 5 (483 472 468 469 468) [GPU alone]
+qwen3.5-4b-4bit 900 pr1: median 325.2 ms of 5 (331 325 325 320 320) [split]
+qwen3.5-4b-4bit 900 main2: median 468.3 ms of 5 (488 469 468 468 459) [GPU alone]
+qwen3.5-4b-4bit 900 pr2: median 330.4 ms of 5 (331 330 330 331 330) [split]
+qwen3.8-27b-kquant 600 main1: median 1913.0 ms of 5 (1923 1900 1884 1915 1913) [GPU alone]
+qwen3.8-27b-kquant 600 pr1: median 1462.0 ms of 5 (1476 1454 1462 1454 1462) [split]
+qwen3.8-27b-kquant 600 main2: median 1908.8 ms of 5 (1918 1892 1884 1909 1912) [GPU alone]
+qwen3.8-27b-kquant 600 pr2: median 1482.0 ms of 5 (1472 1482 1514 1491 1459) [split]
+qwen3.8-27b-kquant 900 main1: median 3256.4 ms of 5 (3295 3285 3256 3229 3256) [GPU alone]
+qwen3.8-27b-kquant 900 pr1: median 2069.4 ms of 5 (2069 2053 2067 2094 2079) [split]
+qwen3.8-27b-kquant 900 main2: median 3244.5 ms of 5 (3325 3244 3243 3238 3263) [GPU alone]
+qwen3.8-27b-kquant 900 pr2: median 2089.7 ms of 5 (2078 2116 2102 2090 2086) [split]

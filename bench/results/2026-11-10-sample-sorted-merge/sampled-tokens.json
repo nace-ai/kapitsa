@@ -1,0 +1,135 @@
+{
+  "evidence_kind": "redacted derived evidence, not an original execution log",
+  "source_records": [
+    {
+      "record": "full-output-audit.private.json",
+      "sha256": "fa290985811bc5edfdd4087ea0d1c4f94233b703c51ad52d9f189b97a7988f71"
+    },
+    {
+      "record": "qwen-sampled/report.json",
+      "sha256": "5c31be6c8ece15aacdb8cd1804c112619a7152435dd19aa0ed1a00d9cf15b449"
+    },
+    {
+      "record": "qwen-mtp-sampled/report.json",
+      "sha256": "b97c74273ecb326b90a17bfc20c06c93cd271fdb2138996ab0a0fd2a136dc89c"
+    }
+  ],
+  "data": {
+    "qwen-sampled": {
+      "passed": true,
+      "purpose": "sampled token equality; not a performance measurement",
+      "sampling": {
+        "tokens": 512,
+        "temperature": 0.7,
+        "top_k": 20,
+        "top_p": 0.95,
+        "seed": 42,
+        "spec": 0,
+        "dflash": "none"
+      },
+      "prompt_tokens": 1020,
+      "prompt_ids_sha256": "a2a1ba7f628984ba865ff05ffbee0fed34c7bb99fb31851ef4d1ec1e07248765",
+      "runner_commit": "24f9182b3c9791f71f4478464d1dfb662859a1c3",
+      "environment": {
+        "NI_SEED": "42",
+        "NI_LOCK_HELD": "1"
+      },
+      "inputs": {
+        "config": {
+          "sha256": "f3efc81b2ea8d96a45301037d3ccccbcccdef44a961845c87f286aaddbc6eaaa"
+        },
+        "tokenizer": {
+          "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+        },
+        "prompt_fixture": {
+          "sha256": "487f6cf5db8116e12a385ef8c0859e143f8529bbebd9a0a08a85aeadf5394ecb"
+        }
+      },
+      "arms": {
+        "reference": {
+          "binary_sha256": "91bbef32e9aae38aa044ca5f898034beb9a491a7b49c612a1324fc2089a18850",
+          "returncode": 0,
+          "token_count": 512,
+          "eos_count": 0,
+          "tokens_before_eos": 512,
+          "nonempty_text": true,
+          "ids_sha256": "895ec85209a0b71d793a6effd8370c209f7d6cb9636542866f66448ace11fe20"
+        },
+        "candidate": {
+          "binary_sha256": "371ffc65398f4f8c11f64d9d6ba41f1cfd1e61b383d1c2eff79fcf54aca5f73e",
+          "returncode": 0,
+          "token_count": 512,
+          "eos_count": 0,
+          "tokens_before_eos": 512,
+          "nonempty_text": true,
+          "ids_sha256": "895ec85209a0b71d793a6effd8370c209f7d6cb9636542866f66448ace11fe20"
+        }
+      },
+      "all_512_ids_literal_equal": true,
+      "ids_sha256": "895ec85209a0b71d793a6effd8370c209f7d6cb9636542866f66448ace11fe20"
+    },
+    "qwen-mtp-sampled": {
+      "passed": true,
+      "purpose": "sampled token equality; not a performance measurement",
+      "sampling": {
+        "tokens": 512,
+        "temperature": 0.7,
+        "top_k": 20,
+        "top_p": 0.95,
+        "seed": 42,
+        "spec": 1,
+        "dflash": "none"
+      },
+      "prompt_tokens": 1020,
+      "prompt_ids_sha256": "a2a1ba7f628984ba865ff05ffbee0fed34c7bb99fb31851ef4d1ec1e07248765",
+      "runner_commit": "24f9182b3c9791f71f4478464d1dfb662859a1c3",
+      "environment": {
+        "NI_SEED": "42",
+        "NI_LOCK_HELD": "1"
+      },
+      "inputs": {
+        "config": {
+          "sha256": "f3efc81b2ea8d96a45301037d3ccccbcccdef44a961845c87f286aaddbc6eaaa"
+        },
+        "tokenizer": {
+          "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+        },
+        "prompt_fixture": {
+          "sha256": "487f6cf5db8116e12a385ef8c0859e143f8529bbebd9a0a08a85aeadf5394ecb"
+        }
+      },
+      "arms": {
+        "reference": {
+          "binary_sha256": "91bbef32e9aae38aa044ca5f898034beb9a491a7b49c612a1324fc2089a18850",
+          "returncode": 0,
+          "token_count": 512,
+          "eos_count": 0,
+          "tokens_before_eos": 512,
+          "nonempty_text": true,
+          "ids_sha256": "0a6623cdca19b8aced30f3db72d4003c1af1dc38970f5c0b0cf6138d0b5275a1",
+          "mtp_head": [
+            "[kapitsa] MTP head loaded in 175 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)"
+          ],
+          "cycles": 293,
+          "accepted_per_cycle": 0.74
+        },
+        "candidate": {
+          "binary_sha256": "371ffc65398f4f8c11f64d9d6ba41f1cfd1e61b383d1c2eff79fcf54aca5f73e",
+          "returncode": 0,
+          "token_count": 512,
+          "eos_count": 0,
+          "tokens_before_eos": 512,
+          "nonempty_text": true,
+          "ids_sha256": "0a6623cdca19b8aced30f3db72d4003c1af1dc38970f5c0b0cf6138d0b5275a1",
+          "mtp_head": [
+            "[kapitsa] MTP head loaded in 182 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)"
+          ],
+          "cycles": 293,
+          "accepted_per_cycle": 0.74
+        }
+      },
+      "all_512_ids_literal_equal": true,
+      "ids_sha256": "0a6623cdca19b8aced30f3db72d4003c1af1dc38970f5c0b0cf6138d0b5275a1"
+    }
+  }
+}

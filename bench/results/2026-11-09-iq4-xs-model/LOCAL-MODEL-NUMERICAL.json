@@ -1,0 +1,247 @@
+{
+  "evidence_type": "Explicitly redacted derived summary; not original execution logs",
+  "setup": {
+    "chip": "M5 Pro",
+    "GPU_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "identity_note": "System chip and OS queries agree with both arms runtime metadata. This subsequent full-model setup is distinct from the earlier M4 Pro CPU measurements.",
+  "sources": {
+    "reference": "b1be7d4f644b3e58d56499404b38b46cf2d2a5ef",
+    "candidate": "d5589c4259b35a3bd5d5cc711b20975705118956"
+  },
+  "binaries": {
+    "reference": {
+      "kapitsa": "52717585d6c33096ab47bb0a4860d330f777f54566abdf2e47ea0d41b2b0ebe7",
+      "logit_dump": "f35ff412e38cd39b2081b832afc75a05a2b1abdd459c36908e9d45102cc1be71",
+      "ni_run": "5d093fa9f67d7ee1ae9e06204fea46254f984b5135f606be7f187692fadabb98",
+      "libnaceinfer.a": "6d80a484b4b9355eaa5dd0089e6458fb185315c697cfc3deb9e451ce3bff33f0"
+    },
+    "candidate": {
+      "kapitsa": "358db60de2a60c23cc675506fbe554ab06f9e817ba935c79e39563019b153aec",
+      "logit_dump": "db6d396fbceb99a8d20caddd502254d7f02dce089a3472a6be9c1ad6deb2fd9b",
+      "ni_run": "c595e120201bd1472ffdf183471b2ab1fd6663c72f72ae14531ef7ee19f74474",
+      "libnaceinfer.a": "97d9e08b461fd54af8028e9912a81f8fcf049916cb26bcb71f9cf87d612bb042"
+    }
+  },
+  "model_source": {
+    "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "filename": "Qwen_Qwen3.5-4B-IQ4_XS.gguf",
+    "bytes": 2671339488,
+    "sha256": "628124c61a806897d3f28dcd416be6daff94f62f731eb900d4381875eac9e412"
+  },
+  "model_provenance": {
+    "local_import_executions": 0,
+    "shared_model": "One M3 reference import, whose nine files had been compared literally against the independent M3 candidate import. Transfer verified by file sizes and SHA256; both local arms use the same transferred bytes."
+  },
+  "numerical": {
+    "report-only": {
+      "prefill": {
+        "records": 8,
+        "bitwise": 8,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": null
+        }
+      },
+      "batch": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": null
+        }
+      },
+      "step": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": null
+        }
+      },
+      "verify": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": null
+        }
+      }
+    },
+    "strict-zero": {
+      "prefill": {
+        "records": 8,
+        "bitwise": 8,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": "flags"
+        }
+      },
+      "batch": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        }
+      },
+      "step": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        }
+      },
+      "verify": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        }
+      }
+    }
+  },
+  "rows_each_arm": 584,
+  "float32_each_arm": 145018880,
+  "complete_output_bytes_equal": true,
+  "recorded_inputs_bytes_equal": true,
+  "all_finite": true,
+  "prefill_independent_literal_gate": true,
+  "report_only_rc": 0,
+  "strict_zero_rc": 0,
+  "limitations": [
+    "Strict numerical thresholds apply to step/verify/batch, with a separate prefill literal-byte and finite gate.",
+    "Teacher-forced KFlash chain-of-eight verify; not free MTP generation.",
+    "No independent local import was executed."
+  ],
+  "qualification_addendum": "Fixed-request ABAB and both HTTP arms have now completed; see LOCAL-FIXED.json and LOCAL-HTTP.json. Original native flags/rates are unchanged."
+}

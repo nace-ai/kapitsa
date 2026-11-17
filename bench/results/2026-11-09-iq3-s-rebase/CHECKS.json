@@ -1,0 +1,42 @@
+{
+  "notice": "Explicitly redacted derived summary, not a raw execution log. Original commands and complete records retained privately.",
+  "source_versions": {
+    "reference": "1ea325c87b0302db86fea7c5d0bddfc2c72257ad",
+    "candidate": "60d312d1ee278cc0b07f2f6cc1ae3162c6265a36"
+  },
+  "setup": {
+    "chip": "Apple M5 Pro",
+    "gpu_cores": 20,
+    "memory_capacity_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "M5_rebased_Release_build": "PASS",
+  "M5_vk_cpu_test_entries": 22,
+  "M5_vk_cpu_tests": "PASS",
+  "M5_prek_all_files": "PASS",
+  "M5_diff_check": "PASS",
+  "M5_vk_cleanup": "PASS",
+  "M3_source_versions": {
+    "reference": "1ea325c87b0302db86fea7c5d0bddfc2c72257ad",
+    "candidate": "60d312d1ee278cc0b07f2f6cc1ae3162c6265a36"
+  },
+  "M3_explicit_Release_builds_and_iq_layout": "PASS",
+  "M3_candidate_oracle_cases": 614602,
+  "M3_full_model": "Pending; no result claimed.",
+  "actual_build_flags": [
+    "-O3",
+    "arm64",
+    "C++20",
+    "no NDEBUG"
+  ],
+  "no_new_sanitizer_runs": true,
+  "original_ASan_limitation": "Compiled but runtime initialization stalled before main; zero executed cases.",
+  "raw_records_collected_and_hashed": {
+    "M5_initial_phase_files": 78,
+    "M5_fixed_recovery_files": 12
+  },
+  "all_M5_owned_workers_and_servers_exited": true,
+  "M5_GPU_lock_released": true,
+  "all_tests_passed": false
+}

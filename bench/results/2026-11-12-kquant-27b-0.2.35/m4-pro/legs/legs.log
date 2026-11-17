@@ -1,0 +1,17 @@
+2026-11-12T17:41:52Z gate reading=1 load=1.41
+2026-11-12T17:42:12Z gate reading=2 load=1.29
+2026-11-12T17:42:32Z gate reading=3 load=1.07
+2026-11-12T17:44:56Z 1-A rc=0 load=1.07->0.90 status=ok foreign=
+2026-11-12T17:44:56Z gate reading=1 load=0.90
+2026-11-12T17:45:16Z gate reading=2 load=0.93
+2026-11-12T17:45:36Z gate reading=3 load=1.08
+2026-11-12T17:47:40Z 2-B rc=0 load=1.08->1.11 status=ok foreign=
+2026-11-12T17:47:40Z gate reading=1 load=1.11
+2026-11-12T17:48:00Z gate reading=2 load=1.02
+2026-11-12T17:48:20Z gate reading=3 load=1.02
+2026-11-12T17:50:23Z 3-B rc=0 load=1.02->0.88 status=ok foreign=
+2026-11-12T17:50:23Z gate reading=1 load=0.88
+2026-11-12T17:50:44Z gate reading=2 load=0.84
+2026-11-12T17:51:04Z gate reading=3 load=0.90
+2026-11-12T17:53:39Z 4-A rc=0 load=0.90->0.67 status=ok foreign=
+2026-11-12T17:53:39Z LEGSDONE valid_A=2 valid_B=2

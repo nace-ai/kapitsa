@@ -1,6 +1,8 @@
 #include "ane/input_profile.h"
+#include "model/sampler.h"
 #include "util/load_threads.h"
 #include "model/qwen35.h"
+#include "ane/proj_split.h"
 #include "engine/device_profile.h"
 #include "model/affine_pack.h"
 #include "model/gemm_slices.h"
@@ -178,6 +180,7 @@ bool qmt_on();  // declared in qwen35.h: DFlash2's context commit takes the same
 // NI_QMT6 (read once; default on where the dense NI_QMT path is): the 6-bit group-64 dense weights' prefill GEMMs
 // at M >= 64 on tensor_ops (qmt6_m64_n64, qmt.metal's tile with qrf_f6g64's exact weight decode) instead of
 // qrf_f6g64_m32_n128.
+static bool qmtf_on(int bits, int gs);  // NI_QMTF: the 3-bit, 5-bit, 8-bit and 4-bit g32 tensor_ops tile (by enc_qmm_large)
 bool qmt6_on();  // declared in qwen35.h: Qwen4Exp's NI_HC_FUSE mix fold shares this kill switch
 // NI_MOE_STAGE (default on, 0 = off): the qmtm tiles write their outputs as whole rows staged through threadgroup
 // memory instead of one element store per accumulator element (scattered, ~35% of qmtm_dn's time). Same values,
@@ -364,12 +367,15 @@ static bool exact_qmms(double bytes, bool multi, uint32_t K) {
 // qmt_on, 4-bit group 64, K a multiple of 64) is faster there than in the short-prefill families, which are sized for the
 // chunks under 64 rows (NI_SHORTPF's own comment). qmr_sel().on is checked too: the qmt tile is only reached behind it,
 // so NI_QMM=0 keeps the short-prefill path the chunk had. Measured on the M5 Pro, 27B, 16K cached prefix, one chunk of new
-// rows, short-prefill against tensor_ops: 73 rows 679 -> 399 ms, 124 rows 1005 -> 483 ms. 8-bit and unaligned
-// projections, and every MoE expert GEMM, keep the short path they have.
+// rows, short-prefill against tensor_ops: 73 rows 679 -> 399 ms, 124 rows 1005 -> 483 ms. 5-bit group 64 from 64 rows
+// takes NI_QMTF's tile the same way (enc_qmm_large, enc_qmm_gu): on the 9B Nace Q4 pack, an 85-row chunk ran its 5-bit
+// down and z projections on qmmsf_f5g64_t6 at 1.11 ms a call, against 0.23 ms for the 4-bit pack's qmt_m64_n64.
+// 3-bit, 8-bit and unaligned projections, and every MoE expert GEMM, keep the short path they have.
 bool Qwen35::sp_qmt_pref(const QLinear& L, int M) const {
   static const bool on = env_int("NI_SP_QMT", 1) != 0;  // 0 restores the pre-change short-prefill preference
   if (!on || cfg_.moe) return false;  // a MoE model's chunk keeps the short-prefill / qmtm split it had
-  return M >= qmt_min_rows() && qmt_on() && qmr_sel().on && L.bits == 4 && L.gs == 64 && L.K % 64 == 0;
+  if (M < qmt_min_rows() || !qmt_on() || !qmr_sel().on || L.gs != 64 || L.K % 64 != 0) return false;
+  return L.bits == 4 || (L.bits == 5 && M >= 64 && qmtf_on(5, 64));
 }
 
 // Short-prefill qmr tile for M <= 128 rows: R row tiles (1 up to 48 rows, 2 above; fused gate/up
@@ -493,6 +499,8 @@ void Qwen35::prewarm_pipelines() {
     for (const char* n : {"qmr8_k32_w14_m32_n128", "qmr8_k32_w14_m16_n64", "qmr8_gu_k32_w14_m32_n64", "qmr8_gu_k32_w14_m16_n64"})
       names.insert(n);
   if (qmm8_on() && prefill_mfast()) names.insert("qmr8_k32_w14_m32_n128_mf");
+  if (qmm8_on() && qmtf_on(8, 64) && !cfg_.moe)
+    for (const char* n : {"qmtf_f8g64_m128_n64", "qmtfg_f8g64_m128_n64", "qmtf_f8g64_m128_n64_ld"}) names.insert(n);
   if (legacy_gpu())  // the M1's prefill attention and tiles (enc_attn_prefill, qmr_sel, enc_qmm_gu)
     for (const char* n : {"attn_prefill11_k16xr", "qmr_k64_w12_m32_n64", "qmr_gu_k64_w14_m32_n64"}) names.insert(n);
   if (cfg_.moe && moe_qmr()) {
@@ -566,6 +574,10 @@ void Qwen35::prewarm_pipelines() {
       for (const char* t : {"_m32_n128", "_m16_n64", "_m8_n64"}) names.insert("qrf_" + f + t);
       for (const char* t : {"_m32_n64", "_m16_n64", "_m8_n32"}) names.insert("qrf_gu_" + f + t);
       if (f == "f6g64" && qmt6_on()) names.insert("qmt6_m64_n64");  // enc_qmm_large's 6-bit tensor tile
+      if (!cfg_.moe && ((f == "f3g64" && qmtf_on(3, 64)) || (f == "f5g64" && qmtf_on(5, 64)) || (f == "f4g32" && qmtf_on(4, 32)))) {  // enc_qmm_large, enc_qmm_gu, the split
+        for (const char* t : {"qmtf_", "qmtfg_"}) names.insert(t + f + "_m128_n64");
+        names.insert("qmtf_" + f + "_m128_n64_ld");
+      }
       if (f == "f16") {
         names.insert("qrf_f16_m32_n128_mf");
         names.insert("qrf_gu_f16_m32_n64_mf");
@@ -1417,14 +1429,22 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
     // the split's GPU share on the matrix units (enc_mlp_gpu_part_qmt): every layer's gate, up and down 4-bit g64, on
     // a model with an M5 share (mma_share_measured), as init_ane decides it, so the planned and the loaded default share agree
     m.ffn_mma = qmt_on() && mma_share_measured(c);
-    for (int i = 0; i < c.layers && m.ffn_mma; ++i)
-      for (const char* t : {"gate_proj", "up_proj", "down_proj"}) {
-        const std::string pre = "layers." + std::to_string(i) + ".mlp." + t;
-        auto iw = metas.find(pre + ".weight"), is = metas.find(pre + ".scales");
-        const int64_t K = t[0] == 'd' ? c.dense_I : c.hidden;  // input width: 4 bits = K / 8 words, g64 = K / 64
-        m.ffn_mma = m.ffn_mma && iw != metas.end() && is != metas.end() && iw->second.dtype == "U32" &&
-                    iw->second.shape.back() == K / 8 && is->second.shape.back() == K / 64;
+    // and every layer with a matrix-unit GPU part (ffn_share::matrix_unit_share, as init_ane decides it from the loaded
+    // projections and enc_mlp_gpu_part_qmt dispatches by gpu_part), its formats read from the shapes
+    if (m.ffn_mma) {
+      std::vector<ffn_share::LayerFmt> layers(size_t(c.layers));
+      for (int i = 0; i < c.layers; ++i) {
+        auto fmt = [&](const char* t) {
+          const std::string pre = "layers." + std::to_string(i) + ".mlp." + t;
+          auto iw = metas.find(pre + ".weight"), is = metas.find(pre + ".scales");
+          const int64_t K = t[0] == 'd' ? c.dense_I : c.hidden;  // input width: F bits = K F / 32 words
+          const bool q = iw != metas.end() && is != metas.end() && iw->second.dtype == "U32";
+          return q ? ffn_share::from_shape(K, iw->second.shape.back(), is->second.shape.back()) : ffn_share::Fmt{};
+        };
+        layers[size_t(i)] = {fmt("gate_proj"), fmt("up_proj"), fmt("down_proj")};
       }
+      m.ffn_mma = ffn_share::matrix_unit_share(layers, qmtf_formats());
+    }
   }
   // weights one plain decode step multiplies (the prefill estimate's FLOPs): from the architecture
   {
@@ -2527,16 +2547,20 @@ void Qwen35::enc_sample(Encoder& e, Seq& s, const Buffer& xrow, int out_index, c
   static Pipeline st2 = Gpu::get().pipeline("sample_stage2");
   enc_qmv(e, lm_head_, xrow, logits_, nullptr, final_norm_);
   enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);  // structured output (nothing without masks)
-  // stage 2 holds 4 candidates per thread (4096): 122 threadgroups x 32 fits
-  uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
-  kp::TopkStage ts{uint32_t(cfg_.vocab), K, 2048};
-  uint32_t ntg = (cfg_.vocab + 2047) / 2048;
+  if (full_vocab(sp)) {  // top_k <= 0 or above the two passes' 64 (sampler.h)
+    enc_sample_full(e, logits_, uint32_t(cfg_.vocab), s.tok, out_index, sprob_, sp, step);
+    return;
+  }
+  // stage 2 holds 4 candidates per thread (4096): 122 lists x 32, or 61 x 64 (topk_chunk)
+  const uint32_t K = topk_k(sp);
+  kp::TopkStage ts{uint32_t(cfg_.vocab), K, topk_chunk(K)};
+  uint32_t ntg = topk_lists(uint32_t(cfg_.vocab), K);
   // Independent SIMD selection and a merge avoid a threadgroup barrier per top-k rank.
   // Keep the small-k path; both kernels emit the same sorted lists.
   e.use(sample_sg_ && K >= 8 ? pipe("topk_stage1_rows_sg") : st1);
   e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, 1, 1, 256);
+  e.dispatch(ntg, 1, 1, topk_threads(K));
   kp::Sample sp2{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, uint32_t(out_index)};
   e.use(st2);
   e.buf(0, cand_v_); e.buf(1, cand_i_); e.buf(2, s.tok); e.buf(3, sprob_);
@@ -2583,9 +2607,15 @@ bool qmt_on() {
 // kernels. A chunk's last rows and a short turn's message are such GEMMs. Default 17 for every dense model; MoE models
 // keep 64 (not measured). M5 Pro, ni_run, interleaved 3 x 2 (#393): a 40-token prefill on the 4B 47.3 -> 28.8 ms, the 9B
 // 99.5 -> 46.6, the 27B 320.0 -> 144.6; a 4,129-token prefill on the 4B 952.6 -> 932.8 ms and the 9B 2,370 -> 2,316, the
-// same greedy text. The 27B shape (hidden 5120, FFN 17408, 64 layers) keeps 64 below the 40-core class: its 4,129-token
-// prefill with its Neural Engine split was 5,577 -> 5,851 ms on the M5 Pro (slower in 3 of 3 pairs, the Neural Engine
-// 20.6 -> 23-24 ms per evaluation), while the M5 Max measurements below are for that shape.
+// same greedy text. The 27B shape (hidden 5120, FFN 17408, 64 layers) kept 64 on the M5 Pro after #393 (its 4,129-token
+// prefill with its Neural Engine split read 5,577 -> 5,851 ms, slower in 3 of 3 pairs) and takes 17 there too since it
+// was measured again (M5 Pro, macOS 26.5.2, ni_run, 8 rounds in rotated order with 64 run twice as the control): 4,096
+// tokens 5,076 / 5,091 ms with 64, 5,082 with 17; 4,129 tokens (a 33-row tail chunk) 5,400 / 5,401 against 5,425, each
+// inside the spread of the two 64 runs; a cached turn's suffix of 26 / 45 / 63 rows 212 / 251 / 301 -> 155 / 163 / 173 ms.
+// The M5 Max measurements below are for that shape and a Mac mini M6 (12 cores, the KQuant pack, ni_run, interleaved)
+// reads the same 4,129 tokens in
+// 8,682 / 8,658 / 8,876 ms against 8,866 / 8,891 / 8,921, and a cached turn's suffix of 28 / 45 / 56 rows (an in-pass
+// checkpoint, a 2,000-token prefix, 5 passes a setting twice) in 221 / 232 / 265 ms against 370 / 545 / 706.
 // bench_qmm on the M5 Max, the 27B's shapes, the 64-row tile against the short-prefill tile the pass takes: gate/up
 // (17408 x 5120) at 17 rows 514 against 638 us, at 33 527 against 1,215; down (5120 x 17408) at 24 rows 334 against
 // 400, at 33 337 against 623; GDN in_proj (16384 x 5120) at 33 288 against 525. At 16 rows and fewer the short tiles
@@ -2593,11 +2623,21 @@ bool qmt_on() {
 // bench/results/2026-11-05-m5-max-qmt-short.
 int Qwen35::qmt_min_rows() const {
   static const int env = std::clamp(env_int("NI_QMT_MIN", 0), 0, 64);
-  static const bool max = wide_cores();
   if (env) return env;
-  if (cfg_.moe) return 64;
-  const bool q27 = cfg_.hidden == 5120 && cfg_.dense_I == 17408 && cfg_.layers == 64;
-  return q27 && !max ? 64 : 17;
+  return cfg_.moe ? 64 : 17;
+}
+
+bool Qwen35::tile_pass(int rows) const {
+  if (cfg_.moe || !qmt_on() || rows < qmt_min_rows()) return false;
+  // The tile takes 4-bit group-64 matrices only (enc_qmm_large, enc_qmm_gu: qmr_ok). A pack with any dense projection in
+  // another format (the 27B's Q5, 5-bit, 6-bit, 8-bit and bf16 packs, a mixed pack) runs part of its suffix on the staged
+  // short-prefill GEMMs, where the passes were the faster path, so it keeps them: only the all-4-bit-group-64 case
+  // (the Q4 and plain 4-bit 27B packs) was measured with the tile. Every projection a prefill pass reads counts, the
+  // token mixer's as well as the FFN's.
+  for (const Layer& L : layers_)
+    for (const QLinear* q : {&L.qkv, &L.z, &L.a, &L.b, &L.out, &L.q, &L.k, &L.v, &L.o, &L.mg, &L.mu, &L.md})
+      if (*q && !qmr_ok(*q)) return false;
+  return true;
 }
 
 bool qmt128_for(int M) {
@@ -2653,6 +2693,26 @@ bool qmt6_on() {
     return true;
   }();
   return on;
+}
+
+// NI_QMTF (read once; default on where qmt_on() is, 0 = off): the dense prefill GEMMs of 64 rows or more in the MLX
+// affine formats without a tensor_ops tile of their own (3-bit, 5-bit and 8-bit group 64; 4-bit group 32, what kapitsa import
+// makes of a GGUF's Q4_K), plain, the fused gate/up/SwiGLU and the Neural Engine split's GPU share, on
+// tensor_ops/qmtf.metal's 128-row tile (qmt_m128_n64's tile with the format's weight decode) instead of the simdgroup
+// kernels (wfmt.metal's qrf_* / qrf_gu_*; 8-bit: qmm3.metal's qmr8 / qmr8_gu). The tile dequantizes to the bits those
+// kernels feed their MMAs (the same half-domain decode, one half fma each), so the change is the K reduction's
+// association order only.
+static bool qmtf_on(int bits, int gs) {
+  static const bool on = [] {
+    if (env_int("NI_QMTF", 1) == 0) return false;
+    if (!qmt_on()) return false;
+    logi("NI_QMTF: 3-bit / 5-bit / 8-bit g64 and 4-bit g32 dense prefill GEMMs on tensor_ops (qmtf_*_m128_n64), M >= 64");
+    return true;
+  }();
+  return on && (((bits == 3 || bits == 5 || bits == 8) && gs == 64) || (bits == 4 && gs == 32));
+}
+static bool qmtf_for(const QLinear& L, int M) {
+  return M >= 64 && qmtf_on(L.bits, L.gs) && L.K % 64 == 0 && (L.bits != 8 || qmm8_for(L));
 }
 
 // Exported for Qwen4Exp's NI_HC_FUSE gate (declared in qwen35.h): enc_qmm_large's tensor-tile branches run only
@@ -2804,6 +2864,14 @@ Buffer Qwen35::qmr_coeff_scratch(size_t groups) {
 
 void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
   const QmrSel& q = qmr_sel();
+  if (q.on && !cfg_.moe && qmtf_for(L, M)) {
+    e.use(pipe("qmtf_" + L.fmt() + "_m128_n64"));
+    kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
+    e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
+    e.val(5, p);
+    e.dispatch((L.N + 63) / 64, (uint32_t(M) + 127) / 128, 1, 128);
+    return;
+  }
   if (q.on && qmm8_for(L) && L.bits == 8 && L.gs == 64 && L.K % 64 == 0) {
     const bool small = M < 64 || L.N <= 64, mfast = !small && prefill_mfast();
     const char* n = small ? "qmr8_k32_w14_m16_n64" : mfast ? "qmr8_k32_w14_m32_n128_mf" : "qmr8_k32_w14_m32_n128";
@@ -3163,6 +3231,16 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
 }
 
 bool Qwen35::qmt_ready() { return qmt_on(); }
+ffn_share::Qmtf Qwen35::qmtf_formats() {
+  // 8-bit: enc_qmm_large's qmm8 condition too (qmtf_for), for a dense FFN projection (never a router gate)
+  return {qmtf_on(3, 64), qmtf_on(8, 64) && qmm8_on(), qmtf_on(4, 32), qmtf_on(5, 64)};
+}
+ffn_share::Fmt Qwen35::ffn_fmt(const QLinear& q) {
+  return q.iq || q.q20 || q.exl3 ? ffn_share::Fmt{} : ffn_share::Fmt{q.bits, q.gs};
+}
+ffn_share::Path Qwen35::ffn_gpu_part(const Layer& L) {
+  return ffn_share::gpu_part(ffn_fmt(L.mg), ffn_fmt(L.mu), ffn_fmt(L.md), qmtf_formats());
+}
 
 // The M5 default share of the Neural Engine split (default_units' gpu_mma, #318) is on today for these shapes only: Qwen3.5 4B (hidden 2560, FFN 9216, 32 layers) and Qwen3.8 27B (5120, 17408, 64). Another
 // 4-bit group-64 dense model (the 9B) keeps the old default share, the whole FFN on the Neural Engine at 20 GPU cores,
@@ -3180,8 +3258,23 @@ bool Qwen35::mma_share_measured(const Qwen35Config& c) {
 // the GPU keeps to 0. The gate/up products are the GPU-alone FFN's (same kernel, tile and K order).
 bool Qwen35::enc_mlp_gpu_part_qmt(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x) {
   const QLinear &G = L.mg, &U = L.mu, &Dn = L.md;
-  auto ok = [](const QLinear& q) { return q.bits == 4 && q.gs == 64 && q.K % 64 == 0; };
-  if (!qmt_on() || T < 64 || g % 64 || !ok(G) || !ok(U) || !ok(Dn) || G.N != U.N || G.K != U.K) return false;
+  const ffn_share::Path path = ffn_gpu_part(L);  // the formats' rule, as plan() and init_ane() chose the share by
+  if (path == ffn_share::Path::generic || T < 64 || g % 64 || G.N != U.N || G.K != U.K || G.K % 64 || Dn.K % 64)
+    return false;
+  if (path == ffn_share::Path::qmtf) {
+    // the 3-bit / 8-bit g64 FFN: qmtfg over the leading g gate/up rows (enc_qmm_gu's tile), qmtf_ld for the down
+    QLinear Gg = G, Ug = U;
+    Gg.N = Ug.N = g;
+    if (!enc_qmm_gu(e, Gg, Ug, xh_, hhalf_, T)) return false;
+    const uint32_t D = uint32_t(cfg_.hidden), I = G.N;
+    e.use(pipe("qmtf_" + Dn.fmt() + "_m128_n64_ld"));
+    kp::QmmLd pd{{uint32_t(T), D, g, g, D, 1u, uint32_t(Dn.gs), 0, 0}, I * uint32_t(Dn.bits) / 32, I / uint32_t(Dn.gs)};
+    e.buf(0, hhalf_); e.buf(1, Dn.w->buf); e.buf(2, Dn.s->buf); e.buf(3, Dn.b->buf); e.buf(4, x);
+    e.val(5, pd);
+    e.dispatch((D + 63) / 64, (uint32_t(T) + 127) / 128, 1, 128);
+    return true;
+  }
+  if (!qmt_on()) return false;  // Path::qmt
   const uint32_t D = uint32_t(cfg_.hidden), I = G.N, bm = qmt128_for(T) ? 128 : 64;
   e.use(pipe(bm == 128 ? "qmtg_m128_n64" : "qmtg_m64_n64"));
   kp::Qmm pg{uint32_t(T), g, G.K, G.K, g, 0, uint32_t(G.gs), 0, 0};
@@ -3234,6 +3327,15 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
   auto ok8 = [](const QLinear& q) { return q.bits == 8 && q.gs == 64 && q.K % 64 == 0; };
   const bool b8 = on && qmm8_for(G) && qmm8_for(U) && ok8(G) && ok8(U) && G.N == U.N && G.K == U.K;
   auto ok = [](const QLinear& q) { return q.bits == 4 && q.gs == 64 && q.K % 64 == 0; };
+  if (on && !cfg_.moe && G.same_format(U) && G.N == U.N && G.K == U.K && qmtf_for(G, M) && qmtf_for(U, M)) {
+    e.use(pipe("qmtfg_" + G.fmt() + "_m128_n64"));  // qmtg_m128_n64's grid: 32 columns a tile
+    kp::Qmm p{uint32_t(M), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};
+    e.buf(0, xh); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, h);
+    e.val(5, p);
+    e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
+    e.dispatch((G.N + 31) / 32, (uint32_t(M) + 127) / 128, 1, 128);
+    return true;
+  }
   if (on && !G.q4() && !G.q8() && G.same_format(U) && G.N == U.N && G.K == U.K) {
     // wfmt.metal's fused gate/up for the other formats (qrf_gu_*; bf16 large tiles with M along grid x)
     static const bool mf = env_int("NI_QRF16_MF", 1) != 0;
@@ -3806,6 +3908,30 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   e.dispatch((T + qb - 1) / qb, gy, 1, th);
 }
 
+bool Qwen35::gdn_par_on() const { return gdn_par(); }
+
+// NI_ANE_PROJ (enc_prefill_wave2): layer li's token mixer around its input projections on the Neural Engine
+void Qwen35::enc_mixer_in(Encoder& e, int li, const Layer& L, int T, const Buffer& x, int lane) {
+  enc_rows_half(e, x, L.in_norm, xh_, T, cfg_.hidden);
+  ane_proj_->pack(e, lane, xh_, T);
+  ane_proj_->launch(e, lane, li, T);
+}
+
+void Qwen35::enc_gdn_ab(Encoder& e, const Layer& L, int T) {
+  enc_proj(e, {{&L.b, bb_, false}, {&L.a, ab_, false}}, xh_, T);
+}
+
+void Qwen35::enc_mixer_out(Encoder& e, Seq& s, int li, const Layer& L, int T, const Buffer& x, int lane, int pos0) {
+  if (L.linear) {
+    ane_proj_->unpack(e, lane, li, {qkv_, zb_}, T);
+    enc_gdn_prefill_par(e, s, li, L, T);
+    enc_qmm(e, L.out, hh_, x, T, true);
+    return;
+  }
+  ane_proj_->unpack(e, lane, li, {qg_, kr_, vr_}, T);
+  enc_attn_post(e, s, li, L, pos0, T, x);
+}
+
 // The token mixer (GDN or attention) of layer i for T rows at positions pos0.., residual rows x.
 // snap / snap_row: capture the recurrent state after row snap_row (NI_SHORTPF in-pass checkpoint).
 void Qwen35::enc_mixer_prefill(Encoder& e, Seq& s, int i, const Layer& L, int pos0, int T, const Buffer& xbuf,
@@ -3837,6 +3963,13 @@ void Qwen35::enc_mixer_prefill(Encoder& e, Seq& s, int i, const Layer& L, int po
     enc_qmm(e, L.out, hh_, xbuf, T, true);
   } else {
     enc_proj(e, {{&L.q, qg_, false}, {&L.k, kr_, false}, {&L.v, vr_, false}}, xh_, T);
+    enc_attn_post(e, s, i, L, pos0, T, xbuf);
+  }
+}
+
+// attention after its q / k / v projections (qg_, kr_, vr_): norms and rope into the cache, attention, o
+void Qwen35::enc_attn_post(Encoder& e, Seq& s, int i, const Layer& L, int pos0, int T, const Buffer& xbuf) {
+  {
     kp::AttnPrep ap{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim),
                     uint32_t(cfg_.rot_dims), uint32_t(pos0), uint32_t(s.cap), cfg_.eps, cfg_.theta};
     e.use(pipe(mrope(s) ? "attn_prep_m" : "attn_prep"));
@@ -3870,7 +4003,9 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   const bool slabs = ane_slabs(T);
   ane_chunk_ = slabs || (cfg_.causal && !snap && ane_splits(T));
   if (ane_chunk_) ane_begin_chunk(slabs ? ane::slab_rows(T, int(ane::FfnSplit::kMaxRows)) : T);
-  if (ane_chunk_ && !slabs && ane_wave_rows(T)) {
+  if (ane_chunk_ && !slabs && ane_wave_rows(T) && ane_proj_ && !ane_proj_->retired()) {
+    enc_prefill_wave2(e, s, pos0, T, ane_wave_rows(T));
+  } else if (ane_chunk_ && !slabs && ane_wave_rows(T)) {
     enc_prefill_wave(e, s, pos0, T, ane_wave_rows(T));
   } else if (!ane_chunk_ && !snap && e.grouped() && gpu_wave_rows(T)) {
     enc_prefill_gpu_wave(e, s, pos0, T, gpu_wave_rows(T));
@@ -3889,16 +4024,18 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   if (snap) snap->pos = pos0 + snap_row;
 }
 
-// NI_PF_WAVE (read once; 0 off): a MoE prefill chunk of at least 1,024 rows as a two-half wavefront on the GPU alone.
+// NI_PF_WAVE (read once; 0 off): a MoE prefill chunk of at least 4,096 rows as a two-half wavefront on the GPU alone.
 // Layer by layer, half B's token mixer (DeltaNet or attention, its rows after A's) runs beside half A's MoE, then half
 // A's next mixer beside half B's MoE, each pair on one grouped encoder (Encoder::play_pair): a DeltaNet scan or an
 // attention pass, which leaves the GPU's cores half busy, overlaps the other half's expert GEMMs. Each half's rows go
 // through the kernels a chunk of that size would, the second half after the first as a next chunk would, so the
-// logits are those of half-size chunks. Default on for the Qwen3.6 35B-A3B (hidden 2048, 40 layers, 4-bit experts) on
-// an Apple10 GPU of 40 cores or more (the M5 Max), with 8,192-row chunks (auto_chunk), so each half's MoE has as many
+// logits are those of half-size chunks. Default on for the Qwen3.6 35B-A3B shape (hidden 2048, 40 layers, 4-bit experts;
+// Clover too) on the M5 class (matrix units), with 8,192-row chunks (auto_chunk), so each half's MoE has as many
 // rows as the 4,096-row chunk it replaces: M5 Max, ni_run, 16,288 ids in 8,192-row chunks 2,767 -> 2,620 ms (-5.3%; in
 // 4,096-row chunks, the default before, 2,777); 4,129 ids in one chunk level (592 -> 590). Halves of 2,048 rows lose
 // what the overlap gains (16K in 4,096-row chunks 2,777 -> 2,767): the experts' weights are read once per half.
+// Below 4,096 rows they lose outright: M5 Pro, Clover, one chunk, A B B A A B, 2,000 ids 590 -> 640 ms (3 of 3 pairs
+// slower), 1,200 ids 373 -> 447 (#1097); 4,129 ids level (1,210 -> 1,212). Shorter chunks keep the plain prefill.
 bool Qwen35::gpu_wave_default(int hidden, int layers, bool moe) {
   if (const char* v = getenv("NI_PF_WAVE")) return atoi(v) != 0;
   ModelFacts f;
@@ -3909,8 +4046,7 @@ bool Qwen35::gpu_wave_default(int hidden, int layers, bool moe) {
 }
 int Qwen35::gpu_wave_rows(int T) const {
   static const bool on = gpu_wave_default(cfg_.hidden, cfg_.layers, cfg_.moe);
-  static const bool forced = env_int("NI_PF_WAVE", 0) == 1;
-  if (!on || (!gpu_wave_model_ && !forced) || !cfg_.moe || !cfg_.causal || T < 1024 || !Encoder::tapes_ok() || !grouped_prefill() || precomb_arm_) return 0;
+  if (!on || !cfg_.moe || !cfg_.causal || T < 4096 || !Encoder::tapes_ok() || !grouped_prefill() || precomb_arm_) return 0;
   for (const Layer& L : layers_)
     if (L.eg.exl3 || L.eg.iq || L.eg.q20 || L.eg.bits != 4) return 0;
   return (T / 2 + 63) / 64 * 64;

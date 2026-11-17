@@ -2,6 +2,7 @@
 #include "engine/device_profile.h"
 #include "vision/qwen_vit.h"
 #include "model/kparams.h"
+#include "model/qwen4_config.h"
 #include "util/bf16.h"
 #include "util/log.h"
 
@@ -30,8 +31,7 @@ static std::string vision_prefix(const std::string& dir) {
 bool QwenViT::supports(const std::string& dir, QwenViTConfig* c) {
   const json root = vit_read_json(dir + "/config.json");
   if (!root.contains("vision_config") || !root["vision_config"].is_object()) return false;
-  const std::string mt = root.value("model_type", std::string());
-  if (mt.rfind("qwen3_5", 0) != 0 && mt != "qwen4_exp") return false;  // (Qwen3.8-Flash-Next: the same tower)
+  if (qwen_layout(root) == QwenLayout::none) return false;  // (Qwen3.8-Flash-Next: the same tower)
   const json& v = root["vision_config"];
   QwenViTConfig q;
   q.depth = v.value("depth", q.depth);

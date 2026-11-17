@@ -708,6 +708,10 @@ check(len(Script.log) == 18, "the quick protocol's 18 requests (warm-up 2, writi
 res = json.load(open(saved[0])) if saved else {}
 check(res.get("invalid") == ["server: a server kapitsa bench did not start (KAPITSA_BENCH_SERVER), so its settings are unknown"],
       "its result is invalid (an external server), so it can't be submitted", str(res.get("invalid")))
+# the scripted server listens in this process: bench finds it as the server's process, so its GPU work is bench's own
+check(f"(KAPITSA_BENCH_SERVER, pid {os.getpid()})" in r.stderr and
+      not any("no process found" in f for f in res.get("flags", [])),
+      "the external server's process is found (this test's), and no flag says it was not", (r.stderr[-400:], res.get("flags")))
 check(res.get("mode") == "quick" and res.get("model", {}).get("name") == "qwen3.5-4b" and res["model"]["variant"] == "4bit" and
       res["model"]["precision"] == "4-bit", "the model and the mode", str(res.get("model")))
 check(res["protocol"]["sizes"] == [4000] and res["protocol"]["decode_runs"] == 3 and len(res["results"]["decode"]["runs_tps"]) == 3,
@@ -917,6 +921,36 @@ for value in ("0", "-1", "abc", "4096x", "99999999999999999"):
           f"invalid prefill chunk {value!r} rejected before loading")
 bad = run([KAPITSA, "bench", "--prefill-chunk", "4096", "--submit"], env=xenv)
 check(bad.returncode != 0 and "standard community" in bad.stderr, "custom chunk submission rejected before loading")
+
+# --dflash carries the drafter to the server bench starts: that server takes no NI_ variables (#1201's A/B of the
+# drafter read the default in both arms). A name that is neither auto, none nor a folder is refused before loading:
+# --model names the model, so the refusal that comes back is the flag's, not "no model on this offline Mac".
+missing = run([KAPITSA, "bench", "--dflash"], env=xenv)
+check(missing.returncode != 0 and "needs a value" in missing.stderr, "dflash requires a value")
+for value in ("of", "0", "off", os.path.join(xhome, "no-such-drafter"), flint_file):
+    bad = run([KAPITSA, "bench", "--model", "4b", "--quick", "--dflash", value], env=xenv)
+    check(bad.returncode != 0 and "--dflash takes auto, none or a drafter folder" in bad.stderr,
+          f"--dflash {value!r} refused before loading", bad.stderr[-200:])
+# a run that picked its own drafter is not the published protocol, so it cannot go to the community results
+for value in ("none", "auto"):
+    bad = run([KAPITSA, "bench", "--model", "4b", "--quick", "--dflash", value, "--submit"], env=xenv)
+    check(bad.returncode != 0 and "cannot be submitted" in bad.stderr,
+          f"--dflash {value} refused with --submit", bad.stderr[-200:])
+# a `~` in the drafter folder is expanded once, where the flag is parsed: `kapitsa serve` does not expand a `~` in
+# --dflash, so a path left unexpanded here would pass this folder check and then fail to load in the server it starts
+tilde_dir = os.path.join(xhome, "user", "drafters", "ornith")
+os.makedirs(tilde_dir, exist_ok=True)
+bad = run([KAPITSA, "bench", "--model", "4b", "--quick", "--dflash", "~/drafters/ornith"], env=xenv)
+check("drafter folder" not in bad.stderr,
+      "a ~ drafter folder is found, not refused as missing", bad.stderr[-200:])
+bad = run([KAPITSA, "bench", "--model", "4b", "--quick", "--dflash", "~/drafters/no-such"], env=xenv)
+check(bad.returncode != 0 and "--dflash takes auto, none or a drafter folder" in bad.stderr,
+      "a ~ drafter folder that does not exist is still refused", bad.stderr[-200:])
+# and --dflash configures only the server bench starts: against a KAPITSA_BENCH_SERVER one it would be dropped
+ext = dict(xenv, KAPITSA_BENCH_SERVER="9")
+bad = run([KAPITSA, "bench", "--model", "4b", "--quick", "--dflash", "none"], env=ext)
+check(bad.returncode != 0 and "KAPITSA_BENCH_SERVER" in bad.stderr,
+      "--dflash refused against a server it did not start", bad.stderr[-200:])
 
 
 shutil.rmtree(xhome, ignore_errors=True)

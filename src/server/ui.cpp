@@ -1,5 +1,6 @@
 // The command line's screens in a terminal (ui.h).
 #include "server/ui.h"
+#include "server/activity.h"
 
 #include "api/clients.h"
 #include "metal/gpu.h"
@@ -233,7 +234,7 @@ void home(const std::string& version) {
       const char* name;
     };
     const A agents[] = {{"claude", "Claude Code"}, {"codex", "Codex"}, {"opencode", "opencode"}, {"pi", "Pi"},
-                        {"hermes", "Hermes"}, {"aider", "aider"}, {"goose", "Goose"}};
+                        {"hermes", "Hermes"}, {"aider", "aider"}, {"goose", "Goose"}, {"copilot", "GitHub Copilot CLI"}};
     int cw = 0, nw2 = 0;
     for (const A& a : agents) cw = std::max(cw, width(a.cmd) + 8), nw2 = std::max(nw2, width(a.name));
     for (const A& a : agents) {
@@ -390,7 +391,8 @@ void list() {
       r.mark = accent(kOk);
       for (const auto& c : hub::catalog())  // what --model takes for it
         for (const auto& var : c.variants)
-          if (m.name == hub::full_name(c, var) || m.name == c.name + "-" + var.name) r.alias = hub::short_name(c, var);
+          if (m.name == hub::full_name(c, var) || m.name == c.name + "-" + var.name || m.name == hub::legacy_dir_name(c, var))
+            r.alias = hub::short_name(c, var);
       if (!m.complete) {
         struct stat st {};
         const bool adopt = !r.alias.empty() && stat((m.dir + "/.kapitsa").c_str(), &st) != 0;
@@ -770,6 +772,8 @@ struct Meter {
   int images = 0;
   std::shared_ptr<LiveDecode> live = std::make_shared<LiveDecode>();
   std::deque<std::array<double, 3>> samples;  // the dashboard thread's: (ms, tokens, cycles), the last 1.5 s
+  std::shared_ptr<server::Activity::Request> act;  // its events on the bus (src/server/activity.h)
+  bool dash = false;                                // on the terminal UI's dashboard and request log
 };
 
 namespace {
@@ -977,8 +981,17 @@ void dash_remove(const std::shared_ptr<Meter>& m) {
 }  // namespace
 
 std::shared_ptr<Meter> meter(const httplib::Request& req, const ChatRequest& r) {
-  if (!g_serve_ui) return nullptr;
+  server::Activity* act = server::activity();
+  if (!g_serve_ui && !act) return nullptr;
   auto m = std::make_shared<Meter>();
+  if (act) {
+    const std::string& p = req.path;
+    const char* api = p.rfind("/api/", 0) == 0 ? "ollama" : p.rfind("/v1/messages", 0) == 0 ? "anthropic" : "openai";
+    m->act = act->start(api, req.get_header_value("User-Agent"));
+    m->live = m->act->live;
+  }
+  if (!g_serve_ui) return m;
+  m->dash = true;
   m->client = client_of(req.get_header_value("User-Agent"));
   m->images = images_in(r.messages);
   {
@@ -998,6 +1011,8 @@ void token(const std::shared_ptr<Meter>& m) {
 void done(const std::shared_ptr<Meter>& m, const ChatResult& r) {
   if (r.completion_tokens > 1 && r.decode_ms > 0) g_rate = (r.completion_tokens - 1) / (r.decode_ms / 1000);
   if (!m) return;
+  if (server::Activity* act = server::activity()) act->finish(m->act, r);
+  if (!m->dash) return;
   dash_remove(m);
   const time_t now = time(nullptr);
   char at[16];
@@ -1020,6 +1035,7 @@ void done(const std::shared_ptr<Meter>& m, const ChatResult& r) {
   else if (fin == "length") fin = warn(r.context_full ? "context full" : "length");
   else if (fin == "cancelled") fin = warn("cancelled");
   else if (fin == "error") fin = red("error") + (r.error.empty() ? "" : dim(" " + r.error));
+  if (!r.thinking_level.empty()) fin += dim("  thinking: " + r.thinking_level);
   if (m->images > 0) fin += dim("  " + std::to_string(m->images) + (m->images == 1 ? " image" : " images"));
   const Cols c = cols_now();
   std::string l = "  ";

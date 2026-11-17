@@ -1,4 +1,5 @@
 #include "model/clover.h"
+#include "model/sampler.h"
 #include "hub/hub.h"
 #include "model/dflash2.h"
 #include "model/kparams.h"
@@ -104,7 +105,6 @@ std::string Clover::find_drafter(const std::string& model_dir) {
 }
 
 Clover::Clover(const std::string& dir, int prefill_chunk) : Qwen35(dir, prefill_chunk) {
-  gpu_wave_model_ = false;  // the 35B-A3B's GPU prefill wavefront (NI_PF_WAVE) is off on Clover today
   const json c = read_json(dir + "/config.json", true);
   cfg_block_ = c.value("block_size", 32);
   mask_id_ = c.value("mask_token_id", -1);
@@ -423,7 +423,9 @@ void Clover::encode_draft(Encoder& e, Seq& s, int P, int W, const CloverReply& r
 void Clover::encode_check(Encoder& e, Seq& s, int P, int W, const CloverReply& reply, const std::vector<int>& stops,
                           const SamplingParams& sp, uint32_t step) {
   // row r predicts position length + r + 1 and checks the draft tokens[P + r + 1]
-  encode_verify(e, s, P, W, sp, step, /*v8=*/true);
+  // (the verify's own sample is not read, enc_pick draws from its logits with no top-k: its sampler gets a top_k it
+  // holds, kapitsa#1286)
+  encode_verify(e, s, P, W, two_pass(sp), step, /*v8=*/true);
   set_controls(reply, stops, W, reply.length + 1, false, 0, false);
   enc_pick(e, logits_, uint32_t(cfg_.vocab), W, sp, step + 1, ptok_, 0, uint32_t(W), false, s.tok, size_t(P + 1) * 4,
            uint32_t(W - 1));

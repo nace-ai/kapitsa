@@ -1,0 +1,283 @@
+{
+  "provenance": "Explicitly redacted derived evidence, not original execution logs. Full original records remain private. Paths use relative names or placeholders. Resource usage and host identifiers are omitted; numerical samples, flags and invalid results are preserved.",
+  "hardware": {
+    "chip": "Apple M5 Pro",
+    "gpu_cores": 20,
+    "memory_gib": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "source_and_binary_identity": {
+    "A": {
+      "head": "4a8265d1aa656e8e523c10c23d5dd4cd0b82c532",
+      "flint_cpp_sha256": "7838d290383347db82ca5c5f1589fdd79f89072555a0437d3f18b8a1d9fd5823",
+      "growth_driver_sha256": "08378f293b5f0ad66c8afa9b11951dc4b248543130bebad0f7992146f0806638",
+      "binary_sha256": {
+        "kapitsa": "01fbf43abde79ea09dbcbcfee77b7edb1df69b4e0e6877a966111e3591f2980b",
+        "logit_dump": "deb1b6ade6eec440d7f02a42746cfe6c1c57afbc905897353683c2a01d19c1b7",
+        "flint_kv_growth_check": "5969a95eb05b6ec7d586409a349be09b58cd7e889e7126cb855fcf948e0aab04"
+      },
+      "growth_binary_sha256": "be3c8beae7ed983edf578ba42806c5fe498cd213c8854f52735769ccb9ecb46b"
+    },
+    "B": {
+      "head": "ae599dd1342b7d699f62e0a5dadb06a2ecb91d30",
+      "flint_cpp_sha256": "1c4c34eafd01ceafa2cccc8dc0864a16c648ad6f47fd354cae8262357228896a",
+      "growth_driver_sha256": "08378f293b5f0ad66c8afa9b11951dc4b248543130bebad0f7992146f0806638",
+      "binary_sha256": {
+        "kapitsa": "33f65d020d90a2975637a7ecbf7cda7713cb64632e02530e382bd2369cada612",
+        "logit_dump": "7874b188a6da6280e78389b423d3707df66aa817eda9bc5c6b14b8cefe65bdfa",
+        "flint_kv_growth_check": "9e87c0170c5d72788dac531f8dd9f288b8b694578678c36579acf802708d1cab"
+      },
+      "growth_binary_sha256": "5dddffa82ea7abcb73a658b80484dbeaceba763ab7b4eb92c96f4e1f9e2e859a"
+    }
+  },
+  "started_at": "2026-11-11T02:22:37.054391+00:00",
+  "finished_at": "2026-11-11T02:29:24.218660+00:00",
+  "gpu_lock": "exclusive, NI_LOCK_HELD=1 and NACE_GPU_LOCK_HELD=1; released after worker completion",
+  "configuration": {
+    "cmake": "Release (-O3), explicit configure with KAPITSA_GIT set to each full source commit",
+    "model": "unsloth/flint-GGUF / flint-UD-IQ2_XXS, existing import shared unchanged by both builds",
+    "model_files": {
+      ".kapitsa/manifest.json": {
+        "bytes": 1459,
+        "sha256": "052f7d3370388b2c84e94b8002ac4d0c9a78bb526e09b546eb132ec3a442b5c6"
+      },
+      "config.json": {
+        "bytes": 37187,
+        "sha256": "14fb7887edfbbf3a5a9ccdde550e8a774887837485c25acfc1c1d4b52e9c2cd4"
+      },
+      "experts.safetensors": {
+        "bytes": 11855541696,
+        "sha256": "cccdf388ce07687844fd4f949bf6f3d2cfd65d2e5a24f4082bae771a59d47a84"
+      },
+      "generation_config.json": {
+        "bytes": 129,
+        "sha256": "745132f7a56e9ff429f4bf4409a588d28a89942a3efe390710d064ceef89de46"
+      },
+      "model.safetensors": {
+        "bytes": 1163262656,
+        "sha256": "431fda6a6f44233053e31fecc74aa050219ed1f03d3cbbc4b35fa19c909341ba"
+      },
+      "model.safetensors.index.json": {
+        "bytes": 105174,
+        "sha256": "003bb87e318dd21a6555bcb0053b8fd926a3337d81319c9d5ef7d469ee5079dc"
+      },
+      "tokenizer.json": {
+        "bytes": 4278400,
+        "sha256": "cbc69b4fd04328e2c637b28fed83af5afe4b9f3c4cecd03559c257351ff53f60"
+      },
+      "tokenizer_config.json": {
+        "bytes": 20882,
+        "sha256": "d5b94880b30e4fa7df11b2b84d91941f3f40130bcc73d3045ad7b9f5c0b6782e"
+      }
+    },
+    "model_imports_this_run": 0,
+    "gpu_debug_layers": "Off for full-model runs; both flags were on for the separately recorded small cache-copy checks. No Metal kernel changed."
+  },
+  "method": {
+    "sequence": "A1 B1 A2 B2",
+    "command_example": "$BUILD/kapitsa bench --model \"$MODEL\" --quick --json --out \"$OUT\"",
+    "command_is_placeholder_example": true,
+    "interpretation": "Native benchmark outputs are retained per run, including all flags and lower-throughput samples. Prompt lengths differ across benchmark runs. These samples do not establish an inference speedup or universal absence of regression; the fixed-input output gates are recorded separately."
+  },
+  "runs": {
+    "A1": {
+      "exit_code": 0,
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 1.0
+      },
+      "results": {
+        "decode": {
+          "median_tps": 153.14,
+          "runs_tps": [
+            153.14,
+            151.27,
+            153.79
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 152.67,
+          "runs_tps": [
+            152.67,
+            152.74,
+            151.48
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 3873,
+            "ttft_s": 1.8544,
+            "tps": 2088.5,
+            "followup_s": [
+              0.0877,
+              0.1264,
+              0.0528
+            ],
+            "followup_median_s": 0.0877,
+            "followup_suffix_tps": 118.7
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [
+        "cached_4000: follow-up returned no content; stopping the cached series"
+      ],
+      "invalid": []
+    },
+    "B1": {
+      "exit_code": 0,
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 1.0
+      },
+      "results": {
+        "decode": {
+          "median_tps": 152.48,
+          "runs_tps": [
+            154.56,
+            152.48,
+            152.33
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 153.62,
+          "runs_tps": [
+            153.04,
+            154.07,
+            153.62
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 3875,
+            "ttft_s": 1.8559,
+            "tps": 2087.9,
+            "followup_s": [
+              0.1093,
+              0.092,
+              0.0473
+            ],
+            "followup_median_s": 0.092,
+            "followup_suffix_tps": 163.1
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [],
+      "invalid": []
+    },
+    "A2": {
+      "exit_code": 0,
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 1.0
+      },
+      "results": {
+        "decode": {
+          "median_tps": 151.25,
+          "runs_tps": [
+            151.67,
+            151.25,
+            149.85
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 151.76,
+          "runs_tps": [
+            152.51,
+            151.76,
+            151.51
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 3874,
+            "ttft_s": 1.8443,
+            "tps": 2100.6,
+            "followup_s": [
+              0.0851,
+              0.1155,
+              0.0514
+            ],
+            "followup_median_s": 0.0851,
+            "followup_suffix_tps": 129.9
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [],
+      "invalid": []
+    },
+    "B2": {
+      "exit_code": 0,
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 1.0
+      },
+      "results": {
+        "decode": {
+          "median_tps": 148.39,
+          "runs_tps": [
+            151.51,
+            148.39,
+            147.54
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 146.93,
+          "runs_tps": [
+            146.93,
+            145.88,
+            147.79
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 3872,
+            "ttft_s": 1.8476,
+            "tps": 2095.6,
+            "followup_s": [
+              0.0845,
+              0.1029,
+              0.052
+            ],
+            "followup_median_s": 0.0845,
+            "followup_suffix_tps": 145.8
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [],
+      "invalid": []
+    }
+  }
+}

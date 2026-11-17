@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+namespace ni { struct DeviceProfile; }
+
 namespace ni::hub {
 
 // A failure to report to the user as is (offline, not found, out of disk ...): what() is one or two sentences.
@@ -80,7 +82,21 @@ struct CatalogModel {
 };
 
 const std::vector<CatalogModel>& catalog();
+// Pure device selection; the no-argument form uses the current device profile.
+const std::vector<CatalogModel>& catalog(const ni::DeviceProfile&);
 const CatalogModel* find_model(const std::string& name_or_alias);  // case-insensitive; nullptr if unknown
+// A variant's current name: the hidden old names (kquant, kquant5) give q4, q5; any other name comes back unchanged.
+std::string current_variant_name(const std::string& variant);
+// The folder name (under models_dir()) a variant had before it was renamed (`<model>-kquant` for q4), or "" if it kept its name.
+std::string legacy_dir_name(const CatalogModel&, const Variant&);
+// Nace AI's combined repos hold one model's packs, a folder each (Q4/, Q5/). Each row is a pack the catalog pins
+// in its standalone repo: the combined repo, its folder ("": the repo's root), the combined revision whose folder holds
+// the same safetensors, and the standalone repo the catalog downloads. `--model <combined repo>[/<folder>][@<revision>]`
+// takes that catalog variant, with its drafter and MTP head; without a folder, the repo's Q4 pack (or its root row).
+struct CombinedPack {
+  std::string repo, folder, revision, pinned_repo;
+};
+const std::vector<CombinedPack>& combined_packs();
 // The catalog variant whose weights are `repo` (case-insensitive) at `revision` ("" = any), or nullptr.
 const Variant* find_variant_by_repo(const std::string& repo, const std::string& revision, const CatalogModel** model);
 std::string short_name(const CatalogModel& m);                     // its shortest alias: "35b"
@@ -134,6 +150,9 @@ struct PullOptions {
 // file goes, its blocks stay in the experts' clone; a stopped import starts again from the downloaded file) before the
 // manifest. Throws Error.
 std::string ensure(const ModelRef& ref, const PullOptions& opt);
+// As Ctrl+C does: the download in progress stops (its parts kept) and ensure() throws Stopped, and so does every
+// download started after it. Safe from any thread.
+void stop_downloads();
 // A model folder that was not downloaded from the catalog (a GGUF import): fetches the catalog drafter that matches its
 // shape (drafter_for_shape) into <dir>/dflash2/, unless the folder has one, and lists it in the manifest. Returns what
 // happened in a few words ("" when the folder's shape has no catalog drafter or already has one). Throws Error
@@ -150,6 +169,13 @@ void set_drafter_declined(const std::string& dir, bool declined);
 bool is_complete(const std::string& dir);
 // Finished, and (catalog models) at the revisions this Kapitsa pins: ensure() needs no network.
 bool is_current(const ModelRef& ref);
+// Whether `dir` is a plan folder (plan_dir's: ~/.cache/kapitsa/plans/<model>-<variant>), and whether that plan holds
+// this Kapitsa's variant of the model: a plan's files are the model, so it is as present as a download, but it is not
+// in the store and has no manifest (a store copy does), so its `.complete` is its only record.
+bool is_plan(const std::string& dir);
+bool plan_is_current(const std::string& dir);
+// Whether a plan's model is on this Mac: planned and holding its weights, not only planned from its headers.
+bool plan_has_model(const std::string& dir);
 
 // What a memory plan reads for a model, without its weights: config.json and each safetensors file's header (the
 // 8-byte length and the JSON, no tensor data), the companions' too (the MTP head's, the drafter's in dflash2/). For a
@@ -167,8 +193,14 @@ struct ImportSize {
 bool import_size(const ModelRef& ref, ImportSize* out);
 // While set, plan_dir() fetches nothing: a plan not already on this Mac is "" (and counted). For answers that must
 // be instant and offline, like the help screen's best model for this Mac: exact when offline_misses() stays 0.
+// A visit nests, and it is per thread plus a process-wide count, so a worker thread started inside one is inside it
+// too; a nested visit's end leaves the outer one open (set_offline(false) and leave_offline).
 void set_offline(bool on);
+// Ends every visit open on this thread (a plan's own worker threads end with their plan).
+void leave_offline();
 int offline_misses();
+// Whether a fetch from the calling thread is refused now (what plan_dir asks before it fetches).
+bool fetch_refused();
 
 // A model in the store, for `kapitsa list`.
 struct Installed {

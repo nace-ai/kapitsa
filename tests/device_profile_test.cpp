@@ -1,3 +1,4 @@
+#include "ane/default_share.h"
 #include "engine/device_profile.h"
 #include "metal/gpu.h"
 
@@ -68,11 +69,11 @@ int main() {
   const ni::DefaultRow* hist = row("kflash_hist");
   CHECK(wave && hist);
   CHECK(wave->live && hist->live);
-  CHECK(wave->win_pct == 5 && wave->win_pct_hi == 0 && !wave->exclusive);
+  CHECK(wave->win_pct == 3 && wave->win_pct_hi == 5 && !wave->exclusive);
   CHECK(hist->win_pct == 12 && hist->win_pct_hi == 15 && !hist->exclusive);
   const auto m5pro = ni::resolve_device(mac(10, 20, "Apple M5 Pro", g48));
   const auto m5max = ni::resolve_device(mac(10, 40, "Apple M5 Max", 128L << 30));
-  CHECK(!ni::default_matches(*wave, m5pro));
+  CHECK(ni::default_matches(*wave, m5pro));  // matrix class since #393
   CHECK(ni::default_matches(*wave, m5max));
   CHECK(ni::default_matches(*hist, m5pro));
   CHECK(ni::default_matches(*hist, m5max));  // the matrix class includes the wide chips
@@ -83,7 +84,35 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 16);  // +1 from m1_max_32 guard row kept (#393)
+  CHECK(ni::default_count() == 19);  // +1: 9B mixed-format catalog policy (#493); +1: kflash_block16; +1: ane_proj_fast
+  // ane_proj_fast: the 27B on the Apple M6 by name (slower on the M5 Pro; the 4B was over its bar; the fast profile reads it)
+  const ni::DefaultRow* proj = row("ane_proj_fast");
+  CHECK(proj && proj->scope == ni::DefaultScope::kName && proj->live && proj->exclusive && proj->win_pct >= 10 &&
+        proj->model == ni::ModelClass::kQwen27bDense);
+  {
+    ni::ModelFacts q27, q4, q9, moe;
+    q27.hidden = 5120, q27.layers = 64;
+    q4.hidden = 2560, q4.layers = 32;
+    q9.hidden = 4096, q9.layers = 32;
+    moe.moe = true, moe.hidden = 2048, moe.layers = 40;
+    const auto m6 = ni::resolve_device(mac(11, 12, "Apple M6", 32L << 30));
+    const auto m5max = ni::resolve_device(mac(10, 40, "Apple M5 Max", 128L << 30));
+    const auto m4pro = ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48));
+    CHECK(ni::default_on(ni::Knob::kAneProjFast, m6, q27) && !ni::default_on(ni::Knob::kAneProjFast, m6, q4));
+    CHECK(!ni::default_on(ni::Knob::kAneProjFast, m5max, q27));
+    CHECK(!ni::default_on(ni::Knob::kAneProjFast, ni::resolve_device(mac(10, 20, "Apple M5 Pro", g48)), q27));
+    CHECK(!ni::default_on(ni::Knob::kAneProjFast, ni::resolve_device(mac(11, 20, "Apple M6 Pro", g48)), q27));
+    CHECK(!ni::default_on(ni::Knob::kAneProjFast, m4pro, q27) && !ni::default_on(ni::Knob::kAneProjFast, m4pro, q4));
+    CHECK(!ni::default_on(ni::Knob::kAneProjFast, m6, q9) && !ni::default_on(ni::Knob::kAneProjFast, m6, moe));
+    CHECK(ni::resolve_model(q27) == ni::ModelClass::kQwen27bDense && ni::resolve_model(q4) == ni::ModelClass::kOther);
+  }
+  // kflash_block16: a multi-slot server drafts 16 rows on the matrix class (M5 and the M6), not on M1 to M4
+  const ni::DefaultRow* b16 = row("kflash_block16");
+  CHECK(b16 && b16->scope == ni::DefaultScope::kMatrix && b16->live && !b16->exclusive && b16->win_pct == 22);
+  CHECK(ni::default_on(ni::Knob::kKflashBlock16, ni::resolve_device(mac(11, 12, "Apple M6", 32L << 30)), {}));
+  CHECK(ni::default_on(ni::Knob::kKflashBlock16, ni::resolve_device(mac(10, 40, "Apple M5 Max", 128L << 30)), {}));
+  CHECK(!ni::default_on(ni::Knob::kKflashBlock16, ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48)), {}));
+  CHECK(!ni::default_on(ni::Knob::kKflashBlock16, ni::resolve_device(mac(7, 32, "Apple M1 Max", 64L << 30)), {}));
   const auto* segmented = row("ane_segmented_fast");
   CHECK(segmented && segmented->scope == ni::DefaultScope::kAneBuiltinNonMatrix && !segmented->exclusive);
   for (const auto& facts : {mac(7, 8, "Apple M1", g48), mac(8, 10, "Apple M2", g48),
@@ -98,7 +127,38 @@ int main() {
     CHECK(ni::default_matches(*segmented, with_ane) == expected);
     with_ane.ane = false;
     CHECK(!ni::default_matches(*segmented, with_ane));
+    // M1 and M2 get default_units()'s own share; it stays apart from the built-in share and the segmented default
+    CHECK(ni::ane_pre_m3_share(facts.name) == (facts.apple_family < 9 ? facts.apple_family - 6 : 0));
   }
+  // The built-in share is the M4 and every later generation, by the name's generation number, not a substring.
+  CHECK(ni::ane_builtin_share("Apple M6") && ni::ane_builtin_share("Apple M6 Pro") && ni::ane_builtin_share("Apple M7 Max"));
+  CHECK(ni::ane_builtin_share("Apple M10") && ni::ane_builtin_share("Apple M5 Ultra"));
+  CHECK(!ni::ane_builtin_share("Apple M3 Max") && !ni::ane_builtin_share("Apple M1") && !ni::ane_builtin_share("Apple M2 Ultra"));
+  CHECK(!ni::ane_builtin_share("Apple M") && !ni::ane_builtin_share("Apple M6X") && !ni::ane_builtin_share("Paravirtual M5"));
+  // An M6 is matrix class: the share's gpu_mma branch applies, and the fast profile's segmented inputs stay off.
+  CHECK(!ni::ane_segmented_default(mac(11, 12, "Apple M6", 32L << 30)));
+  CHECK(ni::ane::default_units("Apple M6", 12, 34, true, true) == 29 && ni::ane::default_units("Apple M6", 12, 18, true, true) == 15);
+  // ... but the plain split (Drex Max's noncausal pass, NI_ANE_WAVE=0) keeps no default share on M6 and later until it
+  // is output-checked there; M4 and M5 keep theirs
+  CHECK(ni::ane::default_units("Apple M6", 12, 34, false, true) == 0 && ni::ane::default_units("Apple M7 Max", 40, 34, false) == 0);
+  CHECK(ni::ane::default_units("Apple M5 Pro", 20, 34, false, true) > 0 && ni::ane::default_units("Apple M4 Pro", 20, 34, false) > 0);
+  CHECK(ni::ane_generation("Apple M6 Pro") == 6 && ni::ane_generation("Apple M10") == 10 && ni::ane_generation("AMD M6") == 0);
+  CHECK(ni::ane_pre_m3_share("Apple M1 Ultra") == 1 && ni::ane_pre_m3_share("Apple M2 Pro") == 2);
+  CHECK(ni::ane_pre_m3_share("Apple M2 Max") == 2 && ni::ane_pre_m3_share("Apple M3 Max") == 0);
+  CHECK(ni::ane_pre_m3_share("Apple M10") == 0 && ni::ane_pre_m3_share("Apple M20 Pro") == 0);
+  // The shares the M1/M2 serve logs printed (bench/results/2026-11-12-m1-m2-ane-share): the 27B's 34 units and the
+  // 4B's 18, wavefront; the 32-unit compile cap; the M1 Max share #1194 measured around; no noncausal share; the M3
+  // still needs a calibration.
+  using ni::ane::default_units;
+  using ni::ane::default_min_rows;
+  CHECK(default_units("Apple M1 Ultra", 64, 34, true) == 20 && default_units("Apple M2 Pro", 19, 34, true) == 30);
+  CHECK(default_units("Apple M1 Ultra", 64, 18, true) == 11 && default_units("Apple M2 Pro", 19, 18, true) == 16);
+  CHECK(default_units("Apple M1 Max", 32, 34, true) == 28);
+  CHECK(default_units("Apple M1", 8, 34, true) == 32 && default_units("Apple M2", 10, 34, true) == 32);
+  CHECK(default_units("Apple M1 Ultra", 64, 34, false) == 0 && default_units("Apple M2 Pro", 19, 34, false) == 0);
+  CHECK(default_units("Apple M3 Pro", 18, 34, true) == 0 && default_units("Apple M3 Max", 40, 34, false) == 0);
+  CHECK(default_min_rows("Apple M1 Ultra", 64, 20, 34) == 1024 && default_min_rows("Apple M2 Pro", 19, 30, 34) == 512);
+  CHECK(default_min_rows("Apple M4 Pro", 20, 27, 34) == 512 && default_min_rows("Apple M5 Max", 40, 14, 34) == 512);
   // The fast profile's first member: matrix class, so every M5, not the M5 Pro it was measured on.
   const ni::DefaultRow* tattn = row("tattn_fast");
   CHECK(tattn && tattn->scope == ni::DefaultScope::kMatrix && !tattn->exclusive && tattn->win_pct == 8);
@@ -179,7 +239,7 @@ int main() {
   const std::string json = ni::format_profile(m5max, true);
   CHECK(json.find("\"chip_class\":\"wide\"") != std::string::npos);
   CHECK(json.find("\"id\":\"pf_wave\"") != std::string::npos);
-  CHECK(json.find("\"win_pct\":5") != std::string::npos);
+  CHECK(json.find("\"win_pct\":3") != std::string::npos);
   CHECK(json.find("\"exclusive\":false") != std::string::npos);
   CHECK(json.find("measured_on") == std::string::npos);
   ni::DeviceProfile quoted = m5pro;
@@ -209,8 +269,8 @@ int main() {
 
   // The proof the move changes nothing: default_on() must agree, on every (device, model) pair, with the inline
   // expression the call site had before it read the table. These lambdas are those expressions, copied verbatim.
-  const auto old_pf_wave = [](const ni::DeviceFacts& d, const ni::ModelFacts& m) {
-    return m.moe && m.hidden == 2048 && m.layers == 40 && d.apple_family >= 10 && d.cores >= 40;
+  const auto old_pf_wave = [](const ni::DeviceFacts& d, const ni::ModelFacts& m) {  // matrix class since #393
+    return m.moe && m.hidden == 2048 && m.layers == 40 && d.apple_family >= 10;
   };
   const auto old_hist = [](const ni::DeviceFacts& d, const ni::ModelFacts& m) {
     return d.apple_family >= 10 && m.moe && !m.clover && m.hidden == 2048 && m.layers == 40 && m.experts == 256 &&

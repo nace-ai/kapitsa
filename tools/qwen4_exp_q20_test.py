@@ -19,6 +19,7 @@ import struct
 import sys
 import tempfile
 import types
+from unittest import mock
 
 import numpy as np
 
@@ -263,6 +264,14 @@ def main():
     check(sorted(os.path.basename(p) for p in Q.gguf_paths(split)) ==
           ["q2_0-00001-of-00002.gguf", "q2_0-00002-of-00002.gguf"],
           "a folder's parts are enumerated by the set's name, not every .gguf (ple.gguf is not one)")
+    other = os.path.join(split, "other-00001-of-00002.gguf")
+    shutil.copyfile(os.path.join(split, "q2_0-00001-of-00002.gguf"), other)
+    try:
+        Q.gguf_paths(split)
+        check(False, "a folder with two candidate split sets is refused")
+    except ValueError as e:
+        check("multiple split sets" in str(e), "two sets are refused before reading either model")
+    os.remove(other)
     dup = os.path.join(root, "dup")
     os.makedirs(dup, exist_ok=True)
     write_gguf(os.path.join(dup, "q2_0-00001-of-00002.gguf"), experts_only,
@@ -331,6 +340,27 @@ def main():
     _, _, wrote2 = Q.write_sparse_table(pk, tp2, more, add=True, stream=True, piece=240)
     check(wrote == len(rows) and wrote2 == 2, f"streamed sparse table: {wrote} rows, then the 2 missing ({wrote2})")
     check(open(tp2, "rb").read() == open(tp, "rb").read(), "streamed sparse table: the same file as row by row")
+    retry_path = os.path.join(root, "retry.safetensors")
+    bias = pk.index["language_model.model.layers.1.ple.ple_embedding.ngram_embedding.shards.0.biases"]
+    pwrite = os.pwrite
+
+    def interrupt_bias(fd, data, offset):
+        if offset == bias[1]:  # row zero of the first shard
+            raise InterruptedError("interrupted before writing biases")
+        return pwrite(fd, data, offset)
+
+    for stream in (False, True):
+        Q.write_sparse_table(pk, retry_path, rows[1:])
+        try:
+            with mock.patch.object(os, "pwrite", interrupt_bias):
+                Q.write_sparse_table(pk, retry_path, [0], add=True, stream=stream)
+        except InterruptedError:
+            pass
+        else:
+            raise AssertionError("the bias write was not interrupted")
+        Q.write_sparse_table(pk, retry_path, [0] + more, add=True, stream=stream)
+        check(open(retry_path, "rb").read() == open(tp, "rb").read(),
+              f"retry after interrupted bias write matches the uninterrupted file (stream={stream})")
     print("table from the GGUF")
     vals = table_values(pack)
     with open(gguf, "rb") as fh:

@@ -126,7 +126,7 @@ Update these files with the new numbers:
 
 - `docs/benchmarks.md`: add a section with the model's results
 - `bench/results/`: commit the raw benchmark output
-- The README's Models tables are generated from `tools/readme_images/readme_images.json` by `python3 tools/readme_images/readme_images.py --tables`. Do not hand-edit them (the `bench-readme` CI check fails hand edits). Update the JSON source, then regenerate.
+- The README's Speed on each Mac tables are generated from `tools/readme_images/readme_images.json` by `python3 tools/readme_images/readme_images.py --tables`. Do not hand-edit them (the `bench-readme` CI check fails hand edits). Update the JSON source, then regenerate.
 
 Format: `prefill / decode` in tok/s, with the Mac, macOS version, and commit.
 
@@ -134,7 +134,7 @@ Format: `prefill / decode` in tok/s, with the Mac, macOS version, and commit.
 # Regenerate the README tables from the JSON source
 python3 tools/readme_images/readme_images.py --tables
 
-# Generate the community results table
+# Generate the community results table and the leaderboard data (docs/site/leaderboard-data.js)
 python3 tools/community_table.py
 ```
 

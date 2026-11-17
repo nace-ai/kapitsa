@@ -8,10 +8,14 @@ run, newest first, every rate in tok/s and every time in seconds, so that each n
 and the precision it was measured with. A measurement that other apps disturbed (contention flagged) carries ⚠, and
 each row lists its run's flags. Quick runs say so. Files that are not results (or fail the schema's basics) are skipped
 with a warning; tools/community_check.py is the full check, run on every pull request. --check: exit 1 when RESULTS.md
-is not what this would write (it changes nothing).
+is not what this would write (it changes nothing). Writing the repository's own table (the default --results and --out) also
+rebuilds docs/site/leaderboard-data.js (tools/build_leaderboard_data.py), so one command brings a result pull request
+up to date: commit both files. The `community-table` check reads the two, and --check here reads only RESULTS.md.
 """
 import argparse, functools, glob, json, os, re, statistics, sys
 
+import build_leaderboard_data  # the leaderboard's data file, from the same folder
+from build_leaderboard_data import decoding
 import community_check  # the catalog, from the same folder
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -21,19 +25,6 @@ MODEL_ORDER = ["qwen3.5-4b", "qwen3.8-27b", "qwen3.6-35b-a3b", "nemotron-3.5-lig
                "nemotron-3.5-super-vl"]
 VARIANT_ORDER = ["4bit", "5bit", "6bit", "8bit", "bf16", "24gb"]
 WARN = "⚠"
-
-
-# The decoding methods by the prefix of a result's decoding_detail (`kapitsa bench`'s decoding_of in src/bench/result.cpp)
-DECODINGS = ("KFlash", "prompt-lookup", "DFlash2", "LiLiCorr", "DSpark", "MTP", "plain")
-
-
-def decoding(model):
-    """The result's decoding method; for one Kapitsa 0.2.0 to 0.2.14 recorded as unknown (KFlash and prompt lookup,
-    issue #295), the one its decoding_detail starts with, so the table is right without rewriting submitted files"""
-    if model["decoding"] != "unknown":
-        return model["decoding"]
-    detail = model.get("decoding_detail") or ""
-    return next((d for d in DECODINGS if detail.startswith(d)), "unknown")
 
 
 def chip_short(chip):
@@ -195,7 +186,53 @@ def render(results, results_dir, out_path):
                 cells.append(", ".join(fl) if fl else "–")
                 lines.append("| " + " | ".join(cells) + " |")
             lines.append("")
+    lines += uncensored_section()
     return "\n".join(lines)
+
+
+def check_raw(u):
+    """Every speed in a row must be the mean of the bench.json files named in the row (raw, stock_raw); returns the Markdown links."""
+    links = []
+    for field, key in (("raw", "decode_tps"), ("stock_raw", "stock_decode_tps")):
+        paths = u.get(field, [])
+        if u.get(key) is None:
+            assert not paths, f"{u['name']}: {field} given but {key} is empty"
+            continue
+        assert paths, f"{u['name']}: {key} has no {field} bench files"
+        speeds = []
+        for rel in paths:
+            full = os.path.join(REPO, rel)
+            speeds.append(json.load(open(full, encoding="utf-8"))["results"]["decode"]["median_tps"])
+        mean = sum(speeds) / len(speeds)
+        assert abs(mean - u[key]) < 0.06, f"{u['name']}: {key} {u[key]} is not the mean {mean:.2f} of {paths}"
+        akey = "accepted_pct" if field == "raw" else "stock_accepted_pct"
+        shares = [json.load(open(os.path.join(REPO, rel), encoding="utf-8"))["results"]["decode"]["median_accepted_draft_share"] for rel in paths]
+        share = 100 * sum(shares) / len(shares)
+        assert abs(share - u.get(akey, -1)) < 0.06, f"{u['name']}: {akey} {u.get(akey)} is not the mean {share:.1f} of {paths}"
+        links += [f"[{'model' if field == 'raw' else 'stock'} {i + 1}]({os.path.relpath(os.path.join(REPO, rel), COMMUNITY)})" for i, rel in enumerate(paths)]
+    return ", ".join(links)
+
+
+def uncensored_section():
+    """The uncensored models (uncensored.json): speed on one Mac with the model's refusals and its KL divergence from the base."""
+    path = os.path.join(COMMUNITY, "uncensored.json")
+    if not os.path.exists(path):
+        return []
+    data = json.load(open(path, encoding="utf-8"))
+    lines = ["## Uncensored models", "", data["note"], "",
+             "| Model | Made by | Refusals | KL vs base | Quant | Writing, T = 0.6 | Same base, stock | Drafter accepts | Mac | Power | Kapitsa | Weights | Raw bench output |",
+             "| --- | --- | ---: | ---: | --- | ---: | ---: | ---: | --- | --- | --- | --- | --- |"]
+    for u in data["rows"]:
+        stock = "–" if u.get("stock_decode_tps") is None else tps(u["stock_decode_tps"])
+        acc = "–" if u.get("accepted_pct") is None else f"{u['accepted_pct']:.1f}%" + (f" (stock {u['stock_accepted_pct']:.1f}%)" if u.get("stock_accepted_pct") else "")
+        kl = "–" if u.get("kl") is None else f"{u['kl']:.3f}" + ("" if u.get("kl_basis") == "measured" else " (claimed)")
+        raw = check_raw(u)
+        basis = "" if u["refusal_basis"] == "measured" else " " + u["refusal_basis"]
+        ref = f"{u['refusals']}/{u['refusals_of']}"
+        lines.append(f"| {u['name']} | {u['source']} | {ref}{basis} | {kl} | {u['quant']} | {tps(u['decode_tps'])} | {stock} | {acc} | "
+                     f"{u['mac']['name']} · {u['mac']['chip']} · {u['mac']['memory_gb']} GB | {u['power']} | {u['kapitsa_commit']} | {u['weights']} | {raw} |")
+    lines.append("")
+    return lines
 
 
 def main():
@@ -213,6 +250,10 @@ def main():
     with open(a.out, "w", encoding="utf-8") as fh:
         fh.write(text)
     print(f"{os.path.relpath(a.out)}: {len(results)} runs")
+    if (os.path.abspath(a.results), os.path.abspath(a.out)) == (os.path.join(COMMUNITY, "results"), os.path.join(COMMUNITY, "RESULTS.md")):
+        path, count = build_leaderboard_data.write(REPO)
+        print(f"{os.path.relpath(path)}: {count} results")
+        print("commit both: git add bench/community/RESULTS.md docs/site/leaderboard-data.js")
     return 0
 
 

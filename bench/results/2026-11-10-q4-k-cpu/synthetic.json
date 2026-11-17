@@ -1,0 +1,159 @@
+{
+  "reference_source": "d91f34efd96a93aeb68e8bc993c091b2d90d4c85",
+  "candidate_source": "54b034f0a4607074a11f60472c42472070efb494",
+  "candidate_quant_cpp_sha256": "19c182b016314a5021ec5ac98aff75133def5e6be3ba57f9b8d4a36eed473ac3",
+  "reference_quant_cpp_sha256": "06165f08d53b51a355b4324fceb80256388f13aa9ccedb69c6a5b8b0ae01262e",
+  "runs": {
+    "chip": "Apple M5 Pro",
+    "gpu_cores": 20,
+    "memory_capacity_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "flags": [
+    "-std=c++20",
+    "-O3"
+  ],
+  "scope": "CPU dequantize(kQ4_K); not whole-import or inference throughput",
+  "evidence_kind": "Redacted derived records; raw logs retained privately",
+  "rc": 0,
+  "order": [
+    "A1",
+    "B1",
+    "A2",
+    "B2"
+  ],
+  "legs": {
+    "A1": {
+      "input_kind": "fixed-seed synthetic Q4_K blocks",
+      "rows": 1024,
+      "width": 2048,
+      "complete_output_bytes": 8388608,
+      "ns_per_row": [
+        580.530807495,
+        465.106323242,
+        419.522598267,
+        416.689559937,
+        418.964385986,
+        411.617279053,
+        412.775665283,
+        405.261352539,
+        407.638549805,
+        408.975601196,
+        407.027557373,
+        409.68069458,
+        404.396057129,
+        411.267593384,
+        405.097961426,
+        415.124267578
+      ],
+      "complete_output_matches_reference": true,
+      "input_unchanged": true,
+      "finite": true,
+      "guards_intact": true,
+      "median_ns_per_row": 411.4424362185
+    },
+    "B1": {
+      "input_kind": "fixed-seed synthetic Q4_K blocks",
+      "rows": 1024,
+      "width": 2048,
+      "complete_output_bytes": 8388608,
+      "ns_per_row": [
+        223.928451538,
+        230.735778809,
+        193.59715271,
+        190.097808838,
+        176.624298096,
+        169.15447998,
+        161.859512329,
+        159.334182739,
+        159.809738159,
+        159.686401367,
+        160.472869873,
+        160.584136963,
+        159.051254272,
+        159.808486938,
+        159.129455566,
+        159.882232666
+      ],
+      "complete_output_matches_reference": true,
+      "input_unchanged": true,
+      "finite": true,
+      "guards_intact": true,
+      "median_ns_per_row": 160.528503418
+    },
+    "A2": {
+      "input_kind": "fixed-seed synthetic Q4_K blocks",
+      "rows": 1024,
+      "width": 2048,
+      "complete_output_bytes": 8388608,
+      "ns_per_row": [
+        410.839080811,
+        415.042236328,
+        416.186645508,
+        408.841445923,
+        419.729232788,
+        418.782562256,
+        421.620681763,
+        437.2628479,
+        443.588882446,
+        416.018814087,
+        414.27104187,
+        410.16960144,
+        414.92906189,
+        411.597564697,
+        404.648468018,
+        404.218048096
+      ],
+      "complete_output_matches_reference": true,
+      "input_unchanged": true,
+      "finite": true,
+      "guards_intact": true,
+      "median_ns_per_row": 414.985649109
+    },
+    "B2": {
+      "input_kind": "fixed-seed synthetic Q4_K blocks",
+      "rows": 1024,
+      "width": 2048,
+      "complete_output_bytes": 8388608,
+      "ns_per_row": [
+        159.692123413,
+        158.966690063,
+        160.081863403,
+        159.191757202,
+        160.768508911,
+        158.075332642,
+        158.748626709,
+        157.768249512,
+        158.473968506,
+        157.428100586,
+        159.692123413,
+        160.942077637,
+        160.475418091,
+        158.641815186,
+        160.283416748,
+        157.398223877
+      ],
+      "complete_output_matches_reference": true,
+      "input_unchanged": true,
+      "finite": true,
+      "guards_intact": true,
+      "median_ns_per_row": 159.07922363249997
+    }
+  },
+  "binary_sha256": {
+    "check-reference-v2": "81cfad7ffdd6395c802b8433ee720ef7b50447b478562834f02fdab5a3c4684e",
+    "check-candidate": "187feaf514aa258b041780df4cd4031c0a8f91cd6e9d9eb6159220ccacaa6c69",
+    "check-ubsan": "045dffac6290e571a090d8b2c0e2dda3b11f1a4ab0a938c2c2354bab9d0ff672",
+    "bench-reference": "ed9c42307ebf32ca476a3f9c58c2642bcc52924a8e9fa546898754fff49b294f",
+    "bench-candidate": "2bb91266ded2f1b40d609dc4dbbcdc2240bd88a033ea99ad1cdc90a28b7d1185"
+  },
+  "complete_outputs_equal": true,
+  "correctness": {
+    "reference_oracle": "2187466 cases plus guarded buffers PASS",
+    "candidate_oracle": "2187466 cases plus guarded buffers PASS",
+    "UBSan": "same cases PASS",
+    "mutant": "low-nibble mask 15 changed to 7: oracle rc1 as expected",
+    "initial_failure": "Initial exceptional-value test refactoring changed NaN propagation and failed on unchanged main. The exact original scalar expression replaced that exceptional-value test reference; the finite integer oracle and production change were unchanged. Initial failed record retained privately."
+  }
+}

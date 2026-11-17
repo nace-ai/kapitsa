@@ -28,6 +28,7 @@ PAGES = [
     "docs/architecture.md",
     "docs/benchmarks-m5-max.md",
     "docs/benchmarks.md",
+    "docs/control-socket.md",
     "docs/kflash-map.md",
     "docs/kflash.md",
     "docs/numerical-history.md",

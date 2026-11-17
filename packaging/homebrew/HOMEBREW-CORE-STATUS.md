@@ -1,19 +1,19 @@
 # Homebrew-core submission status
 
-## Current: ready to submit after 2026-11-15
+## Current: submitting on 2026-11-15
 
-Kapitsa meets every homebrew-core requirement except the 30-day repo age guideline.
+The repo turned 30 days old on 2026-11-15, the last homebrew-core requirement it lacked.
 
 ## Acceptance checklist
 
 | Requirement | Status |
 | --- | --- |
-| Notability (225 stars for self-submission) | 698 stars, 102 forks |
-| Repo age (30 days) | 23 days (created 2026-10-16), eligible ~Nov 15 |
+| Notability (225 stars for self-submission) | 797 stars, 105 forks (2026-11-15) |
+| Repo age (30 days) | 30 days on 2026-11-15 (created 2026-10-16) |
 | Open-source license (DFSG-compatible) | Apache-2.0 |
 | Builds from source | CMake, Apple Clang |
-| Stable releases | v0.2.31 (2026-11-05) |
-| Active development | Pushed 2026-11-08 |
+| Stable releases | v0.2.36 (2026-11-15) |
+| Active development | Pushed 2026-11-15 |
 | livecheck | GitHub latest release strategy |
 | Platform restriction documented | arm64 macOS only (Metal kernels) |
 | No .app bundle | CLI + server |
@@ -47,9 +47,9 @@ a different archive with a different hash.
 
 1. Wait until 2026-11-15 (30-day repo age)
 2. Fork `Homebrew/homebrew-core`
-3. Create branch, copy `kapitsa-core.rb` as `Formula/k/kapitsa.rb`
+3. Create branch, copy `kapitsa-core.rb` as `Formula/k/kapitsa.rb` without its header comments (homebrew-core formulas carry none)
 4. Update URL and SHA to the latest release (see SHA256 section above)
-5. Open PR with the notability evidence (698 stars, 102 forks, 9 models benchmarked on 5 Macs)
+5. Open PR with the notability evidence (stars, forks, community benchmark results)
 
 ## Tap/core name clash
 

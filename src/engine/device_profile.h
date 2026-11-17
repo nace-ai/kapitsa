@@ -17,13 +17,15 @@ enum class ChipClass { kLegacy, kSimd, kMatrix, kWide };
 
 // The model half of a row. kOther matches every model. kQwen35Shape is the 35B-A3B's prefill shape (MoE, hidden
 // 2048, 40 layers), which Clover-35B-A3B shares; kQwen35A3b is the full shape with the drafter fields, Clover out
-// (its sampled decode is slower with the KFlash lanes on the M5 Pro, #1094).
-enum class ModelClass { kOther, kQwen35Shape, kQwen35A3b };
+// (its sampled decode is slower with the KFlash lanes on the M5 Pro, #1094). kQwen27bDense is the Qwen3.8 27B's shape
+// (dense, hidden 5120, 64 layers).
+enum class ModelClass { kOther, kQwen35Shape, kQwen35A3b, kQwen27bDense };
 
 // The knobs the table decides, in the table's order. A call site passes the enum, not the string: a typo is a
 // compile error, not a default that silently reads as off. kNone is a documentation row (a class or a guard the
 // call site still reads itself); default_on never looks one up.
-enum class Knob { kPfWave, kKflashHist, kGemmSlices, kHcWide, kMoe4Dx, kTreeG6, kKflashNarrow, kNone };
+enum class Knob { kPfWave, kKflashHist, kGemmSlices, kHcWide, kMoe4Dx, kTreeG6, kKflashNarrow, kQwen9bQ4, kKflashBlock16, kAneProjFast,
+                  kNone };
 
 // A row's device half. A class matches its own chips, and kMatrix also matches kWide (a wide chip has matrix
 // units). kName is a narrow exception: the name must match, and the row
@@ -104,9 +106,18 @@ DeviceFacts facts_from_gpu(long ram_bytes, bool ane);
 // own with them filled for its print.
 const DeviceProfile& current_device();
 
+// Catalog policy needs only the family: no command queue, unknown devices keep the legacy pack.
+const DeviceProfile& catalog_device();
+
 // The named checks the remaining gates call. The no-argument forms read the live GPU by calling the same Gpu methods
 // the sites used. The DeviceFacts forms are those predicates for the CPU test.
 bool ane_builtin_share(const std::string& chip);  // the families default_units() supports, independent of calibration
+int ane_generation(const std::string& chip);       // N of "Apple M<N>[ ...]", else 0
+// whether default_units() gives the plain split (no wavefront) a share on this chip: M4 and M5, where it was checked
+bool ane_plain_share(const std::string& chip);
+// 1 on an M1, 2 on an M2 (any size), else 0: the families default_units() gives a share of their own. Kept out of
+// ane_builtin_share, which also gates the fast profile's segmented inputs; those leave M1 to M3 off (review 6698446394).
+int ane_pre_m3_share(const std::string& chip);
 bool ane_segmented_default(const DeviceFacts&);   // built-in share, non-matrix GPU; runtime ANE checks still apply
 bool ane_segmented_default();
 bool matrix_units(const DeviceFacts&);  // apple_family() >= 10

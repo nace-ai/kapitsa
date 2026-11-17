@@ -57,6 +57,22 @@ bool is_ns_name(const std::string& s) {
   return true;
 }
 
+// A neighboring server may be starting while we scan. Use the same lock file it opens,
+// including when the namespace exists but its lock file does not yet.
+int lock_other_namespace(const std::string& dir) {
+  const std::string path = dir + "/lock";
+  const int fd = ::open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+  if (fd < 0) return -1;
+  if (flock(fd, LOCK_EX | LOCK_NB) == 0) {
+    struct stat held, current;
+    if (fstat(fd, &held) == 0 && stat(path.c_str(), &current) == 0 &&
+        held.st_dev == current.st_dev && held.st_ino == current.st_ino)
+      return fd;
+  }
+  close(fd);
+  return -1;
+}
+
 // A page-aligned transfer buffer
 struct Buf {
   uint8_t* p = nullptr;
@@ -177,6 +193,22 @@ bool decode(const uint8_t* p, size_t n, Entry* e) {
   return true;
 }
 
+// an entry file's header data: its conversation's key (16 bytes), or nothing (none, or written before keys were kept;
+// the record is the same either way, so the binaries before and after read each other's entries)
+std::string conv_meta(const Key& conv) {
+  if (!conv) return "";
+  std::string m(16, '\0');
+  memcpy(m.data(), &conv.hi, 8);
+  memcpy(m.data() + 8, &conv.lo, 8);
+  return m;
+}
+
+Key conv_of(const uint8_t* meta, size_t n) {
+  Key k;
+  if (n == 16) memcpy(&k.hi, meta, 8), memcpy(&k.lo, meta + 8, 8);
+  return k;
+}
+
 // Time Machine skips the directory (as `tmutil addexclusion` marks one): a cache is rebuilt, not restored
 void exclude_from_backups(const std::string& dir) {
   static const uint8_t plist[] = {0x62, 0x70, 0x6c, 0x69, 0x73, 0x74, 0x30, 0x30, 0x5f, 0x10, 0x11, 0x63, 0x6f, 0x6d, 0x2e,
@@ -268,6 +300,10 @@ Key Hasher::done() const {
   k.lo = fmix(b_ + rotl(a_, 41) + n_);
   if (!k) k.lo = 1;  // never the empty key
   return k;
+}
+
+Key conversation_key(const std::string& prompt_cache_key) {
+  return prompt_cache_key.empty() ? Key() : Hasher().str(prompt_cache_key).done();
 }
 
 uint32_t crc32c(uint32_t crc, const void* data, size_t n) {
@@ -400,13 +436,10 @@ bool Store::open(const Options& o, std::string* why) {
       const std::string p = o.root + "/" + name;
       struct stat st;
       if (stat(p.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) continue;
-      const int fd = ::open((p + "/lock").c_str(), O_RDWR | O_CLOEXEC);
-      if (fd >= 0 && flock(fd, LOCK_EX | LOCK_NB) != 0) {  // in use by another server: its own to count
-        close(fd);
-        continue;
-      }
+      const int fd = lock_other_namespace(p);
+      if (fd < 0) continue;
       struct stat lt;
-      const double used = fd >= 0 && fstat(fd, &lt) == 0 ? mtime_of(lt) : mtime_of(st);
+      const double used = fstat(fd, &lt) == 0 ? mtime_of(lt) : mtime_of(st);
       if (unix_now() - used > o.stale_days * 86400) {
         const uint64_t bytes = dir_bytes(p);
         std::error_code ec;
@@ -417,7 +450,7 @@ bool Store::open(const Options& o, std::string* why) {
         others_.push_back({p, used, dir_bytes(p)});
         others_bytes_ += others_.back().bytes;
       }
-      if (fd >= 0) close(fd);
+      close(fd);
     }
     if (d) closedir(d);
     std::sort(others_.begin(), others_.end(), [](const Other& a, const Other& b) { return a.used < b.used; });
@@ -502,11 +535,13 @@ bool Store::load_entry(const std::string& path, Entry* e) const {
   const uint32_t hc = h.header_crc;
   memset(b.data() + offsetof(Header, header_crc), 0, 4);
   if (memcmp(h.magic, kMagic, 8) != 0 || h.version != kVersion || h.kind != kEntry || crc32c(0, b.data(), kHeader) != hc ||
-      h.payload != b.size() - kHeader || crc32c(0, b.data() + kHeader, b.size() - kHeader) != h.payload_crc)
+      h.payload != b.size() - kHeader || crc32c(0, b.data() + kHeader, b.size() - kHeader) != h.payload_crc ||
+      h.meta_bytes > kMetaMax)
     return false;
   Key ns;
   Key::parse(o_.ns, &ns);
   if (h.ns_hi != ns.hi || h.ns_lo != ns.lo) return false;
+  e->conv = conv_of(b.data() + sizeof(Header), h.meta_bytes);
   return decode(b.data() + kHeader, b.size() - kHeader, e);
 }
 
@@ -571,14 +606,11 @@ void Store::remove_others(uint64_t limit) {
     others_.erase(others_.begin());
     others_bytes_ -= o.bytes;
     // nobody may hold it now: one that started using it since is its server's to count
-    const int fd = ::open((o.path + "/lock").c_str(), O_RDWR | O_CLOEXEC);
-    if (fd >= 0 && flock(fd, LOCK_EX | LOCK_NB) != 0) {
-      close(fd);
-      continue;
-    }
+    const int fd = lock_other_namespace(o.path);
+    if (fd < 0) continue;
     std::error_code ec;
     std::filesystem::remove_all(o.path, ec);
-    if (fd >= 0) close(fd);
+    close(fd);
     logi("SSD prefix cache: removed %s (%s), the oldest cache of another model, to keep within %s", o.path.c_str(),
          gib(o.bytes).c_str(), gib(limit).c_str());
   }
@@ -600,10 +632,12 @@ bool Store::make_room(uint64_t bytes) {
       held_ -= std::min(held_, it->second.bytes);
       it = m->erase(it);
     }
+  // (an entry a new conversation under its key replaced goes before any other)
+  auto first = [](const Entry& a, const Entry& b) { return a.replaced != b.replaced ? a.replaced : a.used < b.used; };
   while (!fits()) {
     auto lru = entries_.end();
     for (auto it = entries_.begin(); it != entries_.end(); ++it)
-      if (it->second.pins == 0 && (lru == entries_.end() || it->second.used < lru->second.used)) lru = it;
+      if (it->second.pins == 0 && (lru == entries_.end() || first(it->second, lru->second))) lru = it;
     if (lru == entries_.end()) return false;
     drop_entry(lru);
   }
@@ -645,13 +679,21 @@ void Store::drop_damaged(Kind kind, const Key& key) {
   std::lock_guard<std::mutex> lk(mu_);
   if (kind == kEntry) {
     auto it = entries_.find(key);
-    if (it != entries_.end() && it->second.pins == 0) drop_entry(it);
+    if (it != entries_.end()) {
+      it->second.damaged = true;
+      unlink(path_of(kEntry, key).c_str());
+      if (it->second.pins == 0) drop_entry(it);
+    }
     return;
   }
   for (auto it = entries_.begin(); it != entries_.end();) {
     bool uses = false;
     for (const Key& b : it->second.blocks) uses = uses || (kind == kKv && b == key);
     for (const Snap& s : it->second.snaps) uses = uses || (kind == kState && s.state == key);
+    if (uses) {
+      it->second.damaged = true;
+      unlink(path_of(kEntry, it->first).c_str());
+    }
     if (uses && it->second.pins == 0) {
       auto next = std::next(it);
       drop_entry(it);
@@ -663,9 +705,9 @@ void Store::drop_damaged(Kind kind, const Key& key) {
   // (pinned users keep the piece's record until unpinned; its file goes now)
   unlink(path_of(kind, key).c_str());
   auto& m = kind == kKv ? kv_ : st_;
-  if (auto it = m.find(key); it != m.end() && it->second.refs == 0) {
-    held_ -= std::min(held_, it->second.bytes);
-    m.erase(it);
+  if (auto it = m.find(key); it != m.end()) {
+    it->second.damaged = true;
+    if (it->second.refs == 0) erase_piece(kind, key);
   }
 }
 
@@ -676,7 +718,7 @@ Hit Store::lookup(const int* keys, int n, int below, uint32_t tag, const Reusabl
   Hit best;
   double best_used = -1;
   for (const auto& [k, e] : entries_) {
-    if (e.tag != tag) continue;
+    if (e.damaged || e.tag != tag) continue;
     const size_t m = std::min(e.tokens.size(), size_t(std::max(n, 0)));
     size_t l = 0;
     while (l < m && e.tokens[l] == keys[l]) ++l;
@@ -693,7 +735,7 @@ Hit Store::lookup(const int* keys, int n, int below, uint32_t tag, const Reusabl
 bool Store::pin(const Key& entry, Entry* out) {
   std::lock_guard<std::mutex> lk(mu_);
   auto it = entries_.find(entry);
-  if (it == entries_.end()) return false;
+  if (it == entries_.end() || it->second.damaged) return false;
   ++it->second.pins;
   *out = it->second;
   return true;
@@ -704,23 +746,51 @@ void Store::unpin(const Key& entry, bool used) {
   auto it = entries_.find(entry);
   if (it == entries_.end()) return;
   if (it->second.pins > 0) --it->second.pins;
+  if (it->second.damaged) {
+    if (it->second.pins == 0) drop_entry(it);
+    return;
+  }
   if (used) {
     it->second.used = unix_now();
+    it->second.replaced = false;  // (restored: the guess that its conversation was over was wrong)
     utimes(path_of(kEntry, entry).c_str(), nullptr);  // the order of use survives a restart
   }
 }
 
+int Store::demote(const Key& conv) {
+  if (!conv) return 0;
+  std::lock_guard<std::mutex> lk(mu_);
+  int n = 0;
+  for (auto& [k, e] : entries_)
+    if (e.conv == conv && !e.replaced) e.replaced = true, ++n;
+  return n;
+}
+
 bool Store::has(Kind kind, const Key& key) const {
   std::lock_guard<std::mutex> lk(mu_);
-  return kind == kEntry ? entries_.count(key) > 0 : (kind == kKv ? kv_ : st_).count(key) > 0;
+  if (kind == kEntry) {
+    const auto it = entries_.find(key);
+    return it != entries_.end() && !it->second.damaged;
+  }
+  const auto& m = kind == kKv ? kv_ : st_;
+  const auto it = m.find(key);
+  return it != m.end() && !it->second.damaged;
 }
 
 bool Store::read(Kind kind, const Key& key, std::string* meta, const Take& take) {
   const std::string p = path_of(kind, key);
-  const int fd = ::open(p.c_str(), O_RDONLY | O_CLOEXEC);
+  int fd;
+  do {
+    fd = ::open(p.c_str(), O_RDONLY | O_CLOEXEC);
+  } while (fd < 0 && errno == EINTR);
   if (fd < 0) {
-    logi("SSD prefix cache: %s is missing; the entries that need it are dropped", p.c_str());
-    drop_damaged(kind, key);
+    const int err = errno;
+    if (err == ENOENT) {
+      logi("SSD prefix cache: %s is missing; the entries that need it are dropped", p.c_str());
+      drop_damaged(kind, key);
+    } else {
+      logi("SSD prefix cache: cannot open %s for reading (%s)", p.c_str(), strerror(err));
+    }
     return false;
   }
   fcntl(fd, F_NOCACHE, 1);
@@ -770,7 +840,10 @@ Store::Job::~Job() {
   std::lock_guard<std::mutex> lk(st_->mu_);
   for (const auto& [kind, key] : held_) {
     auto& m = kind == kKv ? st_->kv_ : st_->st_;
-    if (auto it = m.find(key); it != m.end() && it->second.refs > 0) --it->second.refs;  // kept: a later write reuses it
+    if (auto it = m.find(key); it != m.end() && it->second.refs > 0) {
+      --it->second.refs;
+      if (it->second.refs == 0 && it->second.damaged) st_->erase_piece(kind, key);
+    }  // healthy pieces stay for a later write
   }
 }
 
@@ -780,7 +853,7 @@ std::unique_ptr<Store::Job> Store::begin(const std::vector<std::pair<Kind, Key>>
   for (const auto& [kind, key] : pieces) {
     if (kind == kEntry) continue;
     auto& m = kind == kKv ? kv_ : st_;
-    if (auto it = m.find(key); it != m.end()) {
+    if (auto it = m.find(key); it != m.end() && !it->second.damaged) {
       ++it->second.refs;
       j->held_.push_back({kind, key});
     }
@@ -853,6 +926,7 @@ bool Store::write(Job& job, Kind kind, const Key& key, const std::string& meta, 
     std::lock_guard<std::mutex> lk(mu_);
     auto& m = kind == kKv ? kv_ : st_;
     if (auto it = m.find(key); it != m.end()) {
+      if (it->second.damaged) return false;
       ++it->second.refs;
       job.held_.push_back({kind, key});
       return true;
@@ -878,18 +952,20 @@ bool Store::put(Job& job, Entry e) {
   {
     std::lock_guard<std::mutex> lk(mu_);
     for (const Key& b : e.blocks)
-      if (!kv_.count(b)) return false;
+      if (auto it = kv_.find(b); it == kv_.end() || it->second.damaged) return false;
     for (const Snap& s : e.snaps)
-      if (!st_.count(s.state)) return false;
+      if (auto it = st_.find(s.state); it == st_.end() || it->second.damaged) return false;
     if (auto it = entries_.find(e.key); it != entries_.end()) {  // the same conversation, saved before
+      if (it->second.damaged) return false;
       it->second.used = unix_now();
+      it->second.replaced = e.replaced;
       utimes(path_of(kEntry, e.key).c_str(), nullptr);
       return true;
     }
     if (!make_room(kHeader + payload.size())) return false;
   }
   uint64_t fb = 0;
-  const bool ok = write_file(kEntry, e.key, "", payload.size(),
+  const bool ok = write_file(kEntry, e.key, conv_meta(e.conv), payload.size(),
                              [&](uint64_t off, uint8_t* dst, size_t n) {
                                memcpy(dst, payload.data() + off, n);
                                return true;
@@ -897,6 +973,19 @@ bool Store::put(Job& job, Entry e) {
                              &fb);
   if (!ok) return false;
   std::lock_guard<std::mutex> lk(mu_);
+  bool intact = true;
+  for (const Key& b : e.blocks) {
+    const auto it = kv_.find(b);
+    intact = intact && it != kv_.end() && !it->second.damaged;
+  }
+  for (const Snap& sn : e.snaps) {
+    const auto it = st_.find(sn.state);
+    intact = intact && it != st_.end() && !it->second.damaged;
+  }
+  if (!intact) {
+    unlink(path_of(kEntry, e.key).c_str());
+    return false;
+  }
   for (const Key& b : e.blocks) ++kv_[b].refs;
   for (const Snap& s : e.snaps) ++st_[s.state].refs;
   e.bytes = fb;

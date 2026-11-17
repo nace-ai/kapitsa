@@ -94,7 +94,8 @@ per cycle.
 The drafter's candidates form a lattice: 7 positions, a short list of candidates at each, and for every candidate a
 probability given the candidate before it. On DFlash2 that conditional comes from its path selector. z-lab's DFlash has
 no selector, so its positions are independent. On Nemotron, DSpark's Markov head and LiLiCorr's transition scores play
-the same part. KFlash only reads these tables, so it runs on the drafters as they are published.
+the same part. KFlash only reads these tables, so a drafter needs no change for it: it runs on them as published (the 27B's is our
+retrain with a 16-row block, the same tables).
 
 The builder grows the tree best first. A node's score is the probability that the target accepts its whole path: the
 product, along the path, of each node's drafter probability mapped through a calibration (see
@@ -155,7 +156,13 @@ regression of whether the target took a node on the drafter's probability q, ove
 (those whose parent it accepted). It refits every 16 cycles on the last 2,048 records per position, starting from
 p = q. On this M4 Pro the fits show z-lab's DFlash on the 4B close to calibrated, and the DFlash2 drafters
 overconfident, more so further from the anchor. On the 35B, a candidate the drafter gives 0.7 is accepted 55% of the
-time at position 1 and 38% at position 4 (Figure 4, left).
+time at position 1 and 38% at position 4 (Figure 4, left). A position's fit can only be corrected by nodes the trees
+verify, so a fit pessimistic enough to keep a position out of every tree would stay as it is, and the cache would carry
+it into every later run: on the M5 Max one prompt the drafter could not continue left the 35B's position 2 at
+α −8, β 0.1, and every later request decoded with 2-row trees at 223 tok/s instead of 345. A position with no record
+for 32 cycles whose calibration gives even a node the drafter is sure of (q = 0.9) less than a 10% chance therefore
+moves halfway back toward p = q (and forgets its old records) until the trees verify it again. A fit that is pessimistic
+but not locked, as the 35B's deep positions are, is left alone.
 
 **Cost.** Each cycle reports its GPU time, the drafting pass plus the verify, and the budget keeps a running table: a
 base that moves with the context's length (a 35B cycle costs about 7 ms more at 21K tokens than at 100), plus an offset
@@ -324,7 +331,9 @@ return to 8-row cycles); those cells re-measure every engine and are a PR of the
 ### The drafters as published
 
 KFlash reads the candidate lists and conditional scores the drafters already produce: z-lab's DFlash on Qwen3.5-4B,
-Inco's DFlash2 on Qwen3.8-27B and Qwen3.6-35B-A3B, NVIDIA's DSpark and LiLiCorr on Nemotron. Nothing is retrained. One
+Inco's DFlash2 on Qwen3.6-35B-A3B and our retrain of it on Qwen3.8-27B (with the 16-row block KFlash drafts with on one
+slot: 5.36 tokens per cycle against Inco's 5.04 on an M5 Pro, #1107), NVIDIA's DSpark and LiLiCorr on Nemotron. KFlash
+needs no retraining. One
 tree builder, one acceptance and one budget serve all four drafters; only the verify kernels differ per backend.
 
 ### What is borrowed, and what is new
@@ -342,7 +351,7 @@ runs on. KFlash's part is making the idea fit Kapitsa:
   state in the same pass;
 - sampled replies identical to plain sampling with the same seed;
 - replies that don't depend on the tree schedule;
-- the drafters people already run, as published.
+- the drafters people already run, as published (the 27B's retrained for a 16-row block).
 
 ## Results
 
@@ -464,13 +473,16 @@ allocation of that size. It does not fix the capacity-dependent history partitio
 - **A determinism gap past 16K tokens in the server.** The tree zone's chunk size follows the KV cache's capacity, which
   `kapitsa serve` grows as a conversation does. Past 16,256 positions, a row verified near a growth step can get another
   chunk size under another tree schedule. The position-only partition above would close the gap.
-- **Nemotron has one run per build, and a failing check.** Trees are on by default with DSpark and LiLiCorr. On the M4 Pro,
+- **Nemotron has one run per build.** Trees are on by default with DSpark and LiLiCorr. On the M4 Pro,
   Lightning and Bolt went from 104.3 to 111.7 and from 64.3 to 68.8 tok/s at T 0.6, and from 115.7 to 113.7 and from
   69.4 to 71.2 greedy, one run per build with contention flags
   ([results](../bench/results/2026-10-21-kflash-trees/README.md)). That is inside the 3-8% spread between runs of one
-  build, so there is no per-cycle A/B for them. `tools/nh_tree_check`'s planted-branch acceptance cases have failed since
-  the merge that added chained DSpark drafting. Its real loops on a small synthetic model (chain and tree, greedy and
-  sampled) match plain decoding, but the failure needs an explanation before Nemotron trees are trusted.
+  build, so there is no per-cycle A/B for them. From the merge that added chained DSpark drafting until
+  [#1150](https://github.com/nace-ai/kapitsa/issues/1150), the verify after a tree cycle wrote the wrong rows into the
+  Mamba conv ring whenever the accepted path was not the tree's first branch, which failed `tools/nh_tree_check`'s
+  planted-branch acceptance cases. With that fixed, the sampled case passes; on the M5 Pro the greedy cases (`rows`,
+  greedy acceptance, the greedy loops) still fail with the verify's GEMM rows and pass with `NI_NH_ROWS_GEMM=0`
+  ([docs/kflash-map.md](kflash-map.md), item 3).
 - **Requests decoding together verify chains.** When the 27B, the 35B or Bolt decode several requests in one batched
   pass, each request verifies its chain, and the batch budget ([#207](https://github.com/nace-ai/kapitsa/pull/207))
   picks how many of the 8 rows each gets: with three requests at once on the M4 Pro, the 35B gained 16-20% and the 27B

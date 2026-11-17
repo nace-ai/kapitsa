@@ -13,7 +13,7 @@ on:
     paths: ["bench/community/results/**"]
   push:
     branches: [main]
-    paths: ["bench/community/results/**", "tools/community_table.py", "bench/community/RESULTS.md", "tools/build_leaderboard_data.py", "docs/site/leaderboard-data.js"]
+    paths: ["bench/community/results/**", "bench/community/uncensored.json", "tools/community_table.py", "bench/community/RESULTS.md", "tools/build_leaderboard_data.py", "docs/site/leaderboard-data.js"]
 
 permissions:
   contents: read

@@ -23,6 +23,7 @@
 #include "engine/disk_saved.h"
 #include "engine/engine.h"
 #include "engine/history_gate.h"
+#include "engine/think_control.h"
 #include "engine/reasoning_memory.h"
 #include "engine/tool_args.h"
 #include "model/kflash_wrap.h"
@@ -30,6 +31,8 @@
 
 #include <minja/chat-template.hpp>
 #include <minja/minja.hpp>
+
+#include <optional>
 
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -891,6 +894,15 @@ void clients() {
             std::count(h3.argv.begin(), h3.argv.end(), "-m") == 1,
         "hermes: user's --provider and -m are not duplicated");
 
+  AgentLaunch cp = agent_launch("copilot", "copilot", small, {"-p", "hi"},
+                                {{"COPILOT_PROVIDERS_CONFIG", "other.json"}, {"COPILOT_PROVIDER_BEARER_TOKEN", "other"}}, -1);
+  check(known_agent("copilot") && cp.argv == std::vector<std::string>{"copilot", "-p", "hi"} &&
+            has(cp, "COPILOT_MODEL", "m") && has(cp, "COPILOT_PROVIDER_API_KEY", "k") &&
+            has(cp, "COPILOT_PROVIDER_BASE_URL", small.base_url + "/v1") && has(cp, "COPILOT_OFFLINE", "true") &&
+            has(cp, "COPILOT_PROVIDER_MAX_PROMPT_TOKENS", "36864") && has(cp, "COPILOT_PROVIDER_MAX_OUTPUT_TOKENS", "12288") &&
+            cp.unset == std::vector<std::string>{"COPILOT_PROVIDERS_CONFIG", "COPILOT_PROVIDER_BEARER_TOKEN"},
+        "copilot: local provider, credentials, context and arguments");
+
   // aider
   AgentLaunch a = agent_launch("aider", "/bin/aider", s, {"--no-git"}, {}, -1);
   check(has(a, "OPENAI_API_BASE", "http://127.0.0.1:8000/v1") && has(a, "OPENAI_API_KEY", "kapitsa"),
@@ -959,6 +971,30 @@ std::vector<ChatDelta> generate(const TmplModel& m, const std::string& text, boo
   return out;
 }
 
+// A thinking budget of 0 against thinking off through the model's chat template: the same prompt (Engine::chat sets
+// enable_thinking false for a cap of 0), not one ending inside an opened reasoning block, so the reply carries no empty
+// <think></think>; and the prompt with a cap of 4096 is the thinking-on one (the cap changes no rendering).
+void thinking_cap_zero_render(const TmplModel& m, const std::string& tag) {
+  const char* base = R"({"model": "m", "max_tokens": 100, "messages": [{"role": "user", "content": "What is 2 + 2?"}]})";
+  auto prompt = [&](const char* thinking, const char* control) {
+    ojson b = J(base);
+    if (thinking) b["thinking"] = J(thinking);
+    if (control) b["thinking_control"] = J(control);
+    ChatRequest r = messages_prompt(b, nullptr);
+    if (think_cap_of(r.think_cap, r.thinking_budget) == 0) r.template_kwargs["enable_thinking"] = false;  // as Engine::chat
+    return render_chat(*m.tmpl, r, true);
+  };
+  const std::string off = prompt(R"({"type": "disabled"})", nullptr);
+  const std::string cap0 = prompt(R"({"type": "enabled"})", R"({"hard_cap": 0})");
+  const std::string budget0 = prompt(R"({"type": "enabled", "budget_tokens": 0})", nullptr);
+  const std::string on = prompt(R"({"type": "enabled"})", nullptr);
+  const std::string capped = prompt(R"({"type": "enabled"})", R"({"hard_cap": 4096})");
+  const bool open = cap0.size() >= 8 && cap0.compare(cap0.size() - 8, 8, "<think>\n") == 0;
+  check(cap0 == off && budget0 == off && !open, tag + "thinking budget: a cap of 0 renders as thinking off",
+        "tail: " + cap0.substr(cap0.size() > 60 ? cap0.size() - 60 : 0));
+  check(capped == on && on != off, tag + "thinking budget: a cap above 0 leaves the thinking-on prompt as it is");
+}
+
 ChatResult finished(const std::vector<ChatDelta>& ds, int completion) {
   ChatResult r;
   for (auto& d : ds) {
@@ -991,6 +1027,49 @@ ojson anthropic_reply(const std::vector<Event>& ev) {
     }
   }
   return {{"role", "assistant"}, {"content", blocks}};
+}
+
+// A call whose <tool_call> the model never wrote (35b:16gb, #1277) reaches the client as a call: chat reply, chat stream
+// and finish reason; the same text with an undeclared tool, or with prose after it, stays the content.
+void call_without_opener(const TmplModel& m, const std::string& tag) {
+  const ojson tools = J(R"([{"type":"function","function":{"name":"bash","parameters":{
+    "type":"object","properties":{"command":{"type":"string"}}}}}])");
+  const std::string call = "<function=bash>\n<parameter=command>\nfind / -name \"main.py\" | head -20\n</parameter>\n</function>\n</tool_call>";
+  struct C {
+    const char* name;
+    std::string text;
+    bool is_call;
+  };
+  for (const C& c : {C{"bare call", call, true}, C{"after thinking", "Look first.\n</think>\n\n" + call, true},
+                     C{"prose after", call + "\nDone.", false},
+                     C{"undeclared", "<function=rm>\n<parameter=command>\nx\n</parameter>\n</function>\n</tool_call>", false}}) {
+    const std::string label = tag + "call without its opener: " + c.name + " ";
+    std::vector<int> ids;
+    const auto ds = generate(m, c.text, c.text.find("</think>") != std::string::npos, tools, &ids);
+    const auto res = finished(ds, int(ids.size()));
+    const auto calls = chat_tool_calls(res.tool_calls, 0, false);
+    check(c.is_call ? res.content.empty() && calls.size() == 1 && calls[0]["function"]["name"] == "bash" &&
+                          calls[0]["function"]["arguments"] ==
+                              R"({"command":"find / -name \"main.py\" | head -20"})" && res.finish_reason == "tool_calls"
+                    : calls.empty() && res.content == c.text && res.finish_reason == "stop",
+          label + "chat reply", res.content);
+    ChatCompletionsStream cw("chat", "m", 1);
+    std::string wire = cw.begin(res);
+    for (const auto& d : ds) wire += cw.delta(d);
+    wire += cw.end(res);
+    const size_t done = wire.find("data: [DONE]");
+    std::string text, reason;
+    size_t streamed = 0;
+    for (const auto& e : parse_sse(wire.substr(0, done == std::string::npos ? wire.size() : done))) {
+      const auto& choice = e.data["choices"][0];
+      if (choice["delta"].contains("content")) text += choice["delta"]["content"].get<std::string>();
+      if (choice["delta"].contains("tool_calls")) streamed += choice["delta"]["tool_calls"].size();
+      if (choice["finish_reason"].is_string()) reason = choice["finish_reason"];
+    }
+    check(done != std::string::npos && (c.is_call ? text.empty() && streamed == 1 && reason == "tool_calls"
+                                                  : streamed == 0 && text == c.text && reason == "stop"),
+          label + "chat stream", text);
+  }
 }
 
 void nameless_tool_replies(const TmplModel& m, const std::string& tag) {
@@ -1569,6 +1648,28 @@ void disk_wait_unit() {
   check(!decide(1.5e9, 100, 4e6, 0.5).wait, "disk wait: 1.5 GB for 100 rows (0.2 s of prefill): not written");
 }
 
+void template_content_cache_unit() {
+  ChatRequest r;
+  r.messages = J(R"([{"role":"user","content":[{"type":"text","text":"hello"}]}])");
+  const std::string typed = "{% for m in messages %}{% for p in m.content %}{{p.text}}{% endfor %}{% endfor %}";
+  const std::string plain = "{% for m in messages %}{{m.content}}{% endfor %}";
+  std::optional<minja::chat_template> slot;
+  for (int i = 0; i < 4; ++i) {
+    slot.emplace(i % 2 ? plain : typed, "", "");
+    const std::string text = render_chat(*slot, r, false);
+    check(text == "hello", "template content mode: reconstruct at the same address " + std::to_string(i), text);
+  }
+  for (const char* token : {"bos_token", "eos_token"}) {
+    const std::string source = "{% if " + std::string(token) + " == 'typed' %}" + typed + "{% else %}" + plain + "{% endif %}";
+    for (bool use_typed : {true, false, true}) {
+      const std::string value = use_typed ? "typed" : "plain";
+      slot.emplace(source, std::string(token) == "bos_token" ? value : "", std::string(token) == "eos_token" ? value : "");
+      const std::string text = render_chat(*slot, r, false);
+      check(text == "hello", "template content mode: same source with different " + std::string(token), text);
+    }
+  }
+}
+
 void float_arguments_text() {
   struct Form { const char* name; const char* tail; };  // the end of the real templates' argument line
   const Form forms[] = {{"plain", " else args_value | string %}"},
@@ -1658,6 +1759,66 @@ void preserve_thinking_default_unit() {
   ChatRequest dis = request(R"({"enable_thinking": true})");
   default_preserve_thinking(dis, false);
   check(dis.template_kwargs == J(R"({"enable_thinking": true})"), "preserve_thinking: with the default off the request is untouched", dis.template_kwargs.dump());
+}
+
+void thinking_level_unit() {
+  ChatRequest r;
+  // Non-thinking model
+  check(Engine::thinking_level(r, true, false, false).empty(), "thinking level: non-thinking model returns empty");
+
+  // Thinking off cases
+  r = ChatRequest{};
+  r.effort = "none";
+  check(Engine::thinking_level(r, false) == "none", "thinking level: effort none");
+  r.effort = "minimal";
+  check(Engine::thinking_level(r, false) == "minimal", "thinking level: effort minimal");
+
+  r = ChatRequest{};
+  check(Engine::thinking_level(r, false) == "off", "thinking level: think false returns off");
+  r.thinking_budget = 0;
+  check(Engine::thinking_level(r, false) == "off", "thinking level: budget 0 returns off");
+
+  // Anthropic budget
+  r = ChatRequest{};
+  r.thinking_budget = 4096;
+  check(Engine::thinking_level(r, true) == "budget 4096", "thinking level: Anthropic budget 4096");
+
+  // Template WITH reasoning_effort (e.g. Qwen3.8): low and medium pass through; high, xhigh, max resolve to xhigh
+  r = ChatRequest{};
+  r.effort = "low";
+  check(Engine::thinking_level(r, true, true) == "low", "thinking level: effort template low -> low");
+  r.effort = "medium";
+  check(Engine::thinking_level(r, true, true) == "medium", "thinking level: effort template medium -> medium");
+  for (const char* eff : {"high", "xhigh", "max"}) {
+    r.effort = eff;
+    check(Engine::thinking_level(r, true, true) == "xhigh", std::string("thinking level: effort template ") + eff + " -> xhigh");
+  }
+  // Default on template with reasoning_effort is xhigh
+  r = ChatRequest{};
+  check(Engine::thinking_level(r, true, true) == "xhigh", "thinking level: default reasoning_effort template returns xhigh");
+
+  // template_kwargs reasoning_effort on template with reasoning_effort
+  r = ChatRequest{};
+  r.template_kwargs["reasoning_effort"] = "low";
+  check(Engine::thinking_level(r, true, true) == "low", "thinking level: template_kwargs reasoning_effort low");
+  r.template_kwargs["reasoning_effort"] = "medium";
+  check(Engine::thinking_level(r, true, true) == "medium", "thinking level: template_kwargs reasoning_effort medium");
+  r.template_kwargs["reasoning_effort"] = "max";
+  check(Engine::thinking_level(r, true, true) == "xhigh", "thinking level: template_kwargs reasoning_effort max -> xhigh");
+
+  // Template WITHOUT reasoning_effort (binary thinking, e.g. Qwen3.6): any effort resolves to on
+  for (const char* eff : {"low", "medium", "high", "xhigh", "max"}) {
+    r = ChatRequest{};
+    r.effort = eff;
+    check(Engine::thinking_level(r, true, false) == "on", std::string("thinking level: binary template ") + eff + " -> on");
+  }
+  r = ChatRequest{};
+  check(Engine::thinking_level(r, true, false) == "on", "thinking level: default binary thinking returns on");
+
+  // ChatResult struct
+  ChatResult res;
+  res.thinking_level = "low";
+  check(res.thinking_level == "low", "ChatResult holds thinking_level");
 }
 
 // Tool arguments keep each value's spelling (src/engine/tool_args.h) through the Qwen3.5 / Nemotron templates' `| string`
@@ -2040,6 +2201,99 @@ void draft_conversation_unit() {
   (void)other;
 }
 
+// The slot a new conversation takes (pick_new_conversation_slot, Engine::pick_slot): with a prompt_cache_key, the slot
+// whose conversation that key named, within the rank another slot would be taken from. CPU only. (#956: of four chats,
+// one started again on a changed system prompt took the slot of the chat idle longest, and its old conversation kept
+// its own.)
+void new_conversation_slot_unit() {
+  using V = NewConversationSlot;
+  // A to D: continued conversations, B idle longest, A used last (its third turn)
+  const std::vector<V> four = {{true, 2, "a", false, 9}, {true, 2, "b", false, 3}, {true, 2, "c", false, 5},
+                               {true, 2, "d", false, 7}};
+  check(pick_new_conversation_slot(four, "a") == 0, "new conversation: A's key takes A's slot, not B's (idle longest)");
+  check(pick_new_conversation_slot(four, "") == 1, "new conversation: no key, the least recently used (as before)");
+  check(pick_new_conversation_slot(four, "e") == 1, "new conversation: a key no slot holds, the least recently used");
+  std::vector<V> unkeyed = four;
+  for (V& v : unkeyed) v.key.clear();
+  check(pick_new_conversation_slot(unkeyed, "") == 1, "new conversation: \"\" never matches a slot sent without a key");
+  std::vector<V> busy = four;
+  busy[0].usable = false;
+  check(pick_new_conversation_slot(busy, "a") == 1, "new conversation: the key's slot busy: as before");
+  // no more is evicted than without the key: an empty slot, then a one-off, go first
+  std::vector<V> with_empty = four;
+  with_empty.push_back({true, 0, "", false, 1});
+  check(pick_new_conversation_slot(with_empty, "a") == 4, "new conversation: an empty slot before the key's");
+  std::vector<V> with_one_off = four;
+  with_one_off.push_back({true, 1, "x", false, 8});
+  check(pick_new_conversation_slot(with_one_off, "a") == 4,
+        "new conversation: a one-off before the key's conversation (a title request sent with its chat's key)");
+  with_one_off.push_back({true, 1, "a", false, 10});
+  check(pick_new_conversation_slot(with_one_off, "a") == 5, "new conversation: of two one-offs the key's");
+  // the shared prefix: unchanged without the key, and after it with one
+  std::vector<V> prefix = four;
+  prefix[2].prefix = true;
+  check(pick_new_conversation_slot(prefix, "") == 2, "new conversation: no key, the slot with the shared prefix");
+  check(pick_new_conversation_slot(prefix, "a") == 0, "new conversation: the key's slot before a shared prefix");
+  prefix[0].prefix = true;
+  check(pick_new_conversation_slot(prefix, "a") == 0,
+        "new conversation: compacted (the key's slot with the same system prompt) keeps its checkpoint");
+  check(pick_new_conversation_slot({{false, 0, "", false, 1}}, "a") == -1, "new conversation: every slot busy: none");
+  // by_key: the key chose the slot, so the SSD's entries of that key go first (Engine::disk_replaced)
+  bool by = true;
+  check(pick_new_conversation_slot(four, "a", &by) == 0 && by, "new conversation: A's key chose A's slot (by_key)");
+  by = false;
+  check(pick_new_conversation_slot(four, "b", &by) == 1 && by,
+        "new conversation: the key's slot is also the least recently used: still by_key");
+  check(pick_new_conversation_slot(four, "", &by) == 1 && !by, "new conversation: no key: not by_key");
+  check(pick_new_conversation_slot(four, "e", &by) == 1 && !by, "new conversation: a key no slot holds: not by_key");
+  check(pick_new_conversation_slot(with_empty, "a", &by) == 4 && !by, "new conversation: an empty slot taken: not by_key");
+  check(pick_new_conversation_slot(with_one_off, "a", &by) == 5 && by,
+        "new conversation: the key's one-off over another one-off: by_key");
+  std::vector<V> one_key = four;
+  for (V& v : one_key) v.key = "k";
+  check(pick_new_conversation_slot(one_key, "k", &by) == 1 && !by,
+        "new conversation: every slot holds the key (one key for everything): not by_key, as without it");
+  one_key[2].usable = false, one_key[2].key = "x";
+  check(pick_new_conversation_slot(one_key, "k", &by) == 1 && !by,
+        "new conversation: only a busy slot holds another key: not by_key");
+  std::vector<V> shared = four;
+  shared[2].key = "a";
+  check(pick_new_conversation_slot(shared, "a", &by) == 2 && by,
+        "new conversation: two slots with the key and others without: the key's least recently used, by_key");
+  check(pick_new_conversation_slot({{true, 2, "a", false, 1}}, "a", &by) == 0 && !by,
+        "new conversation: one slot (nothing to tell it from): not by_key");
+}
+
+// The slot a new conversation takes when its prompt does not fit beside the other slots' caches (evicted_prefix_slot,
+// Engine::pick_slot): the slot whose cache the memory rule would drop, if it holds a prefix checkpoint the prompt
+// shares. CPU only. (An agent's compacted conversation read its system prompt again from row 0: the one-off slot took
+// it, and the conversation's cache, with the checkpoint, was dropped to make room.)
+void evicted_prefix_slot_unit() {
+  using K = KvCacheSlot;
+  // slot 0: a one-off (1,024 rows); slot 1: the conversation (56,832 rows), its prefix checkpoint at 13,145
+  const std::vector<K> two = {{true, 1024, 0, 9}, {true, 56832, 13145, 5}};
+  check(evicted_prefix_slot(two, 0, 30000, 34560) == 1, "evicted prefix: the prompt does not fit beside the cache: its slot");
+  check(evicted_prefix_slot(two, 0, 40000, 34560) == -1, "evicted prefix: the prompt fits beside it: the pick (the copy)");
+  check(evicted_prefix_slot(two, 0, 33536, 34560) == -1, "evicted prefix: it fits once the pick's own cache is dropped");
+  check(evicted_prefix_slot(two, 1, 0, 34560) == -1, "evicted prefix: the pick holds the checkpoint itself");
+  check(evicted_prefix_slot(two, 0, 0, 57088) == -1, "evicted prefix: a prompt longer than that cache keeps the pick");
+  std::vector<K> none = two;
+  none[1].prefix = 0;
+  check(evicted_prefix_slot(none, 0, 30000, 34560) == -1, "evicted prefix: no shared checkpoint: the pick");
+  std::vector<K> busy = two;
+  busy[1].idle = false;
+  check(evicted_prefix_slot(busy, 0, 30000, 34560) == -1, "evicted prefix: a busy slot's cache is not dropped: the pick");
+  // three slots: the least recently used idle cache goes first, and when it makes the room the checkpoint's slot stays
+  const std::vector<K> three = {{true, 0, 0, 9}, {true, 56832, 13145, 5}, {true, 20480, 0, 3}};
+  check(evicted_prefix_slot(three, 0, 20000, 34560) == -1, "evicted prefix: an older cache makes the room: the pick");
+  check(evicted_prefix_slot(three, 0, 10000, 34560) == 1, "evicted prefix: the older cache is not enough: the slot");
+  // two slots share a prefix: the deeper checkpoint among those dropped
+  const std::vector<K> deep = {{true, 0, 0, 9}, {true, 40960, 13145, 5}, {true, 40960, 20000, 3}};
+  check(evicted_prefix_slot(deep, 0, 0, 34560) == 2, "evicted prefix: only the first cache is dropped: its checkpoint");
+  check(evicted_prefix_slot(deep, 0, -10000, 34560) == 2, "evicted prefix: both dropped: the deeper checkpoint");
+  check(evicted_prefix_slot(two, -1, 0, 1) == -1 && evicted_prefix_slot(two, 2, 0, 1) == -1, "evicted prefix: no pick");
+}
+
 // --dump DIR: the replies of each scenario as the server sends them, for tests/sdk_check.py (the official Python SDKs
 // parse them from a fake server): <name>.sse (a stream, with keepalives), <name>.json (a response body), <name>.status
 // (an error's)
@@ -2239,6 +2493,24 @@ void unsupported_model_unit() {
             gemma.find("nemotron_h") != std::string::npos && gemma.find("flint") != std::string::npos &&
             gemma.find("clover_moe") != std::string::npos,
         "unsupported_model: another architecture is named by its model_type, with the ones Kapitsa runs");
+  // a Flint folder is accepted, unless NI_KV_I8 asks for int8 KV rows (#1257): the refusal comes here, before an engine
+  // is built or released, so a model switch leaves the old model up
+  {
+    const std::string flint = folder("flint", R"({"model_type": "flint"})");
+    const char* old = getenv("NI_KV_I8");
+    const std::string saved = old ? old : "";
+    unsetenv("NI_KV_I8");
+    check(refused(flint).empty(), "unsupported_model: a flint config is not refused without NI_KV_I8");
+    setenv("NI_KV_I8", "0", 1);
+    check(refused(flint).empty(), "unsupported_model: a flint config is not refused with NI_KV_I8=0");
+    setenv("NI_KV_I8", "1", 1);
+    check(refused(flint) == "int8 KV cache isn't supported with Flint models yet; unset NI_KV_I8",
+          "unsupported_model: a flint config is refused with NI_KV_I8=1, with the one message");
+    check(refused(folder("qwen35i8", R"({"model_type": "qwen3_5"})")).empty(),
+          "unsupported_model: a qwen3_5 config is not refused with NI_KV_I8=1");
+    if (old) setenv("NI_KV_I8", saved.c_str(), 1);
+    else unsetenv("NI_KV_I8");
+  }
   // the Qwen3.5 family is accepted by its model_type, and by the hybrid's shape when the config names none
   check(refused(folder("qwen35", R"({"model_type": "qwen3_5"})")).empty(),
         "unsupported_model: a qwen3_5 config is not refused");
@@ -2337,6 +2609,69 @@ bool exists(const std::string& p) {
   struct stat st;
   return stat(p.c_str(), &st) == 0;
 }
+
+// The thinking budget's request fields (src/engine/think_control.h): budget_tokens stays the API's budget, the
+// thinking_control extension sets the hard cap, its closing text and the tool-call end on every API; malformed ones are
+// a 400 naming the field; usage reports the cap
+void thinking_budget_mapping() {
+  const char* base = R"({"model": "m", "max_tokens": 100, "messages": [{"role": "user", "content": "hi"}],
+                         "thinking": {"type": "enabled", "budget_tokens": 2048}})";
+  ChatRequest r = messages_prompt(J(base), nullptr);
+  check(r.thinking_budget == 2048 && r.think_cap == -1 && r.think_close_text.empty() && r.think_end_on_tool_call == -1,
+        "thinking budget: budget_tokens alone leaves the extension unset");
+  ojson b = J(base);
+  b["thinking_control"] = J(R"({"hard_cap": 0, "close_text": " Time to answer.", "end_on_tool_call": false})");
+  r = messages_prompt(b, nullptr);
+  check(r.think_cap == 0 && r.think_close_text == " Time to answer." && r.think_end_on_tool_call == 0,
+        "thinking budget: thinking_control on /v1/messages (a cap of 0 is a cap)");
+  ChatRequest c;
+  request_think_field(J(R"({"thinking_control": {"hard_cap": 300, "end_on_tool_call": true}})"), c);
+  check(c.think_cap == 300 && c.think_end_on_tool_call == 1, "thinking budget: thinking_control on the OpenAI APIs");
+  for (const char* bad : {R"({"thinking_control": {"hard_cap": -1}})", R"({"thinking_control": {"hard_cap": 1.5}})",
+                          R"({"thinking_control": {"close_text": 5}})", R"({"thinking_control": {"end_on_tool_call": 1}})",
+                          R"({"thinking_control": 7})"}) {
+    ChatRequest x;
+    std::string param;
+    try {
+      request_think_field(J(bad), x);
+    } catch (const ApiError& e) {
+      param = e.param;
+    }
+    check(param.rfind("thinking_control", 0) == 0, std::string("thinking budget: refused ") + bad, "param " + param);
+  }
+  ChatResult res;
+  check(kapitsa_usage(res).is_null(), "thinking budget: no usage field without a cap or loops");
+  res.think_cap = 1024;
+  res.reasoning_tokens = 1300;  // (a second reasoning block after the first: not capped, counted by the API's field)
+  res.think_tokens = 1024;
+  res.think_forced = true;
+  check(kapitsa_usage(res) == J(R"({"thinking": {"hard_cap": 1024, "reasoning_tokens": 1024, "forced": true}})"),
+        "thinking budget: usage reports the cap and the capped block's tokens", dump(kapitsa_usage(res)));
+  res.loops = 2;
+  check(kapitsa_usage(res)["loops"] == 2 && kapitsa_usage(res).contains("thinking"),
+        "thinking budget: usage keeps a looped model's loop count beside it");
+  // a cap of 0 is thinking off (Engine::chat then renders the prompt as thinking off)
+  ojson z = J(base);
+  z["thinking"]["budget_tokens"] = 0;
+  const ChatRequest r0 = messages_prompt(z, nullptr);
+  ojson zc = J(base);
+  zc["thinking_control"] = J(R"({"hard_cap": 0})");
+  const ChatRequest rc0 = messages_prompt(zc, nullptr);
+  const ChatRequest off = messages_prompt(J(R"({"model": "m", "max_tokens": 100, "messages": [{"role": "user",
+                                                "content": "hi"}], "thinking": {"type": "disabled"}})"), nullptr);
+  check(think_cap_of(r0.think_cap, r0.thinking_budget) == 0 && think_cap_of(rc0.think_cap, rc0.thinking_budget) == 0,
+        "thinking budget: budget_tokens 0 and thinking_control's cap 0 read as a cap of 0");
+  // without a budget nothing changes: thinking disabled or absent is no cap, so chat_template_kwargs still decides
+  ojson kwon = J(R"({"model": "m", "max_tokens": 100, "messages": [{"role": "user", "content": "hi"}],
+                   "chat_template_kwargs": {"enable_thinking": true}})");
+  const ChatRequest none = messages_prompt(kwon, nullptr);
+  check(think_cap_of(off.think_cap, off.thinking_budget) == -1 &&
+            think_cap_of(none.think_cap, none.thinking_budget) == -1 && none.template_kwargs["enable_thinking"] == true,
+        "thinking budget: thinking disabled or absent is no cap");
+  check(think_cap_of(-1, -1) == -1 && think_cap_of(-1, 4096) == 4096 && think_cap_of(300, 4096) == 300,
+        "thinking budget: thinking_control's cap over budget_tokens, none without either");
+}
+
 
 }  // namespace
 
@@ -2608,6 +2943,16 @@ static void ollama_unit() {
     }
     check(has_tools && has_thinking, "ollama: clover-35b-a3b has tools and thinking");
   }
+  // any Qwen name has tools and thinking
+  for (const char* n : {"qwen4-32b", "qwen3.6-35b-a3b"}) {
+    bool has_tools = false, has_thinking = false;
+    const auto show = ollama_show_response(n, n);
+    for (const auto& c : show["capabilities"]) {
+      if (c == "tools") has_tools = true;
+      if (c == "thinking") has_thinking = true;
+    }
+    check(has_tools && has_thinking, std::string("ollama: ") + n + " has tools and thinking");
+  }
   // qwen3.6-35b-a3b has vision
   {
     auto show = ollama_show_response("qwen3.6-35b-a3b", "qwen3.6-35b-a3b");
@@ -2669,9 +3014,11 @@ int main(int argc, char** argv) {
   chat_events();
   clients();
   reasoning_memory_unit();
+  template_content_cache_unit();
   float_arguments_text();
   tool_arguments_spelling();
   preserve_thinking_default_unit();
+  thinking_level_unit();
   disk_wait_unit();
   disk_saved_unit();
   disk_retry_wiring_unit();
@@ -2683,6 +3030,9 @@ int main(int argc, char** argv) {
   ollama_unit();
   drafter_report_unit();
   draft_conversation_unit();
+  new_conversation_slot_unit();
+  evicted_prefix_slot_unit();
+  thinking_budget_mapping();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dump" && i + 1 < argc) dump_cases(argv[++i]);
@@ -2703,6 +3053,7 @@ int main(int argc, char** argv) {
     const std::string tag = "[" + dir.substr(dir.find_last_of('/') + 1) + "] ";
     anthropic_round_trip(m, tag);
     nameless_tool_replies(m, tag);
+    call_without_opener(m, tag);
     reasoning_memory(m, tag);
     responses_round_trip(m, tag, false);
     responses_round_trip(m, tag, true);
@@ -2710,6 +3061,7 @@ int main(int argc, char** argv) {
     anthropic_tool_arguments(m, tag);
     template_checks(m, tag);
     draft_checks(m, tag);
+    thinking_cap_zero_render(m, tag);
   }
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;

@@ -1,0 +1,53 @@
+{
+  "derivation": "Redacted derived results; complete token arrays compared literally and retained privately.",
+  "source": "801527c8cd0c2cf55413c38a5a9a2f7ba6315802",
+  "reference": "a283176326de221e9326e05b9f21e0759be75f99",
+  "fuzz": [
+    {
+      "family": "qwen",
+      "cases": 140,
+      "complete_token_arrays_equal": true,
+      "tokenizer_sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+    },
+    {
+      "family": "qwen27b",
+      "cases": 140,
+      "complete_token_arrays_equal": true,
+      "tokenizer_sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+    },
+    {
+      "family": "qwen08b",
+      "cases": 140,
+      "complete_token_arrays_equal": true,
+      "tokenizer_sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+    },
+    {
+      "family": "tekken",
+      "cases": 140,
+      "complete_token_arrays_equal": true,
+      "tokenizer_sha256": "3277c00fe5fb3963b3cb7c07b7f183722d2af4d775a4aea7cfb3684d7cccbc2f"
+    },
+    {
+      "family": "flint",
+      "cases": 140,
+      "complete_token_arrays_equal": true,
+      "tokenizer_sha256": "cbc69b4fd04328e2c637b28fed83af5afe4b9f3c4cecd03559c257351ff53f60"
+    }
+  ],
+  "unit_tests": {
+    "M5_Release": {
+      "pass": 138,
+      "fail": 0
+    },
+    "M3_Release": {
+      "pass": 138,
+      "fail": 0
+    },
+    "M5_UBSan": {
+      "pass": 138,
+      "fail": 0,
+      "heap_calls_observed": 60
+    }
+  },
+  "ASan": "Neither M5 nor M3 reached main: the installed runtime hung in shadow-memory initialization. Own test processes terminated; no ASan pass claimed."
+}

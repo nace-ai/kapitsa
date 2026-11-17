@@ -11,7 +11,7 @@ using ojson = nlohmann::ordered_json;
 
 bool known_agent(const std::string& name) {
   return name == "claude" || name == "codex" || name == "opencode" || name == "pi" || name == "hermes" ||
-         name == "aider" || name == "goose";
+         name == "aider" || name == "goose" || name == "copilot";
 }
 
 std::string agent_install_hint(const std::string& name) {
@@ -33,6 +33,7 @@ std::string agent_install_hint(const std::string& name) {
   if (name == "aider")
     return "aider is not installed (no `aider` on the PATH). Install it:\n"
            "  pip install aider-chat      (or: brew install aider)";
+  if (name == "copilot") return "GitHub Copilot CLI is not installed (no `copilot` on the PATH). Install @github/copilot.";
   if (name == "goose")
     return "Goose is not installed (no `goose` on the PATH). Install it:\n"
            "  See https://block.github.io/goose/docs/getting-started/installation";
@@ -285,6 +286,23 @@ AgentLaunch aider(const std::string& path, const AgentServer& s, const std::vect
   return l;
 }
 
+AgentLaunch copilot(const std::string& path, const AgentServer& s, const std::vector<std::string>& args,
+                    const std::map<std::string, std::string>& env) {
+  AgentLaunch l;
+  // A named providers file takes precedence over the environment. An inherited provider may also supply
+  // credentials, headers or a different wire model. Configure this child for the selected server.
+  for (const auto& [key, value] : env)
+    if (key == "COPILOT_PROVIDERS_CONFIG" || key.starts_with("COPILOT_PROVIDER_")) l.unset.push_back(key);
+  const int out = std::max(1, std::min(32768, s.context / 4));
+  l.set = {{"COPILOT_PROVIDER_TYPE", "openai"}, {"COPILOT_PROVIDER_BASE_URL", s.base_url + "/v1"},
+           {"COPILOT_PROVIDER_API_KEY", s.api_key.empty() ? "kapitsa" : s.api_key}, {"COPILOT_MODEL", s.model},
+           {"COPILOT_PROVIDER_MAX_PROMPT_TOKENS", std::to_string(std::max(1, s.context - out))},
+           {"COPILOT_PROVIDER_MAX_OUTPUT_TOKENS", std::to_string(out)}, {"COPILOT_OFFLINE", "true"}};
+  l.argv = {path};
+  l.argv.insert(l.argv.end(), args.begin(), args.end());
+  return l;
+}
+
 // Goose by Block (https://block.github.io/goose): OpenAI provider with OPENAI_HOST and OPENAI_API_KEY.
 // GOOSE_CONTEXT_LIMIT tells Goose the model's context window so it compacts at the right time.
 // Bare `goose` prints help; `goose session` starts a chat. Insert `session` when the user did not pass a subcommand
@@ -322,6 +340,7 @@ AgentLaunch agent_launch(const std::string& name, const std::string& path, const
   if (name == "pi") return pi(path, s, args, dir);
   if (name == "hermes") return hermes(path, s, args);
   if (name == "aider") return aider(path, s, args);
+  if (name == "copilot") return copilot(path, s, args, env);
   if (name == "goose") return goose(path, s, args);
   throw std::runtime_error("unknown coding agent: " + name);
 }

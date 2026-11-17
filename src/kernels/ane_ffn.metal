@@ -290,3 +290,44 @@ struct AneJoinParams {
     X[tt * p.D + c0 + pos.x] += st[pos.x][j] * sc[j];
   }
 }
+
+
+// ProjSplit (proj_split.h): the Neural Engine's projection Y (half [N][ystride], channel-major, tokens innermost) times
+// each token's input scale tx[t] -> fp32 rows of up to three parts: channels [0, N0) to O0 [T][N0], [N0, N01) to O1
+// [T][N01 - N0], [N01, 32 * grid.y) to O2. N0 and N01 multiples of 32. A non-finite value or scale sets status.
+// grid: (ceil(T/32), channels/32) x (32, 8) threads.
+struct AneUnpackParams {
+  uint T, N0, N01, ystride;
+};
+[[kernel]] void ane_proj_unpack(const device half* Y [[buffer(0)]], const device half* tx [[buffer(1)]],
+                                device float* O0 [[buffer(2)]], device float* O1 [[buffer(3)]],
+                                device float* O2 [[buffer(4)]], device atomic_uint* status [[buffer(5)]],
+                                constant AneUnpackParams& p [[buffer(6)]], uint2 tile [[threadgroup_position_in_grid]],
+                                uint2 ntile [[threadgroups_per_grid]], uint2 pos [[thread_position_in_threadgroup]]) {
+  threadgroup float st[32][33];
+  threadgroup float sc[32];
+  const uint t0 = tile.x * 32, c0 = tile.y * 32, t = t0 + pos.x;
+  const bool in = t < p.T;
+  bool bad = false;
+  for (uint j = pos.y; j < 32; j += 8) {
+    const half v = Y[(c0 + j) * p.ystride + t];
+    bad |= in && ane_bad(v);
+    st[j][pos.x] = float(v);
+  }
+  if (pos.y == 0) {
+    const half s = tx[t];
+    bad |= in && ane_bad(s);
+    sc[pos.x] = float(s);
+  }
+  if (bad) atomic_store_explicit(status, 1u, memory_order_relaxed);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const uint N = ntile.y * 32;
+  device float* O = c0 < p.N0 ? O0 : c0 < p.N01 ? O1 : O2;
+  const uint base = c0 < p.N0 ? 0 : c0 < p.N01 ? p.N0 : p.N01;
+  const uint w = (c0 < p.N0 ? p.N0 : c0 < p.N01 ? p.N01 : N) - base, c = c0 - base + pos.x;
+  for (uint j = pos.y; j < 32; j += 8) {
+    const uint tt = t0 + j;
+    if (tt >= p.T) continue;
+    O[tt * w + c] = st[pos.x][j] * sc[j];
+  }
+}

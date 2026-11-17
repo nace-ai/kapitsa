@@ -3,7 +3,12 @@
 //
 //   logit_dump <model_dir> <out_dir> [--paths step,verify,batch] [--from DIR] [--corpus FILE] [--windows N]
 //              [--rows W] [--chunk C] [--batch N] [--batch-rows R] [--loops N] [--loop-kv last-loop|per-loop]
-//              [--verify-rows N]
+//              [--verify-rows N] [--list-paths]
+//
+// --list-paths prints the paths this model has, comma-separated, and exits: step,verify,batch; step,verify for Flint
+// and Qwen3.8-Flash-Next's layout (under any model_type src/model/qwen4_config.cpp maps to it); step for Dory, and
+// step,verify with --loop-kv per-loop. It reads config.json alone (no GPU, no lock, no out_dir made):
+// tools/logit_floor.py takes its paths from it, so a model under a new name gets its layout's.
 //
 // A window is a cold request: its first L0 tokens are prefilled as the engine prefills a prompt (chunks of C rows,
 // default the engine's 2048, with the Neural Engine split wherever the model runs it), then W rows are fed
@@ -198,13 +203,14 @@ int main(int argc, char** argv) {
   if (argc < 3) {
     fprintf(stderr, "usage: logit_dump <model_dir> <out_dir> [--paths step,verify,batch] [--from DIR] [--corpus FILE] "
                     "[--windows N] [--rows W] [--chunk C] [--batch N] [--batch-rows R] [--loops N] [--spec N] "
-                    "[--loop-kv last-loop|per-loop] [--verify-rows N]\n");
+                    "[--loop-kv last-loop|per-loop] [--verify-rows N] [--list-paths]\n");
     return 1;
   }
   const std::string dir = argv[1], out = argv[2];
   std::string from, corpus = "bench/corpus.txt", paths_arg = "step,verify,batch", loop_kv;
   int n_windows = 8, rows = 24, chunk = 2048, members = 4, member_rows = 0, loops = 0, spec = -1;
   int tree_rows = kVerifyRows;  // --verify-rows: a Qwen KFlash tree's live rows (8, or a wide verify's 16 or 32)
+  bool list_paths = false;
   for (int i = 3; i < argc; ++i) {
     const std::string a = argv[i];
     auto next = [&]() -> std::string {
@@ -223,7 +229,18 @@ int main(int argc, char** argv) {
     else if (a == "--spec") spec = std::stoi(next());
     else if (a == "--loop-kv") loop_kv = next();
     else if (a == "--verify-rows") tree_rows = std::stoi(next());
+    else if (a == "--list-paths") list_paths = true;
     else fatal("unknown argument %s", a.c_str());
+  }
+  if (list_paths) {  // the classes below, in the order they are tried, from config.json alone
+    if (!std::filesystem::exists(dir + "/config.json")) fatal("%s: no config.json", dir.c_str());
+    LoopKv kv = LoopKv::last_loop;
+    if (!loop_kv.empty() && !parse_loop_kv(loop_kv, &kv)) fatal("--loop-kv: last-loop or per-loop");
+    const char* has = Qwen4Exp::is_model(dir) || Flint::is_model(dir) ? "step,verify"
+                      : Dory::is_model(dir) ? (kv == LoopKv::per_loop ? "step,verify" : "step")
+                                            : "step,verify,batch";
+    printf("%s\n", has);
+    return 0;
   }
   const std::vector<std::string> paths = split(paths_arg, ',');
   for (const auto& p : paths)

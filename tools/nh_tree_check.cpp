@@ -569,6 +569,54 @@ int main(int argc, char** argv) {
           "max |difference| %.3g (%.3g of the largest logit)", rows, bitwise, maxd, maxrel);
   }
 
+  // ---- 1b. the Mamba conv ring after a tree cycle whose accepted path is not the tree's first rows: the next verify
+  // commits the path as its pending rows (merged flush, with the ring writes in the grouped norm), which must write the
+  // ring as a separate flush does. kapitsa#1150: the merged path wrote the tree's rows 0 .. a instead of the path's,
+  // so after most tree cycles three positions of every Mamba layer held a sibling's input, and Bolt with LiLiCorr
+  // answered other questions. ----
+  {
+    auto A = m.new_seq(512), B = m.new_seq(512), C = m.new_seq(512);
+    prefill(m, *A, prompt, greedy);
+    prefill(m, *B, prompt, greedy);
+    prefill(m, *C, prompt, greedy);
+    const std::vector<int> want = plain_verify(m, *C, P0, 3, greedy);  // (the verify rows' own greedy continuation)
+    // the root's first child is wrong; its second child carries the continuation three deep: path rows 0, 2, 3, 4
+    Tree t;
+    t.par = {-1, 0, 0, 2, 3, 0};
+    t.tok = {-1, want[0] == 3 ? 4 : 3, want[0], want[1], want[2], want[0] == 5 ? 6 : 5};
+    const int a1 = tree_cycle(m, *A, P0, t, greedy, nullptr), a2 = tree_cycle(m, *B, P0, t, greedy, nullptr);
+    const int* path = A->pend_path.as<int32_t>();
+    const bool off_first = a1 >= 1 && path[1] != 1;
+    const int Pn = P0 + a1 + 1;
+    for (int j = 1; j < R8; ++j) A->tokens()[Pn + j] = B->tokens()[Pn + j] = 7 + j;
+    {
+      auto e = g.begin();
+      m.encode_verify(*e, *A, Pn, R8);  // merged: commits A's pending path rows in its scans
+      e->commit_and_wait();
+    }
+    std::vector<float> la(m.logits(), m.logits() + size_t(R8) * size_t(V));
+    {
+      auto e = g.begin();
+      m.encode_flush(*e, *B);  // the separate flush of the same rows
+      m.encode_verify(*e, *B, Pn, R8);
+      e->commit_and_wait();
+    }
+    int layers = 0, same = 0;
+    for (size_t i = 0; i < A->conv.size(); ++i) {
+      if (!A->conv[i] || A->conv[i].size == 0) continue;
+      ++layers;
+      same += memcmp(A->conv[i].ptr(), B->conv[i].ptr(), A->conv[i].size) == 0;
+    }
+    double d = 0, scale = 0;
+    for (size_t v = 0; v < la.size(); ++v)
+      d = std::max(d, double(std::fabs(la[v] - m.logits()[v]))), scale = std::max(scale, double(std::fabs(la[v])));
+    check(a1 == 3 && a2 == 3 && off_first && layers > 0 && same == layers && d <= 1e-4 * std::max(scale, 1e-6),
+          "pending tree path: accepted %d and %d drafts (want 3, path rows %d %d %d %d); conv ring after the next "
+          "verify's merged commit identical to a separate flush's in %d of %d Mamba layers; the verify's logits max "
+          "|difference| %.3g (%.3g of the largest)",
+          a1, a2, path[0], path[1], path[2], path[3], same, layers, d, d / std::max(scale, 1e-6));
+  }
+
   // ---- 2. acceptance and decoding against plain decoding ----
   for (int mode = 0; mode < 2; ++mode) {
     const SamplingParams& sp = mode ? sampled : greedy;

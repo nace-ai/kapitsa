@@ -313,7 +313,7 @@ static std::string model_family(const std::string& name) {
   if (name.find("nemotron") != std::string::npos || name.find("dory") != std::string::npos) return "mamba2";
   if (name.find("flint") != std::string::npos) return "qwen3_moe";
   if (name.find("clover") != std::string::npos) return "qwen3_moe";
-  if (name.find("qwen3") != std::string::npos) return "qwen3";
+  if (name.find("qwen") != std::string::npos) return "qwen3";
   return "";
 }
 
@@ -331,10 +331,10 @@ static ojson model_details(const std::string& name, const std::string& quant) {
 // Capabilities: the ollama library and Open WebUI read these to decide whether to send tools / thinking / vision.
 static ojson model_capabilities(const std::string& name) {
   ojson caps = ojson::array({"completion"});
-  if (name.find("qwen3") != std::string::npos || name.find("flint") != std::string::npos ||
+  if (name.find("qwen") != std::string::npos || name.find("flint") != std::string::npos ||
       name.find("clover") != std::string::npos || name.find("nemotron") != std::string::npos)
     caps.push_back("tools");
-  if (name.find("qwen3") != std::string::npos || name.find("flint") != std::string::npos ||
+  if (name.find("qwen") != std::string::npos || name.find("flint") != std::string::npos ||
       name.find("clover") != std::string::npos)
     caps.push_back("thinking");
   // Vision: every catalog model reads images except these text-only ones

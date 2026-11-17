@@ -1,4 +1,5 @@
 #include "util/load_threads.h"
+#include "model/sampler.h"
 #include "model/affine_coeff_fixed.h"
 #include "model/dflash2_lowrank_cache.h"
 // DFlash2 block drafter: loading, load-time quantization, context ring and the drafting pass.
@@ -163,12 +164,16 @@ static std::vector<std::string> config_problems(const json& c, const Qwen35Confi
   bool sliding = NL > 0 && c.contains("layer_types") && c["layer_types"].size() == size_t(NL);
   if (sliding)
     for (auto& lt : c["layer_types"]) sliding = sliding && lt == "sliding_attention";
-  check(sliding && window == DFlash2::kWin, "all layers sliding, window 2048");
+  // all layers sliding, over a window at least the ring's: a drafter trained past it (jzinno's Ornith draft has
+  // 4096) runs on the 2048-slot ring, as the v1 drafters do, and only its context past 2047 tokens sees fewer
+  // positions than it trained on (valid_lo keeps the attention from reading slots a gap left behind)
+  check(sliding && window >= DFlash2::kWin, "all layers sliding, a window of at least 2048");
   check(int(dc.value("conv_kernel_size", 0)) == 2, "conv taps 2");
   check(dc.value("conv_group_size", 0) == 16, "conv group 16");
   check(dc.value("selector_rank", 0) == DFlash2::kRank && dc.value("selector_top_k", 0) == DFlash2::kTopK,
         "selector rank 256 / top-k 16");
-  check(dc.value("block_size", 0) == DFlash2::kB, "block 8");
+  // the block a drafter was trained with: 8 (incoai's), or 16 (the block KFlash drafts with on a one-slot engine)
+  check(dc.value("block_size", 0) == DFlash2::kB || dc.value("block_size", 0) == 16, "block 8 or 16");
   // any theta: the inverse frequencies come from it at load (inv_freq_; incoai's Flash-Next draft has 1e4, the others 1e7)
   check(theta > 0 && rope_type == "default", "default rope");
   check(nq == 32 && nkv == 8 && hd == 128, "heads 32/8 x 128");
@@ -225,13 +230,12 @@ void DFlash2::load_config(const std::string& dir) {
     cfg_.trained_block = dc.value("block_size", 16);
     cfg_.trained_window = c.value("sliding_window", 0);
     cfg_.block = kB;
-    cfg_.window = kWin;
   } else {
     cfg_.block = dc["block_size"];
     cfg_.conv_gs = dc["conv_group_size"];
     cfg_.rank = dc["selector_rank"];
     cfg_.topk = dc["selector_top_k"];
-    cfg_.window = c.value("sliding_window", 0);
+    cfg_.trained_window = c.value("sliding_window", 0);
   }
   if (c.contains("rope_parameters")) cfg_.theta = float(c["rope_parameters"].value("rope_theta", 0.0));
   else cfg_.theta = float(c.value("rope_theta", 0.0));
@@ -627,8 +631,8 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
       if (block_ != kB && block_ != 16) fatal("NI_KFLASH_BLOCK=%s: 8, 16 or auto", v);
     } else if (rows16 && rows16_auto_ok()) {
       block_ = 16;
-      logi("KFlash: 16-row drafting block (one slot: the drafter drafts 15 guesses per weight read and the tree verify "
-           "runs 16 rows; NI_KFLASH_BLOCK=8 keeps 8)");
+      logi("KFlash: 16-row drafting block (one slot, or any slot count on the matrix class: the drafter drafts 15 guesses "
+           "per weight read and the tree verify runs 16 rows; NI_KFLASH_BLOCK=8 keeps 8)");
     }
     const char* vv = kenv("VERIFY");
     // The verify-depth default is the full block depth, as before; NI_KFLASH_CAP=<n> (the F74 depth cap) opts into
@@ -819,6 +823,8 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
   if (cfg_.v1)
     logi("DFlash drafter (v1) %s: blocks of %d rows (trained %d), context window %d positions (trained %d)",
          dir.c_str(), kB, cfg_.trained_block, kCtxKeep, cfg_.trained_window);
+  // a drafter trained past this pipeline's ring says so once, beside the v1 note above
+  if (cfg_.trained_window > kWin) logi("DFlash2 drafter %s: ring %d positions (trained %d)", dir.c_str(), kWin, cfg_.trained_window);
   logi("DFlash2 drafter %s: %d layers, hidden %d, %d-bit projections, %.2f GB resident (process footprint %+.2f GB), "
        "loaded in %.0f ms", dir.c_str(), cfg_.NL, cfg_.H, bits_, resident_ / 1e9, footprint_gb() - fp0, now_ms() - t0);
 }
@@ -977,8 +983,8 @@ void DFlash2::alloc_buffers() {
   walk_s_ = g.alloc(D * 16 * 4, "dfl_walk_s");
   qprob_ = g.alloc(D * 16 * 4, "dfl_qprob");
   walk_k_ = g.alloc(B * 4, "dfl_walk_k");
-  dist_id_ = g.alloc(B * 32 * 4, "dfl_dist_id");
-  dist_p_ = g.alloc(B * 32 * 4, "dfl_dist_p");
+  dist_id_ = g.alloc(B * kTopkMax * 4, "dfl_dist_id");  // (dfl_dist_rows' kDflDistW per row)
+  dist_p_ = g.alloc(B * kTopkMax * 4, "dfl_dist_p");
   dist_keep_ = g.alloc(B * 4, "dfl_dist_keep");
   acc_ = g.alloc(16, "dfl_acc");
   memset(acc_.ptr(), 0, acc_.size);
@@ -1144,7 +1150,7 @@ bool DFlash2::tensor_path_ok() {
   return dfl_tw_supported() && v8_knobs().tw && !(v8_knobs().dfl & (1 | 32 | 128));
 }
 
-int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* block_env, bool tw_ok) {
+int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* block_env, bool tw_ok, bool multi16) {
   const char* v = block_env ? block_env : kenv("BLOCK");
   if (v && *v && std::string(v) != "auto")  // 8 or 16; anything else fatals when the drafter loads
     return atoi(v) == 16 ? 16 : kB;
@@ -1153,8 +1159,10 @@ int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* 
   // matrix units with the fused attention the drafting pass needs (tw_ok, which the caller fills from its GPU and its
   // knobs). What is left out is the drafter's own weights (a v1 drafter, projections that are not 4-bit group 64), so
   // on such a drafter this is an upper bound: the plan reserves 16 rows and the load keeps 8, ~30 MB on the 27B. A MoE
-  // target has no wide verify, and a multi-slot engine co-decodes requests, so both keep the 8-row tile.
-  if (slots != 1 || target.moe) return kB;
+  // target has no wide verify, so it keeps the 8-row tile. A multi-slot engine co-decodes requests in 8-row batched
+  // passes; with multi16 (the device profile's kflash_block16 row: the matrix class) it drafts 16 rows anyway and its
+  // requests take turns (Engine::batch_rows), which measured faster for one session and for two at once.
+  if (target.moe || (slots != 1 && !multi16)) return kB;
   if (!kf_tree_default(15)) return kB;  // the 16-row block's full depth
   const char* vv = kenv("VERIFY");
   if (vv && *vv && atoi(vv) < 15) return kB;
@@ -1163,6 +1171,8 @@ int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* 
   if (!tw_ok) return kB;
   return 16;
 }
+
+bool DFlash2::multi_slot16_default() { return default_on(Knob::kKflashBlock16, ModelFacts{}); }
 
 size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, size_t head_row_bytes,
                            size_t* per_slot, size_t* at_prefill, int block_rows, bool lanes) {
@@ -1527,7 +1537,14 @@ void DFlash2::enc_qmm8(Encoder& e, const std::vector<DflSeg8>& segs, const Buffe
   uint32_t Ntot = 0;
   for (auto& sg : segs) Ntot += sg.L->N;
   const uint32_t gpr = K / 64;
-  const int nt = ((Ntot + 15) / 16 > 8192 || gpr > 64) ? 32 : 16;
+  // 32 weight rows a simdgroup for grids past 8192 threadgroups of 16 (the target's rule), and for K > 4096 on narrow
+  // outputs (N <= 4096: the 35B drafter's down projection, 2048 x 6144); 16 otherwise. The 27B drafter's projections
+  // (K 5120 and 17408, N 5120 to 98304) on 16-row simdgroups: its 16-row drafting pass 4.40 -> 3.93 ms, the 8-row one on
+  // these GEMMs (NI_KFLASH_V8=0) 3.14 -> 3.07, M5 Max (ni_run, per-cycle A/B, the same tokens). NI_DFL_NT=0: the previous
+  // rule (32 for every K > 4096)
+  static const bool nt_old = getenv("NI_DFL_NT") && std::string(getenv("NI_DFL_NT")) == "0";
+  const bool fat = (Ntot + 15) / 16 > 8192 || (gpr > 64 && (nt_old || Ntot <= 4096));
+  const int nt = fat ? 32 : 16;
   uint32_t ks = gpr > 32 && gpr <= 64 ? 4 : 8;
   while (ks > 1 && gpr < ks) ks /= 2;
   const bool pf = nt == 32 || gpr > 32;
@@ -1830,7 +1847,7 @@ void DFlash2::encode_accept_rows(Encoder& e, Seq& s, DFlashSeq& d, int P, int K,
                                  uint32_t n) {
   if (K < 1 || K > kB - 1 || sp.temperature <= 0) fatal("DFlash2 accept_rows: K=%d T=%g", K, sp.temperature);
   const size_t R = size_t(K) + 1;
-  kp::DflDist dp{n, uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)), sp.temperature, sp.top_p};
+  kp::DflDist dp{n, topk_k(sp), sp.temperature, sp.top_p};
   e.use(dpipe("dfl_dist_rows"));
   e.buf(0, tg_.verify_cand_vals().view(size_t(r0) * n * 4, R * n * 4));
   e.buf(1, tg_.verify_cand_ids().view(size_t(r0) * n * 4, R * n * 4));
@@ -2267,7 +2284,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
 
 void DFlash2::encode_dist(Encoder& e, int R, const SamplingParams& sp) {
   if (R < 1 || R > kB || sp.temperature <= 0) fatal("DFlash2 dist: R=%d T=%g", R, sp.temperature);
-  kp::DflDist dp{tg_.verify_candidates(sp), uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)), sp.temperature,
+  kp::DflDist dp{tg_.verify_candidates(sp), topk_k(sp), sp.temperature,
                  sp.top_p};
   e.use(dpipe("dfl_dist_rows"));
   e.buf(0, tg_.verify_cand_vals()); e.buf(1, tg_.verify_cand_ids()); e.buf(2, dist_id_); e.buf(3, dist_p_);

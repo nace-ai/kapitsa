@@ -1,10 +1,13 @@
 #include "engine/history_gate.h"
+#include "model/sampler.h"
 #include "engine/engine.h"
 #include "engine/device_profile.h"
 #include "engine/output_parser.h"
 #include "engine/stop_filter.h"
 #include "engine/reasoning_memory.h"
+#include "engine/think_control.h"
 #include "engine/tool_args.h"
+#include "model/flint_kv.h"
 #include "model/qwen4_config.h"
 #include "splash/runtime.h"
 #include "util/json_file.h"
@@ -29,6 +32,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <thread>
+#include <tuple>
 
 namespace ni {
 
@@ -334,13 +338,14 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
             opts_.model_dir.c_str(), need.bytes / 1e9, need.parts.c_str(), budget_ / 1e9, rws / 1e9);
   }
   // the publisher's sampling settings (generation_config.json; Nemotron 3.5 and Dory: temperature 1.0, top-p 0.95, no
-  // top-k: the sampler's 32)
+  // top-k). A request that leaves top_k out gets omitted_top_k() (sampler.h): the publisher's within 1..64, else 32, as
+  // before kapitsa#1286, so those defaults keep their speculative loops; a request that asks for top_k 0 gets every token.
   auto publisher_sampling = [&] {
     auto gc = nlohmann::json::parse(read_file(opts_.model_dir + "/generation_config.json"), nullptr, false);
     if (!gc.is_discarded() && gc.is_object()) {
       if (gc.contains("temperature") && gc["temperature"].is_number()) defaults_.temperature = gc["temperature"];
       if (gc.contains("top_p") && gc["top_p"].is_number()) defaults_.top_p = gc["top_p"];
-      defaults_.top_k = gc.contains("top_k") && gc["top_k"].is_number() ? gc["top_k"].get<int>() : 0;
+      defaults_.top_k = omitted_top_k(gc.contains("top_k") && gc["top_k"].is_number() ? gc["top_k"].get<int>() : 0);
     }
   };
   if (Qwen4Exp::is_model(opts_.model_dir)) {
@@ -380,7 +385,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     auto gc = nlohmann::json::parse(read_file(opts_.model_dir + "/generation_config.json"), nullptr, false);
     const bool sample = !gc.is_discarded() && gc.is_object() && gc.value("do_sample", false);
     if (sample) publisher_sampling();
-    else defaults_.temperature = 0.0f, defaults_.top_p = 1.0f, defaults_.top_k = 0;
+    else defaults_.temperature = 0.0f, defaults_.top_p = 1.0f, defaults_.top_k = kTopkOmitted;  // (a client's temperature alone: 32, as before #1286)
   } else {
     auto m = std::make_unique<Qwen35>(opts_.model_dir, opts_.prefill_chunk);
     q35_ = m.get();
@@ -394,10 +399,17 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   tmpl_ = std::make_unique<minja::chat_template>(src, flint_ ? "<|begin_of_text|>" : "",
                                                  flint_ ? "<|end_of_text|>" : "<|im_end|>");
   preserve_thinking_default_ = !flint_ && !nh_ && !dory_ && preserve_thinking_template(src);
+  reasoning_effort_template_ = !flint_ && !nh_ && !dory_ && src.find("reasoning_effort") != std::string::npos;
   think_open_ = tok_.find("<think>");
   think_close_ = tok_.find("</think>");
   tc_open_ = tok_.find("<tool_call>");
   tc_close_ = tok_.find("</tool_call>");
+  think_space_.assign(size_t(tok_.vocab_size()), 0);
+  for (int id = 0; id < tok_.vocab_size(); ++id) {
+    const std::string& b = tok_.token_bytes(id);
+    think_space_[size_t(id)] =
+        !b.empty() && !tok_.is_special(id) && b.find_first_not_of(" \t\r\n") == std::string::npos;
+  }
   if (nh_) {
     // Nemotron Nano 9B v2: its tokenizer has no <think> or tool-call tokens (the tags are text; its calls
     // <TOOLCALL>[{"name": ..., "arguments": ...}]</TOOLCALL>), and its template switches thinking with "/think" /
@@ -450,9 +462,11 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       dflash_unsupported = dir;
     } else {
       const size_t a0 = Gpu::get().allocated_bytes();
-      // one slot: nothing decodes alongside a request, so a 16-row block's deeper lattice is free to take (with more
-      // slots a 16-row block has no batched cycle at all, Engine::batch_rows, and requests take turns instead)
-      const int block_rows = DFlash2::plan_block_rows(q35_->config(), opts_.slots, nullptr, DFlash2::tensor_path_ok());
+      // one slot: nothing decodes alongside a request, so a 16-row block's deeper lattice is free to take; with more
+      // slots a 16-row block has no batched cycle at all (Engine::batch_rows) and requests take turns instead, which the
+      // matrix class takes too (the device profile's kflash_block16 row)
+      const int block_rows = DFlash2::plan_block_rows(q35_->config(), opts_.slots, nullptr, DFlash2::tensor_path_ok(),
+                                                      DFlash2::multi_slot16_default());
       const bool rows16 = block_rows > DFlash2::kB;
       dfl_ = std::make_unique<DFlash2>(*q35_, dir, 0, rows16);
       dfl_dir_ = dir;
@@ -556,7 +570,16 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     }
     slots_.push_back(std::move(s));
   };
+  weights_bytes_ = Gpu::get().allocated_bytes();
   for (int i = 0; i < std::max(1, opts_.slots); ++i) add_slot(opts_.context);
+  slot_pos_ = std::make_unique<std::atomic<int>[]>(slots_.size());
+  slot_cap_ = std::make_unique<std::atomic<int>[]>(slots_.size());
+  for (const Slot& s : slots_) note_kv(s);
+  for (const TurnCheckpoint& c : slots_[0].ckpts) {
+    for (const Buffer& b : c.conv) ckpt_bytes_ += b.size;
+    for (const Buffer& b : c.rec) ckpt_bytes_ += b.size;
+    ckpt_bytes_ += c.pconv.size;
+  }
   Gpu& g = Gpu::get();
   const size_t used = g.allocated_bytes(), per = model_->kv_bytes_per_pos();
   const size_t room = budget_ > used ? budget_ - used : 0;
@@ -762,8 +785,14 @@ std::string unsupported_model(const std::string& model_dir) {
   if (!j.is_object()) return model_dir + ": its config.json is not valid JSON.";
   // Qwen 4 (qwen4*): what the Qwen3.8-Flash-Next path does not run, or "" (model/qwen4_config.h)
   if (qwen4_family(j)) return qwen4_refusal(j, model_dir);
+  // (Flint with NI_KV_I8: refused here, not by the constructor's fatal, which exits a running server on a model switch;
+  // #1257)
+  if (Flint::is_model(model_dir)) {
+    const char* why = flint_kv_i8_requested_refusal();
+    return why ? why : "";
+  }
   if (Qwen4Exp::is_model(model_dir) || Dory::is_model(model_dir) || NemotronH::is_model(model_dir) ||
-      Flint::is_model(model_dir) || Clover::is_model(model_dir))
+      Clover::is_model(model_dir))
     return "";
   // the Qwen3.5 family by its model_type (Hugging Face's, and what the GGUF import writes); a config that names none,
   // by the hybrid's shape, as the Hub check reads it (src/hub/fetch.cpp, check_supported)
@@ -781,7 +810,7 @@ std::string unsupported_model(const std::string& model_dir) {
     const std::string why = unsupported_quantization(model_dir);
     return why.empty() ? why : model_dir + ": " + why;
   };
-  if (mt == "qwen3_5" || mt == "qwen3_5_moe" || tt == "qwen3_5_text" || tt == "qwen3_5_moe_text") return family();
+  if (qwen_layout(j) == QwenLayout::qwen35) return family();
   if (mt.empty() && tt.empty() && t.contains("linear_num_value_heads") && t.contains("num_hidden_layers"))
     return family();
   const std::string runs = " Kapitsa runs the Qwen3.5 family (Qwen3.5, 3.6 and 3.8: qwen3_5, qwen3_5_moe), "
@@ -880,11 +909,10 @@ static int auto_chunk(const std::string& model_dir, int context, int slots, size
   // concurrent slots, other formats/devices, or when the extra buffers do not fit.
   // M5 Pro, ni_run cold prefill, 2112 -> 4224 rows: 4K 2,637 -> 2,808 tok/s, 16K 2,095 -> 2,192 (logits bitwise the
   // same in dumps of at most 3,200 tokens, i.e. one chunk; a 16K prompt split over chunks was not dumped); the plan counts 0.75 GB more buffers, the measured peak footprint grows by 0.58 GB.
-  // With its GPU wavefront (NI_PF_WAVE, on the 40-core M5 Max) the same model takes 8192-row chunks, so each half has
-  // the rows a 4096-row chunk had: ni_run, 16,288 ids 2,777 -> 2,620 ms (Qwen35::gpu_wave_rows).
+  // With its GPU wavefront (NI_PF_WAVE, on the M5 class) the same model takes 8192-row chunks, so each half has the rows
+  // a 4096-row chunk had: ni_run, 16,288 ids, M5 Max 2,777 -> 2,620 ms, M5 Pro 5,874 -> 5,618 (Clover 5,699 -> 5,526).
   if (slots == 1 && !p.dense && p.hidden == 2048 && p.layers == 40 && p.formats.rfind("4-bit group 64", 0) == 0 &&
-      Qwen35::gpu_wave_default(p.hidden, p.layers, true) &&
-      (!Clover::is_model(model_dir) || (getenv("NI_PF_WAVE") && atoi(getenv("NI_PF_WAVE")) == 1))) {
+      Qwen35::gpu_wave_default(p.hidden, p.layers, true)) {
     const MemPlan wide = model_plan(model_dir, room ? prefill_chunk_room(8192) : 8192);
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget)
       return room ? prefill_chunk_room(8192) : 8192;
@@ -999,7 +1027,8 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
       // instead); the model with 1024-row prefill buffers, the slots' state, the Neural Engine split and one full
       // conversation come first
       const Qwen35Config dc = Qwen35::read_config(model_dir);
-      const int block_rows = DFlash2::plan_block_rows(dc, slots, nullptr, DFlash2::tensor_path_ok());
+      const int block_rows =
+          DFlash2::plan_block_rows(dc, slots, nullptr, DFlash2::tensor_path_ok(), DFlash2::multi_slot16_default());
       const Qwen35::MemPlan p = Qwen35::plan(model_dir, 1024, block_rows > DFlash2::kB);
       size_t per_slot = 0;  // the ring of the live state and of each of the slot's two checkpoints
       lp.dflash_bytes = lp.dflash_found_bytes =
@@ -1365,12 +1394,15 @@ void Engine::wait_split(Encoder& e) {
 
 void Engine::drop_slot(Slot& slot) {
   model_->drop_kv(*slot.seq);
+  note_kv(slot);
+  slot_pos_[&slot - slots_.data()].store(0, std::memory_order_relaxed);  // (its tokens are cleared below)
   model_->reset(*slot.seq);  // nothing in flight uses it: other slots are idle, this one's request has not started
   slot.tokens.clear();
   slot.img_spans.clear();
   slot.img_digests.clear();
   slot.turns = 0;
   slot.done_at = 0;
+  slot.key.clear();
   for (auto& c : slot.ckpts) {
     c.pos = -1;
     c.query = false;
@@ -1382,6 +1414,11 @@ void Engine::drop_slot(Slot& slot) {
 }
 
 bool Engine::reserve_kv(Slot& slot, int need, bool started) {
+  struct Note {  // (every return: the capacity it left, for view())
+    Engine& en;
+    const Slot& s;
+    ~Note() { en.note_kv(s); }
+  } note{*this, slot};
   Seq& s = *slot.seq;
   if (model_->reserve(s, need)) return true;
   if (vision_ && vision_->release(false) && model_->reserve(s, need)) return true;  // earlier requests' image embeddings
@@ -1479,6 +1516,14 @@ void Engine::verify_masks(const GrammarMatcher& gm, const GrammarState& at, Seq&
   }
 }
 
+void Engine::member_masks(const BatchJob& j, int P, int rows) {
+  Seq& s = *j.slot->seq;
+  if (j.gm && *j.g_on) verify_masks(*j.gm, *j.gst, s, P, rows, nullptr, rows);
+  else if (j.tc && j.tc->armed())
+    j.tc->fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), P, rows, nullptr, rows);
+  else memset(s.mask.ptr(), 0xff, size_t(rows) * size_t(s.mask_words) * 4);
+}
+
 // ---- batched decode ----
 
 int Engine::batch_rows(int n) const {
@@ -1490,7 +1535,8 @@ int Engine::batch_rows(int n) const {
   if (mode == 0 || n < 2 || n > 8 || (!dfl_ && !lili_) || (mode < 0 && !batch_measured_)) return 0;
   // a 16-row drafting block has no batched cycle: it drafts a depth-15 lattice with the pair kernel, and the batch loop
   // drafts 7-token chains (encode_draft with tree = false), so the requests take turns instead
-  if (dfl_ && dfl_->block() > DFlash2::kB) return 0;
+  // (a drafter loaded with 16 rows that a long prompt narrowed to 8, set_block, keeps that: its other requests draft 16)
+  if (dfl_ && (dfl_->block() > DFlash2::kB || dfl_->narrow_ok())) return 0;
   // NI_BATCH_ROWS="n:rows,...": rows per member for n members (0: take turns)
   static const std::vector<int> env = [] {
     std::vector<int> t(9, -1);
@@ -1762,8 +1808,8 @@ void Engine::batch_cycle(int rows) {
     if (k > 0 && exact) {  // the sampled members' acceptance (stage-1 candidates per row: as the pass made them)
       uint32_t Kmax = 1;
       for (const auto& gr : groups)
-        if (gr.sp.temperature > 0) Kmax = std::max(Kmax, uint32_t(std::clamp(gr.sp.top_k <= 0 ? 32 : gr.sp.top_k, 1, 32)));
-      const uint32_t n = (uint32_t(model_->vocab()) + 2047) / 2048 * Kmax;
+        Kmax = std::max(Kmax, topk_k(gr.sp));
+      const uint32_t n = topk_lists(uint32_t(model_->vocab()), Kmax) * Kmax;
       int r0 = 0;
       for (size_t i = 0; i < nj; ++i) {
         BatchJob* j = jobs[i];
@@ -1792,8 +1838,7 @@ void Engine::batch_cycle(int rows) {
   if (pending) {
     if (e1_work && !kfb) e1->wait();  // (under the budget it was waited for before the plan)
     for (size_t i = 0; i < nj; ++i)
-      if (gmask[i])
-        verify_masks(*jobs[i]->gm, *jobs[i]->gst, *jobs[i]->slot->seq, jobs[i]->P, kv[i] + 1, nullptr, kv[i] + 1);
+      if (gmask[i]) member_masks(*jobs[i], jobs[i]->P, kv[i] + 1);
     Gpu::signal_event_cpu(mask_event_, pending);
   }
   e2->wait();
@@ -1890,13 +1935,15 @@ void Engine::batch_plain_run() {
   for (size_t i = 0; i < n; ++i) base[i] = jobs[i]->P;
   // structured output: a pass's masked rows wait for their masks, which the host computes once the pass before it has
   // given each masked member's token (its state after it), one signal per pass
+  // (mk: the members a pass was encoded masked, as masked() said then: a thinking budget may end before its masks)
   uint64_t pv[8] = {};
+  std::vector<uint8_t> mk(8 * n, 0);
   auto masks = [&](int c) {
     if (!pv[c]) return;
     for (size_t i = 0; i < n; ++i) {
-      if (!jobs[i]->masked()) continue;
+      if (!mk[size_t(c) * n + i]) continue;
       Seq& sq = *jobs[i]->slot->seq;
-      if (stop_at[i] < 0) verify_masks(*jobs[i]->gm, *jobs[i]->gst, sq, base[i] + c, 1, nullptr, 1);
+      if (stop_at[i] < 0) member_masks(*jobs[i], base[i] + c, 1);
       else memset(sq.mask.ptr(), 0xff, size_t(sq.mask_words) * 4);  // (a stopped member's row: not used)
     }
     Gpu::signal_event_cpu(mask_event_, pv[c]);
@@ -1904,6 +1951,7 @@ void Engine::batch_plain_run() {
   auto encode = [&](int c) {  // pass c: row base + c of every member, its capture to stage row c
     for (size_t i = 0; i < n; ++i)
       if (jobs[i]->masked()) {
+        mk[size_t(c) * n + i] = 1;
         if (!pv[c]) {
           if (!mask_event_) mask_event_ = g.new_shared_event();
           pv[c] = ++mask_value_;
@@ -2211,9 +2259,12 @@ std::string flint_template(std::string src) {
 // must show the text and nothing of the part's markup. Cached per template.
 static bool string_content_template(const minja::chat_template& tmpl) {
   static std::mutex mu;
-  static std::map<const void*, bool> known;
+  using Key = std::tuple<std::string, std::string, std::string>;
+  static std::map<Key, bool> known;
+  const Key key{tmpl.source(), tmpl.bos_token(), tmpl.eos_token()};
   std::lock_guard<std::mutex> lk(mu);
-  if (auto it = known.find(&tmpl); it != known.end()) return it->second;
+  // A replacement template can occupy the same address after a model is unloaded.
+  if (auto it = known.find(key); it != known.end()) return it->second;
   static const std::string needle = "\x01kapitsa-typed-content\x01";
   bool str_only = false;
   try {
@@ -2228,7 +2279,7 @@ static bool string_content_template(const minja::chat_template& tmpl) {
   } catch (...) {
     str_only = true;  // (a template that cannot render a content array at all)
   }
-  known[&tmpl] = str_only;
+  known[key] = str_only;
   return str_only;
 }
 
@@ -2338,7 +2389,48 @@ int Engine::count_tokens(const ChatRequest& r_in) const {
   return int(expand_images(ids, images).ids.size());  // the images' rows
 }
 
-Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm, int loops) {
+int pick_new_conversation_slot(const std::vector<NewConversationSlot>& v, const std::string& key, bool* by_key) {
+  auto keyed = [&](const NewConversationSlot& a) { return !key.empty() && a.key == key; };
+  auto before = [&](const NewConversationSlot& a, const NewConversationSlot& b) {
+    if (a.rank != b.rank) return a.rank < b.rank;
+    if (keyed(a) != keyed(b)) return keyed(a);
+    if (a.prefix != b.prefix) return a.prefix;
+    return a.last_used < b.last_used;
+  };
+  int pick = -1;
+  for (size_t i = 0; i < v.size(); ++i)
+    if (v[i].usable && (pick < 0 || before(v[i], v[size_t(pick)]))) pick = int(i);
+  if (by_key) {
+    *by_key = false;
+    if (pick >= 0 && keyed(v[size_t(pick)]))
+      for (const NewConversationSlot& o : v)
+        *by_key = *by_key || (o.usable && o.rank == v[size_t(pick)].rank && !keyed(o));
+  }
+  return pick;
+}
+
+int evicted_prefix_slot(const std::vector<KvCacheSlot>& v, int pick, long free, int need) {
+  if (pick < 0 || pick >= int(v.size()) || v[size_t(pick)].prefix > 0) return -1;
+  // the pick's own cache goes first (the prompt reuses none of it), then the idle slots', least recently used first
+  long have = free + v[size_t(pick)].cap;
+  std::vector<int> idle;
+  for (int i = 0; i < int(v.size()); ++i)
+    if (i != pick && v[size_t(i)].idle && v[size_t(i)].cap > 0) idle.push_back(i);
+  std::sort(idle.begin(), idle.end(),
+            [&](int a, int b) { return v[size_t(a)].last_used < v[size_t(b)].last_used; });
+  int best = -1;
+  for (int i : idle) {
+    if (have >= need) break;
+    const KvCacheSlot& o = v[size_t(i)];
+    have += o.cap;
+    if (o.prefix > 0 && need <= o.cap && (best < 0 || o.prefix > v[size_t(best)].prefix)) best = i;
+  }
+  return best;
+}
+
+Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm, int loops,
+                                const std::string& key, bool* by_key) {
+  if (by_key) *by_key = false;
   // (a looped model's cached state is only valid for the loop count that computed it)
   auto lcp = [&](const Slot& s) { return dory_ && s.loops != loops ? size_t(0) : common_rows(s, prompt, mm); };
   // What a slot can actually reuse: its live state if the prompt extends it, else its newest
@@ -2354,12 +2446,13 @@ Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
   };
   // A shared system prompt's checkpoint is no reason to take a slot from its conversation (the main agent's, while a
   // subagent starts): it only breaks ties among the slots a new conversation may take anyway.
-  auto has_prefix = [&](const Slot& s) {
+  auto prefix_pos = [&](const Slot& s) {
     size_t l = lcp(s);
     for (auto& c : s.ckpts)
-      if (c.prefix && c.pos >= 64 && c.pos <= int(l) && c.pos < int(prompt.size())) return true;
-    return false;
+      if (c.prefix && c.pos >= 64 && c.pos <= int(l) && c.pos < int(prompt.size())) return c.pos;
+    return 0;
   };
+  auto has_prefix = [&](const Slot& s) { return prefix_pos(s) > 0; };
   Slot* best = nullptr;
   int best_lcp = 0;
   for (auto& s : slots_) {
@@ -2385,21 +2478,47 @@ Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
     // (opencode does), and that first conversation goes on with the tools' results. A one-off is also a short
     // conversation: one longer than 1024 tokens and four times this prompt is a main conversation's first turn that
     // a short side request (a title, a summary) came after, and is not given up for it.
+    // Within a rank, the slot whose conversation was sent with this request's prompt_cache_key goes first (the request
+    // continues no slot, so that conversation is over), then has_prefix, then the least recently used
+    // (pick_new_conversation_slot).
     const size_t cheap = std::max<size_t>(1024, 4 * prompt.size());
     auto rank = [&](const Slot& s) {
       return s.tokens.empty() ? 0 : s.turns <= 1 && arrival > s.done_at && s.tokens.size() <= cheap ? 1 : 2;
     };
-    Slot* pick = nullptr;
-    for (auto& s : slots_) {
-      if (s.busy || int(prompt.size()) + 64 > s.seq->limit) continue;
-      if (!pick || rank(s) < rank(*pick)) {
-        pick = &s;
-      } else if (rank(s) == rank(*pick)) {
-        const bool hp = has_prefix(s), pp = has_prefix(*pick);
-        if (hp != pp ? hp : s.last_used < pick->last_used) pick = &s;
-      }
+    std::vector<NewConversationSlot> view;
+    for (const Slot& s : slots_) {
+      const bool ok = !s.busy && int(prompt.size()) + 64 <= s.seq->limit;
+      view.push_back({ok, ok ? rank(s) : 0, s.key, ok && has_prefix(s), s.last_used});
     }
-    if (pick) {
+    if (int i = pick_new_conversation_slot(view, key, by_key); i >= 0) {
+      // The prompt does not fit beside the other conversations' caches (a Mac whose budget holds one long conversation
+      // and little more): chat() would drop them for it (reserve_kv), and with them the prefix checkpoint the prompt
+      // shares, so a conversation an agent compacted, or started again, under the same system prompt and tools read
+      // that block again from row 0. It takes the slot that holds the checkpoint instead: that slot's conversation is
+      // the one the memory rule gives up either way, and it goes to the SSD as a replaced slot's does (disk_leaving).
+      // Mac mini M6 (32 GB), the 27B, 2 slots, interleaved base / new x 2: a 28,141-token prompt sharing 12,970 tokens
+      // with the 30,636-token conversation whose cache it does not fit beside, 74.1 / 71.5 -> 42.4 / 42.4 s, the same
+      // reply. (Hermes on that Mac: a 34,296-token prompt after a compaction shared 13,148 tokens with the
+      // 56,718-token conversation it replaced and was read from 0 in 129 s.)
+      if (budget_ > 0) {
+        const size_t per = model_->kv_bytes_per_pos(), used = Gpu::get().allocated_bytes();
+        const int need = std::min(slots_[size_t(i)].seq->limit, int(prompt.size()) + 32);
+        std::vector<KvCacheSlot> kv;
+        for (const Slot& s : slots_)
+          kv.push_back({!s.busy, s.seq->cap, !s.busy && int(prompt.size()) + 64 <= s.seq->limit ? prefix_pos(s) : 0,
+                        s.last_used});
+        // (reserve() grows a cache in 256-row steps at least)
+        if (const int x = evicted_prefix_slot(kv, i, budget_ > used ? long((budget_ - used) / per) : 0,
+                                              (need + 255) / 256 * 256);
+            x >= 0) {
+          logi("memory: the %d-token prompt does not fit beside slot %d's cache (%d tokens) and shares its prefix "
+               "checkpoint at %d: it takes that slot, not slot %d", int(prompt.size()), x,
+               int(slots_[size_t(x)].tokens.size()), kv[size_t(x)].prefix, i);
+          i = x;
+          if (by_key) *by_key = false;
+        }
+      }
+      Slot* pick = &slots_[size_t(i)];
       pick->turns = 1;
       return pick;
     }
@@ -2411,6 +2530,27 @@ Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
 #ifdef NI_PIPELINE_TEST
 void pipeline_test_queued();
 #endif
+Engine::View Engine::view() const {
+  View v;
+  v.budget = budget_;
+  v.allocated = Gpu::get().allocated_bytes();
+  v.weights = std::min(weights_bytes_, v.allocated);
+  const size_t per = model_ ? model_->kv_bytes_per_pos() : 0;
+  if (slot_pos_)
+    for (size_t i = 0; i < slots_.size(); ++i) {
+      v.slot_tokens.push_back(slot_pos_[i].load(std::memory_order_relaxed));
+      const size_t cap = size_t(std::max(slot_cap_[i].load(std::memory_order_relaxed), 0));
+      v.kv += cap * per;
+      if (v.slot_tokens.back() > 0) ++v.ram.entries, v.ram.bytes += cap * per + ckpt_bytes_;
+    }
+  v.kv = std::min(v.kv, v.allocated - v.weights);
+  v.ram.hits = ram_hits_.load(std::memory_order_relaxed);
+  v.ram.hit_tokens = ram_hit_tokens_.load(std::memory_order_relaxed);
+  disk_view(v);
+  v.drafts = spec_ || dfl_ || lili_;
+  return v;
+}
+
 ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const ChatDelta&)>& on_delta,
                         const std::function<void(const ChatResult&)>& on_prompt,
                         const std::function<bool()>& cancelled,
@@ -2428,6 +2568,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // assistant turns the client sent back without their reasoning get it again (see restore_reasoning)
   ChatRequest r_restored = r_in;
   default_template_kwargs(r_restored);
+  // a thinking budget of 0 is thinking turned off (src/engine/think_control.h): the prompt renders as thinking off, so
+  // the reply carries no empty <think></think> block
+  if (think_cap_of(r_restored.think_cap, r_restored.thinking_budget) == 0)
+    r_restored.template_kwargs["enable_thinking"] = false;
   const int restored = restore_reasoning(r_restored);
   if (restored > 0) logd("chat: reasoning or argument spelling put back into %d assistant turn(s) the client sent without it", restored);
   const ChatRequest& r = r_restored;
@@ -2511,6 +2655,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   }
   // the reply starts inside the reasoning (the prompt ends with the think tag)
   const bool think = !text.empty() && text.size() >= 8 && text.compare(text.size() - 8, 8, "<think>\n") == 0;
+  res.thinking_level = request_thinking_level(r, think);
   // Structured output: the grammar's matcher on this model's vocabulary (the vocabulary's trie is built by the first
   // such request, here, before the GPU turn). The grammar holds the reply from its first token, or after </think>.
   std::unique_ptr<GrammarMatcher> gm;
@@ -2561,7 +2706,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   model_->ane_poll();
   const double t_slot = now_ms();
   Slot* picked = nullptr;
-  bool queued = false;
+  bool queued = false, by_key = false;
   for (;;) {
     if (cancelled && cancelled()) {  // before a slot is picked: a client gone while its request waited takes none
       if (queued) {
@@ -2571,7 +2716,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       res.finish_reason = "cancelled";
       return res;
     }
-    if (slot_queue_.empty() || slot_queue_.front() == arrival) picked = pick_slot(keys, arrival, mmp, loops);
+    if (slot_queue_.empty() || slot_queue_.front() == arrival)
+      picked = pick_slot(keys, arrival, mmp, loops, r.cache_key, &by_key);
     if (picked) break;
     if (!queued) {
       slot_queue_.push_back(arrival);
@@ -2597,6 +2743,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     Engine& en;
     Slot& s;
     ~SlotUse() {
+      en.slot_pos_[&s - en.slots_.data()].store(int(s.tokens.size()), std::memory_order_relaxed);
+      en.note_kv(s);
       s.busy = false;
       s.mem_wait = Slot::MemWait::none;
       --en.active_;
@@ -2607,6 +2755,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   slot.arrival = arrival;
   ++active_;
   SlotUse slot_use{*this, slot};
+  if (r.live) r.live->slot.store(int(&slot - slots_.data()), std::memory_order_relaxed);
   const double t_turn = now_ms();
   Seq& s = *slot.seq;
   slot.last_used = ++clock_;
@@ -2620,12 +2769,16 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
          int(&slot - slots_.data()), slot.loops);
   // SSD prefix cache (engine_disk.cpp): a stored state deeper than the slot's own is read into it once its KV cache is
   // reserved (below); the conversation the slot held goes to the SSD first, if the SSD lacks it and this request
-  // leaves it behind (another conversation; with the loop count it was computed with)
+  // leaves it behind (another conversation; with the loop count it was computed with), under the slot's key as it was.
+  // A new conversation that took the slot for its prompt_cache_key and resumes nothing from the SSD either retires that
+  // key's conversation: what the SSD has of the key goes first when room is needed (disk_replaced)
   pcache::Hit disk_hit;
   if (disk_) {
     const int ram = reuse_start(slot, common, n);
     disk_hit = disk_lookup(keys, n, ram, dory_ ? uint32_t(loops) : 0, mmp);
-    disk_leaving(slot, disk_hit ? 0 : ram);
+    const bool replaced = by_key && !disk_hit;
+    if (replaced) disk_replaced(slot);
+    disk_leaving(slot, disk_hit ? 0 : ram, false, replaced);
     if (disk_hit) {  // the slot's own state is not reused
       common = 0;
       slot.tokens.clear();
@@ -2633,6 +2786,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       for (auto& c : slot.ckpts) c.pos = -1;
     }
   }
+  slot.key = r.cache_key;
   ++slot.version;
   if (dory_) slot.loops = s.loops = loops;
 
@@ -2693,6 +2847,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     drop_slot(slot);
     kv_ok = fit_kv();
   }
+  note_kv(slot);  // (fit_kv reserves directly)
   if (!kv_ok && !reserve_kv_wait(slot, kv_min, cancelled, /*started=*/false)) {
     if (cancelled && cancelled()) {
       res.finish_reason = "cancelled";
@@ -2707,10 +2862,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     return res;
   }
   double disk_ms = 0;  // (the SSD read: its own log line, not the template's time)
+  bool from_disk = false;
   if (disk_hit) {
     const double t_disk = now_ms();
-    if (disk_restore(slot, disk_hit)) common = slot.tokens.size();  // it is the live state now
-    else model_->reset(s);                                         // (no tokens: the prefill starts at 0)
+    if (disk_restore(slot, disk_hit)) common = slot.tokens.size(), from_disk = true;  // it is the live state now
+    else model_->reset(s);                                                           // (no tokens: the prefill starts at 0)
     disk_ms = now_ms() - t_disk;
   }
   int start = 0;
@@ -2776,6 +2932,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   for (auto& c : slot.ckpts)
     if (c.pos > start) c.pos = -1;
   res.cached_tokens = start;
+  if (start > 0) {  // (view(): which cache the reused positions came from)
+    (from_disk ? ssd_hits_ : ram_hits_).fetch_add(1, std::memory_order_relaxed);
+    (from_disk ? ssd_hit_tokens_ : ram_hit_tokens_).fetch_add(uint64_t(start), std::memory_order_relaxed);
+  }
   LiveDecode* const live = r.live.get();  // progress for a display: relaxed stores, between cycles only
   if (live) live->prompt.store(n, std::memory_order_relaxed), live->cached.store(start, std::memory_order_relaxed),
       live->read.store(start, std::memory_order_relaxed), live->phase.store(1, std::memory_order_relaxed);
@@ -2808,6 +2968,13 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   sp.top_p = r.top_p;
   sp.top_k = r.top_k;
   sp.seed = r.seed ? r.seed : uint32_t(std::random_device{}());
+  // kapitsa#1286: a top_k the two-pass sampler cannot hold (<= 0: no truncation; above its 64) is sampled over the whole
+  // vocabulary (sampler.h), in plain steps: the speculative loops' verifies and acceptances keep 64 candidates per row.
+  // (Clover's own loops draw from the whole vocabulary already, its pick kernel applying no top-k: they are kept.)
+  const bool full_steps = full_vocab(sp) && !clover_own;
+  if (full_steps)
+    logi("chat: top_k %d at temperature %.2f: sampled over the whole vocabulary, plain steps (kapitsa#1286)", sp.top_k,
+         sp.temperature);
   // Structured output: the matcher's state. A reply held from its first token samples that token (in the prompt's last
   // chunk) under the grammar's first mask; with reasoning on the grammar starts after </think>.
   GrammarState gst;
@@ -2832,6 +2999,40 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       s.mask_event = nullptr;
     }
   } mask_off{s};
+  // Thinking budget (src/engine/think_control.h): a hard cap on the first reasoning block, forced through the same row
+  // masks as structured output (whose masks begin at </think>, so the two never mask the same row). Clover's own
+  // decoding modes (no drafter) apply their generation_config controls instead.
+  ThinkControl tc;
+  {
+    const int cap = think_cap_of(r.think_cap, r.thinking_budget);
+    // (thinking turned off: no reasoning to cap, and a control waiting for a <think> would keep the request out of
+    // batches for its whole reply. A template that opens the reasoning all the same, thinking off or not, still gets
+    // it capped: for a cap of 0, the close is then its first token.)
+    const ojson& kw = r.template_kwargs;
+    const bool think_off =
+        kw.contains("enable_thinking") && kw["enable_thinking"].is_boolean() && !kw["enable_thinking"].get<bool>();
+    if (cap >= 0 && think_close_ >= 0 && !clover_own && (!think_off || think)) {
+      std::vector<int> forced = r.think_close_text.empty() ? std::vector<int>() : tok_.encode(r.think_close_text);
+      forced.push_back(think_close_);  // (ThinkControl::start shortens it to fit the cap, think_close_for)
+      const bool on_call = r.think_end_on_tool_call >= 0 ? r.think_end_on_tool_call > 0 : !r.tools.empty();
+      tc.start(cap, std::move(forced), think_open_, think_close_, on_call ? tc_open_ : -1, think, &think_space_);
+      if (!s.mask) {  // (the grammar's width, TokenTable::words(): a later structured-output request reuses the buffer)
+        s.mask_words = (std::max(model_->vocab(), tok_.vocab_size()) + 31) / 32;
+        s.mask = g.alloc(size_t(kf::kMaxRows) * size_t(s.mask_words) * 4, "grammar_mask");
+      }
+      if (think && tc.near(1)) {  // a cap of 0: the prompt's last chunk samples the first token, </think> (or the text)
+        tc.fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), 0, 1, nullptr, 1);
+        s.mask_rows = 1;
+        s.mask_event = nullptr;
+      }
+      res.think_cap = cap;
+    } else if (r.think_cap == 0 && think_off) {  // (a cap of 0, from either field, turned thinking off: reported)
+      res.think_cap = 0;
+    } else if (cap > 0 && clover_own) {
+      logi("chat: the thinking budget (%d tokens) is not enforced in Clover's own decoding (its generation_config "
+           "controls apply)", cap);
+    }
+  }
   double t0 = now_ms();
   const int C = prefill_chunk_for(n - start);
   int p = start;
@@ -3054,14 +3255,29 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     }
     // the default case: a dense target at the weight floor whose drafter drafts a 16-row block (DFlash2). A dense
     // target whose drafter drafts 8 rows keeps the prefill path, whatever capacity the pass sized for itself.
+    // and a suffix the prefill path would read on the staged short-prefill GEMMs, not on the 64-row tensor tile
+    // (Qwen35::tile_pass: from NI_QMT_MIN rows, 17 on the matrix class, and only for a
+    // pack whose dense projections are all 4-bit group 64, the tile's format): the passes won
+    // against the staged GEMMs (above), and the tile wins against the passes. Mac mini M6 (12 cores), the 27B with a
+    // 16-row block and the tile from 17 rows, a cached turn's prefill as passes against the prefill path, two
+    // interleaved rounds: 25 rows 377 / 382 -> 223 / 224 ms, 32 rows 419 / 422 -> 227 / 228, 45 rows 431 / 434 ->
+    // 241 / 240, 56-58 rows 558-567 -> 249-257; 23 rows (never passes: the boundary) and 69-92 rows the same.
     const bool vpf_default =
-        q35_ && !q35_->config().moe && vpf_scale >= 3000000000LL && q35_->drafter_wide() && q35_->verify_wide_ok();
+        q35_ && !q35_->config().moe && vpf_scale >= 3000000000LL && q35_->drafter_wide() && q35_->verify_wide_ok() &&
+        !q35_->tile_pass(n - p);
     // a boundary inside the suffix makes the passes fold at it for the checkpoint; under vpf_split_min rows that
     // fold costs more than the passes save, so the plain path (which snapshots the checkpoint mid-chunk) keeps it
     const bool vpf_split = boundary > p && boundary < n && n - p < vpf_split_min;
-    const bool vpf = vpf_on && q35_ && dfl_ && !lili_ && !spec_ && (vpf_forced || vpf_default) &&
+    // (a full-vocabulary request's first token is sampled by the prefill's own step, sample_full: the verify chain's
+    // sampler holds kTopkMax candidates, kapitsa#1286)
+    const bool vpf = vpf_on && q35_ && dfl_ && !lili_ && !spec_ && verify_pass_ok(sp) && (vpf_forced || vpf_default) &&
                      p == start && p >= 1024 && T == n - p && n - p <= vpf_max && pbound <= p && !s.embeds &&
                      s.mask_rows == 0 && !vpf_split;
+    if (!vpf && q35_ && dfl_ && p >= 1024 && n - p <= vpf_max)  // (why a cached short suffix took the prefill path)
+      logd("prefill: %d suffix rows after %d cached, not as verify passes:%s%s%s%s%s%s%s%s", n - p, p, vpf_on ? "" : " NI_VPF=0",
+           full_steps ? " whole vocabulary" : "", vpf_forced || vpf_default ? "" : " not the default (MoE, size, drafter, tile)",
+           p == start ? "" : " not the cache's end", T == n - p ? "" : " more than one chunk", pbound <= p ? "" : " a boundary before",
+           s.embeds || s.mask_rows ? " images or a mask" : "", vpf_split ? " split (a boundary, under NI_VPF_SPLIT_MIN)" : "");
     Checkpoint* snap = nullptr;
     int snap_at = boundary;
     if (pbound > p && pbound < p + T) {
@@ -3117,6 +3333,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       T = 0;
       for (int c = 0; c < nc; ++c) T += Ts[c];  // the common tail below: p += T, the saves, the commit
     } else if (vpf) {
+      logd("prefill: %d suffix rows after %d cached as verify passes (NI_VPF)", n - p, p);
       int q = p;
       // the suffix's rows [q, upto) as verify passes: as many rows a pass as NI_VPF_ROWS gave the target's verify (32, 24
       // or 16), and 8 for what is left under 16
@@ -3264,6 +3481,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // structured output: </think> ends a speculative loop running the reasoning (g_in_spec), whose drafts and verify
   // know no grammar; the constrained loop below takes the reply from there (g_break)
   bool g_in_spec = false, g_break = false;
+  // thinking budget: a loop that cannot mask its rows (tc_rows: the most tokens it samples unmasked after a handled one)
+  // gives the reply to the constrained loop before a sample can reach the cap (tc_break); the plain loop's step in
+  // flight then has sampled a token not handled yet (tc_unhandled)
+  int tc_rows = 0;
+  bool tc_break = false, tc_unhandled = false;
   // Handles one generated token; returns false when generation must stop (finish is set), or when a speculative loop
   // gives the reply to the constrained loop (g_break).
   auto handle = [&](int t) -> bool {
@@ -3297,6 +3519,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       }
     }
     if (parser.in_think()) ++res.reasoning_tokens;
+    tc.push(t);
+    if (tc_rows > 0 && tc.near(tc_rows)) tc_break = true;
     ChatDelta d = parser.push(t);
     stop_filter.filter(d.content);
     if (!stop_filter.matched().empty()) {
@@ -3309,7 +3533,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     if (!d.reasoning.empty() || !d.content.empty() || !d.tool_calls.empty())
       if (!on_delta(d)) finish = "cancelled";
     if (finish.empty() && gen >= r.max_tokens) finish = "length";
-    return finish.empty() && !g_break;
+    return finish.empty() && !g_break && !tc_break;
   };
   // KV room for `want` positions between two cycles, with nothing of this request in flight: as reserve_kv, but
   // when other requests' caches hold the memory, park and wait for them to end (park() makes the request's state its
@@ -3352,7 +3576,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       tr_margin.push_back(a - b);
     }
   };
-  if (live) live->spec.store(lili_ ? 3 : dfl_ ? 2 : depth > 0 ? 1 : 0, std::memory_order_relaxed),
+  if (live) live->spec.store(full_steps ? 0 : lili_ ? 3 : dfl_ ? 2 : depth > 0 ? 1 : 0, std::memory_order_relaxed),
       live->phase.store(2, std::memory_order_relaxed);
   // batched decode: this request decodes (other requests' batch_wanted() counts it) until its loop ends
   struct Decoding {
@@ -3373,6 +3597,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     job.cycle_done = &cycle_fn;
     job.trace = trace_path ? &trace_fn : nullptr;
     if (gm) job.gm = gm.get(), job.gst = &gst, job.g_on = &g_on;
+    if (tc.on()) job.tc = &tc;
     const bool done = join_batch(job);
     P = job.P;
     req_cycles += job.cycles;
@@ -3387,8 +3612,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     return !(v && v[0] == '0');
   }();
   const bool flint_self = flint_self_ > 0 && n >= flint_self_min_;  // Flint drafts itself this request
-  const bool spec_loop = lili_ || dfl_ || dory_spec_ > 0 || nh_ngram_ > 0 || flint_ngram_ > 0 || flint_self || depth > 0;
-  const bool g_dfl = gm && dfl_ && grammar_spec;
+  const bool spec_loop =
+      !full_steps && (lili_ || dfl_ || dory_spec_ > 0 || nh_ngram_ > 0 || flint_ngram_ > 0 || flint_self || depth > 0);
+  const bool g_dfl = gm && dfl_ && grammar_spec && !full_steps;
   const bool g_direct = gm && !g_dfl && (g_on || !spec_loop);
   g_in_spec = gm && !g_direct && !g_on;
   double mask_ms = 0;  // the masks this request computed (host ms) and how many (the log line at its end)
@@ -3398,10 +3624,76 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     const int* t = tree ? dfl_->tree_desc() : nullptr;
     verify_masks(*gm, gst, s, P, rows, t ? t + kf::kPar : nullptr, t ? std::clamp(t[kf::kN], 1, rows) : rows);
   };
+  // ... and its thinking budget's, the same rows: those past the cap force the close
+  auto tc_masks = [&](int P, int rows, bool tree) {
+    const int* t = tree ? dfl_->tree_desc() : nullptr;
+    return tc.fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), P, rows, t ? t + kf::kPar : nullptr,
+                   t ? std::clamp(t[kf::kN], 1, rows) : rows);
+  };
+  // Thinking budget: DFlash2 cycles (KFlash trees and chains) and the constrained loop mask their rows near the cap.
+  // The other loops (LiLiCorr, Dory, n-gram, MTP, plain steps) hand over to the constrained loop in time: the rest of
+  // the reply is plain steps there, slower but exact.
+  const bool dfl_loop = !clover_own && !g_direct && !lili_ && dfl_ && !full_steps;
+  if (tc.on() && !g_direct && !dfl_loop) tc_rows = spec_loop ? kf::kMaxRows + 1 : 2;
+  // (a cap that close: the constrained loop from the first token, as the hand-over could come too late)
+  const bool tc_direct = tc_rows > 0 && tc.near(tc_rows);  // (near: from the first forced position, think_close_for)
+  if (tc_direct) tc_rows = 0;
+  // plain steps: each step samples the token after the one it feeds (no drafter)
+  auto plain_steps = [&] {
+    std::unique_ptr<Encoder> next;  // step feeding the newest sampled token
+    int pos = n;                    // position of the newest sampled token
+    auto encode_at = [&](int q) {
+      auto x = model_->grouped_passes() ? g.begin_grouped() : g.begin();
+      model_->encode_step(*x, s, q, sp, uint32_t(q), true);
+      x->commit();
+      return x;
+    };
+    // parked: the step in flight completes (it writes only the slot's state and its next token)
+    auto park = [&] {
+      if (next) next->wait();
+    };
+    if (r.max_tokens > 1) next = encode_at(pos);
+    while (true) {
+      bool go = handle(s.tokens()[pos]);  // available: produced by the previous command buffer
+      if (go && pos + 2 >= s.cap) {
+        // the KV cache grows between steps: the step in flight writes it, so it completes first
+        if (next) next->wait();
+        if (pos + 2 >= s.limit || !grow_kv(std::min(s.limit, pos + 3), park)) {
+          finish = "length";
+          res.context_full = true;
+          go = false;
+        }
+      }
+      if (!go) break;
+      if (contended()) {
+        park();
+        yield_turn(res);
+      }
+      kf_rows = kfw.plan(0);  // KFlash's budget with no proposals: the pending token's row alone, this step (so plain decoding is as before)
+      // the step feeding token `pos` is in flight; queue the one after it, then wait
+      auto cur = std::move(next);
+      next = encode_at(pos + 1);
+      cur->wait();
+      ++pos;
+      cycle_done(1);
+    }
+    // Drain: the step feeding the last token (if encoded) completes, so the live state covers
+    // tokens [0, pos] when it ran, else [0, pos).
+    fed_until = pos;
+    if (next) {
+      next->wait();
+      fed_until = pos + 1;
+      tc_unhandled = tc_break;  // (handed over: that step's sample, tokens[pos + 1], is the constrained loop's to handle)
+    }
+  };
   int clover_blocks = 0;  // Clover's block diffusion: blocks written (req_cycles: its denoising passes)
   if (clover_own && gm) {
     finish = "error";
     res.error = "structured output is not supported with Clover";
+  } else if (full_steps && !g_direct && !tc_direct) {
+    // not batched: other requests' batches do not wait for it (as the constrained loop's)
+    slot.decoding = false;
+    plain_steps();
   } else if (clover_own && clover_own->self_spec()) {
     // Clover, self-speculative (src/model/clover.h): tokens[P] is the pending token (the prompt's prefill sampled the
     // first); a cycle drafts the W - 1 after it with one denoising pass and verifies them with one causal pass, then
@@ -3514,7 +3806,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       if (contended()) yield_turn(res);
     }
     fed_until = P;  // (the last block, not committed, is not in the live state)
-  } else if (g_direct) {
+  } else if (g_direct || tc_direct) {
     // (the constrained loop below)
   } else if (lili_) {
     // LiLiCorr / DSpark: per cycle the drafter's context commit of the previous cycle's kept rows and the drafting pass
@@ -3588,7 +3880,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       // parks after this verify (no chained drafting half): another request waits for the GPU or the batch wants this
       // one; the next anchor is at most P + 8, whose cycle must fit without growing the KV cache. (KFlash trees: the
       // drafting pass builds the next cycle's tree from the host's accepted path, so they never chain.)
-      const bool join = batch_wanted(), turn = !join && contended();
+      // (Nemotron-H's batched passes take no masks, as for a reply under a grammar: a request whose reasoning is still
+      // capped decodes alone, handing over to plain steps near the cap, until its control ends; then it may join)
+      slot.decoding = !tc.armed();  // (not counted by batch_wanted() while it cannot join, or a batch waits for it)
+      const bool join = !tc.armed() && batch_wanted(), turn = !join && contended();
       if (chain && !kft && !join && !turn && P + 8 + 2 * B + 2 <= s.cap) {
         next = g.begin();
         lili_->encode_draft_chained(*next, s, d, P);
@@ -3711,6 +4006,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       while (go) {
         if (parked) {
           parked = false;
+          // a request that started while this one waited its turn may have narrowed the drafter (set_block,
+          // NI_KFLASH_NARROW; a multi-slot engine drafts 16 rows on the matrix class): back to this request's block,
+          // with nothing in flight
+          if (dfl_->narrow_ok()) dfl_->set_block(Bk);
           start_cycles();
         }
         if (!next_draft) {  // no room for another drafting pass
@@ -3720,8 +4019,13 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         }
         const auto draft = std::move(next_draft);  // this cycle's drafting half (the budget reads its GPU time)
         auto e2 = g.begin();
+        // thinking budget: a cycle whose rows can reach the cap verifies under its masks (the reasoning before it, and
+        // the reply after </think>, as before)
+        const bool tc_cycle = tc.near(mrows);
+        const bool cyc_masked = masked || tc_cycle;
+        if (tc_cycle && !mask_event_) mask_event_ = g.new_shared_event();
         uint64_t pending = 0;  // masked: the value the verify's sampler waits for
-        if (masked) {
+        if (cyc_masked) {
           s.mask_rows = mrows;
           s.mask_event = mask_event_;
           s.mask_value = pending = ++mask_value_;
@@ -3730,10 +4034,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         s.mask_rows = 0;
         s.mask_event = nullptr;
         e2->commit();
-        if (masked) {  // this cycle's masks, from its drafts, while the verify's layers run
+        if (cyc_masked) {  // this cycle's masks, from its drafts, while the verify's layers run
           draft->wait();
           const double tm = now_ms();
-          spec_masks(P, mrows, dfl_->tree());
+          if (masked) spec_masks(P, mrows, dfl_->tree());
+          else tc_masks(P, mrows, dfl_->tree());
           mask_ms += now_ms() - tm;
           mask_n += mrows;
           Gpu::signal_event_cpu(mask_event_, pending);
@@ -3748,7 +4053,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         // another request waits for the GPU, this one for memory (start_cycles waits for it), or it joins the batch:
         // no drafting half behind this verify, park after it
         const bool turn = contended();
-        const bool join = !kv_wait && batch_wanted();  // (a request waiting for memory would leave the batch at once)
+        // (a request waiting for memory would leave the batch at once; a capped one joins: the batch masks its rows
+        // near the cap, BatchJob::tc)
+        const bool join = !kv_wait && batch_wanted();
         const bool park = turn || kv_wait || join;
         const bool room = P + Bk + Bk + Bk + 2 < s.cap;  // the next anchor is at most P + Bk
         park_last = park && room;
@@ -3761,8 +4068,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         // KFlash: the budget reads the cycle's outcome and its GPU time, the drafting half's (done before the verify
         // started) and the verify's, as ni_run measures it. Not a masked cycle's: the grammar rejects drafts the drafter
         // was right to propose, which would teach the calibration (saved, shared) a lower acceptance than free replies
-        // see, and change their trees.
-        if (!masked) dfl_->observe(draft->gpu_ms() + e2->gpu_ms());
+        // see, and change their trees. Nor a thinking budget's (its forced tokens reject every other draft).
+        if (!cyc_masked) dfl_->observe(draft->gpu_ms() + e2->gpu_ms());
         const int a = dfl_->accepted();
         a_last = a;
         const int* tk = s.tokens();
@@ -4080,60 +4387,25 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     e3->commit_and_wait();
     fed_until = P;
   } else {
-    std::unique_ptr<Encoder> next;  // step feeding the newest sampled token
-    int pos = n;                    // position of the newest sampled token
-    auto encode_at = [&](int q) {
-      auto x = model_->grouped_passes() ? g.begin_grouped() : g.begin();
-      model_->encode_step(*x, s, q, sp, uint32_t(q), true);
-      x->commit();
-      return x;
-    };
-    // parked: the step in flight completes (it writes only the slot's state and its next token)
-    auto park = [&] {
-      if (next) next->wait();
-    };
-    if (r.max_tokens > 1) next = encode_at(pos);
-    while (true) {
-      bool go = handle(s.tokens()[pos]);  // available: produced by the previous command buffer
-      if (go && pos + 2 >= s.cap) {
-        // the KV cache grows between steps: the step in flight writes it, so it completes first
-        if (next) next->wait();
-        if (pos + 2 >= s.limit || !grow_kv(std::min(s.limit, pos + 3), park)) {
-          finish = "length";
-          res.context_full = true;
-          go = false;
-        }
-      }
-      if (!go) break;
-      if (contended()) {
-        park();
-        yield_turn(res);
-      }
-      kf_rows = kfw.plan(0);  // KFlash's budget with no proposals: the pending token's row alone, this step (so plain decoding is as before)
-      // the step feeding token `pos` is in flight; queue the one after it, then wait
-      auto cur = std::move(next);
-      next = encode_at(pos + 1);
-      cur->wait();
-      ++pos;
-      cycle_done(1);
-    }
-    // Drain: the step feeding the last token (if encoded) completes, so the live state covers
-    // tokens [0, pos] when it ran, else [0, pos).
-    fed_until = pos;
-    if (next) {
-      next->wait();
-      fed_until = pos + 1;
-    }
+    plain_steps();
   }
-  const bool switched = g_break;  // a speculative loop ended at </think>: tokens[fed_until] is it, handled
+  // a speculative loop ended at </think> (structured output) or before the thinking budget's cap: tokens[fed_until] is
+  // the newest token, handled (but for the plain loop's hand-over)
+  const bool switched = g_break || tc_break;
+  // (the hand-over is done: handle() must go on returning true in the constrained loop, which masks its own rows, so
+  // neither flag nor tc_rows may stop it again; tc_handed keeps it for the log)
+  const bool tc_handed = tc_break;
   g_break = g_in_spec = false;
-  if (gm && finish.empty() && (g_direct || switched)) {
+  tc_break = false;
+  tc_rows = 0;
+  if (finish.empty() && ((gm && (g_direct || switched)) || tc_direct || tc_handed)) {
     // ---- structured output: plain steps, each token sampled under the grammar's mask ----
     // A step's layers run while the host computes the mask of its sample (the grammar's state after the token the step
     // feeds) and signals the event its sampler waits on (Seq::mask_event); the next step is queued before the host reads
     // this one's token (its embedding reads it on the GPU), as in the plain loop above, so the GPU waits for the host
     // only when a mask takes longer than a step's layers. Before </think> (reasoning on, no speculative loop) the masks
-    // allow every token. Not batched: other requests' batches do not wait for it (slot.decoding off).
+    // allow every token, but the thinking budget's past its cap. Not batched: other requests' batches do not wait for it
+    // (slot.decoding off).
     slot.decoding = false;
     if (!mask_event_) mask_event_ = g.new_shared_event();
     s.mask_rows = 1;
@@ -4148,8 +4420,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       pending = 0;
     };
     auto encode_at = [&](int q) {  // the step feeding tokens[q]; it samples tokens[q + 1] once its mask is signalled
-      s.mask_value = ++mask_value_;
-      pending = s.mask_value;
+      if (s.mask_rows > 0) {  // (unmasked steps, once a thinking budget's control ended, wait for nothing)
+        s.mask_value = ++mask_value_;
+        pending = s.mask_value;
+      }
       auto x = model_->grouped_passes() ? g.begin_grouped() : g.begin();
       model_->encode_step(*x, s, q, sp, uint32_t(q), true);
       x->commit();
@@ -4162,7 +4436,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       return need < s.limit && grow_kv(std::min(s.limit, need + 1), [] {}) && need < s.cap;
     };
     std::unique_ptr<Encoder> next;  // the step feeding tokens[pos]
-    bool go = switched || handle(s.tokens()[pos]);
+    bool go = (switched && !tc_unhandled) || handle(s.tokens()[pos]);
     while (go) {
       if (!next) {
         if (!room(pos + 1)) {
@@ -4172,12 +4446,15 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         }
         next = encode_at(pos);
       }
-      const double tm = now_ms();
-      if (g_on) gm->fill_mask(gst, mw);
-      else memset(mw, 0xff, mbytes);
-      mask_ms += now_ms() - tm;
-      ++mask_n;
-      signal();
+      if (pending) {  // the step in flight waits for its mask
+        const double tm = now_ms();
+        if (g_on) gm->fill_mask(gst, mw);
+        else if (tc.armed()) tc.fill(mw, size_t(s.mask_words), s.tokens(), pos, 1, nullptr, 1);
+        else memset(mw, 0xff, mbytes);
+        mask_ms += now_ms() - tm;
+        ++mask_n;
+        signal();
+      }
       if (pos + 2 >= s.cap) {  // the cache grows between steps: the step in flight writes it, so it completes first
         next->wait();
         if (!room(pos + 2)) {
@@ -4190,6 +4467,12 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         next->wait();
         yield_turn(res);
       }
+      // A thinking budget's hand-over with no grammar: once the control ended (the close handled), the steps need no
+      // masks, so they stop waiting for the host and run as the plain loop's. (The speculative loops are not resumed:
+      // their drafters' state, MTP's hidden rows, DFlash2's target features, LiLiCorr's context, was not kept through
+      // the plain steps, as for structured output's one-way hand-over at </think>.) A request with a grammar keeps its
+      // masks: every token before </think>, the grammar's after it.
+      if (!gm && !tc.armed()) s.mask_rows = 0;
       auto cur = std::move(next);
       next = encode_at(pos + 1);
       cur->wait();
@@ -4210,6 +4493,15 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     logi("chat: structured output (%s), %s: %ld masks (batched passes' not counted), %.1f us each",
          grammar_summary(*r.grammar).c_str(), g_dfl ? "DFlash2 cycles under masks" : "plain steps", mask_n,
          1000 * mask_ms / double(mask_n));
+  if (tc.on()) {
+    res.think_forced = tc.forced();
+    res.think_tokens = tc.count();
+    logi("chat: thinking budget %d: %d reasoning tokens%s%s", tc.cap(), tc.count(), tc.forced() ? ", close forced" : "",
+         tc_direct || tc_handed ? " (plain steps from the hand-over)" : "");
+    if (tc.unmasked() > 0)  // (the mask is sized from the vocabulary, so this is a bug if it happens)
+      logi("warning: thinking budget: %d forced rows could not be masked (token id past the mask width)",
+           tc.unmasked());
+  }
   slot.decoding = false;  // (a batch forming no longer waits for this request)
   if (live) live->phase.store(3, std::memory_order_relaxed);
   res.slot = int(&slot - slots_.data());
@@ -4315,12 +4607,14 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
          "(+%.0f ms decode/resize before the request)", mm.spans.size(),
          [&] { int t = 0; for (auto& sp : mm.spans) t += sp.n; return t; }(), img_encoded, img_ms, img_reused,
          int(mm.spans.size()) - img_encoded - img_reused, img_prep_ms);
+  char th[64] = "";
+  if (!res.thinking_level.empty()) snprintf(th, sizeof th, ", thinking: %s", res.thinking_level.c_str());
   char lp[32] = "";
   if (loops > 0) snprintf(lp, sizeof lp, ", %d loop%s", loops, loops > 1 ? "s" : "");
   logi("chat: prompt %d (cached %d) in %.0f ms (+%.1f ms template/tokenize; last chunk: encoded by %.1f ms, GPU start "
-       "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s%s%s%s", n, start, res.prefill_ms,
+       "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s%s%s%s%s", n, start, res.prefill_ms,
        tok_ms, t_enc, lat_start, gpu_last, lat_wake, gen, res.decode_ms,
-       gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0, finish.c_str(), cyc, conc, lp);
+       gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0, finish.c_str(), th, cyc, conc, lp);
   if (!store_prompt.empty()) logi("expert store: %s; %s", store_prompt.c_str(), store_note(model_.get(), "decode", gen).c_str());
   return res;
 }
@@ -4343,6 +4637,30 @@ int Engine::request_loops(const ChatRequest& r) const {
   }
   if (l <= 0) l = dory_->default_loops();
   return std::clamp(l, 1, Dory::kMaxLoops);
+}
+
+std::string Engine::thinking_level(const ChatRequest& r, bool think, bool reasoning_effort_template,
+                                   bool has_thinking) {
+  if (!has_thinking) return "";
+  if (r.effort == "none" || r.effort == "minimal") return r.effort;
+  if (!think) return "off";
+  if (r.thinking_budget == 0) return "off";
+  if (r.thinking_budget > 0) return "budget " + std::to_string(r.thinking_budget);
+  if (reasoning_effort_template) {
+    std::string eff = r.effort;
+    if (eff.empty() && r.template_kwargs.contains("reasoning_effort") &&
+        r.template_kwargs["reasoning_effort"].is_string()) {
+      eff = r.template_kwargs["reasoning_effort"];
+    }
+    if (eff == "low" || eff == "medium") return eff;
+    if (eff == "high" || eff == "xhigh" || eff == "max" || eff.empty()) return "xhigh";
+    return "on";
+  }
+  return "on";
+}
+
+std::string Engine::request_thinking_level(const ChatRequest& r, bool think) const {
+  return thinking_level(r, think, reasoning_effort_template_, think_open_ >= 0 || text_tags_.think);
 }
 
 void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const std::function<PrefillStop()>& cancelled) {
@@ -4426,6 +4744,14 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
     logd("history: slot %d was used by another request; prefilling into slot %d (%zu tokens there)", res.slot, pick, hp->tokens.size());
   }
   Slot& slot = *hp;
+  struct Note {  // (every return: the slot's tokens and capacity as this left them, for view(); under the turn)
+    Engine& en;
+    const Slot& sl;
+    ~Note() {
+      en.slot_pos_[&sl - en.slots_.data()].store(int(sl.tokens.size()), std::memory_order_relaxed);
+      en.note_kv(sl);
+    }
+  } note{*this, slot};
   const uint64_t want_gen = slot.gen;
   uint64_t seen_req = requests_.load();  // (a request that arrives after this ends the work at a chunk boundary; read again once the SSD read, which gives the turn up, is over)
   const double t0 = now_ms();
@@ -4503,6 +4829,8 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
       Engine& en;
       Slot& sl;
       ~Hold() {
+        en.slot_pos_[&sl - en.slots_.data()].store(int(sl.tokens.size()), std::memory_order_relaxed);
+        en.note_kv(sl);
         sl.busy = false;
         --en.active_;
         en.turn_.notify();
@@ -4537,6 +4865,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
       ++slot.gen;
       slot.turns = std::max(slot.turns, 2);
       slot.last_used = ++clock_;  // (the next new conversation must not take the slot just filled first)
+      slot.key = r.cache_key;
     }
     seen_req = requests_.load();
     // (Hold ends here: the rest runs under the turn as before, with no wait for the SSD)
@@ -4725,6 +5054,14 @@ DraftResult Engine::draft(const std::string& key, const std::string& after, cons
   Seq& s = *slot.seq;
   // another request on the slot since the reply (dropped for memory, another conversation, the next turn)
   if (slot.gen != a->slot_gen || slot.tokens.empty() || s.cap == 0) return done("no_conversation");
+  struct Note {  // (every return from here: the slot's tokens and capacity as the draft left them, for view(); under the turn)
+    Engine& en;
+    const Slot& sl;
+    ~Note() {
+      en.slot_pos_[&sl - en.slots_.data()].store(int(sl.tokens.size()), std::memory_order_relaxed);
+      en.note_kv(sl);
+    }
+  } note{*this, slot};
   if (end + 64 >= s.limit) return done("no_room");
   // The live state when the draft extends it, else the newest turn checkpoint inside the common prefix (the user
   // turn's for an edited draft, the reply's before the history prefill ran; not the prefix one: no drafter context)
@@ -4746,7 +5083,9 @@ DraftResult Engine::draft(const std::string& key, const std::string& after, cons
   }
   for (const vision::ImageSpan& sp : mm.spans)  // an image to encode: left to the request
     if (sp.pos + sp.n > start) return done("unsupported");
-  if (!model_->reserve(s, end + 64)) return done("no_room");  // (the slot's own KV cache; no other slot's is dropped)
+  const bool kv_ok = model_->reserve(s, end + 64);
+  note_kv(slot);
+  if (!kv_ok) return done("no_room");  // (the slot's own KV cache; no other slot's is dropped)
   // The user turn's checkpoint: the conversation as the history prefill leaves it (all but its last token), where a
   // request without drafts starts; a draft that restores it computes the rows of one draft of its text, in its passes
   const int turn_at = user_at - 1;

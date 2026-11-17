@@ -6,6 +6,7 @@
 #include "engine/grammar.h"
 #include "engine/prefix_cache.h"
 #include "engine/reasoning_memory.h"
+#include "engine/think_control.h"
 #include "hub/hub.h"
 #include "model/clover.h"
 #include "model/dflash2.h"
@@ -311,6 +312,40 @@ struct AnsweredReply {
 std::shared_ptr<const AnsweredReply> draft_conversation(const std::deque<std::shared_ptr<const AnsweredReply>>& answered,
                                                         const std::string& key, const std::string& after);
 
+// A slot a new conversation (a prompt no slot can reuse 64 tokens of) may take, as Engine::pick_slot sees it.
+struct NewConversationSlot {
+  bool usable = true;    // not busy, and the prompt fits it
+  int rank = 0;          // 0: empty, 1: a one-off (a title, a summary), 2: a continued conversation
+  std::string key;       // the prompt_cache_key its last request sent ("" if none)
+  bool prefix = false;   // it holds a prefix checkpoint the new prompt shares (the system prompt and tools)
+  uint64_t last_used = 0;
+};
+// The slot a new conversation sent with prompt_cache_key `key` takes (-1: none; CPU only: tools/api_test checks it):
+// the lowest rank; within it the slot whose conversation has that key (the request continues no slot, so the
+// conversation the key named is over: compacted, or started again on a changed system prompt), then one with the
+// shared prefix, then the least recently used. A key never moves a conversation ahead of a slot of a lower rank, so no
+// more is evicted than without it, and "" matches no slot. by_key: set when the key chose the slot (it holds the key
+// and another slot of its rank does not), so its conversation, and the SSD's entries of that key, are taken as over;
+// when every slot of the rank holds the key (a client that sends one key for everything), it tells nothing.
+int pick_new_conversation_slot(const std::vector<NewConversationSlot>& v, const std::string& key,
+                               bool* by_key = nullptr);
+
+// A slot's KV cache as the memory rule sees it (Engine::reserve_kv drops idle slots' caches, least recently used
+// first, until a prompt fits), for evicted_prefix_slot.
+struct KvCacheSlot {
+  bool idle = true;      // not busy: its cache may be dropped for another slot's prompt
+  int cap = 0;           // the KV rows its cache holds
+  int prefix = 0;        // the row of its prefix checkpoint the new prompt shares (0: none)
+  uint64_t last_used = 0;
+};
+// A new conversation was given slot `pick`; its prompt needs `need` KV rows and the budget has `free` rows left beside
+// the caches held now. When the prompt does not fit without dropping other slots' caches and one of the slots that
+// would be dropped holds a prefix checkpoint the prompt shares, in a cache that holds the prompt: that slot (the
+// deepest checkpoint), else -1. Its conversation is lost to the memory rule either way, and with its cache the shared
+// system prompt, which the new conversation would then read again from row 0; taking the slot itself restores the
+// checkpoint instead. -1 too when the pick shares a prefix checkpoint itself. CPU only: tools/api_test checks it.
+int evicted_prefix_slot(const std::vector<KvCacheSlot>& v, int pick, long free, int need);
+
 // What one read ahead of a user's draft did (Engine::draft, POST /v1/draft; docs/usage.md has the statuses).
 struct DraftResult {
   std::string status;  // prefilled unchanged interrupted busy no_conversation unsupported no_room
@@ -355,6 +390,31 @@ class Engine {
   const std::string& model_id() const { return opts_.model_id; }
   int context_length() const { return opts_.context; }
   int slots() const { return splash_ ? splash_slots_ : int(slots_.size()); }  // requests that run at once
+  // What `kapitsa serve`'s status and engine view show (docs/control-socket.md, "Status"), from any thread without
+  // the turn: the memory budget and what the GPU holds; of it, what the engine held before its slots (the model, its
+  // drafter and their buffers) and what it took since (the slots' KV caches as they grow); each slot's positions as
+  // its last request left them; whether it decodes with drafts. Native engines only (Splash: nothing to read).
+  struct View {
+    size_t budget = 0, allocated = 0, weights = 0, kv = 0;
+    std::vector<int> slot_tokens;
+    bool drafts = false;
+    // The prefix caches. ram: the conversations the slots keep for follow-ups (their KV rows and recurrent-state
+    // checkpoints, in the GPU memory counted above): `entries` slots that hold one, its `bytes` (KV capacity of those
+    // slots plus their checkpoints' buffers), and the requests since the load that continued from a slot's state or
+    // a checkpoint (`hits`, `hit_tokens` positions they did not read again). ssd: --disk-cache's store, off (null
+    // `ssd`) when the option is 0 or the model has none; its counters `hits`: requests that resumed from a stored
+    // state.
+    struct Ram {
+      size_t entries = 0;
+      uint64_t bytes = 0, hits = 0, hit_tokens = 0;
+    } ram;
+    struct Ssd {
+      bool on = false;
+      size_t entries = 0;
+      uint64_t bytes = 0, limit = 0, read_bytes = 0, written_bytes = 0, hits = 0, hit_tokens = 0;
+    } ssd;
+  };
+  View view() const;
   // Splash mode (EngineOptions::splash_model): generation runs in the Splash child; chat() refuses (it is the native
   // path), and the caller picks chat_splash(), which has chat()'s signature and results.
   bool splash_mode() const { return splash_ != nullptr; }
@@ -462,6 +522,7 @@ class Engine {
     int turns = 0;
     uint64_t done_at = 0;             // requests_ when its last request ended: one that arrived by then was sent beside it
     int loops = 0;                    // looped models: the loop count its cached state (KV) was computed with
+    std::string key;                  // its last request's prompt_cache_key ("" if none; pick_slot)
     bool busy = false;                // a request runs on it (its state and KV cache are that request's)
     uint64_t arrival = 0;             // that request's number (requests_ when it arrived)
     // that request waits for memory other requests' KV caches hold: before its prefill (nothing of it on the GPU
@@ -479,8 +540,11 @@ class Engine {
     bool live_ok = false;
   };
   // A free slot for a request (nullptr: every slot is busy). `arrival`: the request's number (requests_ when it
-  // arrived); mm: the prompt's images (null for text), when `prompt` holds its prefix-reuse keys
-  Slot* pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm = nullptr, int loops = 0);
+  // arrived); mm: the prompt's images (null for text), when `prompt` holds its prefix-reuse keys; key: its
+  // prompt_cache_key ("" if none); by_key: set when a new conversation took the slot because it held that key
+  // (pick_new_conversation_slot)
+  Slot* pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm = nullptr, int loops = 0,
+                  const std::string& key = "", bool* by_key = nullptr);
   // Rows of `keys` (a prompt's prefix-reuse keys; mm: its images, null for text) that slot's tokens share as a
   // reusable prefix: the common prefix, cut before any image that is not the same image in both
   static size_t common_rows(const Slot& slot, const std::vector<int>& keys, const vision::Prompt* mm);
@@ -525,8 +589,12 @@ class Engine {
   // A request is about to replace the slot's state from row `start` (another conversation, or memory for another):
   // what it would lose and the SSD lacks is copied now and written in the background. wait_write: the caller replaces
   // the slot next and must know whether it landed (a history prefill taking it): the copy is written before returning,
-  // with the GPU turn given up, and the slot is marked saved only if it did
-  void disk_leaving(Slot& slot, int start, bool wait_write = false);
+  // with the GPU turn given up, and the slot is marked saved only if it did. replaced: a new conversation under the
+  // slot's prompt_cache_key replaces it (disk_replaced): its entry is written as one that goes first
+  void disk_leaving(Slot& slot, int start, bool wait_write = false, bool replaced = false);
+  // A new conversation took slot for the prompt_cache_key it holds (pick_slot's by_key) and resumes nothing from the
+  // SSD: the SSD's entries of that key go first when room is needed (pcache::Store::demote)
+  void disk_replaced(const Slot& slot);
   // After disk_leaving(slot, 0): false when the slot holds a conversation worth saving that the SSD does not have
   bool disk_safe_to_replace(const Slot& slot);
   // The deepest stored state matching keys[0, pos), pos < n, deeper than `ram` (null hit: none); tag: what else the
@@ -575,7 +643,12 @@ class Engine {
     const GrammarMatcher* gm = nullptr;
     GrammarState* gst = nullptr;
     const bool* g_on = nullptr;
-    bool masked() const { return gm && *g_on; }
+    // thinking budget: the request's control (its chat()'s, advanced by its handle()); near the cap its rows sample
+    // under the masks it fills (null: no budget). kNear: a member's rows in one cycle (at most 8) and the plain passes
+    // queued before the host reads the tokens of the pass before them.
+    const ThinkControl* tc = nullptr;
+    static constexpr int kNear = 9;
+    bool masked() const { return (gm && *g_on) || (tc && tc->near(kNear)); }
   };
   // Structured output: a verify's masks, Seq::mask rows 0 .. rows - 1, from the grammar's state after the anchor
   // tokens[P]: row r's is the state after row r's path (parent[r]: a tree's, null: a chain's, r - 1; rows from `live` on
@@ -583,6 +656,9 @@ class Engine {
   // sample is not its token): any mask.
   static void verify_masks(const GrammarMatcher& gm, const GrammarState& at, Seq& s, int P, int rows, const int* parent,
                            int live);
+  // A batch member's masks for rows P .. P + rows - 1 of a chain: its grammar's while the grammar applies, else its
+  // thinking budget's (the two never mask the same row: the grammar starts after </think>); every token otherwise
+  static void member_masks(const BatchJob& j, int P, int rows);
   // rows per member in a batch of n members (sum <= 8): 1 = plain rows, 1 + k = the anchor and k drafted tokens; 0:
   // n requests take turns instead (one pass over their rows does not pay, or the drafter is not one batch_rows batches by default);
   // kBatchBudget: KFlash's batch budget (KfBatch, DFlash2) chooses each member's rows every cycle from the members'
@@ -665,7 +741,10 @@ class Engine {
   std::atomic<uint64_t> requests_{0};  // requests started (prefill_history waits for an idle server)
   ReasoningMemory reasoning_;  // remember_reasoning / restore_reasoning
   bool preserve_thinking_default_ = false;  // the template has a preserve_thinking switch: on unless the request says
+  bool reasoning_effort_template_ = false;  // chat_template has reasoning_effort parameter (e.g. Qwen3.8 default xhigh)
   int think_open_ = -1, think_close_ = -1, tc_open_ = -1, tc_close_ = -1;
+  // per token id, 1 when its text is whitespace only: a thinking budget waits through these for a generated <think>
+  std::vector<uint8_t> think_space_;
   TextTags text_tags_;        // the tags written as text (no such tokens; Nemotron Nano 9B v2)
   bool think_flags_ = false;  // the template switches thinking by "/think" / "/no_think" in a message (Nano 9B v2)
   bool think_ws_ = true;      // the whitespace before </think> stays in the reasoning (Nemotron-H, Dory)
@@ -690,7 +769,19 @@ class Engine {
   bool prefix_copy_ = true;   // a slot without the prefix checkpoint copies another's (NI_PREFIX_COPY=0: reads it)
   bool prefix_ckpt_ = false;  // slots keep a prefix checkpoint (TurnCheckpoint::prefix)
   size_t fixed_bytes_ = 0;  // allocated at start (model, buffers, slots' state): context_fit_'s base
+  size_t weights_bytes_ = 0;  // allocated before the slots (model, drafter, buffers): view()
+  size_t ckpt_bytes_ = 0;     // one slot's recurrent-state checkpoints' buffers: view()
+  // requests that continued from the slot's own state or a checkpoint / resumed from a stored SSD state, and the
+  // positions they did not read again: view()
+  std::atomic<uint64_t> ram_hits_{0}, ram_hit_tokens_{0}, ssd_hits_{0}, ssd_hit_tokens_{0};
+  void disk_view(View& v) const;  // engine_disk.cpp: View::ssd
+  std::unique_ptr<std::atomic<int>[]> slot_pos_;  // each slot's tokens.size() as its last request left it: view()
+  std::unique_ptr<std::atomic<int>[]> slot_cap_;  // each slot's KV capacity (Seq::cap) as its last reserve or drop left it
+  // Records `s`'s Seq::cap for view(), from the thread that just changed it
+  void note_kv(const Slot& s) { slot_cap_[&s - slots_.data()].store(s.seq->cap, std::memory_order_relaxed); }
   long spec_cycles_ = 0, spec_accepted_ = 0;
+  // Written only in the constructor (and init_splash, which it calls): request_defaults() copies it from any thread, and
+  // sdk/c/kapitsa.h promises concurrent kapitsa_request_create on that basis. Keep it that way, or add a lock.
   ChatRequest defaults_;
   // Structured output: the vocabulary as grammars read it (built by the first request with a grammar, before its GPU
   // turn), and the event a pass's sampler waits on until the host has written the pass's masks (one value per pass,
@@ -705,6 +796,10 @@ class Engine {
   // Looped models: the loop count a request runs (its "loops", else its effort or thinking budget mapped, else the
   // server's default); 0 for other models
   int request_loops(const ChatRequest& r) const;
+  // Resolved thinking level / effort ("low", "medium", "high", "xhigh", "on", "off", "budget N")
+  static std::string thinking_level(const ChatRequest& r, bool think, bool reasoning_effort_template = false,
+                                    bool has_thinking = true);
+  std::string request_thinking_level(const ChatRequest& r, bool think) const;
   // The SSD store's per-slot refused-version bookkeeping, built with the slot count exactly as disk_start builds it:
   // refuse() must be read back by refused(), and a slot outside the store must read 0. A store is not built without a
   // model, so its wiring is checked here (api_test, no model loaded) rather than through the helpers alone (#467).

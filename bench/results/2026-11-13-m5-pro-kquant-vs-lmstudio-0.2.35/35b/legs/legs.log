@@ -1,0 +1,8 @@
+05:23:41 bin=/Users/alisheramantay/Documents/nace/k495/kapitsa-0.2.35/kapitsa sha=19737e9cd311 kapitsa 0.2.35 (30b18f9) order=[A B B A] macos=26.5.2
+05:23:41 arm A = /Users/alisheramantay/Documents/nace/k495/abm5/arms/lms-35b
+05:23:41 arm B = /Users/alisheramantay/Documents/nace/k495/abm5/arms/kq-35b
+05:24:37 1-A rc=0 load 3.57->3.60 ok flags=[]
+05:25:27 2-B rc=0 load 3.60->2.91 ok flags=[]
+05:26:18 3-B rc=0 load 2.91->2.80 ok flags=[]
+05:27:08 4-A rc=0 load 2.80->4.34 ok flags=[]
+05:27:08 LEGSDONE

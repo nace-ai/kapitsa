@@ -1,0 +1,89 @@
+{
+  "record_type": "redacted derived evidence; not original execution logs",
+  "baseline_source": "90078c7fcc723351fd7dfc88d0422c18679909d6",
+  "candidate_source_sha256": "e3f0511c94dba0cbca17fcd10a790745b20dc4d3badb6eb312f9072cb6779948",
+  "baseline_grammar_sha256": "567f1efb3d04a0ac0dd3253351ed487241304af541b17fcf34a546f06543ef44",
+  "measurement": "CPU compile plus initial matcher/advance of a 999-byte schema: 9 levels, 4 identical references at each level, accepting string x",
+  "timings_ms_ABAB": {
+    "M5_Pro": [
+      11.523625,
+      0.101458,
+      11.843458,
+      0.034291
+    ],
+    "M3_Ultra": [
+      67.722708,
+      0.487292,
+      68.071375,
+      0.164667
+    ]
+  },
+  "setups": [
+    {
+      "chip": "M5 Pro",
+      "gpu_cores": 20,
+      "memory_GiB": 48,
+      "macOS": "26.6.2",
+      "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+    },
+    {
+      "chip": "M3 Ultra",
+      "gpu_cores": 60,
+      "memory_GiB": 96,
+      "macOS": "26.4.1",
+      "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+    }
+  ],
+  "flags": "C++20 -O3 arm64, deployment target macOS 14.0",
+  "complete_mask_comparisons": [
+    {
+      "chip": "M5 Pro",
+      "model_tokenizer": "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB",
+      "tokenizer_sha256": "d0432ad8b1c2984a2e2dca82e1933e3fd5628df6e95c51fba4c3ee9950dce299",
+      "rows": 216,
+      "bytes_per_arm": 3540672,
+      "complete_bytes_compared_literally": true,
+      "equal": true
+    },
+    {
+      "chip": "M5 Pro",
+      "model_tokenizer": "Qwen tokenizer (identity is the recorded SHA256)",
+      "tokenizer_sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+      "rows": 216,
+      "bytes_per_arm": 6700320,
+      "complete_bytes_compared_literally": true,
+      "equal": true
+    },
+    {
+      "chip": "M3 Ultra",
+      "model_tokenizer": "Qwen3.8-Flash-Next Sushi",
+      "tokenizer_sha256": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3",
+      "rows": 216,
+      "bytes_per_arm": 6700320,
+      "complete_bytes_compared_literally": true,
+      "equal": true
+    }
+  ],
+  "limitations": [
+    "CPU synthetic repeated-reference microcase, not inference speed",
+    "Timing variability retained; no stable overall latency claim",
+    "No GPU logits or full model generation run for this change",
+    "M3 driver linked the existing 903cdfce native archive; grammar.cpp/.h and tokenizer.cpp/.h were checked byte-identical to 90078c7f before building the candidate with its replacement grammar.cpp"
+  ],
+  "m3_binary_sha256": {
+    "grammar-probe-A": "e2da80acea4492a0762548cc690a270d3a6e49262c6c2447c95ec991cc00acf6",
+    "grammar-probe-B": "874670f8232c2e2fb5d61800755f6c1819749c5e27566614070340b705ae0485",
+    "grammar-masks-A": "518dd24eeb9ea26d8e2d1f3846e1f409304a4ace26882cfdc1984580a4f7ec26",
+    "grammar-masks-B": "303ccc30b8e41952474b455bdcae9faa46be2cf745a43013d068e313eb973509"
+  },
+  "harness_sha256": {
+    "probe.cpp": "c63f3b4a51b00a8c94ce6c79e6a3c089d4e214a19c16d31dcf8d10c4ee6aca42",
+    "mask_compare.cpp": "1acd140432aebd3edc81bca2c918c092327b4e188bbcb33e50617d77783d3293"
+  },
+  "m5_binary_sha256": {
+    "baseline-probe": "798b29db9477cea87d9d53cb056bcdac71d1daead7fb6de5a2bfd1abacc0cee9",
+    "candidate-probe": "e8cd58ad062b371fb99ee5e2071ae8264a4a7179641573b0f777fa7e50987bfa",
+    "baseline-masks": "8cf06c2dee1fb1442f5a38dc1da20ca6fcb53092da11308e1531e2a197855bb2",
+    "candidate-masks": "77ded2d85f03f647825356808182341b56df5907417f8b6b76547f6c9e49f65e"
+  }
+}

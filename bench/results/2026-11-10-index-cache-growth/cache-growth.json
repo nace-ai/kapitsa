@@ -1,0 +1,283 @@
+{
+  "evidence_kind": "Redacted derived evidence, not original execution logs",
+  "production_sources": {
+    "A": "903cdfcebafb3d138d50c9c83e7787912ee26b81",
+    "B": "cbbf2dcf614761d834e1e4129e6a621ace3a3d6e"
+  },
+  "hardware": {
+    "M3": {
+      "chip": "Apple M3 Ultra",
+      "gpu_cores": 60,
+      "physical_memory_gib": 96,
+      "macos": "26.4.1",
+      "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+    },
+    "M5": {
+      "chip": "Apple M5 Pro",
+      "gpu_cores": 20,
+      "physical_memory_gib": 48,
+      "macos": "26.6.2",
+      "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+    }
+  },
+  "method": "Actual model cache growth with distinct deterministic byte patterns; every retained byte compared with its input pattern",
+  "order_per_setup": "ABAB",
+  "runs": [
+    {
+      "setup": "M5 synthetic",
+      "arm": "A",
+      "ordinal": 0,
+      "initial_capacity": 262144,
+      "binary_sha256": "f1ae02df440d753e95ca3f1e1da52ca07ad65b16114e2488f5bec6658e423693",
+      "buffers": 8,
+      "retained_bytes_compared": 402655232,
+      "mismatches": 0,
+      "growth_ms": 117.44,
+      "final_capacity": 327680
+    },
+    {
+      "setup": "M3 synthetic",
+      "arm": "A",
+      "ordinal": 0,
+      "initial_capacity": 262144,
+      "binary_sha256": "e438a54837ae2f3b0527b5742d34d44929e0ce0aefb1e1c711812256d087c824",
+      "buffers": 8,
+      "retained_bytes_compared": 402655232,
+      "mismatches": 0,
+      "growth_ms": 363.576,
+      "final_capacity": 327680
+    },
+    {
+      "setup": "M3 complete model",
+      "arm": "A",
+      "ordinal": 0,
+      "initial_capacity": 65536,
+      "binary_sha256": "e438a54837ae2f3b0527b5742d34d44929e0ce0aefb1e1c711812256d087c824",
+      "buffers": 26,
+      "retained_bytes_compared": 327162368,
+      "mismatches": 0,
+      "growth_ms": 4586.472,
+      "final_capacity": 81920
+    },
+    {
+      "setup": "M5 complete model",
+      "arm": "A",
+      "ordinal": 0,
+      "initial_capacity": 65536,
+      "binary_sha256": "5ad280d437c3a8f4f887ba19145bf160c29de91b441836d161025515f1c0eee0",
+      "buffers": 26,
+      "retained_bytes_compared": 327162368,
+      "mismatches": 0,
+      "growth_ms": 1826.589,
+      "final_capacity": 81920
+    },
+    {
+      "setup": "M5 synthetic",
+      "arm": "B",
+      "ordinal": 1,
+      "initial_capacity": 262144,
+      "binary_sha256": "f0ec00bde683e8920d7c858524dba6558f1d4f809e8834c94b9745888212e26b",
+      "buffers": 8,
+      "retained_bytes_compared": 402655232,
+      "mismatches": 0,
+      "growth_ms": 108.121,
+      "final_capacity": 327680
+    },
+    {
+      "setup": "M3 synthetic",
+      "arm": "B",
+      "ordinal": 1,
+      "initial_capacity": 262144,
+      "binary_sha256": "64611df0398b43ad44f7c61d180a920bf68a69b876d5ecd40f0ded0859dc1a38",
+      "buffers": 8,
+      "retained_bytes_compared": 402655232,
+      "mismatches": 0,
+      "growth_ms": 361.724,
+      "final_capacity": 327680
+    },
+    {
+      "setup": "M3 complete model",
+      "arm": "B",
+      "ordinal": 1,
+      "initial_capacity": 65536,
+      "binary_sha256": "64611df0398b43ad44f7c61d180a920bf68a69b876d5ecd40f0ded0859dc1a38",
+      "buffers": 26,
+      "retained_bytes_compared": 327162368,
+      "mismatches": 0,
+      "growth_ms": 522.706,
+      "final_capacity": 81920
+    },
+    {
+      "setup": "M5 complete model",
+      "arm": "B",
+      "ordinal": 1,
+      "initial_capacity": 65536,
+      "binary_sha256": "15c4b5cd3721e3e15be1cafb8370933a7753dc0264ab0b22ecf289a752a620e2",
+      "buffers": 26,
+      "retained_bytes_compared": 327162368,
+      "mismatches": 0,
+      "growth_ms": 627.62,
+      "final_capacity": 81920
+    },
+    {
+      "setup": "M5 synthetic",
+      "arm": "A",
+      "ordinal": 2,
+      "initial_capacity": 262144,
+      "binary_sha256": "f1ae02df440d753e95ca3f1e1da52ca07ad65b16114e2488f5bec6658e423693",
+      "buffers": 8,
+      "retained_bytes_compared": 402655232,
+      "mismatches": 0,
+      "growth_ms": 109.697,
+      "final_capacity": 327680
+    },
+    {
+      "setup": "M3 synthetic",
+      "arm": "A",
+      "ordinal": 2,
+      "initial_capacity": 262144,
+      "binary_sha256": "e438a54837ae2f3b0527b5742d34d44929e0ce0aefb1e1c711812256d087c824",
+      "buffers": 8,
+      "retained_bytes_compared": 402655232,
+      "mismatches": 0,
+      "growth_ms": 359.671,
+      "final_capacity": 327680
+    },
+    {
+      "setup": "M3 complete model",
+      "arm": "A",
+      "ordinal": 2,
+      "initial_capacity": 65536,
+      "binary_sha256": "e438a54837ae2f3b0527b5742d34d44929e0ce0aefb1e1c711812256d087c824",
+      "buffers": 26,
+      "retained_bytes_compared": 327162368,
+      "mismatches": 0,
+      "growth_ms": 498.249,
+      "final_capacity": 81920
+    },
+    {
+      "setup": "M5 complete model",
+      "arm": "A",
+      "ordinal": 2,
+      "initial_capacity": 65536,
+      "binary_sha256": "5ad280d437c3a8f4f887ba19145bf160c29de91b441836d161025515f1c0eee0",
+      "buffers": 26,
+      "retained_bytes_compared": 327162368,
+      "mismatches": 0,
+      "growth_ms": 217.38,
+      "final_capacity": 81920
+    },
+    {
+      "setup": "M5 synthetic",
+      "arm": "B",
+      "ordinal": 3,
+      "initial_capacity": 262144,
+      "binary_sha256": "f0ec00bde683e8920d7c858524dba6558f1d4f809e8834c94b9745888212e26b",
+      "buffers": 8,
+      "retained_bytes_compared": 402655232,
+      "mismatches": 0,
+      "growth_ms": 104.72,
+      "final_capacity": 327680
+    },
+    {
+      "setup": "M3 synthetic",
+      "arm": "B",
+      "ordinal": 3,
+      "initial_capacity": 262144,
+      "binary_sha256": "64611df0398b43ad44f7c61d180a920bf68a69b876d5ecd40f0ded0859dc1a38",
+      "buffers": 8,
+      "retained_bytes_compared": 402655232,
+      "mismatches": 0,
+      "growth_ms": 369.846,
+      "final_capacity": 327680
+    },
+    {
+      "setup": "M3 complete model",
+      "arm": "B",
+      "ordinal": 3,
+      "initial_capacity": 65536,
+      "binary_sha256": "64611df0398b43ad44f7c61d180a920bf68a69b876d5ecd40f0ded0859dc1a38",
+      "buffers": 26,
+      "retained_bytes_compared": 327162368,
+      "mismatches": 0,
+      "growth_ms": 458.21,
+      "final_capacity": 81920
+    },
+    {
+      "setup": "M5 complete model",
+      "arm": "B",
+      "ordinal": 3,
+      "initial_capacity": 65536,
+      "binary_sha256": "15c4b5cd3721e3e15be1cafb8370933a7753dc0264ab0b22ecf289a752a620e2",
+      "buffers": 26,
+      "retained_bytes_compared": 327162368,
+      "mismatches": 0,
+      "growth_ms": 132.738,
+      "final_capacity": 81920
+    }
+  ],
+  "small_validation": [
+    {
+      "setup": "M5 synthetic",
+      "initial_capacity": 64,
+      "shader_validation": true,
+      "metal_debug_layer": true,
+      "buffers": 8,
+      "retained_bytes_compared": 100352,
+      "mismatches": 0,
+      "growth_ms": 41.653,
+      "final_capacity": 128
+    },
+    {
+      "setup": "M3 synthetic",
+      "initial_capacity": 64,
+      "shader_validation": true,
+      "metal_debug_layer": true,
+      "buffers": 8,
+      "retained_bytes_compared": 100352,
+      "mismatches": 0,
+      "growth_ms": 313.439,
+      "final_capacity": 128
+    },
+    {
+      "setup": "M5 complete model",
+      "initial_capacity": 64,
+      "shader_validation": false,
+      "metal_debug_layer": false,
+      "buffers": 26,
+      "retained_bytes_compared": 326144,
+      "mismatches": 0,
+      "growth_ms": 13.475,
+      "final_capacity": 128
+    }
+  ],
+  "checker_scope": "M5 synthetic used the preliminary checker; M3 used the final checker. The final checker adds capacity parsing and scoped sampler cleanup without changing compared cache bytes. M5 complete-model validation used the final checker in both arms.",
+  "limits": [
+    "Growth timings are not inference throughput.",
+    "First complete-model A samples on both devices are retained in full; no warm-up sample was excluded.",
+    "The long-context failure has not been reproduced as an allocation failure.",
+    "Allocation diagnostics remain private and are omitted from this derived evidence."
+  ],
+  "provenance": [
+    {
+      "private_record_name": "abab-done.json",
+      "sha256": "efbcf07f69325e889fa62d4c1fa9a79d6dac53fb72a64dec46f619ffcd293e7b"
+    },
+    {
+      "private_record_name": "m3-synth2.private.json",
+      "sha256": "c02b0d6acd7699b628d3f2884162d93c40290eb7794a4b2522d65ed8f6ddad25"
+    },
+    {
+      "private_record_name": "trained-after-native-audit.private.json",
+      "sha256": "356dc55cc8aa768ade4f7f197368b7206a151063a8701d9f4655e27da4db926f"
+    },
+    {
+      "private_record_name": "m5-trained-steps.private.json",
+      "sha256": "e1f3e822135d73c16cc868bbd11f4050e808265f738127c253f932d1c7add43f"
+    },
+    {
+      "private_record_name": "m5-final-byte-audit.private.json",
+      "sha256": "a4925ff2cbdb06f60062f509dedc132ae15856e5638a8ab03a0ad3c8397f6300"
+    }
+  ]
+}
