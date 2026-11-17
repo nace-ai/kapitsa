@@ -1579,12 +1579,11 @@ void NemotronH::restore(Encoder& e, Seq& s, const Checkpoint& c) {
 std::string NemotronH::disk_format() const {
   // the dense models only (the Nanos): the MoE ones (Lightning, Bolt, Super-VL) are left out until a run shows their
   // states read back right (#1301: Super-VL's plain decoding; LatentMoE, the Neural Engine split, #1158's near-ties)
-  if (!dense_model(cfg_)) return "";
-  char b[256];
-  snprintf(b, sizeof b, "nemotron_h %s; K, V f16 [%d][cap][%d]; Mamba-2: conv ring f32 [4][%d], state f32 [%d][%d][%d]; %s",
-           std::string(cfg_.kind.begin(), cfg_.kind.end()).c_str(), cfg_.hkv, cfg_.hd, cfg_.conv_ch(), cfg_.n_head,
-           cfg_.head_dim, cfg_.d_state, formats_summary().c_str());
-  return b;
+  if (!dense_) return "";
+  char b[128];
+  snprintf(b, sizeof b, "; K, V f16 [%d][cap][%d]; Mamba-2: conv ring f32 [4][%d], state f32 [%d][%d][%d]; ", cfg_.hkv,
+           cfg_.hd, cfg_.conv_ch(), cfg_.n_head, cfg_.head_dim, cfg_.d_state);
+  return "nemotron_h " + std::string(cfg_.kind.begin(), cfg_.kind.end()) + b + formats_summary();
 }
 
 void NemotronH::disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const {
