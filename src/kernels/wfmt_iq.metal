@@ -755,8 +755,160 @@ NI_INLINE uint4 iq_pairs(uint2 T, uint s8) {
   return uint4(lo & M, rotate(lo, 24u) & M, hi & M, rotate(hi, 24u) & M);
 }
 
+// The two 8-bit sign masks in iq_pairs, indexed directly by IQ2_XXS's 7 stored sign bits.
+// The omitted sign bit is their parity. The verify and prefill gate/up passes load
+// these masks alongside the grid magnitudes. Each entry contains the masks for both words.
+constant uint2 iq2xxs_pair_signs[128] = {
+    uint2(0x00000000, 0x00000000), uint2(0x00008000, 0x00000080), uint2(0x00800000, 0x00000080),
+    uint2(0x00808000, 0x00000000), uint2(0x00000000, 0x00008080), uint2(0x00008000, 0x00008000),
+    uint2(0x00800000, 0x00008000), uint2(0x00808000, 0x00008080), uint2(0x00000000, 0x00800080),
+    uint2(0x00008000, 0x00800000), uint2(0x00800000, 0x00800000), uint2(0x00808000, 0x00800080),
+    uint2(0x00000000, 0x00808000), uint2(0x00008000, 0x00808080), uint2(0x00800000, 0x00808080),
+    uint2(0x00808000, 0x00808000), uint2(0x80000000, 0x00000080), uint2(0x80008000, 0x00000000),
+    uint2(0x80800000, 0x00000000), uint2(0x80808000, 0x00000080), uint2(0x80000000, 0x00008000),
+    uint2(0x80008000, 0x00008080), uint2(0x80800000, 0x00008080), uint2(0x80808000, 0x00008000),
+    uint2(0x80000000, 0x00800000), uint2(0x80008000, 0x00800080), uint2(0x80800000, 0x00800080),
+    uint2(0x80808000, 0x00800000), uint2(0x80000000, 0x00808080), uint2(0x80008000, 0x00808000),
+    uint2(0x80800000, 0x00808000), uint2(0x80808000, 0x00808080), uint2(0x00000080, 0x00000080),
+    uint2(0x00008080, 0x00000000), uint2(0x00800080, 0x00000000), uint2(0x00808080, 0x00000080),
+    uint2(0x00000080, 0x00008000), uint2(0x00008080, 0x00008080), uint2(0x00800080, 0x00008080),
+    uint2(0x00808080, 0x00008000), uint2(0x00000080, 0x00800000), uint2(0x00008080, 0x00800080),
+    uint2(0x00800080, 0x00800080), uint2(0x00808080, 0x00800000), uint2(0x00000080, 0x00808080),
+    uint2(0x00008080, 0x00808000), uint2(0x00800080, 0x00808000), uint2(0x00808080, 0x00808080),
+    uint2(0x80000080, 0x00000000), uint2(0x80008080, 0x00000080), uint2(0x80800080, 0x00000080),
+    uint2(0x80808080, 0x00000000), uint2(0x80000080, 0x00008080), uint2(0x80008080, 0x00008000),
+    uint2(0x80800080, 0x00008000), uint2(0x80808080, 0x00008080), uint2(0x80000080, 0x00800080),
+    uint2(0x80008080, 0x00800000), uint2(0x80800080, 0x00800000), uint2(0x80808080, 0x00800080),
+    uint2(0x80000080, 0x00808000), uint2(0x80008080, 0x00808080), uint2(0x80800080, 0x00808080),
+    uint2(0x80808080, 0x00808000), uint2(0x00000000, 0x80000080), uint2(0x00008000, 0x80000000),
+    uint2(0x00800000, 0x80000000), uint2(0x00808000, 0x80000080), uint2(0x00000000, 0x80008000),
+    uint2(0x00008000, 0x80008080), uint2(0x00800000, 0x80008080), uint2(0x00808000, 0x80008000),
+    uint2(0x00000000, 0x80800000), uint2(0x00008000, 0x80800080), uint2(0x00800000, 0x80800080),
+    uint2(0x00808000, 0x80800000), uint2(0x00000000, 0x80808080), uint2(0x00008000, 0x80808000),
+    uint2(0x00800000, 0x80808000), uint2(0x00808000, 0x80808080), uint2(0x80000000, 0x80000000),
+    uint2(0x80008000, 0x80000080), uint2(0x80800000, 0x80000080), uint2(0x80808000, 0x80000000),
+    uint2(0x80000000, 0x80008080), uint2(0x80008000, 0x80008000), uint2(0x80800000, 0x80008000),
+    uint2(0x80808000, 0x80008080), uint2(0x80000000, 0x80800080), uint2(0x80008000, 0x80800000),
+    uint2(0x80800000, 0x80800000), uint2(0x80808000, 0x80800080), uint2(0x80000000, 0x80808000),
+    uint2(0x80008000, 0x80808080), uint2(0x80800000, 0x80808080), uint2(0x80808000, 0x80808000),
+    uint2(0x00000080, 0x80000000), uint2(0x00008080, 0x80000080), uint2(0x00800080, 0x80000080),
+    uint2(0x00808080, 0x80000000), uint2(0x00000080, 0x80008080), uint2(0x00008080, 0x80008000),
+    uint2(0x00800080, 0x80008000), uint2(0x00808080, 0x80008080), uint2(0x00000080, 0x80800080),
+    uint2(0x00008080, 0x80800000), uint2(0x00800080, 0x80800000), uint2(0x00808080, 0x80800080),
+    uint2(0x00000080, 0x80808000), uint2(0x00008080, 0x80808080), uint2(0x00800080, 0x80808080),
+    uint2(0x00808080, 0x80808000), uint2(0x80000080, 0x80000080), uint2(0x80008080, 0x80000000),
+    uint2(0x80800080, 0x80000000), uint2(0x80808080, 0x80000080), uint2(0x80000080, 0x80008000),
+    uint2(0x80008080, 0x80008080), uint2(0x80800080, 0x80008080), uint2(0x80808080, 0x80008000),
+    uint2(0x80000080, 0x80800000), uint2(0x80008080, 0x80800080), uint2(0x80800080, 0x80800080),
+    uint2(0x80808080, 0x80800000), uint2(0x80000080, 0x80808080), uint2(0x80008080, 0x80808000),
+    uint2(0x80800080, 0x80808000), uint2(0x80808080, 0x80808080),
+};
+NI_INLINE uint4 iq2xxs_signed_pairs(uint2 grid, uint s7) {
+  const uint2 v = grid ^ iq2xxs_pair_signs[s7];
+  const uint M = 0x807F807Fu;
+  return uint4(v.x & M, rotate(v.x, 24u) & M, v.y & M, rotate(v.y, 24u) & M);
+}
+
 // IQ2_XXS's 8 signs: the 7 stored bits and their parity
 NI_INLINE uint iq_s8(uint s7) { return s7 | (popcount(s7) << 7); }
+
+// IQ2_S and IQ3_S supply the full 8-bit sign mask. Tabulate the original permutations for
+// verify down passes. The canonical GGUF layout remains shared with decode and prefill.
+constant uint2 iq_down_pair_signs[256] = {
+    uint2(0x00000000, 0x00000000), uint2(0x00008000, 0x00000000), uint2(0x00800000, 0x00000000),
+    uint2(0x00808000, 0x00000000), uint2(0x00000000, 0x00008000), uint2(0x00008000, 0x00008000),
+    uint2(0x00800000, 0x00008000), uint2(0x00808000, 0x00008000), uint2(0x00000000, 0x00800000),
+    uint2(0x00008000, 0x00800000), uint2(0x00800000, 0x00800000), uint2(0x00808000, 0x00800000),
+    uint2(0x00000000, 0x00808000), uint2(0x00008000, 0x00808000), uint2(0x00800000, 0x00808000),
+    uint2(0x00808000, 0x00808000), uint2(0x80000000, 0x00000000), uint2(0x80008000, 0x00000000),
+    uint2(0x80800000, 0x00000000), uint2(0x80808000, 0x00000000), uint2(0x80000000, 0x00008000),
+    uint2(0x80008000, 0x00008000), uint2(0x80800000, 0x00008000), uint2(0x80808000, 0x00008000),
+    uint2(0x80000000, 0x00800000), uint2(0x80008000, 0x00800000), uint2(0x80800000, 0x00800000),
+    uint2(0x80808000, 0x00800000), uint2(0x80000000, 0x00808000), uint2(0x80008000, 0x00808000),
+    uint2(0x80800000, 0x00808000), uint2(0x80808000, 0x00808000), uint2(0x00000080, 0x00000000),
+    uint2(0x00008080, 0x00000000), uint2(0x00800080, 0x00000000), uint2(0x00808080, 0x00000000),
+    uint2(0x00000080, 0x00008000), uint2(0x00008080, 0x00008000), uint2(0x00800080, 0x00008000),
+    uint2(0x00808080, 0x00008000), uint2(0x00000080, 0x00800000), uint2(0x00008080, 0x00800000),
+    uint2(0x00800080, 0x00800000), uint2(0x00808080, 0x00800000), uint2(0x00000080, 0x00808000),
+    uint2(0x00008080, 0x00808000), uint2(0x00800080, 0x00808000), uint2(0x00808080, 0x00808000),
+    uint2(0x80000080, 0x00000000), uint2(0x80008080, 0x00000000), uint2(0x80800080, 0x00000000),
+    uint2(0x80808080, 0x00000000), uint2(0x80000080, 0x00008000), uint2(0x80008080, 0x00008000),
+    uint2(0x80800080, 0x00008000), uint2(0x80808080, 0x00008000), uint2(0x80000080, 0x00800000),
+    uint2(0x80008080, 0x00800000), uint2(0x80800080, 0x00800000), uint2(0x80808080, 0x00800000),
+    uint2(0x80000080, 0x00808000), uint2(0x80008080, 0x00808000), uint2(0x80800080, 0x00808000),
+    uint2(0x80808080, 0x00808000), uint2(0x00000000, 0x80000000), uint2(0x00008000, 0x80000000),
+    uint2(0x00800000, 0x80000000), uint2(0x00808000, 0x80000000), uint2(0x00000000, 0x80008000),
+    uint2(0x00008000, 0x80008000), uint2(0x00800000, 0x80008000), uint2(0x00808000, 0x80008000),
+    uint2(0x00000000, 0x80800000), uint2(0x00008000, 0x80800000), uint2(0x00800000, 0x80800000),
+    uint2(0x00808000, 0x80800000), uint2(0x00000000, 0x80808000), uint2(0x00008000, 0x80808000),
+    uint2(0x00800000, 0x80808000), uint2(0x00808000, 0x80808000), uint2(0x80000000, 0x80000000),
+    uint2(0x80008000, 0x80000000), uint2(0x80800000, 0x80000000), uint2(0x80808000, 0x80000000),
+    uint2(0x80000000, 0x80008000), uint2(0x80008000, 0x80008000), uint2(0x80800000, 0x80008000),
+    uint2(0x80808000, 0x80008000), uint2(0x80000000, 0x80800000), uint2(0x80008000, 0x80800000),
+    uint2(0x80800000, 0x80800000), uint2(0x80808000, 0x80800000), uint2(0x80000000, 0x80808000),
+    uint2(0x80008000, 0x80808000), uint2(0x80800000, 0x80808000), uint2(0x80808000, 0x80808000),
+    uint2(0x00000080, 0x80000000), uint2(0x00008080, 0x80000000), uint2(0x00800080, 0x80000000),
+    uint2(0x00808080, 0x80000000), uint2(0x00000080, 0x80008000), uint2(0x00008080, 0x80008000),
+    uint2(0x00800080, 0x80008000), uint2(0x00808080, 0x80008000), uint2(0x00000080, 0x80800000),
+    uint2(0x00008080, 0x80800000), uint2(0x00800080, 0x80800000), uint2(0x00808080, 0x80800000),
+    uint2(0x00000080, 0x80808000), uint2(0x00008080, 0x80808000), uint2(0x00800080, 0x80808000),
+    uint2(0x00808080, 0x80808000), uint2(0x80000080, 0x80000000), uint2(0x80008080, 0x80000000),
+    uint2(0x80800080, 0x80000000), uint2(0x80808080, 0x80000000), uint2(0x80000080, 0x80008000),
+    uint2(0x80008080, 0x80008000), uint2(0x80800080, 0x80008000), uint2(0x80808080, 0x80008000),
+    uint2(0x80000080, 0x80800000), uint2(0x80008080, 0x80800000), uint2(0x80800080, 0x80800000),
+    uint2(0x80808080, 0x80800000), uint2(0x80000080, 0x80808000), uint2(0x80008080, 0x80808000),
+    uint2(0x80800080, 0x80808000), uint2(0x80808080, 0x80808000), uint2(0x00000000, 0x00000080),
+    uint2(0x00008000, 0x00000080), uint2(0x00800000, 0x00000080), uint2(0x00808000, 0x00000080),
+    uint2(0x00000000, 0x00008080), uint2(0x00008000, 0x00008080), uint2(0x00800000, 0x00008080),
+    uint2(0x00808000, 0x00008080), uint2(0x00000000, 0x00800080), uint2(0x00008000, 0x00800080),
+    uint2(0x00800000, 0x00800080), uint2(0x00808000, 0x00800080), uint2(0x00000000, 0x00808080),
+    uint2(0x00008000, 0x00808080), uint2(0x00800000, 0x00808080), uint2(0x00808000, 0x00808080),
+    uint2(0x80000000, 0x00000080), uint2(0x80008000, 0x00000080), uint2(0x80800000, 0x00000080),
+    uint2(0x80808000, 0x00000080), uint2(0x80000000, 0x00008080), uint2(0x80008000, 0x00008080),
+    uint2(0x80800000, 0x00008080), uint2(0x80808000, 0x00008080), uint2(0x80000000, 0x00800080),
+    uint2(0x80008000, 0x00800080), uint2(0x80800000, 0x00800080), uint2(0x80808000, 0x00800080),
+    uint2(0x80000000, 0x00808080), uint2(0x80008000, 0x00808080), uint2(0x80800000, 0x00808080),
+    uint2(0x80808000, 0x00808080), uint2(0x00000080, 0x00000080), uint2(0x00008080, 0x00000080),
+    uint2(0x00800080, 0x00000080), uint2(0x00808080, 0x00000080), uint2(0x00000080, 0x00008080),
+    uint2(0x00008080, 0x00008080), uint2(0x00800080, 0x00008080), uint2(0x00808080, 0x00008080),
+    uint2(0x00000080, 0x00800080), uint2(0x00008080, 0x00800080), uint2(0x00800080, 0x00800080),
+    uint2(0x00808080, 0x00800080), uint2(0x00000080, 0x00808080), uint2(0x00008080, 0x00808080),
+    uint2(0x00800080, 0x00808080), uint2(0x00808080, 0x00808080), uint2(0x80000080, 0x00000080),
+    uint2(0x80008080, 0x00000080), uint2(0x80800080, 0x00000080), uint2(0x80808080, 0x00000080),
+    uint2(0x80000080, 0x00008080), uint2(0x80008080, 0x00008080), uint2(0x80800080, 0x00008080),
+    uint2(0x80808080, 0x00008080), uint2(0x80000080, 0x00800080), uint2(0x80008080, 0x00800080),
+    uint2(0x80800080, 0x00800080), uint2(0x80808080, 0x00800080), uint2(0x80000080, 0x00808080),
+    uint2(0x80008080, 0x00808080), uint2(0x80800080, 0x00808080), uint2(0x80808080, 0x00808080),
+    uint2(0x00000000, 0x80000080), uint2(0x00008000, 0x80000080), uint2(0x00800000, 0x80000080),
+    uint2(0x00808000, 0x80000080), uint2(0x00000000, 0x80008080), uint2(0x00008000, 0x80008080),
+    uint2(0x00800000, 0x80008080), uint2(0x00808000, 0x80008080), uint2(0x00000000, 0x80800080),
+    uint2(0x00008000, 0x80800080), uint2(0x00800000, 0x80800080), uint2(0x00808000, 0x80800080),
+    uint2(0x00000000, 0x80808080), uint2(0x00008000, 0x80808080), uint2(0x00800000, 0x80808080),
+    uint2(0x00808000, 0x80808080), uint2(0x80000000, 0x80000080), uint2(0x80008000, 0x80000080),
+    uint2(0x80800000, 0x80000080), uint2(0x80808000, 0x80000080), uint2(0x80000000, 0x80008080),
+    uint2(0x80008000, 0x80008080), uint2(0x80800000, 0x80008080), uint2(0x80808000, 0x80008080),
+    uint2(0x80000000, 0x80800080), uint2(0x80008000, 0x80800080), uint2(0x80800000, 0x80800080),
+    uint2(0x80808000, 0x80800080), uint2(0x80000000, 0x80808080), uint2(0x80008000, 0x80808080),
+    uint2(0x80800000, 0x80808080), uint2(0x80808000, 0x80808080), uint2(0x00000080, 0x80000080),
+    uint2(0x00008080, 0x80000080), uint2(0x00800080, 0x80000080), uint2(0x00808080, 0x80000080),
+    uint2(0x00000080, 0x80008080), uint2(0x00008080, 0x80008080), uint2(0x00800080, 0x80008080),
+    uint2(0x00808080, 0x80008080), uint2(0x00000080, 0x80800080), uint2(0x00008080, 0x80800080),
+    uint2(0x00800080, 0x80800080), uint2(0x00808080, 0x80800080), uint2(0x00000080, 0x80808080),
+    uint2(0x00008080, 0x80808080), uint2(0x00800080, 0x80808080), uint2(0x00808080, 0x80808080),
+    uint2(0x80000080, 0x80000080), uint2(0x80008080, 0x80000080), uint2(0x80800080, 0x80000080),
+    uint2(0x80808080, 0x80000080), uint2(0x80000080, 0x80008080), uint2(0x80008080, 0x80008080),
+    uint2(0x80800080, 0x80008080), uint2(0x80808080, 0x80008080), uint2(0x80000080, 0x80800080),
+    uint2(0x80008080, 0x80800080), uint2(0x80800080, 0x80800080), uint2(0x80808080, 0x80800080),
+    uint2(0x80000080, 0x80808080), uint2(0x80008080, 0x80808080), uint2(0x80800080, 0x80808080),
+    uint2(0x80808080, 0x80808080),
+};
+template <bool TABLE>
+NI_INLINE uint4 iq_down_pairs(uint2 grid, uint signs) {
+  if (!TABLE) return iq_pairs(grid, signs);
+  const uint2 v = grid ^ iq_down_pair_signs[signs];
+  const uint M = 0x807F807Fu;
+  return uint4(v.x & M, rotate(v.x, 24u) & M, v.y & M, rotate(v.y, 24u) & M);
+}
 
 // IQ3_S: two 4-value grid points (values 0-3, 4-7) as the permuted word pair
 NI_INLINE uint2 iq3_T(uint g0, uint g1) { return uint2((g0 & 0xFFFFu) | (g1 << 16), (g0 >> 16) | (g1 & 0xFFFF0000u)); }
@@ -1147,7 +1299,7 @@ NI_INLINE void iq1_a4(uint G, half dn, half c, thread half2* a) {
 // magnitudes times their sub-block's (2s + 1), x 2^-24, with their signs (exact halves); the value is that times d / 8
 // (IQ2), d / 4 (IQ3_XXS) or d (IQ3_S). IQ1_S: the integers (2s + 1) (8 g +- 1), the value that times d / 8. The 16
 // values lie in one sub-block and one IQ2_S scale half.
-template <int FMT>
+template <int FMT, bool GU_SIGNS = false, bool DN_SIGNS = false>
 NI_INLINE void iq_a16(const device uchar* W, IqSec s, uint r, uint nsb, uint v0, thread half2* a) {
   const uint j = v0 / 32, hb = (v0 / 16) & 1u;
   const uint i = r * nsb + j;
@@ -1164,15 +1316,16 @@ NI_INLINE void iq_a16(const device uchar* W, IqSec s, uint r, uint nsb, uint v0,
   if (FMT == int(kIq2xxs)) {
     constant uint2* gt = (constant uint2*)iq2xxs_gridp;
     const uint sa = extract_bits(q.y, 14u * hb, 7), sb = extract_bits(q.y, 14u * hb + 7u, 7);
-    p0 = iq_pairs(gt[extract_bits(q.x, 16u * hb, 8)], iq_s8(sa));
-    p1 = iq_pairs(gt[extract_bits(q.x, 16u * hb + 8u, 8)], iq_s8(sb));
+    const uint2 g0 = gt[extract_bits(q.x, 16u * hb, 8)], g1 = gt[extract_bits(q.x, 16u * hb + 8u, 8)];
+    p0 = GU_SIGNS ? iq2xxs_signed_pairs(g0, sa) : iq_pairs(g0, iq_s8(sa));
+    p1 = GU_SIGNS ? iq2xxs_signed_pairs(g1, sb) : iq_pairs(g1, iq_s8(sb));
     c = (q.y >> 27) | 1u;
   } else if (FMT == int(kIq2s)) {
     constant uint2* gt = (constant uint2*)iq2s_gridp;
     const uint e = ((const device ushort*)(W + s.x1))[i];
     const uint qh = extract_bits(e, 4u * hb, 4);
-    p0 = iq_pairs(gt[extract_bits(q.x, 16u * hb, 8) | ((qh & 3u) << 8)], extract_bits(q.y, 16u * hb, 8));
-    p1 = iq_pairs(gt[extract_bits(q.x, 16u * hb + 8u, 8) | ((qh & 12u) << 6)], extract_bits(q.y, 16u * hb + 8u, 8));
+    p0 = iq_down_pairs<DN_SIGNS>(gt[extract_bits(q.x, 16u * hb, 8) | ((qh & 3u) << 8)], extract_bits(q.y, 16u * hb, 8));
+    p1 = iq_down_pairs<DN_SIGNS>(gt[extract_bits(q.x, 16u * hb + 8u, 8) | ((qh & 12u) << 6)], extract_bits(q.y, 16u * hb + 8u, 8));
     c = 2u * extract_bits(e, 8u + 4u * hb, 4) + 1u;
   } else if (FMT == int(kIq3xxs)) {
     const uint aux = ((const device uint*)(W + s.x1))[i], w = hb ? q.y : q.x;
@@ -1186,8 +1339,8 @@ NI_INLINE void iq_a16(const device uchar* W, IqSec s, uint r, uint nsb, uint v0,
     const uint w = hb ? q.y : q.x, qh = extract_bits(e, 4u * hb, 4);
     const uint g0 = iq3s_grid[(w & 0xFFu) | ((qh << 8) & 256u)], g1 = iq3s_grid[extract_bits(w, 8, 8) | ((qh << 7) & 256u)];
     const uint g2 = iq3s_grid[extract_bits(w, 16, 8) | ((qh << 6) & 256u)], g3 = iq3s_grid[(w >> 24) | ((qh << 5) & 256u)];
-    p0 = iq_pairs(iq3_T(g0, g1), extract_bits(sg, 16u * hb, 8));
-    p1 = iq_pairs(iq3_T(g2, g3), extract_bits(sg, 16u * hb + 8u, 8));
+    p0 = iq_down_pairs<DN_SIGNS>(iq3_T(g0, g1), extract_bits(sg, 16u * hb, 8));
+    p1 = iq_down_pairs<DN_SIGNS>(iq3_T(g2, g3), extract_bits(sg, 16u * hb + 8u, 8));
     c = 2u * (e >> 8) + 1u;
   }
   const half2 hc = half2(half(c));
@@ -1203,7 +1356,7 @@ NI_INLINE void iq_a16(const device uchar* W, IqSec s, uint r, uint nsb, uint v0,
 
 // The A operands of the 4 fragments for this lane's 8 values [v0, v0 + 8) of row r (v0 % 8 == 0; qmr's order at BK =
 // 32: fragment f, k-slots (2c, 2c + 1) = values v0 + f and + 4), as iq_a16
-template <int FMT>
+template <int FMT, bool GU_SIGNS = false>
 NI_INLINE void iq_a8(const device uchar* W, IqSec s, uint r, uint nsb, uint v0, thread half2* a) {
   const uint j = v0 / 32, l = (v0 / 8) & 3u;  // sub-block, grid point (IQ3: the point pair 2l, 2l + 1)
   const uint i = r * nsb + j;
@@ -1218,7 +1371,9 @@ NI_INLINE void iq_a8(const device uchar* W, IqSec s, uint r, uint nsb, uint v0, 
   uint c;
   if (FMT == int(kIq2xxs)) {
     constant uint2* gt = (constant uint2*)iq2xxs_gridp;
-    p0 = iq_pairs(gt[extract_bits(q.x, 8u * l, 8)], iq_s8(extract_bits(q.y, 7u * l, 7)));
+    const uint2 grid = gt[extract_bits(q.x, 8u * l, 8)];
+    const uint signs = extract_bits(q.y, 7u * l, 7);
+    p0 = GU_SIGNS ? iq2xxs_signed_pairs(grid, signs) : iq_pairs(grid, iq_s8(signs));
     c = (q.y >> 27) | 1u;
   } else if (FMT == int(kIq2s)) {
     constant uint2* gt = (constant uint2*)iq2s_gridp;
@@ -1264,7 +1419,7 @@ struct Moe8IqParams {
 
 // acc[p] += A_p . X8 table over 64-groups [g0, g1) for NA operand rows: row r[p] of IQ matrix W[p] (this lane's row
 // of an 8-row fragment), one fp32 chain per 256-value block (g0 % 4 == 0, g1 % 4 == 0)
-template <int FMT, int NA>
+template <int FMT, int NA, bool GU_SIGNS = false, bool DN_SIGNS = false>
 NI_INLINE void iq8_run(const device uchar* const thread* W, IqSec s, thread const uint* r, uint K,
                        const device half* table, uint g0, uint g1, uint lane, uint q, thread float2* acc) {
   const uint nsb = K / 32, nb = K / 256;
@@ -1278,7 +1433,7 @@ NI_INLINE void iq8_run(const device uchar* const thread* W, IqSec s, thread cons
     _Pragma("clang loop unroll(full)")
     for (int p = 0; p < NA; ++p) {
       half2 a[8];
-      iq_a16<FMT>(W[p], s, r[p], nsb, g * 64 + 16 * q, a);
+      iq_a16<FMT, GU_SIGNS, DN_SIGNS>(W[p], s, r[p], nsb, g * 64 + 16 * q, a);
       _Pragma("clang loop unroll(full)")
       for (int f = 0; f < 8; ++f) v8_mma(ch[p], a[f], b[f]);
     }
@@ -1321,7 +1476,7 @@ NI_INLINE void moe8i_gu_impl(const device uchar* Wg, const device uchar* Wu, con
   } else {
     const device uchar* W[2] = {Wg, Wu};
     const uint r[2] = {e * p.N + row, e * p.N + row};
-    iq8_run<FG, 2>(W, p.sec, r, p.K, table, g0, g1, lane, q, acc);
+    iq8_run<FG, 2, true>(W, p.sec, r, p.K, table, g0, g1, lane, q, acc);
   }
   if (KS > 1) v8_reduce<2>(acc, kred, KS, sg, lane);
   const bool lead = kslice == 0;
@@ -1408,7 +1563,7 @@ NI_INLINE void moe8i_down_impl(const device uchar* W, const device uint32_t* SW,
       Wf[f] = W;
       r[f] = e * p.N + n0 + 8 * f + fm;
     }
-    iq8_run<FD, NF>(Wf, p.sec, r, p.K, ht, 0, gpr, lane, q, acc);
+    iq8_run<FD, NF, false, true>(Wf, p.sec, r, p.K, ht, 0, gpr, lane, q, acc);
   }
   _Pragma("clang loop unroll(full)")
   for (int e2 = 0; e2 < 2; ++e2) {
@@ -1468,8 +1623,8 @@ NI_INLINE void qrmi_acc(const device half* X, const device uint* xrows, bool gat
     for (int p = 0; p < NP; ++p)
       _Pragma("clang loop unroll(full)")
       for (int a = 0; a < FA; ++a) {
-        if (BK == 64) iq_a16<FMT>(W[p], s, wrow[a], nsb, k0 + 16 * c, af[p * FA + a]);
-        else iq_a8<FMT>(W[p], s, wrow[a], nsb, k0 + 8 * c, af[p * FA + a]);
+        if (BK == 64) iq_a16<FMT, NP == 2>(W[p], s, wrow[a], nsb, k0 + 16 * c, af[p * FA + a]);
+        else iq_a8<FMT, NP == 2>(W[p], s, wrow[a], nsb, k0 + 8 * c, af[p * FA + a]);
       }
     qr_store_x<BMl, BK, NT>(xs, tid, xr);
     threadgroup_barrier(mem_flags::mem_threadgroup);
