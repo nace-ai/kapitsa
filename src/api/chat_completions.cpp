@@ -46,7 +46,10 @@ std::pair<int, ojson> chat_failure(const ChatResult& res) {
   if (res.engine_down) return {503, chat_error(res.error, "server_error", "engine_unavailable")};
   if (res.prompt_limit > 0)
     return {400, chat_error("This model's maximum context length is " + std::to_string(res.prompt_limit) +
-                                " tokens. However, your messages resulted in " + std::to_string(res.prompt_tokens) +
+                                (res.memory_limit ? " tokens for this conversation now, as much KV cache as this Mac's "
+                                                    "memory budget holds (the context window itself is larger)"
+                                                  : " tokens") +
+                                ". However, your messages resulted in " + std::to_string(res.prompt_tokens) +
                                 " tokens. Please reduce the length of the messages.",
                             "invalid_request_error", "context_length_exceeded", "messages")};
   return {400, chat_error(res.error.empty() ? "the request failed" : res.error)};

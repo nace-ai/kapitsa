@@ -636,6 +636,13 @@ void responses_events() {
     check(st == 400 && body["error"]["code"] == "context_length_exceeded" && body["error"]["type"] == "invalid_request_error" &&
               body["error"]["param"] == "input",
           "responses: a prompt longer than the context is 400 context_length_exceeded", body.dump());
+    check(body["error"]["message"].get<std::string>().find("context window") != std::string::npos,
+          "responses: the context window's limit says so", body.dump());
+    r.memory_limit = true;
+    const ojson mb = responses_failure(r).second;
+    check(mb["error"]["code"] == "context_length_exceeded" &&
+              mb["error"]["message"].get<std::string>().find("this Mac's memory holds") != std::string::npos,
+          "responses: the memory's limit says it is the memory (kapitsa#1300)", mb.dump());
     ChatResult im = result("error");
     im.error = "video input is not supported";
     im.invalid_request = true;
@@ -741,6 +748,16 @@ void chat_events() {
     check(st == 400 && body == J(R"({"error": {"message": "This model's maximum context length is 131070 tokens. However, your messages resulted in 140000 tokens. Please reduce the length of the messages.",
                                                 "type": "invalid_request_error", "param": "messages", "code": "context_length_exceeded"}})"),
           "chat: a prompt the context cannot hold is a 400 context_length_exceeded, in OpenAI's words", body.dump());
+    // kapitsa#1300: a prompt the memory cannot hold says it is the memory, with the limit the conversation has now
+    ChatResult mem = result("error");
+    mem.prompt_tokens = 10238, mem.prompt_limit = 10208, mem.memory_limit = true;
+    auto [stm, bodym] = chat_failure(mem);
+    check(stm == 400 && bodym["error"]["code"] == "context_length_exceeded" &&
+              bodym["error"]["message"] == "This model's maximum context length is 10208 tokens for this conversation now, "
+                                           "as much KV cache as this Mac's memory budget holds (the context window itself "
+                                           "is larger). However, your messages resulted in 10238 tokens. Please reduce the "
+                                           "length of the messages.",
+          "chat: a prompt the memory cannot hold is context_length_exceeded that names the memory", bodym.dump());
     ChatResult bad = result("error");
     bad.error = "images: the image at https://x/a.png can't be read";
     bad.invalid_request = true;

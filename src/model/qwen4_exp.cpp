@@ -665,9 +665,9 @@ bool Qwen4Exp::reserve(Seq& s, int need) {
   return Qwen35::reserve(s, need);
 }
 
-void Qwen4Exp::grow_kv(Seq& s, int cap) {
+void Qwen4Exp::grow_kv(Seq& s, int cap, size_t batch_max) {
   const int old = s.cap;
-  Qwen35::grow_kv(s, cap);
+  Qwen35::grow_kv(s, cap, batch_max);
   // the indexer's caches grow alongside: rows by position, so the old buffer is the new one's prefix
   Gpu& g = Gpu::get();
   const size_t kb = size_t(cap) * c4_.ix_dim * 2, bb = (size_t(cap) / c4_.ix_ratio + 1) * c4_.ix_dim * 4;
@@ -697,7 +697,7 @@ void Qwen4Exp::grow_kv(Seq& s, int cap) {
       *b = nb;
       batch += n;
       ++i;
-    } while (i < bufs.size() && batch + bufs[i].second <= (size_t(256) << 20));
+    } while (i < bufs.size() && batch + bufs[i].second <= batch_max);
     if (e) e->commit_and_wait();
     for (Buffer& b : olds) g.release(b);
   }
@@ -721,6 +721,12 @@ size_t Qwen4Exp::kv_bytes_per_pos() const {
   // attention rows are int8-packed (kernels/kv_int8.h), the index cache as before; +16 is the row's scale
   const size_t arow = kv_row_bytes(cfg_.head_dim);  // int8 or fp16 rows, as the attention kernels read them
   return layers * (size_t(2) * cfg_.hkv * arow + size_t(c4_.ix_dim) * 2 + size_t(c4_.ix_dim) * 4 / c4_.ix_ratio);
+}
+
+size_t Qwen4Exp::kv_unit_bytes_per_pos() const {
+  // the largest buffer that grows: an attention cache, or an index cache (the block index's rows counted as if one
+  // per position: an upper bound)
+  return std::max({Qwen35::kv_unit_bytes_per_pos(), size_t(c4_.ix_dim) * 2, size_t(c4_.ix_dim) * 4});
 }
 
 void Qwen4Exp::reset(Seq& s) {
