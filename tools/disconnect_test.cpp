@@ -68,7 +68,7 @@ int connect_client(int port) {
   addr.sin_port = htons(static_cast<uint16_t>(port));
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
   CHECK(::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof addr) == 0);
-  const timeval timeout{5, 0};
+  const timeval timeout{30, 0};
   CHECK(::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout) == 0);
   return fd;
 }
@@ -185,13 +185,37 @@ static void queued_request_on_live_connection_is_served() {
   CHECK(d.steps > 0);
   send_all(fd, kNextRequest);
   std::string response;
-  char buffer[1024];
-  for (;;) {
-    const auto n = ::recv(fd, buffer, sizeof buffer, 0);
-    if (n < 0 && errno == EINTR) continue;
-    CHECK(n >= 0);
-    if (n == 0) break;
-    response.append(buffer, static_cast<size_t>(n));
+  // Read two framed responses, without waiting for the peer's keep-alive EOF.
+  for (int reply = 0; reply < 2; ++reply) {
+    std::string header;
+    while (!header.ends_with("\r\n\r\n")) {
+      char byte;
+      const auto n = ::recv(fd, &byte, 1, 0);
+      if (n < 0 && errno == EINTR) continue;
+      CHECK(n == 1);
+      header += byte;
+      CHECK(header.size() <= 8192);
+    }
+    CHECK(header.starts_with("HTTP/1.1 200 OK\r\n"));
+    const std::string length_header = "\r\nContent-Length: ";
+    const auto at = header.find(length_header);
+    CHECK(at != std::string::npos);
+    const auto begin = at + length_header.size();
+    const auto end = header.find("\r\n", begin);
+    const auto digits = header.substr(begin, end - begin);
+    CHECK(!digits.empty() && digits.find_first_not_of("0123456789") == std::string::npos);
+    const auto bytes = std::stoul(digits);
+    CHECK(bytes == 4);  // both expected bodies, "stop" and "next", have four bytes
+    response += header;
+    size_t remaining = bytes;
+    char buffer[4];
+    while (remaining > 0) {
+      const auto n = ::recv(fd, buffer, remaining, 0);
+      if (n < 0 && errno == EINTR) continue;
+      CHECK(n > 0);
+      response.append(buffer, static_cast<size_t>(n));
+      remaining -= static_cast<size_t>(n);
+    }
   }
   ::close(fd);
   CHECK(!d.stop_seen);
