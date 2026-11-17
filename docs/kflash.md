@@ -169,11 +169,16 @@ base that moves with the context's length (a 35B cycle costs about 7 ms more at 
 for each row count. A single greedy DFlash2 stream on a MoE target with the full 1–8 row budget starts by measuring
 8, 1 and 4 rows. The planner estimates missing costs by linear interpolation between measured counts and uses the
 nearest measurement outside that range. After the initial probes it can choose freely, with one probe every eighth
-cycle if counts are still missing. A clipped tree can miss a requested count, so initial probing lasts at most six
+cycle for the least-sampled count until each has three measurements. Unmeasured counts come first. A clipped tree
+can miss a requested count, so initial probing lasts at most six
 cycles. Only measurements enter the disk cache. With a cached table, the first verify requests its largest measured
 count to adjust the table to the current context. A complete table then needs no forced probes. A partial table uses
-the adjusted costs and continues filling the missing counts. Sampled or restricted narrow trees still collect three
-measurements per allowed count on a fresh start.
+the adjusted costs and continues sampling newly measured counts. Once all eight costs are measured, the greedy planner
+fits a line in the row count using the batched planner's median pairwise slope. For each row count it averages the
+fitted cost (weight three) with the measured cost (weight one per observation of that count in this process). A newly
+loaded table thus starts from the line and recovers persistent differences as those rows run. The saved table retains
+the individual measurements. Sampled or restricted narrow trees still collect three measurements per allowed count
+on a fresh start.
 
 **The choice.** The budget picks the size with the most expected tokens per millisecond. In practice it takes the n
 with the largest E(n) − r · cost(n), where r is the tokens per millisecond of the recent cycles: a row goes in when its

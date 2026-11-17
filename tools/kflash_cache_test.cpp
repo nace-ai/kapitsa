@@ -6,6 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -94,24 +95,41 @@ static void test_greedy_costs(const std::string& dir) {
   observe(partial, 8, 36);
   const auto rebased = plan(partial);
   check(!rebased.force_n && rebased.cost[2] == 25 && partial.cost(2) == 0, "partial cache estimates use the new base");
-  bool missing_only = true;
+  // The cached 1, 4 and 8 have the normal sample credit. Other counts compete on actual samples.
+  std::array<int, 9> samples{};
+  for (int n : {1, 4, 8}) samples[n] = KfBudget::kExplore;
+  bool measured_least = true;
   int probes = 0;
-  for (int i = 1; i < 64; ++i) {
+  for (int i = 1; i <= 8 * (5 * KfBudget::kExplore + 2); ++i) {
     const int n = plan(partial).force_n;
     if (n) {
       ++probes;
-      missing_only = missing_only && i % 8 == 0 && partial.cost(n) == 0;
+      const int least = *std::min_element(samples.begin() + 1, samples.end());
+      measured_least = measured_least && i % 8 == 0 && samples[n] == least && least < KfBudget::kExplore;
+      ++samples[n];
     }
     observe(partial, n ? n : 4, 20);
   }
-  check(missing_only && probes == 5, "one missing count per eighth cycle eventually fills a partial table");
+  check(measured_least && probes == 5 * KfBudget::kExplore,
+        "one probe every eighth cycle brings each new row count up to the narrow sampling target");
 
   write_cache(dir, "complete", KfBudget::build(), 0);
+  const std::string complete_path = dir + "/kflash/complete.json";
+  auto table = nlohmann::json::parse(std::ifstream(complete_path));
+  table["cost"][7] = 65;  // An expensive sample among the 30 + n measurements.
+  std::ofstream(complete_path) << table.dump();
   KfBudget complete("complete");
-  check(plan(complete).force_n == 8, "a complete cache requests its reference count");
+  const auto initial = plan(complete);
+  check(initial.force_n == 8 && initial.cost[7] == 37, "a complete cache starts at the fitted costs and rebases at eight rows");
   observe(complete, 8, 48);
   const auto warm = plan(complete);
-  check(!warm.force_n && warm.cost[4] == 44 && warm.cost[4] == complete.cost(4), "a complete cache uses measured costs");
+  check(!warm.force_n && warm.cost[4] == 44 && warm.cost[7] == 47 && warm.cost[8] == 48,
+        "a complete greedy table fits the cost line across a distorted row");
+  check(complete.cost(7) == 75 && plan(complete, false).cost[7] == 75,
+        "the stored measurement and the sampled planner keep the raw cost of that row");
+  observe(complete, 7, 75);
+  check(plan(complete).cost[7] == 54 && complete.cost(7) == 75 && plan(complete, false).cost[7] == 75,
+        "one new observation gives the distorted row a quarter of the greedy cost weight");
   KfBudget clipped;
   int late = 0;
   for (int i = 0; i < 64; ++i) {

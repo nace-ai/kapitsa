@@ -58,8 +58,8 @@ struct KfCosts {
   // the count the next cycle must verify (0: none): with a loaded table and a choice of counts, before this process's
   // base, a count the table holds (the largest); then every allowed count (bit n - 1) `explore` times
   int force(uint32_t allowed, int max_rows, int explore) const;
-  // Sparse exploration for the narrow tree: force anchor measurements first, then occasionally a missing count.
-  int cold_force(int cycles) const;
+  // Sparse exploration for the narrow tree: force anchor measurements first, then occasionally the least-sampled count.
+  int cold_force(int cycles, int explore) const;
   double interpolated_cost(int n) const;  // between measured counts in 1..8; flat outside that interval
   // the cache's table (n: the cost now; 0: not measured, or not since this process's base), and one read back
   std::vector<double> table() const;
@@ -99,7 +99,7 @@ class KfBudget {
   int cycles() const { return cycles_; }
   // n rows' cost now (ms; 0: not measured)
   double cost(int n) const { return n >= 1 && n <= kf::kMaxRows ? cur_cost(n) : 0.0; }
-  static constexpr int kExplore = 3;  // observations per count in exhaustive narrow exploration
+  static constexpr int kExplore = 3;  // target observations per count in narrow exploration
   // the build a cache file names (its "build"): a file another build wrote is not loaded (KfBatch's too)
   static const char* build();
   double cost_narrow() const { return cost8n_; }  // an 8-row cycle at capacity 8 (wide verifies)
