@@ -99,7 +99,8 @@ struct ChatResult {
   std::string error;
   std::string stop_sequence;  // "stop" at one of the request's stop strings: that string
   bool context_full = false;  // "length" because the context window (or the memory for it) ran out, not max_tokens
-  int prompt_limit = 0;       // "error" because the prompt does not fit: the most prompt tokens that would
+  int prompt_limit = 0;       // "error" because the prompt does not fit: the most prompt tokens that would fit
+  bool memory_limit = false;  // prompt_limit is what this Mac's memory holds for the conversation now, not the context window
   bool busy = false;          // "error" because the engine has no capacity for it now: a 503 with Retry-After, not a 400
   bool invalid_request = false;  // "error" because of the request's content (an image that cannot be read, a video)
   bool engine_down = false;   // "error" because the engine is unavailable: a 503, without Retry-After if permanently dead

@@ -240,6 +240,8 @@ class Qwen35 : public Model {
   void drop_kv(Seq& s) override;
   // Bytes of attention cache per position of a sequence (every attention layer and the MTP head, K + V)
   size_t kv_bytes_per_pos() const override;
+  // What growing s holds beside its new size while it copies (bytes): one copy batch's old buffers, at the least
+  size_t kv_grow_held(const Seq& s) const override;
   // Upper limit for Metal allocations (bytes) that reserve() and the Neural Engine split respect; 0 = none
   void set_mem_budget(size_t bytes) override { mem_budget_ = bytes; }
   size_t mem_budget() const { return mem_budget_; }
@@ -835,7 +837,12 @@ class Qwen35 : public Model {
   unsigned qmt_i8_next_ = 0;
   std::vector<Buffer> qmt_i8_retired_;
   std::pair<Buffer, Buffer> qmt_i8_scratch(size_t m, size_t k);
-  virtual void grow_kv(Seq& s, int cap);
+  // Grows s's attention caches to `cap` positions, copying in batches of at most batch_max bytes (kv_grow.h)
+  virtual void grow_kv(Seq& s, int cap, size_t batch_max = size_t(256) << 20);
+  // Bytes per position of the largest single attention cache buffer (one head group's K or V of one layer)
+  virtual size_t kv_unit_bytes_per_pos() const;
+  // Bytes the memory budget has left (SIZE_MAX without one)
+  size_t kv_room() const;
   void enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int old_cap, int new_cap);
 
   std::unique_ptr<ane::FfnSplit> ane_;

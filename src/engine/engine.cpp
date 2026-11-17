@@ -8,6 +8,7 @@
 #include "engine/think_control.h"
 #include "engine/tool_args.h"
 #include "model/flint_kv.h"
+#include "model/kv_grow.h"
 #include "model/qwen4_config.h"
 #include "splash/runtime.h"
 #include "util/json_file.h"
@@ -2651,6 +2652,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     res.finish_reason = "error";
     res.error = "prompt (" + std::to_string(n) + " tokens) exceeds the context window (" + std::to_string(opts_.context) + ")";
     res.prompt_limit = opts_.context - 2;
+    logi("chat: refused a %d-token prompt: the context window is %d", n, opts_.context);
     return res;
   }
   // the reply starts inside the reasoning (the prompt ends with the think tag)
@@ -2853,12 +2855,18 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       res.finish_reason = "cancelled";
       return res;
     }
+    // what this conversation's cache can grow to now: the room left, less what a grow holds while it copies the old
+    // rows (kv_grow.h), in reserve()'s 256-position steps, less the 32 the prompt reserves beyond itself
     const size_t per = model_->kv_bytes_per_pos(), used = g.allocated_bytes();
-    const size_t fit = size_t(s.cap) + (budget_ > used ? budget_ - used : 0) / per;
+    const int fit = kvgrow::fit(s.cap, per, model_->kv_grow_held(s), budget_ > used ? budget_ - used : 0);
     res.finish_reason = "error";
     res.error = "insufficient memory: a " + std::to_string(n) + "-token prompt needs more KV cache than this Mac's "
-                "memory budget for Kapitsa holds with this model (" + std::to_string(fit) + " tokens)";
-    res.prompt_limit = std::max(0, int(fit) - 32);
+                "memory budget for Kapitsa holds for this conversation now (" + std::to_string(fit) + " tokens)";
+    res.prompt_limit = std::max(0, std::min(s.limit, fit / 256 * 256) - 32);
+    res.memory_limit = true;
+    logi("chat: refused a %d-token prompt on slot %d: its KV cache holds %d positions and can grow to %d in the "
+         "memory budget (%.2f of %.2f GB in use), so at most %d prompt tokens", n, int(&slot - slots_.data()), s.cap,
+         fit, used / 1e9, budget_ / 1e9, res.prompt_limit);
     return res;
   }
   double disk_ms = 0;  // (the SSD read: its own log line, not the template's time)

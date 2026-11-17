@@ -6,6 +6,7 @@
 #include "metal/gpu.h"
 #include "vision/embed.h"
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
@@ -142,6 +143,9 @@ class Model {
   virtual bool reserve(Seq& s, int need) = 0;
   virtual void drop_kv(Seq& s) = 0;
   virtual size_t kv_bytes_per_pos() const = 0;
+  // What growing s's attention caches holds beside their new size while it copies the old rows (bytes): a reserve()
+  // needs room for both. Default: a 256 MB batch, or the whole old cache when smaller.
+  virtual size_t kv_grow_held(const Seq& s) const { return std::min(size_t(256) << 20, size_t(s.cap) * kv_bytes_per_pos()); }
   virtual void reset(Seq& s) = 0;
   virtual Checkpoint new_checkpoint() = 0;
   virtual void save(Encoder& e, const Seq& s, Checkpoint& c, int pos) = 0;
