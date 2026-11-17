@@ -122,6 +122,32 @@ int KfCosts::force(uint32_t allowed, int max_rows, int explore) const {
   return f;
 }
 
+int KfCosts::cold_force(int cycles) const {
+  // Rebase a loaded table from a measurement it already holds, exactly as force() does for warm starts.
+  if (loaded && !based) return force(0xffu, 8, 1);
+  // Cap initial exploration even when the tree builder clips a requested count and the anchor never arrives.
+  if (!ncost[8] && cycles < 2) return 8;
+  if (!ncost[1] && cycles < 4) return 1;
+  if (!ncost[4] && cycles < 6) return 4;
+  if (cycles && cycles % 8 == 0) {
+    for (int i = 0; i < 8; ++i) {
+      const int n = 1 + (cycles / 8 - 1 + i) % 8;
+      if (!ncost[n]) return n;
+    }
+  }
+  return 0;
+}
+
+double KfCosts::interpolated_cost(int n) const {
+  if (ncost[n]) return at(n);
+  int lo = n - 1, hi = n + 1;
+  while (lo >= 1 && !ncost[lo]) --lo;
+  while (hi <= 8 && !ncost[hi]) ++hi;
+  if (lo < 1) return hi <= 8 ? at(hi) : 0.0;
+  if (hi > 8) return at(lo);
+  return at(lo) + (at(hi) - at(lo)) * double(n - lo) / double(hi - lo);
+}
+
 std::vector<double> KfCosts::table() const {
   std::vector<double> cost(kD, 0.0);  // the costs now
   for (int n = 1; n < kD; ++n)
@@ -396,7 +422,7 @@ void KfBudget::calibration(float* alpha, float* beta, int n) const {
   }
 }
 
-void KfBudget::write(KfParams& p) {
+void KfBudget::write(KfParams& p, bool greedy_moe) {
   std::lock_guard<std::mutex> lk(mu_);
   for (int d = 0; d < kD; ++d) {
     p.alpha[d] = alpha_[d];
@@ -404,6 +430,7 @@ void KfBudget::write(KfParams& p) {
   }
   // NI_KFLASH_FORCE=n (tests): every cycle verifies n rows (-1: the allowed counts in turn, cycle by cycle)
   static const int forced = getenv("NI_KFLASH_FORCE") ? std::clamp(atoi(getenv("NI_KFLASH_FORCE")), -1, max_rows_) : 0;
+  const bool sparse = greedy_moe && !forced && !wide_ && max_rows_ == 8 && allowed_ == 0xffu;
   int force = std::max(forced, 0);
   if (forced < 0)
     for (int i = 0; i < max_rows_ && !force; ++i) {
@@ -432,9 +459,7 @@ void KfBudget::write(KfParams& p) {
       // capacity 8 unless the per-cycle choice among the wider counts pays (eval_wide)
       if (!force && !narrow && !wide_pays_) narrow = true;
     } else {
-      // with a cached table and a choice of counts, this process's first cycles verify a count it holds (they set
-      // the base); then every allowed count kExplore times (KfCosts::force)
-      if (!force) force = c_.force(allowed_, max_rows_, kExplore);
+      force = sparse ? c_.cold_force(cycles_) : c_.force(allowed_, max_rows_, kExplore);
     }
   }
   p.force_n = force;
@@ -451,7 +476,7 @@ void KfBudget::write(KfParams& p) {
   }
   p.cost[0] = 1.0f;
   for (int n = 1; n < kD; ++n) {
-    const double c = cur_cost(n);
+    const double c = sparse && n <= 8 ? c_.interpolated_cost(n) : cur_cost(n);
     p.cost[n] = c > 0 ? float(std::max(c, 0.01)) : 1.0f;
   }
 }

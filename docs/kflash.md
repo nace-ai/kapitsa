@@ -166,7 +166,14 @@ but not locked, as the 35B's deep positions are, is left alone.
 
 **Cost.** Each cycle reports its GPU time, the drafting pass plus the verify, and the budget keeps a running table: a
 base that moves with the context's length (a 35B cycle costs about 7 ms more at 21K tokens than at 100), plus an offset
-for each row count. The first cycles try every allowed count three times, unless a cached table already exists.
+for each row count. A single greedy DFlash2 stream on a MoE target with the full 1–8 row budget starts by measuring
+8, 1 and 4 rows. The planner estimates missing costs by linear interpolation between measured counts and uses the
+nearest measurement outside that range. After the initial probes it can choose freely, with one probe every eighth
+cycle if counts are still missing. A clipped tree can miss a requested count, so initial probing lasts at most six
+cycles. Only measurements enter the disk cache. With a cached table, the first verify requests its largest measured
+count to adjust the table to the current context. A complete table then needs no forced probes. A partial table uses
+the adjusted costs and continues filling the missing counts. Sampled or restricted narrow trees still collect three
+measurements per allowed count on a fresh start.
 
 **The choice.** The budget picks the size with the most expected tokens per millisecond. In practice it takes the n
 with the largest E(n) − r · cost(n), where r is the tokens per millisecond of the recent cycles: a row goes in when its
