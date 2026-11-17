@@ -67,29 +67,30 @@ fetching, the chat template and the tokenizer run before a request takes its tur
 
 When two or more requests decode at once with a block drafter (DFlash2 on the Qwen 27B and 35B-A3B, LiLiCorr on Bolt),
 or on a Nemotron Nano without one, their decode cycles are batched. At a cycle boundary a parked request joins the
-batch, and one member's thread holds the turn and runs every member's cycles (`Engine::run_batch`): each member's draft
-when it verifies drafts, then one target pass over all the members' rows (`encode_verify_multi`, up to 8 rows). The
-norms, projections, MLP or experts and the LM head run once over every row, so each weight is read once for all the
-members; each member's recurrent scan, convolution window and attention over its own KV cache run side by side in the
-same command buffer. Every member keeps its own drafter ring, acceptance (the longest greedy match, or the exact
-speculative sampling of a sampled DFlash2 request), parser and stream. With DFlash2, KFlash's batch budget (`KfBatch`)
-decides the rows every cycle, once the members' drafting passes are done: a member's draft is worth the calibrated
-chance that the target accepts it and the drafts before it (the drafter's probabilities calibrated against the verify's
-own acceptances, as for KFlash trees; a sampled request's against its speculative sampling's), every member verifies its
-anchor, and the drafts go in decreasing worth over the whole batch, each while it pays for one more row at this Mac's
-measured cost (a batched cycle's GPU time by members and rows) and the batch's recent tokens per ms, up to the pass's 8
-rows. A draft's place never depends on the draft itself, so a sampled request's speculative sampling stays exact. The
-rows are chosen on the host (the verify's per-member dispatches take their rows when encoded), so the verify is encoded
-once the drafting passes are done; its first layer goes to the GPU at once. With LiLiCorr the rows follow a table, as
-measured (`Engine::batch_rows`): two requests verify 3 drafts each, three 1 draft each and four plain rows
-(`NI_BATCH_KF=0` gives DFlash2 its table too: two requests 3 drafts each, three or four 1 draft each, the 27B's three
-taking turns). The Qwen3.5 4B's DFlash drafter, Nemotron 3.5 Lightning and Super-VL take turns today (`NI_BATCH=1`
-batches them too). A Nemotron Nano (no drafter: the 4B decodes with prompt lookup, the 9B v2 with plain steps) batches
-plain rows: one pass over every member's pending token, the 4B's lookup drafts left for when it decodes alone again. A
-member that finishes leaves the batch, and the last one goes back to its own loop. One request alone runs the
-single-stream path unchanged. Requests decoded together can get other tokens than alone where two candidates are within
-the batched pass's rounding of each other, and sampled requests draw other random numbers; `NI_BATCH=0` makes them take
-turns instead.
+batch, and one member's thread holds the
+turn and runs every member's cycles (`Engine::run_batch`): each member's draft when it verifies drafts, then one target
+pass over all the members' rows (`encode_verify_multi`, up to 8 rows). The norms, projections, MLP or experts and the LM
+head run once over every row, so each weight is read once for all the members; each member's recurrent scan, convolution
+window and attention over its own KV cache run side by side in the same command buffer. Every member keeps its own
+drafter ring, acceptance (the longest greedy match, or the exact speculative sampling of a sampled DFlash2 request),
+parser and stream. With DFlash2, KFlash's batch budget (`KfBatch`) decides the rows every cycle, once the members'
+drafting passes are done: a member's draft is worth the calibrated chance that the target accepts it and the drafts
+before it (the drafter's probabilities calibrated against the verify's own acceptances, as for KFlash trees; a sampled
+request's against its speculative sampling's), every member verifies its anchor, and the drafts go in decreasing worth
+over the whole batch, each while it pays for one more row at this Mac's measured cost (a batched cycle's GPU time by
+members and rows) and the batch's recent tokens per ms, up to the pass's 8 rows. A draft's place never depends on the
+draft itself, so a sampled request's speculative sampling stays exact. The rows are chosen on the host (the verify's
+per-member dispatches take their rows when encoded), so the verify is encoded once the drafting passes are done; its
+first layer goes to the GPU at once. With LiLiCorr the rows follow a table, as measured (`Engine::batch_rows`): two
+requests verify 3 drafts each, three 1 draft each and four plain rows (`NI_BATCH_KF=0` gives DFlash2 its table too:
+two requests 3 drafts each, three or four 1 draft each, the 27B's three taking turns). The Qwen3.5 4B's DFlash
+drafter, Nemotron 3.5 Lightning and Super-VL take turns today
+(`NI_BATCH=1` batches them too). A Nemotron Nano (no drafter: the 4B decodes with prompt lookup, the 9B v2 with plain
+steps) batches plain rows: one pass over every member's pending token, the 4B's lookup drafts left for when it decodes
+alone again. A member that finishes leaves the batch, and the last one goes back to its own loop.
+One request alone runs the single-stream path unchanged. Requests decoded together can get other tokens than alone where
+two candidates are within the batched pass's rounding of each other, and sampled requests draw other random numbers;
+`NI_BATCH=0` makes them take turns instead.
 
 ## Execution session ownership
 
