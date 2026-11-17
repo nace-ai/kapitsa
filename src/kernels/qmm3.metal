@@ -161,7 +161,7 @@ NI_INLINE void qr_acc(const device half* X, const device uint32_t* const thread*
 }
 
 // Dense GEMM with qmm_b4_*'s interface (QmmParams, buffers 0-5): Y (+)= X W^T, fp32 Y.
-#define NI_QMRA(NAME, BM, BN, WM, WN, BK, ABL)                                                            \
+#define NI_QMRA_IMPL(NAME, BM, BN, WM, WN, BK, ABL, ACC, SHARED_K)                                                            \
   [[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void NAME(                                    \
       const device half* X [[buffer(0)]], const device uint32_t* Wd [[buffer(1)]],                         \
       const device bfloat* Sd [[buffer(2)]], const device bfloat* Bd [[buffer(3)]],                        \
@@ -169,14 +169,14 @@ NI_INLINE void qr_acc(const device half* X, const device uint32_t* const thread*
       uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],                  \
       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                \
     constexpr int TM = BM / WM, TN = BN / WN;                                                              \
-    threadgroup uint4 xs4[BM * (BK + 8) / 8];                                                              \
+    threadgroup uint4 xs4[BM * (SHARED_K) / 8];                                                              \
     const device uint32_t* W[1] = {Wd};                                                                    \
     const device bfloat* S[1] = {Sd};                                                                      \
     const device bfloat* B[1] = {Bd};                                                                      \
     const uint sgm = sg / WN, sgn = sg % WN, m0 = tg.y * BM, n0 = tg.x * BN;                               \
     const uint2 rc = qr_rc(lane);                                                                          \
     simdgroup_float8x8 acc[TN / 8][TM / 8];                                                                \
-    qr_acc<BM, BN, WM, WN, BK, 1, ABL>(X, W, S, B, p.M, p.N, p.K, p.x_ld, m0, n0, (threadgroup half*)xs4,  \
+    ACC<BM, BN, WM, WN, BK, 1, ABL>(X, W, S, B, p.M, p.N, p.K, p.x_ld, m0, n0, (threadgroup half*)xs4,  \
                                        tid, sgm, sgn, rc, acc);                                            \
     _Pragma("clang loop unroll(full)")                                                                     \
     for (int a = 0; a < TN / 8; ++a) {                                                                     \
@@ -195,11 +195,13 @@ NI_INLINE void qr_acc(const device half* X, const device uint32_t* const thread*
         }                                                                                                  \
     }                                                                                                      \
   }
+#define NI_QMRA(NAME, BM, BN, WM, WN, BK, ABL) \
+  NI_QMRA_IMPL(NAME, BM, BN, WM, WN, BK, ABL, qr_acc, BK + 8)
 #define NI_QMR(NAME, BM, BN, WM, WN, BK) NI_QMRA(NAME, BM, BN, WM, WN, BK, 0)
 
 // Fused dense MLP gate/up: H[m, n] = half(silu(X Wg^T) * (X Wu^T)) (y_ld: halfs per H row); both
 // projections share the X tile. Buffers 0-5 as the dense kernel (W/S/B = gate, Y = H), 6-8 up.
-#define NI_QMR_GU(NAME, BM, BN, WM, WN, BK)                                                               \
+#define NI_QMR_GU_IMPL(NAME, BM, BN, WM, WN, BK, ACC, SHARED_K)                                                               \
   [[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void NAME(                                    \
       const device half* X [[buffer(0)]], const device uint32_t* Wg [[buffer(1)]],                         \
       const device bfloat* Sg [[buffer(2)]], const device bfloat* Bg [[buffer(3)]],                        \
@@ -209,14 +211,14 @@ NI_INLINE void qr_acc(const device half* X, const device uint32_t* const thread*
       uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],                  \
       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                \
     constexpr int TM = BM / WM, TN = BN / WN, FA = TN / 8;                                                 \
-    threadgroup uint4 xs4[BM * (BK + 8) / 8];                                                              \
+    threadgroup uint4 xs4[BM * (SHARED_K) / 8];                                                              \
     const device uint32_t* W[2] = {Wg, Wu};                                                                \
     const device bfloat* S[2] = {Sg, Su};                                                                  \
     const device bfloat* B[2] = {Bg, Bu};                                                                  \
     const uint sgm = sg / WN, sgn = sg % WN, m0 = tg.y * BM, n0 = tg.x * BN;                               \
     const uint2 rc = qr_rc(lane);                                                                          \
     simdgroup_float8x8 acc[2 * FA][TM / 8];                                                                \
-    qr_acc<BM, BN, WM, WN, BK, 2, 0>(X, W, S, B, p.M, p.N, p.K, p.x_ld, m0, n0, (threadgroup half*)xs4,    \
+    ACC<BM, BN, WM, WN, BK, 2, 0>(X, W, S, B, p.M, p.N, p.K, p.x_ld, m0, n0, (threadgroup half*)xs4,    \
                                      tid, sgm, sgn, rc, acc);                                              \
     _Pragma("clang loop unroll(full)")                                                                     \
     for (int a = 0; a < FA; ++a) {                                                                         \
@@ -232,6 +234,9 @@ NI_INLINE void qr_acc(const device half* X, const device uint32_t* const thread*
         }                                                                                                  \
     }                                                                                                      \
   }
+
+#define NI_QMR_GU(NAME, BM, BN, WM, WN, BK) \
+  NI_QMR_GU_IMPL(NAME, BM, BN, WM, WN, BK, qr_acc, BK + 8)
 
 // Multi-projection form (NI_SHORTPF): up to 4 projections sharing X (same K, 4-bit g64), e.g. the
 // GDN in-proj (qkv, z, b, a) or attention q/k/v, in ONE dispatch: tg.x runs over the concatenated N
@@ -498,3 +503,134 @@ NI_QMRA(qmra6_k32_w14_m32_n128, 32, 128, 1, 4, 32, 6)
 NI_QMRA(qmra8_k32_w14_m32_n128, 32, 128, 1, 4, 32, 8)
 NI_QMRA(qmra9_k32_w14_m32_n128, 32, 128, 1, 4, 32, 9)
 NI_QMRA(qmra15_k32_w14_m32_n128, 32, 128, 1, 4, 32, 15)
+
+// Preconverted coefficient path. Packed W, qr_pair and the K32 MMA sequence are unchanged.
+
+// Exact same coefficient conversions as qr_load_w, only moved to a separate dispatch.
+kernel void qmr_pack_coeff(const device bfloat* S [[buffer(0)]], const device bfloat* B [[buffer(1)]],
+                            device half2* C [[buffer(2)]], constant uint& count [[buffer(3)]],
+                            uint i [[thread_position_in_grid]]) {
+  if (i < count) C[i] = half2(half(float(S[i]) * 4096.0f), half(float(B[i])));
+}
+template <int FA, int BK, int NP>
+NI_INLINE void qrc_load_w(const device uint32_t* const thread* W, const device bfloat* const thread* S,
+                         const device bfloat* const thread* B, thread const uint* wrow, uint wpr, uint gpr,
+                         uint k0, uint c, thread uint* wr, thread half2* sb) {
+  constexpr int WPL = BK / 32;
+  const uint g = (k0 + 8 * WPL * c) / 64;
+  _Pragma("clang loop unroll(full)")
+  for (int p = 0; p < NP; ++p)
+    _Pragma("clang loop unroll(full)")
+    for (int a = 0; a < FA; ++a) {
+      const int i = p * FA + a;
+      const device uint* wp = W[p] + wrow[a] * wpr + k0 / 8 + WPL * c;
+      if (WPL == 4) {
+        uint4 v = *(const device uint4*)wp;
+        wr[i * 4 + 0] = v.x; wr[i * 4 + 1] = v.y; wr[i * 4 + 2] = v.z; wr[i * 4 + 3] = v.w;
+      } else if (WPL == 2) {
+        uint2 v = *(const device uint2*)wp;
+        wr[i * 2 + 0] = v.x; wr[i * 2 + 1] = v.y;
+      } else {
+        wr[i] = wp[0];
+      }
+      if (BK >= 64 || (k0 & 63) == 0)
+        sb[i] = ((const device half2*)S[p])[wrow[a] * gpr + g];
+    }
+}
+
+// Shared X [permuted K, BM]. Each lane writes its own row as half elements;
+// the read barrier precedes adjacent-row half2 B fragment loads.
+template <int BM, int BK, int NT>
+NI_INLINE void qrc_store_x_transposed(threadgroup half* xs, uint tid, thread const uint4* xr) {
+  constexpr int CPR = BK / 8, XL = (BM * CPR + NT - 1) / NT, WPL = BK / 32;
+  _Pragma("clang loop unroll(full)")
+  for (int j = 0; j < XL; ++j) {
+    const uint i = tid + j * NT, r = i / CPR, q = i % CPR;
+    const uint cc = q / WPL, h = q % WPL;
+    const uint4 v = xr[j];
+    _Pragma("clang loop unroll(full)")
+    for (uint word = 0; word < 4; ++word) {
+      const uint own = v[word];
+      if (i < uint(BM * CPR)) {
+        const uint e = word / 2, f = (word % 2) * 2;
+        threadgroup half* dst = xs + ((4 * h + f) * 8 + 2 * cc + e) * BM + r;
+        const half2 bits = as_type<half2>(own);
+        dst[0] = bits.x;
+        dst[8 * BM] = bits.y;
+      }
+    }
+  }
+}
+
+// acc[a][b] += A_a(f) * X_b(f)^T over the BK/8 fragments of one K step; A_a from this lane's words.
+template <int FA, int FB, int BK, int TM, int ABL, int BM>
+NI_INLINE void qrc_mma_transposed(thread simdgroup_float8x8 (&acc)[FA][FB], threadgroup const half* xs, uint sgm,
+                      thread const uint* wr, thread const half2* sb, uint2 rc) {
+  constexpr int WPL = BK / 32, NF = BK / 8;
+  _Pragma("clang loop unroll(full)")
+  for (int f = 0; f < NF; ++f) {
+    simdgroup_half8x8 af[FA];
+    _Pragma("clang loop unroll(full)")
+    for (int a = 0; a < FA; ++a) {
+      half2 v = (ABL & 1) ? as_type<half2>(wr[a * WPL + f / 4]) : qr_pair(wr[a * WPL + f / 4], f % 4, sb[a]);
+      af[a].thread_elements()[0] = v.x;
+      af[a].thread_elements()[1] = v.y;
+    }
+    _Pragma("clang loop unroll(full)")
+    for (int b = 0; b < FB; ++b) {
+      simdgroup_half8x8 bf;
+      const half2 xv = *(threadgroup const half2*)(xs + (8 * f + rc.x) * BM + sgm * TM + b * 8 + rc.y);
+      bf.thread_elements()[0] = xv.x;
+      bf.thread_elements()[1] = xv.y;
+      _Pragma("clang loop unroll(full)")
+      for (int a = 0; a < FA; ++a) simdgroup_multiply_accumulate(acc[a][b], af[a], bf, acc[a][b]);
+    }
+  }
+}
+
+// Load the next X/W before waiting to reuse shared X; the second barrier publishes its stores.
+// Preserve qr_acc's per-output fragment order. The original accumulator serves other tile sizes.
+template <int BM, int BN, int WM, int WN, int BK, int NP, int ABL>
+NI_INLINE void qrc_acc(const device half* X, const device uint32_t* const thread* W,
+                      const device bfloat* const thread* S, const device bfloat* const thread* B, uint M, uint N,
+                      uint K, uint x_ld, uint m0, uint n0, threadgroup half* xs, uint tid, uint sgm, uint sgn,
+                      uint2 rc, thread simdgroup_float8x8 (&acc)[NP * (BN / WN / 8)][BM / WM / 8]) {
+  constexpr int NT = WM * WN * 32;
+  constexpr int TM = BM / WM, TN = BN / WN;
+  constexpr int FB = TM / 8, FA = TN / 8;
+  constexpr int CPR = BK / 8, XL = (BM * CPR + NT - 1) / NT;
+  constexpr int WPL = BK / 32;
+  const uint c = rc.y / 2;
+  _Pragma("clang loop unroll(full)")
+  for (int a = 0; a < NP * FA; ++a)
+    _Pragma("clang loop unroll(full)")
+    for (int b = 0; b < FB; ++b) acc[a][b] = simdgroup_float8x8(0);
+
+  const uint wpr = K / 8, gpr = K / 64, x_ld8 = x_ld / 8;
+  // this lane's W rows (clamped: rows past N compute garbage that is never stored)
+  uint wrow[FA];
+  _Pragma("clang loop unroll(full)")
+  for (int a = 0; a < FA; ++a) wrow[a] = min(n0 + sgn * TN + a * 8 + rc.x, N - 1);
+  const device uint4* X4 = (const device uint4*)X;
+
+  uint4 xr[XL];
+  uint wr[NP * FA * WPL];
+  half2 sb[NP * FA];
+  for (uint k0 = 0; k0 < K; k0 += BK) {
+    if (!(ABL & 2)) qr_load_x<BM, BK, NT>(X4, x_ld8, M, m0, k0, tid, xr);
+    if (!(ABL & 8)) {
+      qrc_load_w<FA, BK, NP>(W, S, B, wrow, wpr, gpr, k0, c, wr, sb);
+    } else {
+      for (int u = 0; u < NP * FA * WPL; ++u) wr[u] = k0 + u;
+      for (int a = 0; a < NP * FA; ++a) sb[a] = half2(0.01h, 0.1h);
+    }
+    if (!(ABL & 4)) threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (!(ABL & 2)) qrc_store_x_transposed<BM, BK, NT>(xs, tid, xr);
+    if (!(ABL & 4)) threadgroup_barrier(mem_flags::mem_threadgroup);
+    qrc_mma_transposed<NP * FA, FB, BK, TM, ABL, BM>(acc, xs, sgm, wr, sb, rc);
+  }
+}
+
+// Identical output epilogues; these instances use packed coefficients and transposed shared X.
+NI_QMRA_IMPL(qmr_pc_k32_w14_m32_n128, 32, 128, 1, 4, 32, 0, qrc_acc, 32)
+NI_QMR_GU_IMPL(qmr_gu_pc_k32_w14_m32_n64, 32, 64, 1, 4, 32, qrc_acc, 32)

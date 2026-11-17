@@ -302,6 +302,7 @@ void Qwen4Exp::load(const std::string& dir) {
       },
       [no_mtp](const std::string& f) { return f != "ple.safetensors" && !(no_mtp && f == "mtp.safetensors"); },
       defer);
+  qmr_coeff_scratch_capacity_ = qmr_coeff_budget(false).scratch;
   {
     // the naming from a tensor every share holds: its first layer's input mix
     const std::string probe = "model.layers." + std::to_string(lo_) + ".attn_hyper_connection.hc_norm.weight";
@@ -2034,6 +2035,8 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk, const Split* split) {
   const char* es = getenv("NI_EXPERT_STORE");
   const bool stream = q20_experts_in(root) && !(es && (!strcmp(es, "off") || !strcmp(es, "0")));
   size_t lm_head = 0, table = 0;
+  QmrCoeffHeaders qmr_headers;
+  const bool qmr = qmr_coeff_enabled(chunk);
   for (const std::string& f : files) {
     std::ifstream in(dir + "/" + f, std::ios::binary);
     uint64_t n = 0;
@@ -2060,6 +2063,7 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk, const Split* split) {
         if (!getenv("NI_NO_MTP")) m.mtp += al;
         continue;
       }
+      if (qmr) qmr_headers.note(name, v["dtype"] == "U32", v["shape"].get<std::vector<int64_t>>());
       if (stream && is_trunk_expert(name)) m.streamed += b;
       else m.weights += al;
       if (name.find("lm_head.") != std::string::npos) lm_head += b;
@@ -2067,6 +2071,7 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk, const Split* split) {
         m.decode_bytes += name.find("switch_mlp") != std::string::npos ? size_t(double(b) * share) : b;
     }
   }
+  m.activations += qmr_headers.budget(false).scratch;
   (void)table;
   if (m.streamed) {
     const size_t slot = q20::slot_layout(uint32_t(c.hidden), uint32_t(c.moe_I)).bytes;

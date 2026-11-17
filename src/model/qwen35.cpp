@@ -490,6 +490,7 @@ void Qwen35::prewarm_pipelines() {
                                  "gdn_prep_par", "gdn_step_par_l16", "gdn_step_parr4_l16", "gdn_gnorm", "topk_stage1",
                                  "sample_stage2",
                                  "qmr_k32_w14_m32_n128", "qmr_k64_w14_m16_n64", "qmr_k64_w12_m8_n64",
+                                 "qmr_pc_k32_w14_m32_n128", "qmr_pack_coeff", "qmr_gu_pc_k32_w14_m32_n64",
                                  "qmr_gu_k32_w14_m32_n64", "qmr_gu_k64_w14_m16_n64", "qmr_gu_k64_w12_m8_n32",
                                  "qmm_b8_m32_n32", "qmm_moe_gu_b4_m64_n32", "qmm_moe_dn_b4_m64_n64"};
   if (sample_sg_) names.insert("topk_stage1_rows_sg");
@@ -1102,6 +1103,7 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   pass_rows_ = vpf_pass_rows(cfg_);
   if (pass_rows_ > tree_rows_) set_tree_rows(pass_rows_);
   prewarm_pipelines();
+  load_qmr_coeff_cache();
   logi("loaded %s: %d layers, %s, %.1f GB mapped in %.0f ms; weights %s", dir.c_str(), cfg_.layers,
        cfg_.moe ? "MoE" : "dense", ws_.total_bytes() / 1e9, now_ms() - t0, formats_summary().c_str());
   // Dense ANE FFN: legacy 2560-channel inputs keep their defaults; new 2048-channel inputs
@@ -1131,8 +1133,8 @@ Qwen35::~Qwen35() {
   // The background compile only touches its own copies (no Metal objects), so this cannot race the model's own teardown;
   // it is here so the thread cannot outlive the process's model, as an unjoined std::thread would
   if (ane_thread_.joinable()) ane_thread_.join();
-  // NI_QMT_I8's scratch (qmt_i8_scratch): released once the queue has finished everything committed before
-  bool any = !qmt_i8_retired_.empty();
+  // Prefill scratch: release after the queue has finished all previously committed work.
+  bool any = !qmt_i8_retired_.empty() || bool(qmr_coeff_) || !qmr_coeff_cache_.empty();
   for (const QmtI8Slot& sl : qmt_i8_ring_) any = any || bool(sl.q);
   if (any) {
     Gpu& g = Gpu::get();
@@ -1142,6 +1144,8 @@ Qwen35::~Qwen35() {
       g.release(sl.s);
     }
     for (Buffer& b : qmt_i8_retired_) g.release(b);
+    g.release(qmr_coeff_);
+    for (auto& [q, b] : qmr_coeff_cache_) g.release(b);
   }
 }
 
@@ -1267,7 +1271,7 @@ struct TensorMeta {
 };
 static size_t st_bytes(const std::string& path, bool mtp, double expert_share = -1, size_t* decode = nullptr,
                        size_t* lm_head = nullptr, std::map<std::string, TensorMeta>* metas = nullptr,
-                       int mtp_bits = 4, bool packed_metas = false) {
+                       int mtp_bits = 4, bool packed_metas = false, QmrCoeffHeaders* qmr_headers = nullptr) {
   std::ifstream f(path, std::ios::binary);
   uint64_t n = 0;
   if (!f.read(reinterpret_cast<char*>(&n), 8) || n > (256u << 20)) return 0;
@@ -1293,6 +1297,7 @@ static size_t st_bytes(const std::string& path, bool mtp, double expert_share = 
       b = N * K * size_t(mtp_bits) / 8 + 2 * (N * K / 64) * 2;  // quantized at load: codes + bf16 scales and biases
     }
     total += (b + 255) / 256 * 256;
+    if (qmr_headers) qmr_headers->note(name, v["dtype"] == "U32", v["shape"].get<std::vector<int64_t>>());
     if (metas) {  // keyed by the name's tail: embed_tokens.weight, lm_head.scales, mlp.gate_proj.weight (layer 0) ...
       for (const char* k : {"embed_tokens.weight", "embed_tokens.scales", "lm_head.weight", "lm_head.scales"})
         if (name.size() >= strlen(k) && name.compare(name.size() - strlen(k), strlen(k), k) == 0)
@@ -1334,13 +1339,18 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
   size_t lm_head = 0;
   std::map<std::string, TensorMeta> metas;
   const bool packed = v8_packed_coeff_on(c);
+  QmrCoeffHeaders qmr_headers;
+  const bool qmr = qmr_coeff_enabled(chunk);
   // the MTP head: mtp.safetensors, else the one in the checkpoint's own shards (load_mtp reads the same)
   const bool sidecar = std::find(files.begin(), files.end(), "mtp.safetensors") != files.end();
   for (const std::string& f : files) {
-    m.weights += st_bytes(dir + "/" + f, false, share, &m.decode_bytes, &lm_head, &metas, 4, packed);
+    m.weights += st_bytes(dir + "/" + f, false, share, &m.decode_bytes, &lm_head, &metas, 4, packed, qmr ? &qmr_headers : nullptr);
     if ((f == "mtp.safetensors" || !sidecar) && !getenv("NI_NO_MTP"))
       m.mtp += st_bytes(dir + "/" + f, true, -1, nullptr, nullptr, nullptr, mtp_head_bits(c.moe));
   }
+  const QmrCoeffBudget coeff = qmr_headers.budget(true);
+  m.weights += coeff.immutable;
+  m.activations += coeff.scratch;
   has_mtp = m.mtp > 0;
   m.dense = !c.moe;
   m.hidden = c.hidden;
@@ -2809,6 +2819,62 @@ std::pair<Buffer, Buffer> Qwen35::qmt_i8_scratch(size_t m, size_t k) {
   return {sl.q, sl.s};
 }
 
+bool Qwen35::qmr_coeff_enabled(int chunk) {
+  if (chunk < 64) return false;
+  const QmrSel& q = qmr_sel();
+  return q.on && !qmt_on() && (q.name == "qmr_k32_w14_m32_n128" || q.name == "qmr_pc_k32_w14_m32_n128");
+}
+
+QmrCoeffBudget Qwen35::qmr_coeff_budget(bool cache_trunk) const {
+  if (!qmr_coeff_enabled(tmax_)) return {};
+  QmrCoeffHeaders headers;
+  for (const auto& [name, t] : ws_.all())
+    if (!is_mtp(name)) headers.note(name, t.dtype == DType::U32, t.shape);
+  return headers.budget(cache_trunk);
+}
+
+void Qwen35::load_qmr_coeff_cache() {
+  const QmrCoeffBudget budget = qmr_coeff_budget(true);
+  qmr_coeff_scratch_capacity_ = budget.scratch;
+  if (!budget.immutable) return;
+  // Only actual trunk objects, after all load-time transforms. Temporary/sliced QLinear objects and
+  // NoLoad-derived models keep the per-call conversion. Nothing is published from a request encoder:
+  // cancellation before commit must never leave a cache that has not been initialized.
+  std::vector<const QLinear*> projections;
+  size_t total = 0;
+  for (const Layer& l : layers_)
+    for (const QLinear* p : {&l.qkv, &l.z, &l.out, &l.q, &l.k, &l.v, &l.o,
+                            &l.sg, &l.su, &l.sd, &l.mg, &l.mu, &l.md}) {
+      if (!*p || !p->q4() || p->q20 || p->exl3 || p->N <= 64 || !p->K || p->K % 64) continue;
+      const size_t groups = size_t(p->N) * (p->K / 64), bytes = groups * 4;
+      if (groups > UINT32_MAX || bytes > budget.immutable - total) return;
+      projections.push_back(p);
+      total += bytes;
+    }
+  if (projections.empty()) return;
+  const double start = now_ms();
+  Gpu& g = Gpu::get();
+  auto e = g.begin();
+  for (const QLinear* p : projections) {
+    const uint32_t groups = p->N * (p->K / 64);
+    Buffer b = g.alloc(size_t(groups) * 4, "qmr_static_coeff");
+    qmr_coeff_cache_.emplace(p, b);
+    e->use(pipe("qmr_pack_coeff"));
+    e->buf(0, p->s->buf); e->buf(1, p->b->buf); e->buf(2, b); e->val(3, groups);
+    e->dispatch((groups + 255) / 256, 1, 1, 256);
+  }
+  e->commit_and_wait();  // Constructor has not published the model yet; every cache is now initialized.
+  logi("QMR coefficient cache: %zu static projections, %.3f MiB; setup %.3f ms, GPU %.3f ms",
+       projections.size(), double(total) / (1024 * 1024), now_ms() - start, e->gpu_ms());
+}
+
+Buffer Qwen35::qmr_coeff_scratch(size_t groups) {
+  if (!groups || groups > qmr_coeff_scratch_capacity_ / 4) return {};
+  // One buffer for all fallback calls. Never replace a buffer referenced by an in-flight encoder.
+  if (!qmr_coeff_) qmr_coeff_ = Gpu::get().alloc(qmr_coeff_scratch_capacity_, "qmr_coeff");
+  return qmr_coeff_;
+}
+
 void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
   const QmrSel& q = qmr_sel();
   if (q.on && !cfg_.moe && qmtf_for(L, M)) {
@@ -2880,9 +2946,30 @@ void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const
     static const std::string small = "qmr_k64_w14_m16_n64", tiny = "qmr_k64_w12_m8_n64";
     if (M <= 8) n = &tiny, bm = 8, bn = 64, th = 64;
     else if (M < 64 || L.N <= 64) n = &small, bm = 16, bn = 64, th = 128;
+    const size_t groups = size_t(L.N) * (L.K / 64);
+    static const std::string original = "qmr_k32_w14_m32_n128", packed = "qmr_pc_k32_w14_m32_n128";
+    Buffer coeff;
+    bool cached = false;
+    if ((*n == original || *n == packed) && groups <= UINT32_MAX) {
+      const auto it = qmr_coeff_cache_.find(&L);
+      cached = it != qmr_coeff_cache_.end();
+      coeff = cached ? it->second : qmr_coeff_scratch(groups);
+    }
+    if (coeff && !cached) {
+      // Even within an independent-projection group, this shared scratch has a write/read dependency.
+      e.barrier();
+      e.use(pipe("qmr_pack_coeff"));
+      e.buf(0, L.s->buf); e.buf(1, L.b->buf); e.buf(2, coeff); e.val(3, uint32_t(groups));
+      e.dispatch(uint32_t((groups + 255) / 256), 1, 1, 256);
+      e.barrier();
+    }
+    if (coeff) n = &packed;
+    else if (*n == packed) {
+      n = &original;
+    }
     e.use(pipe(*n));
     kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
-    e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
+    e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, coeff ? coeff : L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
     e.val(5, p);
     e.dispatch((L.N + bn - 1) / bn, (M + bm - 1) / bm, 1, th);
     return;
@@ -3309,11 +3396,32 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
   if (b8) n = M < 64 ? "qmr8_gu_k32_w14_m16_n64" : "qmr8_gu_k32_w14_m32_n64", bm = M < 64 ? 16 : 32;
   else if (M <= 8) n = "qmr_gu_k64_w12_m8_n32", bm = 8, bn = 32, th = 64;
   else if (M < 64) n = "qmr_gu_k64_w14_m16_n64", bm = 16, bn = 64, th = 128;
+  Buffer cg, cu;
+  const size_t groups = size_t(G.N) * (G.K / 64);
+  if (!strcmp(n, "qmr_gu_k32_w14_m32_n64") && groups <= UINT32_MAX) {
+    const auto ig = qmr_coeff_cache_.find(&G), iu = qmr_coeff_cache_.find(&U);
+    if (ig != qmr_coeff_cache_.end() && iu != qmr_coeff_cache_.end()) {
+      cg = ig->second;
+      cu = iu->second;
+    } else if (Buffer coeff = qmr_coeff_scratch(2 * groups)) {
+      cg = coeff.view(0, groups * 4);
+      cu = coeff.view(groups * 4, groups * 4);
+      e.barrier();
+      e.use(pipe("qmr_pack_coeff"));
+      e.buf(0, G.s->buf); e.buf(1, G.b->buf); e.buf(2, cg); e.val(3, uint32_t(groups));
+      e.dispatch(uint32_t((groups + 255) / 256), 1, 1, 256);
+      e.use(pipe("qmr_pack_coeff"));
+      e.buf(0, U.s->buf); e.buf(1, U.b->buf); e.buf(2, cu); e.val(3, uint32_t(groups));
+      e.dispatch(uint32_t((groups + 255) / 256), 1, 1, 256);
+      e.barrier();
+    }
+    if (cg && cu) n = "qmr_gu_pc_k32_w14_m32_n64";
+  }
   e.use(pipe(n));
   kp::Qmm p{uint32_t(M), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};
-  e.buf(0, xh); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, h);
+  e.buf(0, xh); e.buf(1, G.w->buf); e.buf(2, cg ? cg : G.s->buf); e.buf(3, G.b->buf); e.buf(4, h);
   e.val(5, p);
-  e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
+  e.buf(6, U.w->buf); e.buf(7, cu ? cu : U.s->buf); e.buf(8, U.b->buf);
   e.dispatch((G.N + bn - 1) / bn, (M + bm - 1) / bm, 1, th);
   return true;
 }

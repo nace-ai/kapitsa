@@ -1,0 +1,1888 @@
+{
+  "stage": "formal",
+  "started_epoch": 1794320290.7275252,
+  "status": "complete",
+  "binary_sha256": {
+    "A": "b7d63d63d5dc7d0c7782bd6dfd13edd0a2646975982f8faf9ff684155fa8f962",
+    "B": "7b01c3c4f7c3dbf464185f95d302b5dea0d254d4c98b3a39e362eb884aa6ec3f"
+  },
+  "command": [
+    "/Users/bytedance/Desktop/kapitsa-qmr-20261109/scripts/paired_requests_ambient.py",
+    "--out",
+    "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07",
+    "--candidate",
+    "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/candidate-coeff-cache/model-build/kapitsa",
+    "--stage",
+    "formal",
+    "--pairs",
+    "3",
+    "--sizes",
+    "4096",
+    "16384",
+    "--freeze",
+    "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-freeze-07.json"
+  ],
+  "attempts": [
+    {
+      "size": 4096,
+      "index": 1,
+      "attempt": 0,
+      "display_boundaries": {
+        "A": {
+          "before": {
+            "epoch": 1794320293.970134,
+            "displays": [
+              {
+                "id": 2,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 19501,
+                "model": 30319,
+                "asleep": 1
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794320378.174986,
+            "displays": [
+              {
+                "id": 2,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 19501,
+                "model": 30319,
+                "asleep": 1
+              }
+            ]
+          }
+        },
+        "B": {
+          "before": {
+            "epoch": 1794320382.8230278,
+            "displays": [
+              {
+                "id": 2,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 19501,
+                "model": 30319,
+                "asleep": 1
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794320457.165577,
+            "displays": [
+              {
+                "id": 2,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 19501,
+                "model": 30319,
+                "asleep": 1
+              }
+            ]
+          }
+        }
+      },
+      "A": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/4096-pair-1-attempt-0-A",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [],
+        "diagnostic_failures": [],
+        "valid_for_timing": true,
+        "usage": {
+          "prompt_tokens": 4096,
+          "completion_tokens": 512,
+          "total_tokens": 4608,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 16378.6,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 16.383486542,
+        "total_s": 26.347930417,
+        "whole_decode_client_s": 9.964443875,
+        "prefill_s": 16.3786,
+        "whole_decode_engine_s": 9.964,
+        "model_ready_s": 14.360570292,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8479529704,
+          "resident_size": 4555309056,
+          "wired_size": 0,
+          "pageins": 591,
+          "phys_footprint_peak": 9682460160
+        },
+        "resident_memory": {
+          "phys_footprint": 9540000488,
+          "resident_size": 4569382912,
+          "wired_size": 0,
+          "pageins": 599,
+          "phys_footprint_peak": 9682460160
+        },
+        "after_memory": {
+          "phys_footprint": 9587268328,
+          "resident_size": 4569530368,
+          "wired_size": 0,
+          "pageins": 599,
+          "phys_footprint_peak": 9682460160
+        },
+        "mean_compute_gpu_pct": 0.0,
+        "mean_desktop_gpu_pct": 0.0,
+        "mean_windowserver_gpu_pct": 0.0,
+        "mean_other_desktop_gpu_pct": 0.0,
+        "max_foreign_cpu_pct": 80.9,
+        "content_sha256": "1ae36f7bc96c4679d4947baf4eb82a2c9ee59b5ffd1a6b0075dc1dcf2eb73b5c"
+      },
+      "A_returncode": 0,
+      "B": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/4096-pair-1-attempt-0-B",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [],
+        "diagnostic_failures": [],
+        "valid_for_timing": true,
+        "usage": {
+          "prompt_tokens": 4096,
+          "completion_tokens": 512,
+          "total_tokens": 4608,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 15752.1,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 15.756257292,
+        "total_s": 25.680913082999993,
+        "whole_decode_client_s": 9.924655790999992,
+        "prefill_s": 15.7521,
+        "whole_decode_engine_s": 9.925,
+        "model_ready_s": 12.743107,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8912542368,
+          "resident_size": 7517732864,
+          "wired_size": 0,
+          "pageins": 437,
+          "phys_footprint_peak": 10115620280
+        },
+        "resident_memory": {
+          "phys_footprint": 9972505272,
+          "resident_size": 7533740032,
+          "wired_size": 0,
+          "pageins": 437,
+          "phys_footprint_peak": 10115620280
+        },
+        "after_memory": {
+          "phys_footprint": 10019805880,
+          "resident_size": 7534215168,
+          "wired_size": 0,
+          "pageins": 437,
+          "phys_footprint_peak": 10115620280
+        },
+        "mean_compute_gpu_pct": 0.0,
+        "mean_desktop_gpu_pct": 0.0,
+        "mean_windowserver_gpu_pct": 0.0,
+        "mean_other_desktop_gpu_pct": 0.0,
+        "max_foreign_cpu_pct": 97.8,
+        "content_sha256": "1ae36f7bc96c4679d4947baf4eb82a2c9ee59b5ffd1a6b0075dc1dcf2eb73b5c"
+      },
+      "B_returncode": 0,
+      "pair_environment_failures": [],
+      "valid": true
+    },
+    {
+      "size": 4096,
+      "index": 2,
+      "attempt": 0,
+      "display_boundaries": {
+        "A": {
+          "before": {
+            "epoch": 1794320461.9480782,
+            "displays": [
+              {
+                "id": 2,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 19501,
+                "model": 30319,
+                "asleep": 1
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794320536.824054,
+            "displays": [
+              {
+                "id": 2,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 19501,
+                "model": 30319,
+                "asleep": 1
+              }
+            ]
+          }
+        },
+        "B": {
+          "before": {
+            "epoch": 1794320541.7589161,
+            "displays": [
+              {
+                "id": 2,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 19501,
+                "model": 30319,
+                "asleep": 1
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794320617.578634,
+            "displays": [
+              {
+                "id": 2,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 19501,
+                "model": 30319,
+                "asleep": 1
+              }
+            ]
+          }
+        }
+      },
+      "A": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/4096-pair-2-attempt-0-A",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [
+          "foreign compute GPU"
+        ],
+        "diagnostic_failures": [],
+        "valid_for_timing": false,
+        "usage": {
+          "prompt_tokens": 4096,
+          "completion_tokens": 512,
+          "total_tokens": 4608,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 16380.1,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 16.384201333000007,
+        "total_s": 26.219817207999995,
+        "whole_decode_client_s": 9.835615874999988,
+        "prefill_s": 16.3801,
+        "whole_decode_engine_s": 9.835,
+        "model_ready_s": 12.759822999999999,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8479726264,
+          "resident_size": 7646232576,
+          "wired_size": 0,
+          "pageins": 590,
+          "phys_footprint_peak": 9680215504
+        },
+        "resident_memory": {
+          "phys_footprint": 9540197096,
+          "resident_size": 7662419968,
+          "wired_size": 0,
+          "pageins": 600,
+          "phys_footprint_peak": 9680215504
+        },
+        "after_memory": {
+          "phys_footprint": 9587497704,
+          "resident_size": 7662845952,
+          "wired_size": 0,
+          "pageins": 600,
+          "phys_footprint_peak": 9680215504
+        },
+        "mean_compute_gpu_pct": 1.5002117026777022,
+        "mean_desktop_gpu_pct": 0.0,
+        "mean_windowserver_gpu_pct": 0.0,
+        "mean_other_desktop_gpu_pct": 0.0,
+        "max_foreign_cpu_pct": 100.0,
+        "content_sha256": "1ae36f7bc96c4679d4947baf4eb82a2c9ee59b5ffd1a6b0075dc1dcf2eb73b5c"
+      },
+      "A_returncode": 0,
+      "B": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/4096-pair-2-attempt-0-B",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [],
+        "diagnostic_failures": [],
+        "valid_for_timing": true,
+        "usage": {
+          "prompt_tokens": 4096,
+          "completion_tokens": 512,
+          "total_tokens": 4608,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 15749.5,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 15.753906874999998,
+        "total_s": 25.594071416999995,
+        "whole_decode_client_s": 9.840164541999997,
+        "prefill_s": 15.7495,
+        "whole_decode_engine_s": 9.839,
+        "model_ready_s": 12.762692958999999,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8912493312,
+          "resident_size": 7741784064,
+          "wired_size": 0,
+          "pageins": 439,
+          "phys_footprint_peak": 10115522024
+        },
+        "resident_memory": {
+          "phys_footprint": 9972521752,
+          "resident_size": 7757856768,
+          "wired_size": 0,
+          "pageins": 439,
+          "phys_footprint_peak": 10115522024
+        },
+        "after_memory": {
+          "phys_footprint": 10019887896,
+          "resident_size": 7758348288,
+          "wired_size": 0,
+          "pageins": 439,
+          "phys_footprint_peak": 10115522024
+        },
+        "mean_compute_gpu_pct": 0.0,
+        "mean_desktop_gpu_pct": 0.0,
+        "mean_windowserver_gpu_pct": 0.0,
+        "mean_other_desktop_gpu_pct": 0.0,
+        "max_foreign_cpu_pct": 3.4,
+        "content_sha256": "1ae36f7bc96c4679d4947baf4eb82a2c9ee59b5ffd1a6b0075dc1dcf2eb73b5c"
+      },
+      "B_returncode": 0,
+      "pair_environment_failures": [],
+      "valid": false
+    },
+    {
+      "size": 4096,
+      "index": 2,
+      "attempt": 1,
+      "display_boundaries": {
+        "A": {
+          "before": {
+            "epoch": 1794320622.335526,
+            "displays": [
+              {
+                "id": 2,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 19501,
+                "model": 30319,
+                "asleep": 1
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794320697.347324,
+            "displays": [
+              {
+                "id": 2,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 19501,
+                "model": 30319,
+                "asleep": 1
+              }
+            ]
+          }
+        },
+        "B": {
+          "before": {
+            "epoch": 1794320702.087208,
+            "displays": [
+              {
+                "id": 2,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 19501,
+                "model": 30319,
+                "asleep": 1
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794320777.266931,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          }
+        }
+      },
+      "A": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/4096-pair-2-attempt-1-A",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [],
+        "diagnostic_failures": [],
+        "valid_for_timing": true,
+        "usage": {
+          "prompt_tokens": 4096,
+          "completion_tokens": 512,
+          "total_tokens": 4608,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 16374.2,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 16.378603375000004,
+        "total_s": 26.320779249999994,
+        "whole_decode_client_s": 9.94217587499999,
+        "prefill_s": 16.374200000000002,
+        "whole_decode_engine_s": 9.942,
+        "model_ready_s": 12.752405708000001,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8479628056,
+          "resident_size": 7832748032,
+          "wired_size": 0,
+          "pageins": 588,
+          "phys_footprint_peak": 9682427416
+        },
+        "resident_memory": {
+          "phys_footprint": 9540164424,
+          "resident_size": 7849082880,
+          "wired_size": 0,
+          "pageins": 598,
+          "phys_footprint_peak": 9682427416
+        },
+        "after_memory": {
+          "phys_footprint": 9587448648,
+          "resident_size": 7849492480,
+          "wired_size": 0,
+          "pageins": 598,
+          "phys_footprint_peak": 9682427416
+        },
+        "mean_compute_gpu_pct": 0.0,
+        "mean_desktop_gpu_pct": 0.0,
+        "mean_windowserver_gpu_pct": 0.0,
+        "mean_other_desktop_gpu_pct": 0.0,
+        "max_foreign_cpu_pct": 97.5,
+        "content_sha256": "1ae36f7bc96c4679d4947baf4eb82a2c9ee59b5ffd1a6b0075dc1dcf2eb73b5c"
+      },
+      "A_returncode": 0,
+      "B": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/4096-pair-2-attempt-1-B",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [],
+        "diagnostic_failures": [],
+        "valid_for_timing": true,
+        "usage": {
+          "prompt_tokens": 4096,
+          "completion_tokens": 512,
+          "total_tokens": 4608,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 15920.0,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 15.924819,
+        "total_s": 25.898971666999998,
+        "whole_decode_client_s": 9.974152666999998,
+        "prefill_s": 15.92,
+        "whole_decode_engine_s": 9.974,
+        "model_ready_s": 13.198848000000002,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8912657152,
+          "resident_size": 7621427200,
+          "wired_size": 0,
+          "pageins": 438,
+          "phys_footprint_peak": 10115784240
+        },
+        "resident_memory": {
+          "phys_footprint": 9972620056,
+          "resident_size": 7248920576,
+          "wired_size": 0,
+          "pageins": 438,
+          "phys_footprint_peak": 10115784240
+        },
+        "after_memory": {
+          "phys_footprint": 10019920664,
+          "resident_size": 7215792128,
+          "wired_size": 0,
+          "pageins": 438,
+          "phys_footprint_peak": 10115784240
+        },
+        "mean_compute_gpu_pct": 0.34960631534905834,
+        "mean_desktop_gpu_pct": 21.514879964503905,
+        "mean_windowserver_gpu_pct": 21.50741609619509,
+        "mean_other_desktop_gpu_pct": 0.007463868308816179,
+        "max_foreign_cpu_pct": 111.5,
+        "content_sha256": "1ae36f7bc96c4679d4947baf4eb82a2c9ee59b5ffd1a6b0075dc1dcf2eb73b5c"
+      },
+      "B_returncode": 0,
+      "pair_environment_failures": [],
+      "valid": true
+    },
+    {
+      "size": 4096,
+      "index": 3,
+      "attempt": 0,
+      "display_boundaries": {
+        "A": {
+          "before": {
+            "epoch": 1794320782.280279,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794320859.499825,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          }
+        },
+        "B": {
+          "before": {
+            "epoch": 1794320864.522403,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794320939.662167,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          }
+        }
+      },
+      "A": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/4096-pair-3-attempt-0-A",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [],
+        "diagnostic_failures": [],
+        "valid_for_timing": true,
+        "usage": {
+          "prompt_tokens": 4096,
+          "completion_tokens": 512,
+          "total_tokens": 4608,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 16378.4,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 16.382848958000004,
+        "total_s": 26.332840958,
+        "whole_decode_client_s": 9.949991999999995,
+        "prefill_s": 16.3784,
+        "whole_decode_engine_s": 9.95,
+        "model_ready_s": 12.757893959,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8479595240,
+          "resident_size": 7453507584,
+          "wired_size": 0,
+          "pageins": 642,
+          "phys_footprint_peak": 9680084480
+        },
+        "resident_memory": {
+          "phys_footprint": 9540033280,
+          "resident_size": 7467499520,
+          "wired_size": 0,
+          "pageins": 665,
+          "phys_footprint_peak": 9680084480
+        },
+        "after_memory": {
+          "phys_footprint": 9587366656,
+          "resident_size": 7467712512,
+          "wired_size": 0,
+          "pageins": 665,
+          "phys_footprint_peak": 9680084480
+        },
+        "mean_compute_gpu_pct": 0.0,
+        "mean_desktop_gpu_pct": 0.0,
+        "mean_windowserver_gpu_pct": 0.0,
+        "mean_other_desktop_gpu_pct": 0.0,
+        "max_foreign_cpu_pct": 2.1,
+        "content_sha256": "1ae36f7bc96c4679d4947baf4eb82a2c9ee59b5ffd1a6b0075dc1dcf2eb73b5c"
+      },
+      "A_returncode": 0,
+      "B": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/4096-pair-3-attempt-0-B",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [],
+        "diagnostic_failures": [],
+        "valid_for_timing": true,
+        "usage": {
+          "prompt_tokens": 4096,
+          "completion_tokens": 512,
+          "total_tokens": 4608,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 15754.4,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 15.757346582999993,
+        "total_s": 25.767739041999995,
+        "whole_decode_client_s": 10.010392459000002,
+        "prefill_s": 15.7544,
+        "whole_decode_engine_s": 10.01,
+        "model_ready_s": 13.756923417,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8912526032,
+          "resident_size": 7264780288,
+          "wired_size": 0,
+          "pageins": 465,
+          "phys_footprint_peak": 10115784168
+        },
+        "resident_memory": {
+          "phys_footprint": 9972521704,
+          "resident_size": 7278395392,
+          "wired_size": 0,
+          "pageins": 465,
+          "phys_footprint_peak": 10115784168
+        },
+        "after_memory": {
+          "phys_footprint": 10019838696,
+          "resident_size": 7278592000,
+          "wired_size": 0,
+          "pageins": 465,
+          "phys_footprint_peak": 10115784168
+        },
+        "mean_compute_gpu_pct": 0.0,
+        "mean_desktop_gpu_pct": 0.0,
+        "mean_windowserver_gpu_pct": 0.0,
+        "mean_other_desktop_gpu_pct": 0.0,
+        "max_foreign_cpu_pct": 99.2,
+        "content_sha256": "1ae36f7bc96c4679d4947baf4eb82a2c9ee59b5ffd1a6b0075dc1dcf2eb73b5c"
+      },
+      "B_returncode": 0,
+      "pair_environment_failures": [],
+      "valid": true
+    },
+    {
+      "size": 16384,
+      "index": 1,
+      "attempt": 0,
+      "display_boundaries": {
+        "A": {
+          "before": {
+            "epoch": 1794320944.437647,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794321135.511489,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          }
+        },
+        "B": {
+          "before": {
+            "epoch": 1794321140.403379,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794321326.127651,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          }
+        }
+      },
+      "A": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/16384-pair-1-attempt-0-A",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [],
+        "diagnostic_failures": [],
+        "valid_for_timing": true,
+        "usage": {
+          "prompt_tokens": 16384,
+          "completion_tokens": 512,
+          "total_tokens": 16896,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 72422.3,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 72.42700812499999,
+        "total_s": 83.63598620799999,
+        "whole_decode_client_s": 11.208978083000005,
+        "prefill_s": 72.4223,
+        "whole_decode_engine_s": 11.209,
+        "model_ready_s": 13.26652825,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8479791824,
+          "resident_size": 7589085184,
+          "wired_size": 0,
+          "pageins": 640,
+          "phys_footprint_peak": 9682623976
+        },
+        "resident_memory": {
+          "phys_footprint": 9942850280,
+          "resident_size": 7605927936,
+          "wired_size": 0,
+          "pageins": 665,
+          "phys_footprint_peak": 10030242536
+        },
+        "after_memory": {
+          "phys_footprint": 9990101736,
+          "resident_size": 7606255616,
+          "wired_size": 0,
+          "pageins": 665,
+          "phys_footprint_peak": 10036828928
+        },
+        "mean_compute_gpu_pct": 0.6298395910611,
+        "mean_desktop_gpu_pct": 0.00045500360252780005,
+        "mean_windowserver_gpu_pct": 0.0,
+        "mean_other_desktop_gpu_pct": 0.00045500360252780005,
+        "max_foreign_cpu_pct": 163.9,
+        "content_sha256": "d6f4484291e6cc7dfee67196fac008a35341bd20ca6b8af4b68a35a61e8b9030"
+      },
+      "A_returncode": 0,
+      "B": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/16384-pair-1-attempt-0-B",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [],
+        "diagnostic_failures": [],
+        "valid_for_timing": true,
+        "usage": {
+          "prompt_tokens": 16384,
+          "completion_tokens": 512,
+          "total_tokens": 16896,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 69016.8,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 69.02231991700002,
+        "total_s": 80.236849583,
+        "whole_decode_client_s": 11.214529665999976,
+        "prefill_s": 69.0168,
+        "whole_decode_engine_s": 11.215,
+        "model_ready_s": 13.257460875,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8912509648,
+          "resident_size": 7516749824,
+          "wired_size": 0,
+          "pageins": 431,
+          "phys_footprint_peak": 10115571152
+        },
+        "resident_memory": {
+          "phys_footprint": 10376436456,
+          "resident_size": 7534247936,
+          "wired_size": 0,
+          "pageins": 431,
+          "phys_footprint_peak": 10463943400
+        },
+        "after_memory": {
+          "phys_footprint": 10423851752,
+          "resident_size": 7534739456,
+          "wired_size": 0,
+          "pageins": 431,
+          "phys_footprint_peak": 10470284032
+        },
+        "mean_compute_gpu_pct": 0.1596710614355097,
+        "mean_desktop_gpu_pct": 0.0,
+        "mean_windowserver_gpu_pct": 0.0,
+        "mean_other_desktop_gpu_pct": 0.0,
+        "max_foreign_cpu_pct": 99.8,
+        "content_sha256": "d6f4484291e6cc7dfee67196fac008a35341bd20ca6b8af4b68a35a61e8b9030"
+      },
+      "B_returncode": 0,
+      "pair_environment_failures": [],
+      "valid": true
+    },
+    {
+      "size": 16384,
+      "index": 2,
+      "attempt": 0,
+      "display_boundaries": {
+        "A": {
+          "before": {
+            "epoch": 1794321331.0817542,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794321522.65637,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          }
+        },
+        "B": {
+          "before": {
+            "epoch": 1794321528.1166341,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794321713.141572,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          }
+        }
+      },
+      "A": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/16384-pair-2-attempt-0-A",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [],
+        "diagnostic_failures": [],
+        "valid_for_timing": true,
+        "usage": {
+          "prompt_tokens": 16384,
+          "completion_tokens": 512,
+          "total_tokens": 16896,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 72768.4,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 72.773923667,
+        "total_s": 84.003523292,
+        "whole_decode_client_s": 11.229599624999992,
+        "prefill_s": 72.7684,
+        "whole_decode_engine_s": 11.23,
+        "model_ready_s": 12.754201625,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8479726288,
+          "resident_size": 7526121472,
+          "wired_size": 0,
+          "pageins": 642,
+          "phys_footprint_peak": 9682558416
+        },
+        "resident_memory": {
+          "phys_footprint": 9944046336,
+          "resident_size": 7543980032,
+          "wired_size": 0,
+          "pageins": 663,
+          "phys_footprint_peak": 10031504128
+        },
+        "after_memory": {
+          "phys_footprint": 9991396096,
+          "resident_size": 7544406016,
+          "wired_size": 0,
+          "pageins": 663,
+          "phys_footprint_peak": 10037713664
+        },
+        "mean_compute_gpu_pct": 0.3227845107537603,
+        "mean_desktop_gpu_pct": 0.0029123003705721776,
+        "mean_windowserver_gpu_pct": 0.0,
+        "mean_other_desktop_gpu_pct": 0.0029123003705721776,
+        "max_foreign_cpu_pct": 101.3,
+        "content_sha256": "d6f4484291e6cc7dfee67196fac008a35341bd20ca6b8af4b68a35a61e8b9030"
+      },
+      "A_returncode": 0,
+      "B": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/16384-pair-2-attempt-0-B",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [],
+        "diagnostic_failures": [],
+        "valid_for_timing": true,
+        "usage": {
+          "prompt_tokens": 16384,
+          "completion_tokens": 512,
+          "total_tokens": 16896,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 69333.9,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 69.33848504199999,
+        "total_s": 80.604786,
+        "whole_decode_client_s": 11.266300958000016,
+        "prefill_s": 69.3339,
+        "whole_decode_engine_s": 11.266,
+        "model_ready_s": 12.799572249999999,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8912493288,
+          "resident_size": 7646363648,
+          "wired_size": 0,
+          "pageins": 431,
+          "phys_footprint_peak": 10113260984
+        },
+        "resident_memory": {
+          "phys_footprint": 10375191296,
+          "resident_size": 7662698496,
+          "wired_size": 0,
+          "pageins": 435,
+          "phys_footprint_peak": 10462845696
+        },
+        "after_memory": {
+          "phys_footprint": 10422491904,
+          "resident_size": 7663173632,
+          "wired_size": 0,
+          "pageins": 435,
+          "phys_footprint_peak": 10468891392
+        },
+        "mean_compute_gpu_pct": 0.3859787655017429,
+        "mean_desktop_gpu_pct": 0.0,
+        "mean_windowserver_gpu_pct": 0.0,
+        "mean_other_desktop_gpu_pct": 0.0,
+        "max_foreign_cpu_pct": 99.4,
+        "content_sha256": "d6f4484291e6cc7dfee67196fac008a35341bd20ca6b8af4b68a35a61e8b9030"
+      },
+      "B_returncode": 0,
+      "pair_environment_failures": [],
+      "valid": true
+    },
+    {
+      "size": 16384,
+      "index": 3,
+      "attempt": 0,
+      "display_boundaries": {
+        "A": {
+          "before": {
+            "epoch": 1794321718.006803,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794321912.139503,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          }
+        },
+        "B": {
+          "before": {
+            "epoch": 1794321917.865324,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794322112.0721972,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          }
+        }
+      },
+      "A": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/16384-pair-3-attempt-0-A",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [
+          "foreign CPU"
+        ],
+        "diagnostic_failures": [],
+        "valid_for_timing": false,
+        "usage": {
+          "prompt_tokens": 16384,
+          "completion_tokens": 512,
+          "total_tokens": 16896,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 74244.4,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 74.25003812500002,
+        "total_s": 85.51408608300001,
+        "whole_decode_client_s": 11.264047957999992,
+        "prefill_s": 74.2444,
+        "whole_decode_engine_s": 11.264,
+        "model_ready_s": 13.257723916000002,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8479759104,
+          "resident_size": 7531200512,
+          "wired_size": 0,
+          "pageins": 642,
+          "phys_footprint_peak": 9682460112
+        },
+        "resident_memory": {
+          "phys_footprint": 9942915888,
+          "resident_size": 7499841536,
+          "wired_size": 0,
+          "pageins": 653,
+          "phys_footprint_peak": 10031110960
+        },
+        "after_memory": {
+          "phys_footprint": 9990150960,
+          "resident_size": 7500578816,
+          "wired_size": 0,
+          "pageins": 653,
+          "phys_footprint_peak": 10036566832
+        },
+        "mean_compute_gpu_pct": 0.4290480960248471,
+        "mean_desktop_gpu_pct": 0.0,
+        "mean_windowserver_gpu_pct": 0.0,
+        "mean_other_desktop_gpu_pct": 0.0,
+        "max_foreign_cpu_pct": 171.6,
+        "content_sha256": "d6f4484291e6cc7dfee67196fac008a35341bd20ca6b8af4b68a35a61e8b9030"
+      },
+      "A_returncode": 0,
+      "B": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/16384-pair-3-attempt-0-B",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [],
+        "diagnostic_failures": [],
+        "valid_for_timing": true,
+        "usage": {
+          "prompt_tokens": 16384,
+          "completion_tokens": 512,
+          "total_tokens": 16896,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 68064.6,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 68.070827333,
+        "total_s": 79.265426541,
+        "whole_decode_client_s": 11.194599208,
+        "prefill_s": 68.06460000000001,
+        "whole_decode_engine_s": 11.194,
+        "model_ready_s": 13.321060416,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8912739024,
+          "resident_size": 7314522112,
+          "wired_size": 0,
+          "pageins": 523,
+          "phys_footprint_peak": 10113965544
+        },
+        "resident_memory": {
+          "phys_footprint": 10375060224,
+          "resident_size": 7328104448,
+          "wired_size": 0,
+          "pageins": 527,
+          "phys_footprint_peak": 10462714624
+        },
+        "after_memory": {
+          "phys_footprint": 10422295296,
+          "resident_size": 7328219136,
+          "wired_size": 0,
+          "pageins": 527,
+          "phys_footprint_peak": 10470071040
+        },
+        "mean_compute_gpu_pct": 0.3499571743789446,
+        "mean_desktop_gpu_pct": 0.008313142106792945,
+        "mean_windowserver_gpu_pct": 0.0,
+        "mean_other_desktop_gpu_pct": 0.008313142106792945,
+        "max_foreign_cpu_pct": 109.8,
+        "content_sha256": "d6f4484291e6cc7dfee67196fac008a35341bd20ca6b8af4b68a35a61e8b9030"
+      },
+      "B_returncode": 0,
+      "pair_environment_failures": [],
+      "valid": false
+    },
+    {
+      "size": 16384,
+      "index": 3,
+      "attempt": 1,
+      "display_boundaries": {
+        "A": {
+          "before": {
+            "epoch": 1794322117.075031,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794322308.485829,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          }
+        },
+        "B": {
+          "before": {
+            "epoch": 1794322313.664885,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          },
+          "after": {
+            "epoch": 1794322497.8995872,
+            "displays": [
+              {
+                "id": 8,
+                "width": 1920,
+                "height": 1080,
+                "vendor": 1970170734,
+                "model": 1986622068,
+                "asleep": 0
+              }
+            ]
+          }
+        }
+      },
+      "A": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/16384-pair-3-attempt-1-A",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [],
+        "diagnostic_failures": [],
+        "valid_for_timing": true,
+        "usage": {
+          "prompt_tokens": 16384,
+          "completion_tokens": 512,
+          "total_tokens": 16896,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 72252.7,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 72.25898370899999,
+        "total_s": 83.500577917,
+        "whole_decode_client_s": 11.24159420800001,
+        "prefill_s": 72.25269999999999,
+        "whole_decode_engine_s": 11.242,
+        "model_ready_s": 12.758354208,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8479742672,
+          "resident_size": 7527038976,
+          "wired_size": 0,
+          "pageins": 518,
+          "phys_footprint_peak": 9682525648
+        },
+        "resident_memory": {
+          "phys_footprint": 9944046336,
+          "resident_size": 7542161408,
+          "wired_size": 0,
+          "pageins": 527,
+          "phys_footprint_peak": 10030734080
+        },
+        "after_memory": {
+          "phys_footprint": 9991461632,
+          "resident_size": 7542505472,
+          "wired_size": 0,
+          "pageins": 527,
+          "phys_footprint_peak": 10039745280
+        },
+        "mean_compute_gpu_pct": 0.3607754432827957,
+        "mean_desktop_gpu_pct": 0.0,
+        "mean_windowserver_gpu_pct": 0.0,
+        "mean_other_desktop_gpu_pct": 0.0,
+        "max_foreign_cpu_pct": 99.6,
+        "content_sha256": "d6f4484291e6cc7dfee67196fac008a35341bd20ca6b8af4b68a35a61e8b9030"
+      },
+      "A_returncode": 0,
+      "B": {
+        "run": "/Users/bytedance/Desktop/kapitsa-qmr-20261109/evidence/formal-acceptance-07/16384-pair-3-attempt-1-B",
+        "status": "complete",
+        "work_valid": true,
+        "environment_failures": [],
+        "diagnostic_failures": [],
+        "valid_for_timing": true,
+        "usage": {
+          "prompt_tokens": 16384,
+          "completion_tokens": 512,
+          "total_tokens": 16896,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 69035.5,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 159
+            }
+          }
+        },
+        "ttft_s": 69.04102354199999,
+        "total_s": 80.271575417,
+        "whole_decode_client_s": 11.230551875000003,
+        "prefill_s": 69.0355,
+        "whole_decode_engine_s": 11.231,
+        "model_ready_s": 12.741379541,
+        "power_mode_before": "automatic",
+        "power_mode_after": "automatic",
+        "ready_memory": {
+          "phys_footprint": 8912608048,
+          "resident_size": 7544700928,
+          "wired_size": 0,
+          "pageins": 452,
+          "phys_footprint_peak": 10115653120
+        },
+        "resident_memory": {
+          "phys_footprint": 10375224136,
+          "resident_size": 7560937472,
+          "wired_size": 0,
+          "pageins": 456,
+          "phys_footprint_peak": 10462878536
+        },
+        "after_memory": {
+          "phys_footprint": 10422475592,
+          "resident_size": 7561330688,
+          "wired_size": 0,
+          "pageins": 456,
+          "phys_footprint_peak": 10474953544
+        },
+        "mean_compute_gpu_pct": 0.24399077150217888,
+        "mean_desktop_gpu_pct": 0.0,
+        "mean_windowserver_gpu_pct": 0.0,
+        "mean_other_desktop_gpu_pct": 0.0,
+        "max_foreign_cpu_pct": 156.8,
+        "content_sha256": "d6f4484291e6cc7dfee67196fac008a35341bd20ca6b8af4b68a35a61e8b9030"
+      },
+      "B_returncode": 0,
+      "pair_environment_failures": [],
+      "valid": true
+    }
+  ],
+  "scenarios": {
+    "4096": {
+      "accepted": [
+        {
+          "index": 1,
+          "attempt": 0
+        },
+        {
+          "index": 2,
+          "attempt": 1
+        },
+        {
+          "index": 3,
+          "attempt": 0
+        }
+      ],
+      "metrics": {
+        "ttft_s": {
+          "A_s": [
+            16.383486542,
+            16.378603375000004,
+            16.382848958000004
+          ],
+          "B_s": [
+            15.756257292,
+            15.924819,
+            15.757346582999993
+          ],
+          "paired_B_over_A": [
+            0.9617157649324483,
+            0.9722940738834513,
+            0.9618196824860203
+          ],
+          "geomean_B_over_A": 0.965263782462553,
+          "reduction_pct": 3.473621753744708,
+          "paired_95pct_B_over_A": [
+            0.9503106182596153,
+            0.980452235123163
+          ],
+          "A_median_s": 16.382848958000004,
+          "B_median_s": 15.757346582999993,
+          "A_range_s": [
+            16.378603375000004,
+            16.383486542
+          ],
+          "B_range_s": [
+            15.756257292,
+            15.924819
+          ]
+        },
+        "prefill_s": {
+          "A_s": [
+            16.3786,
+            16.374200000000002,
+            16.3784
+          ],
+          "B_s": [
+            15.7521,
+            15.92,
+            15.7544
+          ],
+          "paired_B_over_A": [
+            0.9617488674245663,
+            0.972261240243798,
+            0.9619010403946662
+          ],
+          "geomean_B_over_A": 0.9652912072004443,
+          "reduction_pct": 3.470879279955569,
+          "paired_95pct_B_over_A": [
+            0.9504641176237615,
+            0.9803495970242786
+          ],
+          "A_median_s": 16.3784,
+          "B_median_s": 15.7544,
+          "A_range_s": [
+            16.374200000000002,
+            16.3786
+          ],
+          "B_range_s": [
+            15.7521,
+            15.92
+          ]
+        },
+        "whole_decode_engine_s": {
+          "A_s": [
+            9.964,
+            9.942,
+            9.95
+          ],
+          "B_s": [
+            9.925,
+            9.974,
+            10.01
+          ],
+          "paired_B_over_A": [
+            0.9960859092733843,
+            1.0032186682760007,
+            1.006030150753769
+          ],
+          "geomean_B_over_A": 1.00176948729208,
+          "reduction_pct": -0.17694872920800078,
+          "paired_95pct_B_over_A": [
+            0.9891033567643452,
+            1.0145978160991436
+          ],
+          "A_median_s": 9.95,
+          "B_median_s": 9.974,
+          "A_range_s": [
+            9.942,
+            9.964
+          ],
+          "B_range_s": [
+            9.925,
+            10.01
+          ]
+        },
+        "whole_decode_client_s": {
+          "A_s": [
+            9.964443875,
+            9.94217587499999,
+            9.949991999999995
+          ],
+          "B_s": [
+            9.924655790999992,
+            9.974152666999998,
+            10.010392459000002
+          ],
+          "paired_B_over_A": [
+            0.9960069940180171,
+            1.0032162770405637,
+            1.006070402770174
+          ],
+          "geomean_B_over_A": 1.0017555954801733,
+          "reduction_pct": -0.1755595480173315,
+          "paired_95pct_B_over_A": [
+            0.9889416296396626,
+            1.0147355951043175
+          ],
+          "A_median_s": 9.949991999999995,
+          "B_median_s": 9.974152666999998,
+          "A_range_s": [
+            9.94217587499999,
+            9.964443875
+          ],
+          "B_range_s": [
+            9.924655790999992,
+            10.010392459000002
+          ]
+        },
+        "total_s": {
+          "A_s": [
+            26.347930417,
+            26.320779249999994,
+            26.332840958
+          ],
+          "B_s": [
+            25.680913082999993,
+            25.898971666999998,
+            25.767739041999995
+          ],
+          "paired_B_over_A": [
+            0.9746842608340259,
+            0.9839743504934415,
+            0.9785400323154907
+          ],
+          "geomean_B_over_A": 0.9790588018047378,
+          "reduction_pct": 2.094119819526224,
+          "paired_95pct_B_over_A": [
+            0.9675374099693733,
+            0.9907173898543842
+          ],
+          "A_median_s": 26.332840958,
+          "B_median_s": 25.767739041999995,
+          "A_range_s": [
+            26.320779249999994,
+            26.347930417
+          ],
+          "B_range_s": [
+            25.680913082999993,
+            25.898971666999998
+          ]
+        }
+      },
+      "gates": {
+        "ttft_s": true,
+        "total_s": true,
+        "decode": false,
+        "resident_memory": true
+      },
+      "resident_deltas_bytes": [
+        432504784,
+        432455632,
+        432488424
+      ],
+      "timing_memory_pass": false
+    },
+    "16384": {
+      "accepted": [
+        {
+          "index": 1,
+          "attempt": 0
+        },
+        {
+          "index": 2,
+          "attempt": 0
+        },
+        {
+          "index": 3,
+          "attempt": 1
+        }
+      ],
+      "metrics": {
+        "ttft_s": {
+          "A_s": [
+            72.42700812499999,
+            72.773923667,
+            72.25898370899999
+          ],
+          "B_s": [
+            69.02231991700002,
+            69.33848504199999,
+            69.04102354199999
+          ],
+          "paired_B_over_A": [
+            0.9529914558651394,
+            0.9527929998563779,
+            0.9554662963437278
+          ],
+          "geomean_B_over_A": 0.9537494757998076,
+          "reduction_pct": 4.625052420019237,
+          "paired_95pct_B_over_A": [
+            0.9500582776112646,
+            0.9574550151549803
+          ],
+          "A_median_s": 72.42700812499999,
+          "B_median_s": 69.04102354199999,
+          "A_range_s": [
+            72.25898370899999,
+            72.773923667
+          ],
+          "B_range_s": [
+            69.02231991700002,
+            69.33848504199999
+          ]
+        },
+        "prefill_s": {
+          "A_s": [
+            72.4223,
+            72.7684,
+            72.25269999999999
+          ],
+          "B_s": [
+            69.0168,
+            69.3339,
+            69.0355
+          ],
+          "paired_B_over_A": [
+            0.9529771907271655,
+            0.9528023152907031,
+            0.9554729442636747
+          ],
+          "geomean_B_over_A": 0.9537500371667458,
+          "reduction_pct": 4.624996283325423,
+          "paired_95pct_B_over_A": [
+            0.9500476742110893,
+            0.9574668283367198
+          ],
+          "A_median_s": 72.4223,
+          "B_median_s": 69.0355,
+          "A_range_s": [
+            72.25269999999999,
+            72.7684
+          ],
+          "B_range_s": [
+            69.0168,
+            69.3339
+          ]
+        },
+        "whole_decode_engine_s": {
+          "A_s": [
+            11.209,
+            11.23,
+            11.242
+          ],
+          "B_s": [
+            11.215,
+            11.266,
+            11.231
+          ],
+          "paired_B_over_A": [
+            1.000535284146668,
+            1.0032056990204807,
+            0.9990215264187866
+          ],
+          "geomean_B_over_A": 1.0009193423551548,
+          "reduction_pct": -0.09193423551548205,
+          "paired_95pct_B_over_A": [
+            0.9956718110312015,
+            1.0061945299657387
+          ],
+          "A_median_s": 11.23,
+          "B_median_s": 11.231,
+          "A_range_s": [
+            11.209,
+            11.242
+          ],
+          "B_range_s": [
+            11.215,
+            11.266
+          ]
+        },
+        "whole_decode_client_s": {
+          "A_s": [
+            11.208978083000005,
+            11.229599624999992,
+            11.24159420800001
+          ],
+          "B_s": [
+            11.214529665999976,
+            11.266300958000016,
+            11.230551875000003
+          ],
+          "paired_B_over_A": [
+            1.0004952800298887,
+            1.003268267278053,
+            0.9990177253514321
+          ],
+          "geomean_B_over_A": 1.0009255407566153,
+          "reduction_pct": -0.09255407566153187,
+          "paired_95pct_B_over_A": [
+            0.9955809526762689,
+            1.0062988202474108
+          ],
+          "A_median_s": 11.229599624999992,
+          "B_median_s": 11.230551875000003,
+          "A_range_s": [
+            11.208978083000005,
+            11.24159420800001
+          ],
+          "B_range_s": [
+            11.214529665999976,
+            11.266300958000016
+          ]
+        },
+        "total_s": {
+          "A_s": [
+            83.63598620799999,
+            84.003523292,
+            83.500577917
+          ],
+          "B_s": [
+            80.236849583,
+            80.604786,
+            80.271575417
+          ],
+          "paired_B_over_A": [
+            0.9593579656423677,
+            0.9595405387916192,
+            0.9613295790214811
+          ],
+          "geomean_B_over_A": 0.9600756159154648,
+          "reduction_pct": 3.9924384084535283,
+          "paired_95pct_B_over_A": [
+            0.9573739676364855,
+            0.9627848880735863
+          ],
+          "A_median_s": 83.63598620799999,
+          "B_median_s": 80.271575417,
+          "A_range_s": [
+            83.500577917,
+            84.003523292
+          ],
+          "B_range_s": [
+            80.236849583,
+            80.604786
+          ]
+        }
+      },
+      "gates": {
+        "ttft_s": true,
+        "total_s": true,
+        "decode": false,
+        "resident_memory": true
+      },
+      "resident_deltas_bytes": [
+        433586176,
+        431144960,
+        431177800
+      ],
+      "timing_memory_pass": false
+    }
+  },
+  "ended_epoch": 1794322497.91112
+}

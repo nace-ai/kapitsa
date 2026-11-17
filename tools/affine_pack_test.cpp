@@ -9,6 +9,7 @@
 //   affine_pack_test      (no model, no GPU)
 #include "model/affine_pack.h"
 #include "model/affine_coeff_fixed.h"
+#include "model/qmr_coeff_plan.h"
 
 #include <bit>
 #include <cmath>
@@ -33,6 +34,34 @@ _Float16 f16_from_bits(uint16_t b) {
 
 int main() {
   using namespace ni;
+  {
+    QmrCoeffHeaders h;
+    auto matrix = [&](const std::string& name, int64_t n, int64_t groups, int words_per_group) {
+      const int64_t w[] = {n, groups * words_per_group}, sc[] = {n, groups};
+      h.note(name + ".scales", false, sc);  // headers may arrive in either order
+      h.note(name + ".weight", true, w);
+    };
+    matrix("model.layers.1.self_attn.q_proj", 128, 4, 8);
+    matrix("model.layers.0.mlp.shared_expert.gate_proj", 256, 8, 8);
+    matrix("model.layers.0.mlp.up_proj", 256, 8, 16);  // Q8
+    matrix("model.layers.0.linear_attn.in_proj_z", 64, 8, 8);  // small-N kernel
+    matrix("lm_head", 384, 4, 8);
+    const int64_t expert[] = {256, 512, 32};
+    h.note("model.layers.0.mlp.switch_mlp.gate_proj.scales", false, expert);
+    h.note("model.layers.0.mlp.switch_mlp.gate_proj.weight", true, expert);
+    const auto b = h.budget(true), derived = h.budget(false);
+    check(b.immutable == (128 * 4 + 256 * 8) * 4 && b.scratch == 2 * 256 * 8 * 4,
+          "QMR prefill only counts eligible trunk images and reserves paired scratch");
+    check(derived.immutable == 0 && derived.scratch == b.scratch, "QMR scratch-only loader");
+    constexpr size_t limit = size_t(512) << 20;
+    matrix("model.layers.1.mlp.down_proj", 131072, 1023, 8);
+    const auto clipped = h.budget(true);
+    check(clipped.immutable == b.immutable + 131072ul * 1023 * 4 && clipped.immutable + clipped.scratch == limit,
+          "QMR clips the one scratch buffer to the available budget");
+    matrix("model.layers.1.mlp.down_proj", 131072, 1024, 8);
+    const auto over = h.budget(true);
+    check(over.immutable == 0 && over.scratch == limit, "QMR over-cap trunk takes the scratch-only path");
+  }
   // Check the interleaved record address independently, including partial output blocks, multiple row groups,
   // compressed and raw coefficient headers. The raw tail is compared too: its header offsets are absolute.
   size_t interleaves = 0;

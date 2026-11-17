@@ -9,6 +9,7 @@
 #include "model/model.h"
 #include "model/moe_exl3.h"
 #include "model/moe_q20.h"
+#include "model/qmr_coeff_plan.h"
 #include "vision/embed.h"
 
 #include <deque>
@@ -835,6 +836,13 @@ class Qwen35 : public Model {
   unsigned qmt_i8_next_ = 0;
   std::vector<Buffer> qmt_i8_retired_;
   std::pair<Buffer, Buffer> qmt_i8_scratch(size_t m, size_t k);
+  Buffer qmr_coeff_;
+  size_t qmr_coeff_scratch_capacity_ = 0;
+  static bool qmr_coeff_enabled(int chunk);
+  QmrCoeffBudget qmr_coeff_budget(bool cache_trunk) const;
+  Buffer qmr_coeff_scratch(size_t groups);
+  std::unordered_map<const QLinear*, Buffer> qmr_coeff_cache_;
+  void load_qmr_coeff_cache();
   virtual void grow_kv(Seq& s, int cap);
   void enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int old_cap, int new_cap);
 
