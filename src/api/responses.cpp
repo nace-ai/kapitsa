@@ -391,7 +391,10 @@ std::pair<int, ojson> responses_failure(const ChatResult& res) {
   if (res.busy) return {503, responses_error(res.error, "server_error", "server_error")};
   if (res.engine_down) return {503, responses_error(res.error, "server_error", "engine_unavailable")};
   if (res.prompt_limit > 0)
-    return {400, responses_error("Your input exceeds the context window of this model (" + std::to_string(res.prompt_tokens) +
+    return {400, responses_error(std::string(res.memory_limit ? "Your input exceeds what this Mac's memory holds for this "
+                                                                 "conversation with this model now ("
+                                                               : "Your input exceeds the context window of this model (") +
+                                     std::to_string(res.prompt_tokens) +
                                      " tokens > " + std::to_string(res.prompt_limit) +
                                      " maximum). Please adjust your input and try again.",
                                  "invalid_request_error", "context_length_exceeded", "input")};

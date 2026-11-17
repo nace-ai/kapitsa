@@ -42,7 +42,8 @@ static void issue_1300() {
 
 // An agent-style conversation from an empty cache: each turn's prompt is the last one plus ~600 tokens and asks for
 // up to 1,024 more (no max_tokens: the engine reserves n + 1024 + 32, else n + 32), within a 14,348-position room.
-// It is served up to within ~300 positions of that room, never holding more than the budget.
+// It is served past 13K (one buffer's old rows and the 256-position rounding short of that room), never holding more
+// than the budget; counting a whole 256 MB batch stopped it at 10,200.
 static void growing_conversation() {
   size_t room = size_t(14348) * kPer;
   int cap = 0, served = 0;
@@ -58,7 +59,7 @@ static void growing_conversation() {
     served = n;
   }
   std::printf("growing conversation: served up to %d tokens of %d positions' room (cache %d)\n", served, 14348, cap);
-  CHECK(served >= 13800);
+  CHECK(served >= 13000);
 }
 
 // With room to spare a grow is what it always was: a quarter more in 1024-position steps, copied in 256 MB batches
