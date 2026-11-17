@@ -1,0 +1,15 @@
+Tue Nov 17 09:55:36 CET 2026 start ab
+{"n": 1, "serial": false, "temperature": 0.0, "tokens": [0], "per_stream_tps": [0.0], "ttft": [null], "total_tokens": 0, "span_s": 0.003, "total_tps": 0.0, "decode_window_tps": 0, "errors": [{"message": "insufficient memory: a 89-token prompt needs more KV cache than this Mac's memory budget for Kap
+{"n": 2, "serial": false, "temperature": 0.0, "tokens": [0, 0], "per_stream_tps": [0.0, 0.0], "ttft": [null, null], "total_tokens": 0, "span_s": 0.001, "total_tps": 0.0, "decode_window_tps": 0, "errors": [{"message": "insufficient memory: a 89-token prompt needs more KV cache than this Mac's memory 
+{"decode_tps": [null, null, null], "decode_median": null, "ttft": {}, "ttft_median": {}, "prompt_tokens": {}}
+{"n": 1, "serial": false, "temperature": 0.0, "tokens": [0], "per_stream_tps": [0.0], "ttft": [null], "total_tokens": 0, "span_s": 0.002, "total_tps": 0.0, "decode_window_tps": 0, "errors": [{"message": "insufficient memory: a 89-token prompt needs more KV cache than this Mac's memory budget for Kap
+{"n": 2, "serial": false, "temperature": 0.0, "tokens": [0, 0], "per_stream_tps": [0.0, 0.0], "ttft": [null, null], "total_tokens": 0, "span_s": 0.001, "total_tps": 0.0, "decode_window_tps": 0, "errors": [{"message": "insufficient memory: a 89-token prompt needs more KV cache than this Mac's memory 
+{"decode_tps": [null, null, null], "decode_median": null, "ttft": {}, "ttft_median": {}, "prompt_tokens": {}}
+Tue Nov 17 09:55:54 CET 2026 pair 1 done
+{"n": 1, "serial": false, "temperature": 0.0, "tokens": [0], "per_stream_tps": [0.0], "ttft": [null], "total_tokens": 0, "span_s": 0.003, "total_tps": 0.0, "decode_window_tps": 0, "errors": [{"message": "insufficient memory: a 89-token prompt needs more KV cache than this Mac's memory budget for Kap
+{"n": 2, "serial": false, "temperature": 0.0, "tokens": [0, 0], "per_stream_tps": [0.0, 0.0], "ttft": [null, null], "total_tokens": 0, "span_s": 0.001, "total_tps": 0.0, "decode_window_tps": 0, "errors": [{"message": "insufficient memory: a 89-token prompt needs more KV cache than this Mac's memory 
+{"decode_tps": [null, null, null], "decode_median": null, "ttft": {}, "ttft_median": {}, "prompt_tokens": {}}
+{"n": 1, "serial": false, "temperature": 0.0, "tokens": [0], "per_stream_tps": [0.0], "ttft": [null], "total_tokens": 0, "span_s": 0.003, "total_tps": 0.0, "decode_window_tps": 0, "errors": [{"message": "insufficient memory: a 89-token prompt needs more KV cache than this Mac's memory budget for Kap
+{"n": 2, "serial": false, "temperature": 0.0, "tokens": [0, 0], "per_stream_tps": [0.0, 0.0], "ttft": [null, null], "total_tokens": 0, "span_s": 0.001, "total_tps": 0.0, "decode_window_tps": 0, "errors": [{"message": "insufficient memory: a 89-token prompt needs more KV cache than this Mac's memory 
+{"decode_tps": [null, null, null], "decode_median": null, "ttft": {}, "ttft_median": {}, "prompt_tokens": {}}
+Tue Nov 17 09:56:07 CET 2026 pair 2 done

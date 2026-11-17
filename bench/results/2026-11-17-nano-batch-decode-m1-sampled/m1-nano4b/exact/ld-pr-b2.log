@@ -1,0 +1,8 @@
+[kapitsa] compiled kernels in 22 ms
+[kapitsa] compiled the Nemotron-H kernels in 6 ms
+[kapitsa] Nemotron-H: 42 layers (21 Mamba-2, 4 attention, 17 MLP), 4.44 GB of weights read in 2.9 s (Mamba FP8 17 / BF16 4, MLP FP8, attention BF16, Q8_0 head, BF16 embedding)
+[kapitsa] Nemotron-H: prewarmed 289 pipelines in 14 ms
+[kapitsa] NI_ANE: Neural Engine split unavailable (hidden / Mamba sizes are not whole 2048-channel segments); the GPU runs the prefill alone
+prefill 8 rows: next-token NLL 0.7379, top-1 = next token 0.7500 -> ~/kapitsa-batching2/out/m1-nano4b/exact/ld-pr-b2/prefill
+batch  192 rows: next-token NLL 0.8686, top-1 = next token 0.7969 -> ~/kapitsa-batching2/out/m1-nano4b/exact/ld-pr-b2/batch
+8 windows, 14848 prefilled tokens in 56.6 s; 65.5 s in all

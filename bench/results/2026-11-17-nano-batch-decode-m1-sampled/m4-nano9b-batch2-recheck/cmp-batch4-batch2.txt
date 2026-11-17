@@ -1,0 +1,4 @@
+batch: 192 records (nemotron-nano-9b-v2-nvfp4)
+  reference: 0.2.36 (9ef19349), batch {"members":4,"rows":1}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.36 (9ef19349), batch {"members":2,"rows":1}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical

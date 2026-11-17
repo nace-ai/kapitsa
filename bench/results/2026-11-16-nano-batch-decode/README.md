@@ -100,3 +100,19 @@ traced M2 one (9ef19349) is g3 at token 156, margin 0.0013. The M2's pipelined g
 model's tokenizer), where the alone margin is 0.0013. For scale: 12.8% of all greedy tokens in these replies have a
 margin under 0.5 (both Macs). g3 alone also differs between the two Macs (M2 and M4 alone, same binary, same tokens up to there):
 its alone text on the M4 is the M2's together text. Every difference is a near-tie of that kind.
+
+## Notes added 2026-11-17
+
+- **"The alone path's code is not changed"** (Outputs, above) overstates it. A request alone still runs the same
+  passes, but its loops changed: each cycle of the prompt-lookup loop and each step of the plain-step loop now asks
+  `batch_wanted()` and writes `slot.decoding`, and the lookup loop has a `NI_TRACE_TOKENS` line. The evidence that a
+  request alone is unchanged is the 8 of 8 identical greedy texts one at a time and the single-request decode A/B. The
+  `logit_dump` main-against-branch identity is true by construction: `tools/logit_dump.cpp` calls `encode_step`,
+  `encode_verify` and `encode_verify_multi` directly, never `Engine::chat`, and the branch changes no model code.
+- **`m4-nano9b/exact/cmp-step-batch2.txt` says "candidate: no meta.json".** `compare.sh` ran while `exact.sh` was
+  still finishing the `ld-pr-b2` dump: on the M4 that dump's `logits.f32` and `meta.json` and the previous comparison's
+  `cmp-step-batch4.txt` all carry 22:32:19, so the comparison most likely opened the dump in the second before
+  `meta.json` was written. Its numbers equal `cmp-step-batch4.txt`'s because the two dumps are the same bytes: the
+  2-member and 4-member `logits.f32` have the same SHA-256 (`086acf8b...`). Re-run on copies of the finished dumps,
+  with `meta.json` present, the numbers are the same:
+  `../2026-11-17-nano-batch-decode-m1-sampled/m4-nano9b-batch2-recheck/`.

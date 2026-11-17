@@ -1,0 +1,1 @@
+{"code_t06_seed7_400": {"tokens": 400, "prompt_tokens": 83, "ttft": 0.386, "decode_tps": 23.33, "error": null}, "ctx2k_t06_seed3": {"tokens": 250, "prompt_tokens": 2015, "ttft": 0.302, "decode_tps": 22.67, "error": null}, "_run": {"mode": "together", "plan": "seeded", "span_s": 17.491, "total_tps": 37.16}}

@@ -1,0 +1,14 @@
+pair1-main     n1: total 15.84 window 16.09 per-stream [16.09]  n2: total 15.09 window 15.3 per-stream [8.05, 7.65]  n4: total None window None per-stream None  single [24.83, 24.63, 15.24]
+pair2-main     n1: total 15.8 window 16.05 per-stream [16.05]  n2: total 15.1 window 15.31 per-stream [8.04, 7.67]  n4: total None window None per-stream None  single [24.76, 24.83, 15.25]
+pair3-main     n1: total 15.84 window 16.09 per-stream [16.09]  n2: total 15.08 window 15.29 per-stream [8.04, 7.65]  n4: total None window None per-stream None  single [24.85, 24.88, 15.26]
+pair1-pr       n1: total 15.79 window 16.04 per-stream [16.04]  n2: total 24.53 window 25.15 per-stream [12.62, 12.6]  n4: total None window None per-stream None  single [24.76, 24.75, 15.25]
+pair2-pr       n1: total 15.81 window 16.06 per-stream [16.06]  n2: total 24.52 window 25.13 per-stream [12.61, 12.59]  n4: total None window None per-stream None  single [24.87, 24.79, 15.29]
+pair3-pr       n1: total 15.8 window 16.05 per-stream [16.05]  n2: total 24.51 window 25.13 per-stream [12.59, 12.62]  n4: total None window None per-stream None  single [24.83, 24.89, 15.27]
+
+tot1    main 15.84  pr 15.8  pr/main 0.997
+win1    main 16.09  pr 16.05  pr/main 0.998
+tot2    main 15.09  pr 24.52  pr/main 1.625
+win2    main 15.3  pr 25.13  pr/main 1.642
+tot4 None None
+win4 None None
+single  main 24.76  pr 24.76  pr/main 1.000

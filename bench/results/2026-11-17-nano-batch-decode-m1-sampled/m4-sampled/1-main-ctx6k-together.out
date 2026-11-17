@@ -1,0 +1,1 @@
+{"ctx6k_greedy_300": {"tokens": 300, "prompt_tokens": 6185, "ttft": 0.053, "decode_tps": 12.99, "error": null}, "ctx6k_t06_seed5_300": {"tokens": 300, "prompt_tokens": 6652, "ttft": 0.146, "decode_tps": 12.99, "error": null}, "_run": {"mode": "together", "plan": "ctx6k", "span_s": 23.161, "total_tps": 25.91}}

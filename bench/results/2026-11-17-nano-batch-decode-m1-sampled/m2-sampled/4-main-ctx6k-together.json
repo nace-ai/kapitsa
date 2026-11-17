@@ -1,0 +1,26 @@
+{
+ "ctx6k_greedy_300": {
+  "text": "Below is a concise, file\u2011by\u2011file description of the two snippets you posted.  \nI\u2019ve kept the focus on **what the code does** (its purpose, main responsibilities, and the key operations it performs) rather than on the exact line numbers or minor implementation details.\n\n---\n\n## 1\ufe0f\u20e3 `modeling_t5.py`\n\n| Section | What it does |\n|---------|--------------|\n| **Imports & utilities** | Pulls in standard PyTorch modules, the `activation` mapping (`ACT2FN`), caching utilities (`Cache`, `DynamicCache`, `EncoderDecoderCache`), generation helpers, and the T5\u2011specific configuration (`T5Config`). |\n| **`T5LayerNorm`** | Implements a *layer\u2011norm* that only scales the input (no bias). It also converts the output to the same dtype as the layer\u2011norm weight (useful for half\u2011precision). |\n| **`T5DenseActDense`** | A dense\u2011\u2192\u2011ReLU\u2011\u2192\u2011dense block (the \u201cFFN\u201d in T5). It takes a hidden\u2011state tensor, linearly projects it to `d_ff`, applies the activation (`ACT2FN[config.dense_act_fn]`), drops out, and projects back to `d_model`. |\n| **`T5DenseGatedActDense`** | A gated version of the FF",
+  "tokens": 300,
+  "finish": "length",
+  "error": null,
+  "prompt_tokens": 6185,
+  "ttft": 0.068,
+  "decode_tps": 10.66
+ },
+ "ctx6k_t06_seed5_300": {
+  "text": "Here is a **file-by-file description** of the provided code snippets, focusing on their purpose, functionality, and role within the overall model architecture.\n\n---\n\n### **1. `modeling_ctrl.py`**\nThis file implements a **custom transformer model** called `CTRLModel`, based on the original [Salesforce/ctrl](https://huggingface.co/salesforce/ctrl) architecture. It introduces **control codes** as input tokens for a text-to-image generation model.\n\n#### Key Components:\n- **`angle_defn` & `positional_encoding`**: Standard sinusoidal positional encodings.\n- **`eager_attention_forward`**: Custom attention implementation (copied from BERT) that handles attention masks and dropout.\n- **`MultiHeadAttention`**: Standard multi-head self-attention with causal masking support.\n- **`EncoderLayer`**: A single transformer block with attention and feed-forward networks.\n- **`CTRLPreTrainedModel` & `CTRLModel`**: \n  - `CTRLModel`: The main transformer architecture.\n  - Uses **positional encoding as a `nn.Buffer`** (not a parameter) so it can be moved to device/dtype at runtime.\n  - Inputs: `input_ids`, `past_key_values`, `attention_mask`, etc.\n  - Outputs: `last_hidden_state`, `past_key_values`.\n- **`CTRLLMHeadModel`",
+  "tokens": 300,
+  "finish": "length",
+  "error": null,
+  "prompt_tokens": 6652,
+  "ttft": 0.183,
+  "decode_tps": 10.65
+ },
+ "_run": {
+  "mode": "together",
+  "plan": "ctx6k",
+  "span_s": 28.249,
+  "total_tps": 21.24
+ }
+}

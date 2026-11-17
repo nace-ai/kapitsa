@@ -1,0 +1,71 @@
+{
+  "paths": {
+    "step": {
+      "records": 192,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 2.104913711795711e-07,
+      "kl_median": 3.9705927373358906e-08,
+      "kl_p99": 1.689707140339162e-06,
+      "kl_max": 2.220429286535225e-06,
+      "margin_change_max": 0.008321762084960938,
+      "tie_margin": 0.0,
+      "nll_change_mean": 7.501207400890788e-05,
+      "max_abs_diff": 0.012799263000488281,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "source": null
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.36 (e4b69ec6)",
+        "model": "nemotron-3-nano-4b-fp8",
+        "model_dir": "~/kapitsa-run/home/models/nemotron-3-nano-4b-fp8",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 131072,
+        "source": "~/kapitsa-batching2/out/m1-nano4b/exact/ld-main",
+        "mac": "Mac mini (M1, 2020), M1 (8-core GPU), 8 GB",
+        "macos": "27.0",
+        "date": "2026-11-17T09:19:20Z",
+        "env": {
+          "NI_MEM_BUDGET": "5.9"
+        },
+        "disk_format": ""
+      },
+      "candidate": {
+        "engine": "kapitsa",
+        "build": "0.2.36 (e4b69ec6)",
+        "model": "nemotron-3-nano-4b-fp8",
+        "model_dir": "~/kapitsa-run/home/models/nemotron-3-nano-4b-fp8",
+        "path": "verify",
+        "verify": "8 rows",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 131072,
+        "source": "~/kapitsa-batching2/out/m1-nano4b/exact/ld-main",
+        "mac": "Mac mini (M1, 2020), M1 (8-core GPU), 8 GB",
+        "macos": "27.0",
+        "date": "2026-11-17T09:19:20Z",
+        "env": {
+          "NI_MEM_BUDGET": "5.9"
+        },
+        "disk_format": ""
+      }
+    }
+  }
+}

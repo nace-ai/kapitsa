@@ -66,8 +66,9 @@ to 4 by default, as memory allows) sets how many run at once; with every slot bu
 fetching, the chat template and the tokenizer run before a request takes its turn.
 
 When two or more requests decode at once with a block drafter (DFlash2 on the Qwen 27B and 35B-A3B, LiLiCorr on Bolt),
-their decode cycles are batched. At a cycle boundary a parked request joins the batch, and one member's thread holds the
-turn and runs every member's cycles (`Engine::run_batch`): each member's draft when it verifies drafts, then one target
+or on a Nemotron Nano without one, their decode cycles are batched. At a cycle boundary a parked request joins the
+batch, and one member's thread holds the turn and runs every member's cycles (`Engine::run_batch`): each member's draft
+when it verifies drafts, then one target
 pass over all the members' rows (`encode_verify_multi`, up to 8 rows). The norms, projections, MLP or experts and the LM
 head run once over every row, so each weight is read once for all the members; each member's recurrent scan, convolution
 window and attention over its own KV cache run side by side in the same command buffer. Every member keeps its own

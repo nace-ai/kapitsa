@@ -1,0 +1,1 @@
+{"n": 1, "serial": false, "temperature": 0.0, "tokens": [512], "per_stream_tps": [16.04], "ttft": [0.563], "total_tokens": 512, "span_s": 32.427, "total_tps": 15.79, "decode_window_tps": 16.04, "errors": []}

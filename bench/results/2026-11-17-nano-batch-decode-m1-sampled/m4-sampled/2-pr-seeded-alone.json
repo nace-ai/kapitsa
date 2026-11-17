@@ -1,0 +1,26 @@
+{
+ "code_t06_seed7_400": {
+  "text": "```python\n\"\"\"\nLRUCacheTTL.py\n\nA comprehensive, thread-safe LRU (Least Recently Used) cache implementation\nwith Time-To-Live (TTL) expiry support. This module includes:\n\n1. A robust LRUCache class that maintains:\n   - Ordered dictionary-like behavior (LRU eviction on size limit)\n   - Automatic TTL-based expiration of keys\n   - Thread-safe operations via internal locks\n\n2. A wrapper class (ThreadSafeLRUCache) that:\n   - Provides a thread-safe interface\n   - Exposes clean, intuitive API\n   - Handles exceptions gracefully\n\n3. A comprehensive pytest test suite (test_lru_cache_ttl.py) that:\n   - Tests LRU eviction behavior\n   - Tests TTL expiry\n   - Tests thread safety\n   - Tests edge cases\n   - Tests performance under load\n\nThis module is designed to be production-ready with extensive documentation,\nerror handling, and test coverage. The implementation is ~600+ lines of code.\n\nAuthor: Coding Assistant\n\"\"\"\n\nfrom __future__ import annotations\n\nimport threading\nimport time\nfrom collections import OrderedDict\nfrom typing import Any, Callable, Dict, Optional, Tuple, Union\nimport logging\nfrom logging import LogRecord\nfrom contextlib import contextmanager\n\n# Configure logging\nlogger = logging.getLogger(__name__)\nif not logger.handlers:\n    handler = logging.StreamHandler()\n    formatter = logging.Formatter(\n        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'\n    )\n    handler.setFormatter(formatter)\n    logger.addHandler(handler)\n    logger.setLevel(logging.DEBUG)\n\n# Constants\nDEFAULT_TTL = 30.0  # seconds\nDEFAULT_CAPACITY = 100\nMAX_KEY_LENGTH = 256\n\n# Thread-safe LRU Cache Implementation\nclass LRUCache:\n    \"\"\"",
+  "tokens": 400,
+  "finish": "length",
+  "error": null,
+  "prompt_tokens": 83,
+  "ttft": 0.298,
+  "decode_tps": 25.26
+ },
+ "ctx2k_t06_seed3": {
+  "text": "1. **XcodecOutput** \u2013 Output dataclass for encoder and decoder outputs (contains `audio_codes` and `audio_values`).  \n2. **XcodecEncoderOutput** \u2013 Output dataclass for encoder outputs (contains `audio_codes`).  \n3. **XcodecDecoderOutput** \u2013 Output dataclass for decoder outputs (contains `audio_values`).  \n4. **XcodecResidualUnit** \u2013 Residual block used in encoder/decoder blocks (adds a 1D convolutional residual path).  \n5. **XcodecSemanticEncoderBlock** \u2013 Encoder block that applies residual units followed by a 1D convolution.  \n6. **SemanticEncoder** \u2013 Encoder module that processes audio with multiple encoder blocks.  \n7. **SemanticDecoderBlock** \u2013 Decoder block that upsamples with transposed convolution and residual units.  \n8. **SemanticDecoder** \u2013 Decoder module that downsamples and upsamples audio with multiple decoder blocks.  \n9. **XcodecEuclideanCodebook** \u2013 Codebook module that stores nearest-neighbor embeddings for discrete code generation (partial implementation shown).",
+  "tokens": 250,
+  "finish": "stop",
+  "error": null,
+  "prompt_tokens": 2015,
+  "ttft": 4.198,
+  "decode_tps": 32.62
+ },
+ "_run": {
+  "mode": "alone",
+  "plan": "seeded",
+  "span_s": 28.012,
+  "total_tps": 23.2
+ }
+}

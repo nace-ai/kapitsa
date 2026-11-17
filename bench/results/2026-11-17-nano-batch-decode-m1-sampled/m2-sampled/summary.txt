@@ -1,0 +1,50 @@
+== seeded
+1-main alone    total 18.63 tok/s, span 34.897 s
+    code_t06_seed7_400: 400 tok, prompt 83, ttft 0.396, 20.55 tok/s, same
+    ctx2k_t06_seed3: 250 tok, prompt 2015, ttft 5.73, 26.8 tok/s, same
+1-main together total 22.31 tok/s, span 29.137 s
+    code_t06_seed7_400: 400 tok, prompt 83, ttft 0.504, 13.94 tok/s, same
+    ctx2k_t06_seed3: 250 tok, prompt 2015, ttft 0.403, 13.71 tok/s, same
+2-pr alone    total 18.61 tok/s, span 34.936 s
+    code_t06_seed7_400: 400 tok, prompt 83, ttft 0.396, 20.5 tok/s, same
+    ctx2k_t06_seed3: 250 tok, prompt 2015, ttft 5.739, 26.83 tok/s, same
+2-pr together total 30.57 tok/s, span 21.265 s
+    code_t06_seed7_400: 400 tok, prompt 83, ttft 0.502, 19.27 tok/s, differs at char 433
+    ctx2k_t06_seed3: 250 tok, prompt 2015, ttft 0.4, 18.56 tok/s, same
+3-pr alone    total 18.61 tok/s, span 34.919 s
+    code_t06_seed7_400: 400 tok, prompt 83, ttft 0.399, 20.48 tok/s, same
+    ctx2k_t06_seed3: 250 tok, prompt 2015, ttft 5.729, 26.9 tok/s, same
+3-pr together total 30.64 tok/s, span 21.211 s
+    code_t06_seed7_400: 400 tok, prompt 83, ttft 0.504, 19.32 tok/s, differs at char 433
+    ctx2k_t06_seed3: 250 tok, prompt 2015, ttft 0.402, 18.6 tok/s, same
+4-main alone    total 18.66 tok/s, span 34.834 s
+    code_t06_seed7_400: 400 tok, prompt 83, ttft 0.397, 20.56 tok/s, same
+    ctx2k_t06_seed3: 250 tok, prompt 2015, ttft 5.739, 26.96 tok/s, same
+4-main together total 22.25 tok/s, span 29.21 s
+    code_t06_seed7_400: 400 tok, prompt 83, ttft 0.503, 13.9 tok/s, same
+    ctx2k_t06_seed3: 250 tok, prompt 2015, ttft 0.401, 13.67 tok/s, same
+== ctx6k
+1-main alone    total 9.22 tok/s, span 65.042 s
+    ctx6k_greedy_300: 300 tok, prompt 6185, ttft 17.888, 21.44 tok/s, same
+    ctx6k_t06_seed5_300: 300 tok, prompt 6652, ttft 19.056, 21.14 tok/s, same
+1-main together total 21.26 tok/s, span 28.219 s
+    ctx6k_greedy_300: 300 tok, prompt 6185, ttft 0.068, 10.67 tok/s, same
+    ctx6k_t06_seed5_300: 300 tok, prompt 6652, ttft 0.183, 10.67 tok/s, same
+2-pr alone    total 9.2 tok/s, span 65.248 s
+    ctx6k_greedy_300: 300 tok, prompt 6185, ttft 17.938, 21.37 tok/s, same
+    ctx6k_t06_seed5_300: 300 tok, prompt 6652, ttft 19.136, 21.09 tok/s, same
+2-pr together total 35.09 tok/s, span 17.097 s
+    ctx6k_greedy_300: 300 tok, prompt 6185, ttft 0.069, 17.62 tok/s, same
+    ctx6k_t06_seed5_300: 300 tok, prompt 6652, ttft 0.186, 17.68 tok/s, same
+3-pr alone    total 9.2 tok/s, span 65.221 s
+    ctx6k_greedy_300: 300 tok, prompt 6185, ttft 17.864, 21.37 tok/s, same
+    ctx6k_t06_seed5_300: 300 tok, prompt 6652, ttft 19.181, 21.09 tok/s, same
+3-pr together total 35.09 tok/s, span 17.098 s
+    ctx6k_greedy_300: 300 tok, prompt 6185, ttft 0.068, 17.62 tok/s, same
+    ctx6k_t06_seed5_300: 300 tok, prompt 6652, ttft 0.183, 17.68 tok/s, same
+4-main alone    total 9.2 tok/s, span 65.236 s
+    ctx6k_greedy_300: 300 tok, prompt 6185, ttft 17.821, 21.41 tok/s, same
+    ctx6k_t06_seed5_300: 300 tok, prompt 6652, ttft 19.283, 21.11 tok/s, same
+4-main together total 21.24 tok/s, span 28.249 s
+    ctx6k_greedy_300: 300 tok, prompt 6185, ttft 0.068, 10.66 tok/s, same
+    ctx6k_t06_seed5_300: 300 tok, prompt 6652, ttft 0.183, 10.65 tok/s, same
