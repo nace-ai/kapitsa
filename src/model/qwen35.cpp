@@ -1145,7 +1145,6 @@ Qwen35::~Qwen35() {
     }
     for (Buffer& b : qmt_i8_retired_) g.release(b);
     g.release(qmr_coeff_);
-    for (Buffer& b : qmr_coeff_retired_) g.release(b);
     for (auto& [q, b] : qmr_coeff_cache_) g.release(b);
   }
 }
@@ -1272,7 +1271,7 @@ struct TensorMeta {
 };
 static size_t st_bytes(const std::string& path, bool mtp, double expert_share = -1, size_t* decode = nullptr,
                        size_t* lm_head = nullptr, std::map<std::string, TensorMeta>* metas = nullptr,
-                       int mtp_bits = 4, bool packed_metas = false) {
+                       int mtp_bits = 4, bool packed_metas = false, QmrCoeffHeaders* qmr_headers = nullptr) {
   std::ifstream f(path, std::ios::binary);
   uint64_t n = 0;
   if (!f.read(reinterpret_cast<char*>(&n), 8) || n > (256u << 20)) return 0;
@@ -1298,6 +1297,7 @@ static size_t st_bytes(const std::string& path, bool mtp, double expert_share = 
       b = N * K * size_t(mtp_bits) / 8 + 2 * (N * K / 64) * 2;  // quantized at load: codes + bf16 scales and biases
     }
     total += (b + 255) / 256 * 256;
+    if (qmr_headers) qmr_headers->note(name, v["dtype"] == "U32", v["shape"].get<std::vector<int64_t>>());
     if (metas) {  // keyed by the name's tail: embed_tokens.weight, lm_head.scales, mlp.gate_proj.weight (layer 0) ...
       for (const char* k : {"embed_tokens.weight", "embed_tokens.scales", "lm_head.weight", "lm_head.scales"})
         if (name.size() >= strlen(k) && name.compare(name.size() - strlen(k), strlen(k), k) == 0)
@@ -1339,13 +1339,18 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
   size_t lm_head = 0;
   std::map<std::string, TensorMeta> metas;
   const bool packed = v8_packed_coeff_on(c);
+  QmrCoeffHeaders qmr_headers;
+  const bool qmr = qmr_coeff_enabled(chunk);
   // the MTP head: mtp.safetensors, else the one in the checkpoint's own shards (load_mtp reads the same)
   const bool sidecar = std::find(files.begin(), files.end(), "mtp.safetensors") != files.end();
   for (const std::string& f : files) {
-    m.weights += st_bytes(dir + "/" + f, false, share, &m.decode_bytes, &lm_head, &metas, 4, packed);
+    m.weights += st_bytes(dir + "/" + f, false, share, &m.decode_bytes, &lm_head, &metas, 4, packed, qmr ? &qmr_headers : nullptr);
     if ((f == "mtp.safetensors" || !sidecar) && !getenv("NI_NO_MTP"))
       m.mtp += st_bytes(dir + "/" + f, true, -1, nullptr, nullptr, nullptr, mtp_head_bits(c.moe));
   }
+  const QmrCoeffBudget coeff = qmr_headers.budget(true);
+  m.weights += coeff.immutable;
+  m.activations += coeff.scratch;
   has_mtp = m.mtp > 0;
   m.dense = !c.moe;
   m.hidden = c.hidden;
@@ -2814,22 +2819,35 @@ std::pair<Buffer, Buffer> Qwen35::qmt_i8_scratch(size_t m, size_t k) {
   return {sl.q, sl.s};
 }
 
-void Qwen35::load_qmr_coeff_cache() {
+bool Qwen35::qmr_coeff_enabled(int chunk) {
+  if (chunk < 64) return false;
   const QmrSel& q = qmr_sel();
-  if (!q.on || qmt_on() || qmt_i8_on() ||
-      (q.name != "qmr_k32_w14_m32_n128" && q.name != "qmr_pc_k32_w14_m32_n128")) return;
+  return q.on && !qmt_on() && (q.name == "qmr_k32_w14_m32_n128" || q.name == "qmr_pc_k32_w14_m32_n128");
+}
+
+QmrCoeffBudget Qwen35::qmr_coeff_budget(bool cache_trunk) const {
+  if (!qmr_coeff_enabled(tmax_)) return {};
+  QmrCoeffHeaders headers;
+  for (const auto& [name, t] : ws_.all())
+    if (!is_mtp(name)) headers.note(name, t.dtype == DType::U32, t.shape);
+  return headers.budget(cache_trunk);
+}
+
+void Qwen35::load_qmr_coeff_cache() {
+  const QmrCoeffBudget budget = qmr_coeff_budget(true);
+  qmr_coeff_scratch_capacity_ = budget.scratch;
+  if (!budget.immutable) return;
   // Only actual trunk objects, after all load-time transforms. Temporary/sliced QLinear objects and
   // NoLoad-derived models keep the per-call conversion. Nothing is published from a request encoder:
   // cancellation before commit must never leave a cache that has not been initialized.
   std::vector<const QLinear*> projections;
   size_t total = 0;
-  constexpr size_t limit = size_t(512) << 20;
   for (const Layer& l : layers_)
     for (const QLinear* p : {&l.qkv, &l.z, &l.out, &l.q, &l.k, &l.v, &l.o,
                             &l.sg, &l.su, &l.sd, &l.mg, &l.mu, &l.md}) {
       if (!*p || !p->q4() || p->q20 || p->exl3 || p->N <= 64 || !p->K || p->K % 64) continue;
       const size_t groups = size_t(p->N) * (p->K / 64), bytes = groups * 4;
-      if (groups > UINT32_MAX || bytes > limit - total) return;
+      if (groups > UINT32_MAX || bytes > budget.immutable - total) return;
       projections.push_back(p);
       total += bytes;
     }
@@ -2846,19 +2864,14 @@ void Qwen35::load_qmr_coeff_cache() {
     e->dispatch((groups + 255) / 256, 1, 1, 256);
   }
   e->commit_and_wait();  // Constructor has not published the model yet; every cache is now initialized.
-  qmr_coeff_bytes_ += total;  // Shared cap includes later fallback scratch and all retired allocations.
   logi("QMR coefficient cache: %zu static projections, %.3f MiB; setup %.3f ms, GPU %.3f ms",
        projections.size(), double(total) / (1024 * 1024), now_ms() - start, e->gpu_ms());
 }
 
 Buffer Qwen35::qmr_coeff_scratch(size_t groups) {
-  const size_t bytes = groups * 4, limit = size_t(512) << 20;
-  if (qmr_coeff_.size >= bytes) return qmr_coeff_;
-  if (bytes > limit - qmr_coeff_bytes_) return {};
-  // Prior command buffers use unretained references; release replaced buffers only at teardown.
-  if (qmr_coeff_) qmr_coeff_retired_.push_back(qmr_coeff_);
-  qmr_coeff_ = Gpu::get().alloc(bytes, "qmr_coeff");
-  qmr_coeff_bytes_ += bytes;
+  if (!groups || groups > qmr_coeff_scratch_capacity_ / 4) return {};
+  // One buffer for all fallback calls. Never replace a buffer referenced by an in-flight encoder.
+  if (!qmr_coeff_) qmr_coeff_ = Gpu::get().alloc(qmr_coeff_scratch_capacity_, "qmr_coeff");
   return qmr_coeff_;
 }
 
