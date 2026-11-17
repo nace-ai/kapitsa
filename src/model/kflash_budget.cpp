@@ -122,36 +122,6 @@ int KfCosts::force(uint32_t allowed, int max_rows, int explore) const {
   return f;
 }
 
-int KfCosts::cold_force(int cycles, int explore) const {
-  // Rebase a loaded table from a measurement it already holds, exactly as force() does for warm starts.
-  if (loaded && !based) return force(0xffu, 8, 1);
-  // Cap initial exploration even when the tree builder clips a requested count and the anchor never arrives.
-  if (!ncost[8] && cycles < 2) return 8;
-  if (!ncost[1] && cycles < 4) return 1;
-  if (!ncost[4] && cycles < 6) return 4;
-  if (!cycles || cycles % 8) return 0;
-  // Rotate ties so a repeatedly clipped request does not starve other poorly sampled counts.
-  int selected = 0, least = explore;
-  for (int i = 0; i < 8; ++i) {
-    const int n = 1 + (cycles / 8 - 1 + i) % 8;
-    if (ncost[n] < least) {
-      selected = n;
-      least = ncost[n];
-    }
-  }
-  return selected;
-}
-
-double KfCosts::interpolated_cost(int n) const {
-  if (ncost[n]) return at(n);
-  int lo = n - 1, hi = n + 1;
-  while (lo >= 1 && !ncost[lo]) --lo;
-  while (hi <= 8 && !ncost[hi]) ++hi;
-  if (lo < 1) return hi <= 8 ? at(hi) : 0.0;
-  if (hi > 8) return at(lo);
-  return at(lo) + (at(hi) - at(lo)) * double(n - lo) / double(hi - lo);
-}
-
 std::vector<double> KfCosts::table() const {
   std::vector<double> cost(kD, 0.0);  // the costs now
   for (int n = 1; n < kD; ++n)
@@ -434,7 +404,6 @@ void KfBudget::write(KfParams& p, bool greedy_moe) {
   }
   // NI_KFLASH_FORCE=n (tests): every cycle verifies n rows (-1: the allowed counts in turn, cycle by cycle)
   static const int forced = getenv("NI_KFLASH_FORCE") ? std::clamp(atoi(getenv("NI_KFLASH_FORCE")), -1, max_rows_) : 0;
-  const bool sparse = greedy_moe && !forced && !wide_ && max_rows_ == 8 && allowed_ == 0xffu;
   int force = std::max(forced, 0);
   if (forced < 0)
     for (int i = 0; i < max_rows_ && !force; ++i) {
@@ -463,7 +432,9 @@ void KfBudget::write(KfParams& p, bool greedy_moe) {
       // capacity 8 unless the per-cycle choice among the wider counts pays (eval_wide)
       if (!force && !narrow && !wide_pays_) narrow = true;
     } else {
-      force = sparse ? c_.cold_force(cycles_, kExplore) : c_.force(allowed_, max_rows_, kExplore);
+      // Keep row counts in their usual order; a greedy MoE tree can start choosing after one sample of each.
+      const bool all_moe_rows = greedy_moe && !wide_ && max_rows_ == 8 && allowed_ == 0xffu;
+      force = c_.force(allowed_, max_rows_, all_moe_rows ? 1 : kExplore);
     }
   }
   p.force_n = force;
@@ -478,25 +449,9 @@ void KfBudget::write(KfParams& p, bool greedy_moe) {
     p.force_n = 0;
     if (narrow_writes_++ % kStatsEvery) p.max_rows = 8;
   }
-  double narrow_cost[9] = {};
-  if (sparse) {
-    if (std::all_of(c_.ncost + 1, c_.ncost + 9, [](int count) { return count > 0; })) {
-      // Use the batched planner's robust fit until this process measures a row's own cost.
-      double measured[9] = {};
-      for (int n = 1; n <= 8; ++n) measured[n] = c_.at(n);
-      KfBatch::cost_line(measured, 1, 8, narrow_cost);
-      for (int n = 1; n <= 8; ++n) {
-        const double observations = double(ncycles_[n]);
-        const double weight = observations / (kExplore + observations);
-        narrow_cost[n] += weight * (measured[n] - narrow_cost[n]);
-      }
-    } else {
-      for (int n = 1; n <= 8; ++n) narrow_cost[n] = c_.interpolated_cost(n);
-    }
-  }
   p.cost[0] = 1.0f;
   for (int n = 1; n < kD; ++n) {
-    const double c = sparse && n <= 8 ? narrow_cost[n] : cur_cost(n);
+    const double c = cur_cost(n);
     p.cost[n] = c > 0 ? float(std::max(c, 0.01)) : 1.0f;
   }
 }

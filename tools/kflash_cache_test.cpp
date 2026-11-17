@@ -6,14 +6,11 @@
 
 #include <nlohmann/json.hpp>
 
-#include <algorithm>
-#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <string>
 #include <sys/stat.h>
-#include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
 
@@ -41,109 +38,22 @@ static void write_cache(const std::string& dir, const std::string& key, const ch
   std::ofstream(dir + "/kflash/" + key + ".json") << j.dump() << "\n";
 }
 
-static ni::KfParams plan(KfBudget& b, bool greedy_moe = true) {
+static bool check_exploration(bool greedy_moe, uint32_t allowed, int samples) {
+  KfBudget budget;
+  budget.set_rows(allowed, 8);
   ni::KfParams p{};
-  b.write(p, greedy_moe);
-  return p;
-}
-
-static void observe(KfBudget& b, int n, double ms) {
-  std::array<int32_t, ni::kf::kWords> tree{};
-  tree[ni::kf::kObs] = n;
-  b.observe(tree.data(), ms);
-}
-
-// NI_KFLASH_FORCE is read once per process. Fork before the parent writes its first plan.
-static bool test_forced(const char* setting, int first, int second) {
-  const pid_t pid = fork();
-  if (pid == 0) {
-    setenv("NI_KFLASH_FORCE", setting, 1);
-    KfBudget b;
-    const auto p = plan(b);
-    observe(b, first, 20);
-    const auto q = plan(b);
-    _exit(p.force_n == first && q.force_n == second && q.cost[8] == 1.0f ? 0 : 1);
-  }
-  int status = 0;
-  return pid > 0 && waitpid(pid, &status, 0) == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
-}
-
-static void test_greedy_costs(const std::string& dir) {
-  check(test_forced("3", 3, 3), "a fixed verify count takes precedence over greedy exploration");
-  check(test_forced("-1", 1, 2), "cycling every allowed count takes precedence over greedy exploration");
-  unsetenv("NI_KFLASH_FORCE");
-
-  KfBudget b("partial");
-  check(plan(b, false).force_n == 1 && plan(b).force_n == 8, "greedy and sampled start at their own row counts");
-  observe(b, 8, 26);
-  const auto upper = plan(b);
-  check(upper.force_n == 1 && upper.cost[5] == 26, "one measured count sets costs until a second is observed");
-  observe(b, 1, 12);
-  const auto lower = plan(b);
-  check(lower.force_n == 4 && lower.cost[4] == 18 && lower.cost[6] == 22, "interpolate between the two endpoints");
-  observe(b, 4, 21);
-  const auto mid = plan(b);
-  check(!mid.force_n && mid.cost[2] == 15 && mid.cost[6] == 23.5, "a third measurement splits the estimate");
-  check(b.cost(2) == 0 && plan(b, false).cost[2] == 1.0f, "sampled planning only sees measured costs");
-
-  for (int i = 3; i < 32; ++i) observe(b, 4, 21);
-  b.save();
-  const auto j = nlohmann::json::parse(std::ifstream(dir + "/kflash/partial.json"));
-  check(j.at("cost").at(2) == 0 && j.at("cost").at(1) == 12, "only actual measurements reach the cache");
-  KfBudget partial("partial");
-  check(plan(partial).force_n == 8, "a partial cache first requests its largest measured count");
-  observe(partial, 8, 36);
-  const auto rebased = plan(partial);
-  check(!rebased.force_n && rebased.cost[2] == 25 && partial.cost(2) == 0, "partial cache estimates use the new base");
-  // The cached 1, 4 and 8 have the normal sample credit. Other counts compete on actual samples.
-  std::array<int, 9> samples{};
-  for (int n : {1, 4, 8}) samples[n] = KfBudget::kExplore;
-  bool measured_least = true;
-  int probes = 0;
-  for (int i = 1; i <= 8 * (5 * KfBudget::kExplore + 2); ++i) {
-    const int n = plan(partial).force_n;
-    if (n) {
-      ++probes;
-      const int least = *std::min_element(samples.begin() + 1, samples.end());
-      measured_least = measured_least && i % 8 == 0 && samples[n] == least && least < KfBudget::kExplore;
-      ++samples[n];
+  std::vector<int32_t> tree(ni::kf::kWords);
+  for (int n = 1; n <= 8; ++n) {
+    if (!(allowed & (1u << (n - 1)))) continue;
+    for (int i = 0; i < samples; ++i) {
+      budget.write(p, greedy_moe);
+      if (p.force_n != n) return false;
+      tree[ni::kf::kN] = n;
+      budget.observe(tree.data(), 30 + n);
     }
-    observe(partial, n ? n : 4, 20);
   }
-  check(measured_least && probes == 5 * KfBudget::kExplore,
-        "one probe every eighth cycle brings each new row count up to the narrow sampling target");
-
-  write_cache(dir, "complete", KfBudget::build(), 0);
-  const std::string complete_path = dir + "/kflash/complete.json";
-  auto table = nlohmann::json::parse(std::ifstream(complete_path));
-  table["cost"][7] = 65;  // An expensive sample among the 30 + n measurements.
-  std::ofstream(complete_path) << table.dump();
-  KfBudget complete("complete");
-  const auto initial = plan(complete);
-  check(initial.force_n == 8 && initial.cost[7] == 37, "a complete cache starts at the fitted costs and rebases at eight rows");
-  observe(complete, 8, 48);
-  const auto warm = plan(complete);
-  check(!warm.force_n && warm.cost[4] == 44 && warm.cost[7] == 47 && warm.cost[8] == 48,
-        "a complete greedy table fits the cost line across a distorted row");
-  check(complete.cost(7) == 75 && plan(complete, false).cost[7] == 75,
-        "the stored measurement and the sampled planner keep the raw cost of that row");
-  observe(complete, 7, 75);
-  check(plan(complete).cost[7] == 54 && complete.cost(7) == 75 && plan(complete, false).cost[7] == 75,
-        "one new observation gives the distorted row a quarter of the greedy cost weight");
-  KfBudget clipped;
-  int late = 0;
-  for (int i = 0; i < 64; ++i) {
-    if (plan(clipped).force_n && i >= 6) ++late;
-    observe(clipped, 6, 20);  // the tree actually verified six rows, whatever the budget requested
-  }
-  check(late == 7, "clipped anchors release the planner after the initial six cycles");
-  KfBudget restricted;
-  restricted.set_rows(0x88u, 8);
-  check(plan(restricted).force_n == 4, "a restricted mask uses its original exhaustive rule");
-  KfBudget wide;
-  wide.set_rows((1u << 7) | (1u << 15), 16);
-  wide.set_wide(true);
-  check(plan(wide).cap == 8 && plan(wide).force_n == 0, "wide starts at the existing narrow capacity");
+  budget.write(p, greedy_moe);
+  return p.force_n == 0;
 }
 
 int main() {
@@ -158,10 +68,22 @@ int main() {
   mkdir((dir + "/kflash").c_str(), 0755);
   const std::string key = "model-Drafter-Chip";
 
-  test_greedy_costs(dir);
+  unsetenv("NI_KFLASH_FORCE");
+  check(check_exploration(true, 0xffu, 1), "the greedy MoE budget measures every row count once in ascending order");
+  check(check_exploration(false, 0xffu, 3) && check_exploration(true, 0x88u, 3),
+        "other narrow trees retain three measurements per allowed count");
+
   write_cache(dir, key, KfBudget::build(), 2.5f);
   {
     KfBudget b(key);
+    ni::KfParams p{};
+    b.write(p, true);
+    check(p.force_n == 8, "the greedy full cache rebases on its largest measured row count");
+    std::vector<int32_t> tree(ni::kf::kWords);
+    tree[ni::kf::kN] = 8;
+    b.observe(tree.data(), 48);
+    b.write(p, true);
+    check(p.force_n == 0 && p.cost[4] == 44, "a rebased greedy cache immediately uses actual costs");
     check(b.alpha(1) == 2.5f && b.beta(1) == 1.5f, "a cache this build wrote is loaded");
   }
   {

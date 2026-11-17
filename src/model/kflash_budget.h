@@ -11,11 +11,10 @@
 //    KfBatch's sampled calibration the same).
 //  - cost: a cycle's GPU time with n verify rows, measured on the Mac it runs on: its drafting half's command buffer
 //    and its verify's, in ms, whichever tool runs the cycles (ni_run, the server), so the cache means one thing
-//    whoever wrote it. Greedy MoE trees with all 1..8 rows available start from three measured counts and interpolate
-//    the rest. Other narrow trees try every allowed count three times. A cost is a base that every cycle moves
-//    with the context's length (the 35B's cycles cost ~7 ms more at 21k tokens than at 100, whatever n), plus
-//    n's own offset, a running mean of what its cycles cost above the base. Each process sets the base by its
-//    first cycle at a count the cache holds. Wide verifies
+//    whoever wrote it. The first cycles try every allowed n a few times (unless the cache already holds a table for
+//    this model, drafter and chip). A cost is a base that every cycle moves (the context's length: the 35B's cycles
+//    cost ~7 ms more at 21k tokens than at 100, whatever n) plus n's own offset, a running mean of what its cycles
+//    cost above the base; each process sets the base by its first cycle (a count the cache holds). Wide verifies
 //    (below) model the drift as a ratio: log cost(n) = log base + log ratio(n), the base an 8-row verify's cost now
 //    and the ratios each count's own, fitted online.
 // The builder takes the allowed n that maximizes E(n) - rate cost[n], E(n) the tokens a verify of n rows is expected
@@ -58,9 +57,6 @@ struct KfCosts {
   // the count the next cycle must verify (0: none): with a loaded table and a choice of counts, before this process's
   // base, a count the table holds (the largest); then every allowed count (bit n - 1) `explore` times
   int force(uint32_t allowed, int max_rows, int explore) const;
-  // Sparse exploration for the narrow tree: force anchor measurements first, then occasionally the least-sampled count.
-  int cold_force(int cycles, int explore) const;
-  double interpolated_cost(int n) const;  // between measured counts in 1..8; flat outside that interval
   // the cache's table (n: the cost now; 0: not measured, or not since this process's base), and one read back
   std::vector<double> table() const;
   void load(const std::vector<double>& c, int explore);
@@ -99,7 +95,7 @@ class KfBudget {
   int cycles() const { return cycles_; }
   // n rows' cost now (ms; 0: not measured)
   double cost(int n) const { return n >= 1 && n <= kf::kMaxRows ? cur_cost(n) : 0.0; }
-  static constexpr int kExplore = 3;  // target observations per count in narrow exploration
+  static constexpr int kExplore = 3;  // ordinary narrow exploration and loaded cost credit
   // the build a cache file names (its "build"): a file another build wrote is not loaded (KfBatch's too)
   static const char* build();
   double cost_narrow() const { return cost8n_; }  // an 8-row cycle at capacity 8 (wide verifies)
