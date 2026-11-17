@@ -1531,7 +1531,8 @@ void Engine::member_masks(const BatchJob& j, int P, int rows) {
 // ---- batched decode ----
 
 int Engine::batch_rows(int n) const {
-  // NI_BATCH: 0 = requests take turns, 1 = batched with every drafter; unset: batched for the drafters listed at batch_measured_
+  // NI_BATCH: 0 = requests take turns, 1 = batched with every drafter; unset: batched where batch_measured_ is set (the
+  // measured drafters and the Nemotron Nanos)
   static const int mode = [] {
     const char* v = getenv("NI_BATCH");
     return v && *v ? atoi(v) : -1;
@@ -1558,7 +1559,7 @@ int Engine::batch_rows(int n) const {
   int rows = env[size_t(n)];
   // no drafter (a Nemotron Nano): plain rows, every member's pending token (its lookup drafts wait
   // for its own loop)
-  if (!dfl_ && !lili_) return nh_batch_rows(n, mode, rows);
+  if (!dfl_ && !lili_) return nh_batch_rows(rows);
   // KFlash's batch budget (DFlash2 drafters, 2 .. 4 members; NI_BATCH_KF=0 keeps the table below): each cycle, the rows
   // of one verify pass in all and which member gets them, from the members' calibrated drafts and this Mac's measured
   // cost of a batched cycle (KfBatch). Against the table on the M4 Pro (same streams, interleaved): 3 at once 35B

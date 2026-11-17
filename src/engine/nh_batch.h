@@ -11,10 +11,9 @@ inline bool nh_batches(const std::vector<char>& kind, bool block_drafter) {
   return !block_drafter && std::find(kind.begin(), kind.end(), 'E') == kind.end();
 }
 
-// rows per member for n members, with no drafter: 1 (every member's pending token), 0 = take turns.
-// mode: NI_BATCH (-1 unset, 0 take turns); env_rows: NI_BATCH_ROWS's entry for n (-1 unset)
-inline int nh_batch_rows(int n, int mode, int env_rows) {
-  return mode == 0 || n < 2 || n > 8 || env_rows == 0 ? 0 : 1;
-}
+// rows per member with no drafter, once Engine::batch_rows has ruled out NI_BATCH=0 and fewer than 2 or more than 8
+// members: 1 (every member's pending token), or 0 = take turns when NI_BATCH_ROWS gives 0 for this count.
+// env_rows: NI_BATCH_ROWS's entry for the member count (-1 unset; a drafter's row count still means one plain row)
+inline int nh_batch_rows(int env_rows) { return env_rows == 0 ? 0 : 1; }
 
 }  // namespace ni

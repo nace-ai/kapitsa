@@ -21,13 +21,10 @@ int main() {
   CHECK(!ni::nh_batches(moe, false), "a LatentMoE model takes turns");
   CHECK(!ni::nh_batches(moe, true), "a LatentMoE model with a drafter keeps its own path");
 
-  for (int n = 2; n <= 8; ++n) CHECK(ni::nh_batch_rows(n, -1, -1) == 1, "2 to 8 members: one row each");
-  CHECK(ni::nh_batch_rows(1, -1, -1) == 0, "one request decodes alone");
-  CHECK(ni::nh_batch_rows(9, -1, -1) == 0, "more than 8 members take turns");
-  CHECK(ni::nh_batch_rows(4, 0, -1) == 0, "NI_BATCH=0 takes turns");
-  CHECK(ni::nh_batch_rows(4, 1, -1) == 1, "NI_BATCH=1 batches");
-  CHECK(ni::nh_batch_rows(4, -1, 0) == 0, "NI_BATCH_ROWS=4:0 takes turns at 4");
-  CHECK(ni::nh_batch_rows(4, -1, 3) == 1, "a drafter's row count gives plain rows one row");
+  // (NI_BATCH=0 and member counts outside 2 .. 8 return 0 in Engine::batch_rows before this rule)
+  CHECK(ni::nh_batch_rows(-1) == 1, "NI_BATCH_ROWS unset: one row each");
+  CHECK(ni::nh_batch_rows(0) == 0, "NI_BATCH_ROWS=n:0 takes turns at n");
+  CHECK(ni::nh_batch_rows(3) == 1, "a drafter's row count gives plain rows one row");
 
   if (failures) return 1;
   std::puts("nh_batch_test: ok");

@@ -50,7 +50,7 @@ SDK build the named targets, as CI does.
 
 CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
 update_test prefix_cache_test kflash_cache_test grammar_test structured_check fn_store_test fn_dflash_test drafter_attach_test tokenizer_test iq_layout_test
-exl3_test remote_test cluster_test split_place_test gemm_slices_test kv_grow_test ffn_share_test device_profile_test sample_topk_test qwen4_config_test nh_quant_q8_test json_file_test serve_options_test events_test control_test engine_view_test think_control_test systemone systemone_test
+exl3_test remote_test cluster_test split_place_test gemm_slices_test kv_grow_test nh_batch_test ffn_share_test device_profile_test sample_topk_test qwen4_config_test nh_quant_q8_test json_file_test serve_options_test events_test control_test engine_view_test think_control_test systemone systemone_test
 systemone_codes_probe_test systemone_codes_driver splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump`:
 
 ```bash
