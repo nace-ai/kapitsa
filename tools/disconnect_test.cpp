@@ -3,6 +3,7 @@
 #include "server/disconnect.h"
 
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstdlib>
 #include <functional>
@@ -59,8 +60,7 @@ void serve_route(httplib::Server& srv, Decode& d, int target) {
   });
 }
 
-// A client that sends a complete request and closes the socket while the decode is still running.
-void send_and_hang_up(int port) {
+int connect_client(int port) {
   int fd = ::socket(AF_INET, SOCK_STREAM, 0);
   CHECK(fd >= 0);
   sockaddr_in addr{};
@@ -68,9 +68,29 @@ void send_and_hang_up(int port) {
   addr.sin_port = htons(static_cast<uint16_t>(port));
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
   CHECK(::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof addr) == 0);
-  const std::string request = "POST /run HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\n"
-                              "Content-Length: 2\r\nConnection: close\r\n\r\n{}";
-  CHECK(::send(fd, request.data(), request.size(), 0) == static_cast<ssize_t>(request.size()));
+  const timeval timeout{30, 0};
+  CHECK(::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout) == 0);
+  return fd;
+}
+
+void send_all(int fd, const std::string& data) {
+  size_t sent = 0;
+  while (sent < data.size()) {
+    const auto n = ::send(fd, data.data() + sent, data.size() - sent, 0);
+    if (n < 0 && errno == EINTR) continue;
+    CHECK(n > 0);
+    sent += static_cast<size_t>(n);
+  }
+}
+
+const std::string kRequest = "POST /run HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\n"
+                             "Content-Length: 2\r\n\r\n{}";
+const std::string kNextRequest = "GET /next HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+
+// A client that sends a complete request and closes the socket while the decode is still running.
+void send_and_hang_up(int port) {
+  const int fd = connect_client(port);
+  send_all(fd, kRequest);
   std::this_thread::sleep_for(100ms);  // let the server start decoding before the client leaves
   ::close(fd);
 }
@@ -119,6 +139,98 @@ static void connected_client_gets_result() {
   serving.join();
 }
 
+// A reset must cancel even when a pipelined request leaves readable bytes ahead of the socket error.
+static void reset_with_queued_request_stops_generation() {
+  Decode d;
+  server::ServingServer srv;
+  serve_route(srv, d, kMaxSteps);
+  const int port = srv.bind_to_any_port("127.0.0.1");
+  CHECK(port > 0);
+  std::thread serving([&] { srv.listen_after_bind(); });
+  const int fd = connect_client(port);
+  send_all(fd, kRequest);
+  wait_until([&] { return d.steps.load() > 0; }, 5s);
+  CHECK(d.steps > 0);
+  // Send after the first handler starts so these bytes stay in the socket, beyond httplib's read buffer.
+  send_all(fd, kNextRequest);
+  const linger reset{1, 0};
+  CHECK(::setsockopt(fd, SOL_SOCKET, SO_LINGER, &reset, sizeof reset) == 0);
+  ::close(fd);
+  wait_until([&] { return d.finished.load() == 1; }, 5s);
+  CHECK(d.finished == 1);
+  CHECK(d.stop_seen);
+  CHECK(d.reason == "cancelled");
+  CHECK(d.steps < kMaxSteps / 2);
+  srv.stop();
+  serving.join();
+  std::cout << "reset with queued request: decode stopped after " << d.steps << " of " << kMaxSteps << " steps\n";
+}
+
+// Watching a healthy socket must neither cancel the decode nor consume the next request's bytes.
+static void queued_request_on_live_connection_is_served() {
+  Decode d;
+  std::atomic<int> next_served{0};
+  server::ServingServer srv;
+  serve_route(srv, d, 750);  // keep the first request active across several watch intervals
+  srv.Get("/next", [&](const httplib::Request&, httplib::Response& res) {
+    ++next_served;
+    res.set_content("next", "text/plain");
+  });
+  const int port = srv.bind_to_any_port("127.0.0.1");
+  CHECK(port > 0);
+  std::thread serving([&] { srv.listen_after_bind(); });
+  const int fd = connect_client(port);
+  send_all(fd, kRequest);
+  wait_until([&] { return d.steps.load() > 0; }, 5s);
+  CHECK(d.steps > 0);
+  send_all(fd, kNextRequest);
+  std::string response;
+  // Read two framed responses, without waiting for the peer's keep-alive EOF.
+  for (int reply = 0; reply < 2; ++reply) {
+    std::string header;
+    while (!header.ends_with("\r\n\r\n")) {
+      char byte;
+      const auto n = ::recv(fd, &byte, 1, 0);
+      if (n < 0 && errno == EINTR) continue;
+      CHECK(n == 1);
+      header += byte;
+      CHECK(header.size() <= 8192);
+    }
+    CHECK(header.starts_with("HTTP/1.1 200 OK\r\n"));
+    const std::string length_header = "\r\nContent-Length: ";
+    const auto at = header.find(length_header);
+    CHECK(at != std::string::npos);
+    const auto begin = at + length_header.size();
+    const auto end = header.find("\r\n", begin);
+    const auto digits = header.substr(begin, end - begin);
+    CHECK(!digits.empty() && digits.find_first_not_of("0123456789") == std::string::npos);
+    const auto bytes = std::stoul(digits);
+    CHECK(bytes == 4);  // both expected bodies, "stop" and "next", have four bytes
+    response += header;
+    size_t remaining = bytes;
+    char buffer[4];
+    while (remaining > 0) {
+      const auto n = ::recv(fd, buffer, remaining, 0);
+      if (n < 0 && errno == EINTR) continue;
+      CHECK(n > 0);
+      response.append(buffer, static_cast<size_t>(n));
+      remaining -= static_cast<size_t>(n);
+    }
+  }
+  ::close(fd);
+  CHECK(!d.stop_seen);
+  CHECK(d.steps == 750);
+  CHECK(d.finished == 1);
+  CHECK(d.reason == "stop");
+  CHECK(next_served == 1);
+  CHECK(response.starts_with("HTTP/1.1 200 OK\r\n"));
+  CHECK(response.find("\r\n\r\nstopHTTP/1.1 200 OK\r\n") != std::string::npos);
+  CHECK(response.ends_with("\r\n\r\nnext"));
+  srv.stop();
+  serving.join();
+  std::cout << "live queued request: both responses returned without cancellation\n";
+}
+
 // Outside a served request there is no socket to watch; the wait returns the result without cancelling.
 static void unserved_wait_returns_result() {
   Decode d;
@@ -136,6 +248,8 @@ int main() {
   unserved_wait_returns_result();
   connected_client_gets_result();
   dropped_client_stops_generation();
+  queued_request_on_live_connection_is_served();
+  reset_with_queued_request_stops_generation();
   std::cout << "disconnect_test: all passed\n";
   return 0;
 }

@@ -48,7 +48,7 @@ cmake --build build -j --target kapitsa                  # the CLI only; drop --
 `all` also builds tools that need a newer macOS SDK than 15.x (`tensor_probe` uses `MTLLanguageVersion4_0`): on an older
 SDK build the named targets, as CI does.
 
-CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
+CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test disconnect_test bench_test
 update_test prefix_cache_test kflash_cache_test grammar_test structured_check fn_store_test fn_dflash_test drafter_attach_test tokenizer_test iq_layout_test
 exl3_test remote_test cluster_test split_place_test gemm_slices_test kv_grow_test ffn_share_test device_profile_test sample_topk_test qwen4_config_test nh_quant_q8_test json_file_test serve_options_test events_test control_test engine_view_test think_control_test systemone systemone_test
 systemone_codes_probe_test systemone_codes_driver splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump`:
@@ -91,6 +91,7 @@ python3 tests/test_events_schema.py tools/engine_replay.py  # the engine view's 
 python3 tests/test_engine_view.py            # needs: jsonschema; that stand-in's answers: the run's key, stop and switch, Host/Origin/proxy refusals, resume and resets, 3 streams at most
 node tests/test_engine_page.mjs              # Node 18+: the page's own script (src/server/engine.html) on that stand-in: key, live view, Switch and Stop, disconnect, no key
 build/http_stream_test                       # HTTP streaming: framing, keepalive, disconnect, meters (src/server/http_stream.cpp)
+build/disconnect_test                        # non-streaming disconnects: close, reset with queued bytes, and live pipelined requests (no model)
 build/ws_upgrade_test                        # a WebSocket upgrade on /v1/responses gets 426, the rest passes through (src/server/ws_upgrade.h)
 build/splash_protocol_test                   # Splash protocol v11 frames against Splash 1.4.0's goldens (src/splash/protocol.h)
 build/splash_runtime_test                    # the Splash engine child: start, requests, cancel, death (src/splash/runtime.h)

@@ -49,7 +49,11 @@ public:
       : thread_([this, sock, &execution] {
           std::unique_lock<std::mutex> lk(mu_);
           while (!cv_.wait_for(lk, std::chrono::milliseconds(250), [this] { return stop_; })) {
-            if (!httplib::detail::is_socket_alive(sock)) {
+            // MSG_PEEK can still see queued request bytes after a reset. Check the socket error first.
+            int error = 0;
+            socklen_t size = sizeof error;
+            const bool failed = ::getsockopt(sock, SOL_SOCKET, SO_ERROR, &error, &size) == 0 && error != 0;
+            if (failed || !httplib::detail::is_socket_alive(sock)) {
               execution.cancel();
               return;
             }
