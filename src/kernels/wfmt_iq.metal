@@ -1441,7 +1441,7 @@ struct QrmIqParams {
 // acc[p*FA + a][b] = C_p[n = n0 + sgn*TN + 8a + rc.x][m = 8b + rc.y + e] over the whole K for the FL live row fragments
 // of the tile (rows m0 .. m0 + rows of the sorted order). K steps of 64 (qmr's permuted X order at BK = 64: the lane's
 // 16 values of a row per step are iq_a16's), one fp32 chain per 256-value block (4 steps), then acc += chain * d.
-template <int FMT, int FL, int BN, int WN, int NP, int BK = 64>
+template <int FMT, int FL, int BN, int WN, int NP, int BK = 64, bool DIRECT = false>
 NI_INLINE void qrmi_acc(const device half* X, const device uint* xrows, bool gather, uint x_ld, uint m0, uint rows,
                         const device uchar* const thread* W, IqSec s, uint rbase, uint N, uint K, uint n0,
                         threadgroup half* xs, uint tid, uint sgn, uint2 rc,
@@ -1458,11 +1458,38 @@ NI_INLINE void qrmi_acc(const device half* X, const device uint* xrows, bool gat
   _Pragma("clang loop unroll(full)")
   for (int a = 0; a < FA; ++a) wrow[a] = rbase + min(n0 + sgn * TN + a * 8 + rc.x, N - 1);
   uint xo[XL];
-  qrm_xoff<BMl, BK, NT>(xrows, gather, x_ld / 8, m0, rows, tid, xo);
+  // A lane owns two adjacent rows of B. Undo qr_store_x's K permutation to load
+  // four consecutive fragment operands from each row in one half4.
+  uint input_row[FL][2];
+  if (DIRECT) {
+    _Pragma("clang loop unroll(full)")
+    for (int b = 0; b < FL; ++b)
+      _Pragma("clang loop unroll(full)")
+      for (int e = 0; e < 2; ++e) {
+        const uint m = b * 8 + rc.y + e;
+        input_row[b][e] = m < rows ? (gather ? xrows[m0 + m] : m0 + m) : ~0u;
+      }
+  } else {
+    qrm_xoff<BMl, BK, NT>(xrows, gather, x_ld / 8, m0, rows, tid, xo);
+  }
   const device uint4* X4 = (const device uint4*)X;
   uint4 xr[XL];
   for (uint k0 = 0; k0 < K; k0 += BK) {
-    qrm_load_x<BMl, BK, NT>(X4, xo, k0, xr);
+    half4 direct_x[FL][2][BK / 32];
+    if (DIRECT) {
+      const uint lane_k = (rc.x / 2) * (BK / 4) + (rc.x & 1u) * 4;
+      _Pragma("clang loop unroll(full)")
+      for (int b = 0; b < FL; ++b)
+        _Pragma("clang loop unroll(full)")
+        for (int e = 0; e < 2; ++e)
+          _Pragma("clang loop unroll(full)")
+          for (int q = 0; q < BK / 32; ++q)
+            direct_x[b][e][q] = input_row[b][e] != ~0u
+                ? *(const device half4*)(X + size_t(input_row[b][e]) * x_ld + k0 + lane_k + q * 8)
+                : half4(0);
+    } else {
+      qrm_load_x<BMl, BK, NT>(X4, xo, k0, xr);
+    }
     half2 af[NP * FA][NF];
     _Pragma("clang loop unroll(full)")
     for (int p = 0; p < NP; ++p)
@@ -1471,8 +1498,10 @@ NI_INLINE void qrmi_acc(const device half* X, const device uint* xrows, bool gat
         if (BK == 64) iq_a16<FMT>(W[p], s, wrow[a], nsb, k0 + 16 * c, af[p * FA + a]);
         else iq_a8<FMT>(W[p], s, wrow[a], nsb, k0 + 8 * c, af[p * FA + a]);
       }
-    qr_store_x<BMl, BK, NT>(xs, tid, xr);
-    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (!DIRECT) {
+      qr_store_x<BMl, BK, NT>(xs, tid, xr);
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
     _Pragma("clang loop unroll(full)")
     for (int f = 0; f < NF; ++f) {
       simdgroup_half8x8 A[NP * FA];
@@ -1484,12 +1513,17 @@ NI_INLINE void qrmi_acc(const device half* X, const device uint* xrows, bool gat
       _Pragma("clang loop unroll(full)")
       for (int b = 0; b < FL; ++b) {
         simdgroup_half8x8 bf;
-        simdgroup_load(bf, xs + (b * 8) * LD + 8 * f, LD, ulong2(0, 0), true);
+        if (DIRECT) {
+          bf.thread_elements()[0] = direct_x[b][0][f / 4][f % 4];
+          bf.thread_elements()[1] = direct_x[b][1][f / 4][f % 4];
+        } else {
+          simdgroup_load(bf, xs + (b * 8) * LD + 8 * f, LD, ulong2(0, 0), true);
+        }
         _Pragma("clang loop unroll(full)")
         for (int i = 0; i < NP * FA; ++i) simdgroup_multiply_accumulate(ch[i][b], A[i], bf, ch[i][b]);
       }
     }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (!DIRECT) threadgroup_barrier(mem_flags::mem_threadgroup);
     if (((k0 + BK) & 255u) == 0) {
       _Pragma("clang loop unroll(full)")
       for (int p = 0; p < NP; ++p)
@@ -1509,13 +1543,13 @@ NI_INLINE void qrmi_acc(const device half* X, const device uint* xrows, bool gat
   }
 }
 
-template <int FMT, int FL, int BN, int WN, int BK = 64, typename HT = half>
+template <int FMT, int FL, int BN, int WN, int BK = 64, typename HT = half, bool DIRECT = false>
 NI_INLINE void qrmi_gu_body(const device half* X, const device uint* xrows, uint x_ld, uint m0, uint rows,
                             const device uchar* const thread* W, IqSec s, uint rbase, device HT* H, uint y_ld, uint N,
                             uint K, uint n0, threadgroup half* xs, uint tid, uint sgn, uint2 rc) {
   constexpr int TN = BN / WN, FA = TN / 8;
   simdgroup_float8x8 acc[2 * FA][FL];
-  qrmi_acc<FMT, FL, BN, WN, 2, BK>(X, xrows, true, x_ld, m0, rows, W, s, rbase, N, K, n0, xs, tid, sgn, rc, acc);
+  qrmi_acc<FMT, FL, BN, WN, 2, BK, DIRECT>(X, xrows, true, x_ld, m0, rows, W, s, rbase, N, K, n0, xs, tid, sgn, rc, acc);
   _Pragma("clang loop unroll(full)")
   for (int a = 0; a < FA; ++a) {
     const uint n = n0 + sgn * TN + a * 8 + rc.x;
@@ -1530,13 +1564,13 @@ NI_INLINE void qrmi_gu_body(const device half* X, const device uint* xrows, uint
   }
 }
 
-template <int FMT, int FL, int BN, int WN, int BK = 64>
+template <int FMT, int FL, int BN, int WN, int BK = 64, bool DIRECT = false>
 NI_INLINE void qrmi_dn_body(const device half* X, uint x_ld, uint m0, uint rows, const device uchar* const thread* W,
                             IqSec s, uint rbase, device float* Y, const device uint* yrows, uint y_ld, uint N, uint K,
                             uint n0, threadgroup half* xs, uint tid, uint sgn, uint2 rc) {
   constexpr int TN = BN / WN, FA = TN / 8;
   simdgroup_float8x8 acc[FA][FL];
-  qrmi_acc<FMT, FL, BN, WN, 1, BK>(X, nullptr, false, x_ld, m0, rows, W, s, rbase, N, K, n0, xs, tid, sgn, rc, acc);
+  qrmi_acc<FMT, FL, BN, WN, 1, BK, DIRECT>(X, nullptr, false, x_ld, m0, rows, W, s, rbase, N, K, n0, xs, tid, sgn, rc, acc);
   _Pragma("clang loop unroll(full)")
   for (int b = 0; b < FL; ++b)
     _Pragma("clang loop unroll(full)")
@@ -1553,7 +1587,8 @@ NI_INLINE void qrmi_dn_body(const device half* X, uint x_ld, uint m0, uint rows,
 // gate/up + SwiGLU: H (sorted rows, half; HT float: fp32, as Flint scales them into half rows) from X rows gathered
 // through xrows. grid (N / BN, max tiles), 32 WN threads.
 #define NI_QRMI_GU(NAME, FMT, FB, BN, WN, BK) NI_QRMI_GU_T(NAME, FMT, FB, BN, WN, BK, half)
-#define NI_QRMI_GU_T(NAME, FMT, FB, BN, WN, BK, HT)                                                           \
+#define NI_QRMI_GU_T(NAME, FMT, FB, BN, WN, BK, HT) NI_QRMI_GU_IMPL(NAME, FMT, FB, BN, WN, BK, HT, false)
+#define NI_QRMI_GU_IMPL(NAME, FMT, FB, BN, WN, BK, HT, DIRECT)                                                           \
   [[kernel, max_total_threads_per_threadgroup(WN * 32)]] void NAME(                                           \
       const device half* X [[buffer(0)]], const device uchar* Wg [[buffer(1)]], const device uchar* Wu [[buffer(2)]], \
       device HT* H [[buffer(3)]], constant QrmIqParams& p [[buffer(4)]], const device uint* tiles [[buffer(5)]], \
@@ -1575,15 +1610,16 @@ NI_INLINE void qrmi_dn_body(const device half* X, uint x_ld, uint m0, uint rows,
       qrmi_gu_body<FMT, (FB >= 3 ? 3 : 1), BN, WN, BK, HT>(X, xrows, p.x_ld, m0, rows, W, p.sec, e * p.N, H, p.y_ld, \
                                                        p.N, p.K, n0, xs, tid, sg, rc);                      \
     else if (FB >= 2 && live == 2)                                                                           \
-      qrmi_gu_body<FMT, (FB >= 2 ? 2 : 1), BN, WN, BK, HT>(X, xrows, p.x_ld, m0, rows, W, p.sec, e * p.N, H, p.y_ld, \
+      qrmi_gu_body<FMT, (FB >= 2 ? 2 : 1), BN, WN, BK, HT, DIRECT>(X, xrows, p.x_ld, m0, rows, W, p.sec, e * p.N, H, p.y_ld, \
                                                        p.N, p.K, n0, xs, tid, sg, rc);                      \
     else                                                                                                     \
-      qrmi_gu_body<FMT, 1, BN, WN, BK, HT>(X, xrows, p.x_ld, m0, rows, W, p.sec, e * p.N, H, p.y_ld, p.N, p.K, n0, xs, \
+      qrmi_gu_body<FMT, 1, BN, WN, BK, HT, DIRECT>(X, xrows, p.x_ld, m0, rows, W, p.sec, e * p.N, H, p.y_ld, p.N, p.K, n0, xs, \
                                        tid, sg, rc);                                                         \
   }
 
 // down: Y[yrows[m]] (fp32 rows by pair id) = H[m] W_e^T. grid (N / BN, max tiles), 32 WN threads.
-#define NI_QRMI_DN(NAME, FMT, FB, BN, WN, BK)                                                                 \
+#define NI_QRMI_DN(NAME, FMT, FB, BN, WN, BK) NI_QRMI_DN_IMPL(NAME, FMT, FB, BN, WN, BK, false)
+#define NI_QRMI_DN_IMPL(NAME, FMT, FB, BN, WN, BK, DIRECT)                                                                 \
   [[kernel, max_total_threads_per_threadgroup(WN * 32)]] void NAME(                                           \
       const device half* X [[buffer(0)]], const device uchar* Wd [[buffer(1)]], device float* Y [[buffer(2)]],  \
       constant QrmIqParams& p [[buffer(3)]], const device uint* tiles [[buffer(4)]],                          \
@@ -1605,10 +1641,10 @@ NI_INLINE void qrmi_dn_body(const device half* X, uint x_ld, uint m0, uint rows,
       qrmi_dn_body<FMT, (FB >= 3 ? 3 : 1), BN, WN, BK>(X, p.x_ld, m0, rows, W, p.sec, e * p.N, Y, yrows, p.y_ld, \
                                                        p.N, p.K, n0, xs, tid, sg, rc);                      \
     else if (FB >= 2 && live == 2)                                                                           \
-      qrmi_dn_body<FMT, (FB >= 2 ? 2 : 1), BN, WN, BK>(X, p.x_ld, m0, rows, W, p.sec, e * p.N, Y, yrows, p.y_ld, \
+      qrmi_dn_body<FMT, (FB >= 2 ? 2 : 1), BN, WN, BK, DIRECT>(X, p.x_ld, m0, rows, W, p.sec, e * p.N, Y, yrows, p.y_ld, \
                                                        p.N, p.K, n0, xs, tid, sg, rc);                      \
     else                                                                                                     \
-      qrmi_dn_body<FMT, 1, BN, WN, BK>(X, p.x_ld, m0, rows, W, p.sec, e * p.N, Y, yrows, p.y_ld, p.N, p.K, n0, xs, \
+      qrmi_dn_body<FMT, 1, BN, WN, BK, DIRECT>(X, p.x_ld, m0, rows, W, p.sec, e * p.N, Y, yrows, p.y_ld, p.N, p.K, n0, xs, \
                                        tid, sg, rc);                                                         \
   }
 
@@ -1630,6 +1666,8 @@ NI_INLINE void qrmi_dn_body(const device half* X, uint x_ld, uint m0, uint rows,
   NI_MOE8I_GU(moe8i_gu_##SFX, FMT)                                                                         \
   NI_MOE8I_DOWN(moe8i_down_##SFX##_nf1, FMT, 1)                                                            \
   NI_MOE8I_DOWN(moe8i_down_##SFX##_nf2, FMT, 2)                                                            \
+  NI_QRMI_GU_IMPL(qrmi_gu_##SFX##_m32_n64_k32_direct, FMT, 4, 64, 4, 32, half, true) \
+  NI_QRMI_DN_IMPL(qrmi_dn_##SFX##_m32_n64_direct, FMT, 4, 64, 4, 64, true) \
   NI_QRMI_GU(qrmi_gu_##SFX##_m32_n64_k32, FMT, 4, 64, 4, 32)                                               \
   NI_QRMI_GU(qrmi_gu_##SFX##_m32_n64, FMT, 4, 64, 4, 64)                                                   \
   NI_QRMI_GU(qrmi_gu_##SFX##_m32_n32, FMT, 4, 32, 2, 64)                                                   \

@@ -706,11 +706,15 @@ void case_pf(const Layer& l, uint32_t T) {
     uint32_t gbn, gwn, dbn, dwn;
     const char* gk = "";  // "_k32": 32-deep K steps
     const char* dk = "";
+    bool direct = false;
   };
-  std::vector<Cfg> cfgs = {{64, 4, 64, 4, "_k32", ""}};  // the model's (Qwen35::enc_moe_prefill_iq)
-  if (g_variants || g_validate)
+  const Cfg model{64, 4, 64, 4, "_k32", "", true};
+  std::vector<Cfg> cfgs = {model};  // the model's (Qwen35::enc_moe_prefill_iq)
+  if (g_variants || g_validate) {
     cfgs = {{64, 4, 128, 4}, {64, 4, 64, 4}, {64, 4, 64, 4, "_k32", ""}, {64, 4, 64, 4, "_k32", "_k32"},
             {64, 4, 128, 4, "_k32", "_k32"}, {32, 2, 128, 4}};
+    cfgs.push_back(model);
+  }
   auto enc = [&](Encoder& e, const Cfg& c, bool bucket) {
     if (bucket) {
       Bucket2Params bp{P, k, E, BM, 0};
@@ -720,18 +724,35 @@ void case_pf(const Layer& l, uint32_t T) {
       e.dispatch(1, 1, 1, 1024);
     }
     QrmIqParams gp{I, D, D, I, l.g.sec()};
-    e.use(pipe("qrmi_gu_" + gf + "_m32_n" + std::to_string(c.gbn) + c.gk));
+    e.use(pipe("qrmi_gu_" + gf + "_m32_n" + std::to_string(c.gbn) + c.gk + (c.direct ? "_direct" : "")));
     e.buf(0, X); e.buf(1, l.g.buf); e.buf(2, l.u.buf); e.buf(3, H);
     e.val(4, gp);
     e.buf(5, tiles); e.buf(6, nt); e.buf(7, xrows);
     e.dispatch(I / c.gbn, max_tiles, 1, 32 * c.gwn);
     QrmIqParams dp{D, I, I, D, l.d.sec()};
-    e.use(pipe("qrmi_dn_" + df + "_m32_n" + std::to_string(c.dbn) + c.dk));
+    e.use(pipe("qrmi_dn_" + df + "_m32_n" + std::to_string(c.dbn) + c.dk + (c.direct ? "_direct" : "")));
     e.buf(0, H); e.buf(1, l.d.buf); e.buf(2, Y);
     e.val(3, dp);
     e.buf(4, tiles); e.buf(5, nt); e.buf(6, yrows);
     e.dispatch(D / c.dbn, max_tiles, 1, 32 * c.dwn);
   };
+  if (g_validate || g_variants) {
+    Cfg staged = model;
+    staged.direct = false;
+    auto ref = g.begin();
+    enc(*ref, staged, true);
+    ref->commit_and_wait();
+    const std::vector<uint16_t> h(H.as<uint16_t>(), H.as<uint16_t>() + size_t(P) * I);
+    const std::vector<float> y(Y.as<float>(), Y.as<float>() + size_t(P) * D);
+    memset(H.ptr(), 0xff, H.size);
+    memset(Y.ptr(), 0xff, Y.size);
+    auto direct = g.begin();
+    enc(*direct, model, false);  // reuse the same tiles and gather/scatter order
+    direct->commit_and_wait();
+    if (memcmp(h.data(), H.ptr(), h.size() * sizeof(uint16_t)) || memcmp(y.data(), Y.ptr(), y.size() * sizeof(float)))
+      fatal("IQ prefill: direct and staged operands give different outputs at T=%u", T);
+    printf("  pf T=%u: %zu half hidden values and %zu float outputs bitwise equal\n", T, h.size(), y.size());
+  }
   // check sampled pairs
   for (const Cfg& c : cfgs) {
     auto e = g.begin();
@@ -791,7 +812,7 @@ void case_pf(const Layer& l, uint32_t T) {
   const double flop = 2.0 * P * (2.0 * I * D + double(D) * I);
   std::vector<Variant> vs;
   for (const Cfg& c : cfgs)
-    vs.push_back({"bucket3 + qrmi gu n" + std::to_string(c.gbn) + c.gk + " dn n" + std::to_string(c.dbn) + c.dk,
+    vs.push_back({"bucket3 + qrmi gu n" + std::to_string(c.gbn) + c.gk + " dn n" + std::to_string(c.dbn) + c.dk + (c.direct ? " direct" : ""),
                   [&, c](Encoder& e, int) { enc(e, c, true); }});
   time_variants(vs, std::max(1u, 8192u / T), 1, flop / 1e3, "TFLOP/s");
 }
@@ -847,7 +868,7 @@ int main(int argc, char** argv) {
     if (want("rows R=" + std::to_string(R))) case_rows(l, R);
   for (uint32_t R : {2u, 4u, 8u})
     if (want("v8 R=" + std::to_string(R)) && l.SI == l.I) case_v8(l, R);
-  for (uint32_t T : {64u, 512u, 2048u, 4096u})
+  for (uint32_t T : {33u, 64u, 256u, 512u, 2048u, 4096u})
     if (want("pf T=" + std::to_string(T)) && (!g_validate || T <= 512)) case_pf(l, T);
   return 0;
 }
