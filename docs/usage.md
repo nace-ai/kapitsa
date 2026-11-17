@@ -471,7 +471,7 @@ per second in all, 512-token replies to code prompts, greedy, on a MacBook Pro w
 In parentheses: the same requests taking turns on the GPU, as with `NI_BATCH=0`. The Nemotron Nanos have no draft
 model; their requests at once share plain rows, one per request: on a Mac mini M4 (16 GB) the Nano 4B FP8 writes 44.5
 tok/s in all with 2 at once and 80.2 with 4, against 27.1 and 26.5 taking turns (28.4 alone; M2: 36.6 and 64.9
-against 22.5 and 22.0), and the 9B v2 26.9 and 45.8 against 15.0 and 15.0 (15.1 alone;
+against 22.5 and 22.0), and the 9B v2 26.9 and 45.8 against 15.0 and 15.0 (15.1 alone; its replies 256 tokens;
 [results](../bench/results/2026-11-16-nano-batch-decode/README.md)). With the Qwen models KFlash chooses
 each shared pass's rows (`NI_BATCH_KF`): how many in all, up to 8, and which request gets them, from each request's
 drafts and what a row costs on this Mac; three requests now share 8 rows instead of 2 each (or, on the 27B, taking
@@ -479,8 +479,9 @@ turns). A request alone gets the tokens it always gets. Requests decoded
 together can get other tokens than alone where two candidates nearly tie (they are within the batched pass's rounding of
 each other), and sampled requests draw other random numbers, so their replies differ as two samples do. With the Qwen3.5
 4B's DFlash drafter, Nemotron 3.5 Lightning and Super-VL (they take turns today; `NI_BATCH=1` batches them), without
-a draft model (`--dflash none`) and with `NI_BATCH=0`, requests at once take turns on the GPU, each with the tokens it
-gets alone, and write about as many tokens per second in all as one alone.
+a draft model (`--dflash none`; the Nemotron Nanos excepted, which batch plain rows) and with `NI_BATCH=0`, requests at
+once take turns on the GPU, each with the tokens it gets alone, and write about as many tokens per second in all as one
+alone.
 
 Without `--slots` the server takes 4 slots where they fit as well as 2 would (room for one full `--context` conversation,
 the same draft model and prefill chunk), else 3, else 2; `GET /v1/models` reports them. With every slot busy a request

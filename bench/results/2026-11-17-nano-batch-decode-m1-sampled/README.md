@@ -23,8 +23,8 @@ The Nano 4B FP8 does not fit 4 slots in 8 GB: with 4 slots' state the server all
 (`m1-nano4b/memory-probe/serve-4-*.log`; 3 slots 6.02 GB). So the M1 ran `SLOTS=2 NS="1 2"
 SERVE_ARGS="--mem-budget 5.9 --prefill-chunk 512" NI_MEM_BUDGET=5.9`: 2 slots, 1 and 2 requests at once, 16K context,
 15,306 tokens of KV room. The first try used 5.7 GB, the budget of the earlier M1 runs of this model: the server
-started with 3,099 tokens of KV room and refused every request ("insufficient memory ... (0 tokens)",
-`memory-probe/chain-m1-budget5.7.out`), so that run was discarded and the chain re-run at 5.9 GB
+started with 3,099 tokens of KV room and refused every request, main's and the branch's alike ("insufficient
+memory ... (0 tokens)", `memory-probe/chain-m1-budget5.7.out`: 4 arms), so that run was discarded and the chain re-run at 5.9 GB
 (`memory-probe/req-5.9.log`, `req-6.1.log`: 2 requests of 64 tokens at once, both answered). No arm swapped out;
 35 to 835 swap-ins per arm (`env.txt`).
 
