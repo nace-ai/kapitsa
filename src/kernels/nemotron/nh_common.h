@@ -5,7 +5,7 @@
 // macOS 14 does not have (Gpu::compile_library: 3.1 there). Without them (NH_FENCES 0) the kernels that merge in the
 // threadgroup to arrive last compile without the merge: the fused one-token MoE layers' routing (nh_moe_a1, nh_moe_a4,
 // nh_moe_ah) is left out, nh_x4_moe_dn_sum writes only its partials and the split-K GEMMs (nh_x4_mm*, nh_x8_mm*)
-// write nothing for SK > 1. The engine does not run those then (NemotronH::split_merges(): macOS 14, or
+// write nothing for SK > 1. The engine does not run those then (NemotronH::split_merges(): macOS 14, an Ultra, or
 // NI_NH_SPLIT=1): the separate routing kernels, nh_x4_moe_dn + nh_moe2_sum2 and SK = 1. With Metal 3.2+ every kernel
 // is the same source as before.
 #if __METAL_VERSION__ >= 320
