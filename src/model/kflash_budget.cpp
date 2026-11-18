@@ -26,7 +26,7 @@ constexpr const char* kCostOf = "cycle GPU ms";
 constexpr const char* kBatchCostOf = "batched cycle GPU ms";  // KfBatch's: the members' drafting passes and the verify
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.2.36"
+#define KAPITSA_VERSION "0.2.37"
 #endif
 #ifndef KAPITSA_GIT
 #define KAPITSA_GIT "unknown"
