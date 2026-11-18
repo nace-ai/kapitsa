@@ -342,12 +342,13 @@ void check_runs(const Hp& h, const std::string& file) {
   std::string why;
   if (h.dk != 128 || h.dv != 128) why = "DeltaNet head size " + std::to_string(h.dk) + "/" + std::to_string(h.dv) + " (128 needed)";
   else if (h.head_dim != 256) why = "attention head size " + std::to_string(h.head_dim) + " (256 needed)";
-  else if (h.hq % h.hkv || h.hq / h.hkv > 8) why = "a grouped-query ratio above 8";
+  else if (h.hq % h.hkv || h.hq / h.hkv > 16) why = "a grouped-query ratio above 16";
   else if (h.conv != 4) why = "a convolution of " + std::to_string(h.conv) + " (4 needed)";
-  else if (h.moe && (h.moe_I % 512 || h.shared_I % 512)) why = "expert sizes that are not multiples of 512";
-  else if (h.moe && (h.topk + 1) * std::max(h.moe_I, h.shared_I) > 4608) why = "experts too large for the decode kernels";
-  else if (h.moe && (h.E != 256 || h.topk > 8)) why = std::to_string(h.E) + " experts, " + std::to_string(h.topk) + " per token (256 and at most 8 run)";
-  else if (h.moe && (h.H > 4096 || h.hv * h.dv > 4096 || h.hq * h.head_dim > 4096)) why = "a hidden size above 4096 for a MoE model";
+  else if (h.moe && (h.moe_I % 64 || h.shared_I % 64)) why = "expert sizes that are not multiples of 64";
+  else if (h.moe && (h.topk + 1) * std::max(h.moe_I, h.shared_I) > 7168) why = "experts too large for the decode kernels";
+  else if (h.moe && (h.E <= 0 || h.E % 32 || h.E > 512 || h.topk <= 0 || h.topk > 16))
+    why = std::to_string(h.E) + " experts, " + std::to_string(h.topk) + " per token (a multiple of 32 up to 512 and at most 16 run)";
+  else if (h.moe && h.H > 4096) why = "a hidden size above 4096 for a MoE model";
   else if (h.H % 64) why = "a hidden size that is not a multiple of 64";
   if (!why.empty()) throw Error(file + " is a Qwen3.5-family model with " + why + ", which Kapitsa does not run.");
 }
@@ -1219,6 +1220,7 @@ void pwrite_all(int fd, const void* p, size_t n, uint64_t off, const std::string
   const uint8_t* d = static_cast<const uint8_t*>(p);
   while (n) {
     const ssize_t w = pwrite(fd, d, n, off_t(off));
+    if (w < 0 && errno == EINTR) continue;
     if (w <= 0) {
       if (errno == ENOSPC) throw Error("The disk is full while writing " + hub::tilde(path) + ".");
       throw Error("Can't write " + hub::tilde(path) + ": " + strerror(errno) + ".");
