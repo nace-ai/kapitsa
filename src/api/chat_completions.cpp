@@ -1,6 +1,7 @@
 #include "api/chat_completions.h"
 
 #include <cmath>
+#include <limits>
 
 namespace ni::api {
 
@@ -56,8 +57,19 @@ std::pair<int, ojson> chat_failure(const ChatResult& res) {
 }
 
 int chat_max_tokens(const ojson& body) {
-  for (const char* k : {"max_completion_tokens", "max_tokens"})
-    if (body.contains(k) && !body[k].is_null()) return body[k].get<int>();
+  for (const char* k : {"max_completion_tokens", "max_tokens"}) {
+    if (!body.contains(k) || body[k].is_null()) continue;
+    const auto& value = body[k];
+    const bool valid = value.is_number_unsigned()
+        ? value.get<uint64_t>() >= 1 && value.get<uint64_t>() <= uint64_t(std::numeric_limits<int>::max())
+        : value.is_number_integer() && value.get<int64_t>() >= 1 &&
+              value.get<int64_t>() <= std::numeric_limits<int>::max();
+    if (!valid)
+      throw ApiError(400, "invalid_request_error",
+                     std::string(k) + " must be an integer between 1 and " + std::to_string(std::numeric_limits<int>::max()),
+                     "", k);
+    return value.get<int>();
+  }
   return 16384;
 }
 
