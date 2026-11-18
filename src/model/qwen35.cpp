@@ -3921,8 +3921,25 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   } else if (!ane_chunk_ && !snap && e.grouped() && gpu_wave_rows(T)) {
     enc_prefill_gpu_wave(e, s, pos0, T, gpu_wave_rows(T));
   } else {
+    const bool cap_last = cap_ && (cfg_.layers - 1) < int(cap_->slot.size()) && cap_->slot[cfg_.layers - 1] >= 0;
+    const bool kv_only_last = !ane_chunk_ && !sample && !mtp_loaded_ && !snap && cfg_.causal && !cap_last &&
+                              !layers_[cfg_.layers - 1].linear && local(cfg_.layers - 1);
     for (int i = 0; i < cfg_.layers; ++i) {
       const Layer& L = layers_[i];
+      if (kv_only_last && i == cfg_.layers - 1) {
+        // Non-sampling chunk: nothing reads x_ after the last layer, so write only its K/V cache rows.
+        enc_rows_half(e, x_, L.in_norm, xh_, T, D);
+        enc_proj(e, {{&L.k, kr_, false}, {&L.v, vr_, false}}, xh_, T);
+        kp::AttnPrep ap{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim),
+                        uint32_t(cfg_.rot_dims), uint32_t(pos0), uint32_t(s.cap), cfg_.eps, cfg_.theta};
+        e.use(pipe(mrope(s) ? "attn_prep_m" : "attn_prep"));
+        e.buf(0, qg_); e.buf(1, kr_); e.buf(2, vr_); e.buf(3, L.q_norm->buf); e.buf(4, L.k_norm->buf);
+        e.buf(5, qo_); e.buf(6, s.kc[i]); e.buf(7, s.vc[i]);
+        e.val(8, ap);
+        if (mrope(s)) enc_mrope_args(e, s);
+        e.dispatch(cfg_.hq + 2 * cfg_.hkv, T, 1, cfg_.head_dim);
+        continue;
+      }
       enc_mixer_prefill(e, s, i, L, pos0, T, x_, snap, snap_row);
       if (cfg_.moe) enc_moe_prefill(e, L, T, x_);
       else if (slabs) enc_mlp_prefill_slabs(e, i, L, T, x_);
