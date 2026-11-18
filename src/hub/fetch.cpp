@@ -465,18 +465,35 @@ void save_state(Target& t) {
   }
 }
 
+bool resume_ranges(const Target& t, Ranges& done) {
+  try {
+    const json j = json::parse(read_text(t.state_path));
+    const auto unsigned_integer = [](const json& n) {
+      return n.is_number_unsigned() || (n.is_number_integer() && n.get<int64_t>() >= 0);
+    };
+    if (j.at("id") != t.id || !unsigned_integer(j.at("size")) || j.at("size").get<uint64_t>() != t.size) return false;
+    const auto& ranges = j.at("done");
+    if (!ranges.is_array()) return false;
+    Ranges r;
+    for (const auto& p : ranges) {
+      if (!p.is_array() || p.size() != 2 || !unsigned_integer(p[0]) || !unsigned_integer(p[1])) return false;
+      const uint64_t a = p[0].get<uint64_t>(), b = p[1].get<uint64_t>();
+      if (a >= b || b > t.size) return false;
+      r.add(a, b);
+    }
+    // Counts and gaps must use the same bounded ranges; discard the whole journal if any entry is invalid.
+    done = std::move(r);
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
 uint64_t part_bytes(const Target& t) {  // already downloaded bytes of an unfinished part (no open)
   uint64_t sz;
   if (!file_size(t.part_path, sz) || sz != t.size) return 0;
-  try {
-    const json j = json::parse(read_text(t.state_path));
-    if (j.value("id", "") != t.id || j.value("size", uint64_t(0)) != t.size) return 0;
-    Ranges r;
-    for (const auto& p : j.at("done")) r.add(p.at(0).get<uint64_t>(), p.at(1).get<uint64_t>());
-    return r.covered();
-  } catch (...) {
-    return 0;
-  }
+  Ranges r;
+  return resume_ranges(t, r) ? r.covered() : 0;
 }
 
 void prepare(Target& t) {
@@ -484,16 +501,7 @@ void prepare(Target& t) {
   t.done = Ranges();
   uint64_t sz = 0;
   bool keep = file_size(t.part_path, sz) && sz == t.size;
-  if (keep) {
-    try {
-      const json j = json::parse(read_text(t.state_path));
-      keep = j.value("id", "") == t.id && j.value("size", uint64_t(0)) == t.size;
-      if (keep)
-        for (const auto& p : j.at("done")) t.done.add(p.at(0).get<uint64_t>(), p.at(1).get<uint64_t>());
-    } catch (...) {
-      keep = false;
-    }
-  }
+  if (keep) keep = resume_ranges(t, t.done);
   if (!keep) {
     unlink(t.part_path.c_str());
     t.done = Ranges();

@@ -134,6 +134,73 @@ def download_checks(kapitsa, check):
             check("pull: a failed transfer resumes to the complete requested bytes",
                   retry.returncode == 0 and manifest.exists()
                   and all((model / name).read_bytes() == data for name, data in files.items()), retry.stderr)
+
+            name = "model.safetensors"
+            data = files[name]
+            size = len(data)
+            identity = hashlib.sha256(data).hexdigest()
+            cases = [
+                ("end past file", [[0, size + 1]]),
+                ("negative end", [[0, -1]]),
+                ("maximum end", [[0, 2**64 - 1]]),
+                ("negative start", [[-1, size]]),
+                ("fractional end", [[0, size + 0.5]]),
+                ("boolean start", [[False, size]]),
+                ("extra endpoint", [[0, size, size]]),
+                ("object instead of list", {"range": [0, size]}),
+                ("valid then invalid", [[0, 4], [4, size + 1]]),
+                ("reversed range", [[0, 4], [size, 4]]),
+                ("empty range", [[0, 4], [4, 4]]),
+            ]
+            for label, ranges in cases:
+                home = root / ("invalid-" + label.replace(" ", "-"))
+                model = home / "models" / "test--resume"
+                parts = model / ".kapitsa" / "parts"
+                parts.mkdir(parents=True)
+                for other, content in files.items():
+                    if other != name:
+                        (model / other).write_bytes(content)
+                (parts / (name + ".part")).write_bytes(b"?" * size)
+                (parts / (name + ".part.json")).write_text(json.dumps(
+                    {"id": identity, "size": size, "done": ranges}))
+                server.requests.clear()
+                result = pull(home)
+                final = model / name
+                completed = (model / ".kapitsa" / "manifest.json").exists()
+                detail = f"exit={result.returncode}, final={final.exists()}, manifest={completed}\n{result.stderr}"
+                check(f"pull: invalid resume state ({label}) restarts the entire file",
+                      result.returncode == 0 and final.exists() and final.read_bytes() == data
+                      and (model / ".kapitsa" / "manifest.json").exists()
+                      and any(path.endswith("/" + name) and span == f"bytes=0-{size - 1}"
+                              for path, span in server.requests),
+                      detail)
+
+            # Valid ranges may overlap or arrive out of order; only their gaps need fetching.
+            for label, ranges, spans in [
+                ("prefix", [[0, 4]], [f"bytes=4-{size - 1}"]),
+                ("overlap", [[2, 4], [0, 3], [7, size]], ["bytes=4-6"]),
+                ("complete", [[0, size]], []),
+            ]:
+                home = root / ("valid-" + label)
+                model = home / "models" / "test--resume"
+                parts = model / ".kapitsa" / "parts"
+                parts.mkdir(parents=True)
+                for other, content in files.items():
+                    if other != name:
+                        (model / other).write_bytes(content)
+                partial = bytearray(b"?" * size)
+                for first, last in ranges:
+                    partial[first:last] = data[first:last]
+                (parts / (name + ".part")).write_bytes(partial)
+                (parts / (name + ".part.json")).write_text(json.dumps(
+                    {"id": identity, "size": size, "done": ranges}))
+                server.requests.clear()
+                result = pull(home)
+                final = model / name
+                fetched = [span for path, span in server.requests if path.endswith("/" + name) and span]
+                check(f"pull: valid resume state ({label}) fetches only missing bytes",
+                      result.returncode == 0 and final.exists() and final.read_bytes() == data
+                      and fetched == spans, result.stderr)
     finally:
         server.shutdown()
         server.server_close()
