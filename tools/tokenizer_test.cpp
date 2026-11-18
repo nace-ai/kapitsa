@@ -329,6 +329,33 @@ int main() {
   check_bpe_merges();
   check_lmstudio_pretokenizer();
 
+  // Duplicate merge line (later rank wins, matching HF tokenizers), string-form merges ("a b"),
+  // and non-byte codepoints in vocab (mapped to '?' in id_to_bytes_).
+  {
+    json dv = json::object();
+    dv["a"] = 0;
+    dv["b"] = 1;
+    dv["c"] = 2;
+    dv["ab"] = 3;
+    dv["bc"] = 4;
+    dv["a\xe2\x98\x83z"] = 5;  // U+2603 SNOWMAN is outside the 256 GPT-2 byte-unicode codepoints [0, 323]
+    // "a b" appears at rank 0 and again at rank 2 (after ["b", "c"] at rank 1): last wins -> "bc" (4) merges before "ab"
+    json dj = {{"added_tokens", json::array()},
+               {"normalizer", nullptr},
+               {"pre_tokenizer", nullptr},
+               {"model",
+                {{"type", "BPE"},
+                 {"vocab", dv},
+                 {"merges", json::array({"a b", json::array({"b", "c"}), "a b"})}}}};
+    ni::Tokenizer dtok;
+    load(dtok, dj);
+    const std::vector<int> got = dtok.encode("abc");
+    const std::vector<int> want_ids = {0, 4};  // "a" (0) + "bc" (4), not "ab" (3) + "c" (2)
+    check(got == want_ids, "duplicate merge line keeps the later rank (HF order) and string-form merges parse",
+          "ids " + ids_str(got));
+    check(dtok.token_bytes(5) == "a?z", "non-byte codepoint in vocab maps to '?' in token_bytes", dtok.token_bytes(5));
+  }
+
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;
 }
