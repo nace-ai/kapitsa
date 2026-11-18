@@ -12,6 +12,7 @@
 
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/mman.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -249,6 +250,32 @@ void write_read_restart(const std::string& root) {
       all = all && read_piece(st, kKv, c.e.blocks[i], &r) == c.blocks[i] && r;
     }
     check(all, "its pieces read back as written after the restart");
+    // F_NOCACHE on Apple silicon's 16 KiB pages: a page-aligned payload write leaves 0 payload pages in the page cache
+    const Key aligned_key = Hasher().u64(9999).done();
+    const std::vector<uint8_t> aligned_data = pattern(9999, 16 * 16384);
+    auto job = st.begin({{kKv, aligned_key}});
+    check(write_piece(st, *job, kKv, aligned_key, aligned_data), "write a 256 KiB page-aligned KV piece");
+    job.reset();
+    const std::string aligned_path = st.dir() + "/kv/" + aligned_key.hex();
+    const int afd = open(aligned_path.c_str(), O_RDONLY);
+    int resident_pages = -1;
+    if (afd >= 0) {
+      const size_t pg = size_t(getpagesize());
+      const size_t len = 17 * pg;
+      void* map = mmap(nullptr, len, PROT_READ, MAP_SHARED, afd, 0);
+      close(afd);
+      if (map != MAP_FAILED) {
+        std::vector<char> vec(17, 0);
+        if (mincore(map, len, vec.data()) == 0) {
+          resident_pages = 0;
+          for (char c0 : vec)
+            if (c0 & MINCORE_INCORE) ++resident_pages;
+        }
+        munmap(map, len);
+      }
+    }
+    check(resident_pages == 0, "16 KiB header aligns F_NOCACHE writes: 0 of 17 pages cached in RAM",
+          std::to_string(resident_pages));
     st.clear();
   }
 }
@@ -265,7 +292,7 @@ void damage(const std::string& root) {
     st.open(opts(root, ns, 64 * kMiB), &why);
     dir = st.dir();
     check(save_conv(st, c) && save_conv(st, d) && save_conv(st, f), "three entries written");
-    flip_byte(dir + "/kv/" + c.e.blocks[2].hex(), 4096 + 777);  // one payload byte of one block
+    flip_byte(dir + "/kv/" + c.e.blocks[2].hex(), 16384 + 777);  // one payload byte of one block
     bool r = true;
     read_piece(st, kKv, c.e.blocks[2], &r);
     check(!r && hit_pos(st, tokens_of(c, 80)) == 0 && !fs::exists(dir + "/kv/" + c.e.blocks[2].hex()),
@@ -276,7 +303,7 @@ void damage(const std::string& root) {
   const std::string tmp = dir + "/kv/" + d.e.blocks[0].hex() + ".tmp.999.1";
   if (FILE* t = fopen(tmp.c_str(), "w")) fputs("partial", t), fclose(t);
   truncate((dir + "/st/" + d.e.snaps[0].state.hex()).c_str(), 100);
-  truncate((dir + "/kv/" + f.e.blocks[1].hex()).c_str(), 4096 + 1000);
+  truncate((dir + "/kv/" + f.e.blocks[1].hex()).c_str(), 16384 + 1000);
   {
     Store st;
     std::string why;
@@ -294,7 +321,7 @@ void damage(const std::string& root) {
   {
     std::string rec;
     for (const auto& de : fs::directory_iterator(dir + "/e")) rec = de.path();
-    flip_byte(rec, 4096 + 5);
+    flip_byte(rec, 16384 + 5);
     Store st;
     std::string why;
     st.open(opts(root, ns, 64 * kMiB), &why);
@@ -317,7 +344,7 @@ void pinned_damage(const std::string& root) {
       const Key key = kind == kKv ? c.e.blocks.front() : kind == kState ? c.e.snaps.front().state : entry;
       const std::string file = st.dir() + (kind == kKv ? "/kv/" : kind == kState ? "/st/" : "/e/") + key.hex();
       if (missing) check(unlink(file.c_str()) == 0, "remove the pinned file");
-      else flip_byte(file, 4096 + 5);
+      else flip_byte(file, 16384 + 5);
       bool ok = true;
       read_piece(st, kind, key, &ok);
       check(!ok, "a pinned missing or corrupt file fails to read");
@@ -457,7 +484,7 @@ void quota(const std::string& root) {
   st.set_test_space(10 * kGiB + 2 * kMiB, 2000 * kGiB);  // the volume filled: 2 MiB free beyond the floor
   check(st.limit() == std::min(kMiB, (2 * kMiB + h0) / 4),
         "the volume fills: the limit shrinks to a quarter of what is left beyond the floor (its own files counted)");
-  check(hit_pos(st, tokens_of(a, 70)) == 64 && st.held() <= st.limit() + 400000,
+  check(hit_pos(st, tokens_of(a, 70)) == 64 && st.held() <= st.limit() + 450000,
         "entries go to fit, least recently used first; a pinned one stays");
   st.unpin(pinned.key, false);
   st.measure();

@@ -25,10 +25,11 @@ namespace ni::pcache {
 namespace {
 
 constexpr char kMagic[8] = {'K', 'P', 'C', 'A', 'C', 'H', 'E', '1'};
-constexpr uint32_t kVersion = 1;
-constexpr size_t kHeader = 4096;            // a file's header; the payload starts at this (aligned) offset
+constexpr uint32_t kVersion = 2;
+constexpr size_t kAlign = size_t(16) << 10; // the transfer buffer's alignment (F_NOCACHE moves whole 16 KiB pages)
+constexpr size_t kHeader = kAlign;          // a file's header; the payload starts at this page-aligned offset
+constexpr size_t kHeaderV1 = 4096;          // v1 header size (accepted on read so existing caches survive an upgrade)
 constexpr size_t kChunk = size_t(8) << 20;  // bytes per read / write call
-constexpr size_t kAlign = size_t(16) << 10; // the transfer buffer's alignment (F_NOCACHE moves whole pages)
 
 struct Header {
   char magic[8];
@@ -37,10 +38,12 @@ struct Header {
   uint64_t payload;      // bytes after the header
   uint32_t payload_crc;  // CRC-32C of the payload
   uint32_t meta_bytes;   // kind-specific data right after this struct
-  uint32_t header_crc;   // CRC-32C of the 4 KiB header with this field 0
+  uint32_t header_crc;   // CRC-32C of the header with this field 0
   uint32_t pad;
 };
-constexpr size_t kMetaMax = kHeader - sizeof(Header);
+constexpr size_t kMetaMax = kHeaderV1 - sizeof(Header);
+
+size_t header_bytes(uint32_t version) { return version == 1 ? kHeaderV1 : version == kVersion ? kHeader : 0; }
 
 double unix_now() {
   timespec t;
@@ -483,7 +486,7 @@ bool Store::open(const Options& o, std::string* why) {
         entries_.emplace(key, std::move(e));
       } else {
         const uint64_t n = file_size(p);
-        if (n < kHeader) {
+        if (n < kHeaderV1) {
           unlink(p.c_str());
           continue;
         }
@@ -525,24 +528,26 @@ bool Store::load_entry(const std::string& path, Entry* e) const {
   const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
   if (fd < 0) return false;
   struct stat st;
-  bool ok = fstat(fd, &st) == 0 && size_t(st.st_size) >= kHeader && size_t(st.st_size) < (size_t(1) << 31);
+  bool ok = fstat(fd, &st) == 0 && size_t(st.st_size) >= kHeaderV1 && size_t(st.st_size) < (size_t(1) << 31);
   std::vector<uint8_t> b(ok ? size_t(st.st_size) : 0);
   ok = ok && pread_all(fd, b.data(), b.size(), 0);
   close(fd);
   if (!ok) return false;
   Header h;
   memcpy(&h, b.data(), sizeof h);
+  const size_t hdr = header_bytes(h.version);
+  if (!hdr || b.size() < hdr) return false;
   const uint32_t hc = h.header_crc;
   memset(b.data() + offsetof(Header, header_crc), 0, 4);
-  if (memcmp(h.magic, kMagic, 8) != 0 || h.version != kVersion || h.kind != kEntry || crc32c(0, b.data(), kHeader) != hc ||
-      h.payload != b.size() - kHeader || crc32c(0, b.data() + kHeader, b.size() - kHeader) != h.payload_crc ||
+  if (memcmp(h.magic, kMagic, 8) != 0 || h.kind != kEntry || crc32c(0, b.data(), hdr) != hc ||
+      h.payload != b.size() - hdr || crc32c(0, b.data() + hdr, b.size() - hdr) != h.payload_crc ||
       h.meta_bytes > kMetaMax)
     return false;
   Key ns;
   Key::parse(o_.ns, &ns);
   if (h.ns_hi != ns.hi || h.ns_lo != ns.lo) return false;
   e->conv = conv_of(b.data() + sizeof(Header), h.meta_bytes);
-  return decode(b.data() + kHeader, b.size() - kHeader, e);
+  return decode(b.data() + hdr, b.size() - hdr, e);
 }
 
 void Store::touch() {
@@ -795,24 +800,36 @@ bool Store::read(Kind kind, const Key& key, std::string* meta, const Take& take)
   }
   fcntl(fd, F_NOCACHE, 1);
   Buf buf(std::max(kChunk, kHeader));
-  bool ok = buf.p && pread_all(fd, buf.p, kHeader, 0);
+  size_t got = 0;
+  while (buf.p && got < kHeader) {
+    const ssize_t r = pread(fd, buf.p + got, kHeader - got, off_t(got));
+    if (r < 0 && errno == EINTR) continue;
+    if (r <= 0) break;
+    got += size_t(r);
+  }
   Header h{};
+  size_t hdr = 0;
+  bool ok = got >= kHeaderV1;
   if (ok) {
     memcpy(&h, buf.p, sizeof h);
+    hdr = header_bytes(h.version);
+    ok = hdr != 0 && got >= hdr;
+  }
+  if (ok) {
     const uint32_t hc = h.header_crc;
     memset(buf.p + offsetof(Header, header_crc), 0, 4);
     Key ns;
     Key::parse(o_.ns, &ns);
-    ok = memcmp(h.magic, kMagic, 8) == 0 && h.version == kVersion && h.kind == kind && h.key_hi == key.hi &&
+    ok = hdr != 0 && memcmp(h.magic, kMagic, 8) == 0 && h.kind == kind && h.key_hi == key.hi &&
          h.key_lo == key.lo && h.ns_hi == ns.hi && h.ns_lo == ns.lo && h.meta_bytes <= kMetaMax &&
-         crc32c(0, buf.p, kHeader) == hc;
+         crc32c(0, buf.p, hdr) == hc;
     if (ok && meta) meta->assign(reinterpret_cast<const char*>(buf.p) + sizeof(Header), h.meta_bytes);
   }
   uint32_t crc = 0;
   bool refused = false;
   for (uint64_t off = 0; ok && off < h.payload; ) {
     const size_t n = size_t(std::min<uint64_t>(kChunk, h.payload - off));
-    ok = pread_all(fd, buf.p, n, kHeader + off);
+    ok = pread_all(fd, buf.p, n, hdr + off);
     if (!ok) break;
     crc = crc32c(crc, buf.p, n);
     if (!take(off, buf.p, n)) {
@@ -830,7 +847,7 @@ bool Store::read(Kind kind, const Key& key, std::string* meta, const Take& take)
     return false;
   }
   std::lock_guard<std::mutex> lk(mu_);
-  read_ += kHeader + h.payload;
+  read_ += hdr + h.payload;
   return true;
 }
 
