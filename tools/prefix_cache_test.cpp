@@ -198,6 +198,7 @@ void sizes() {
 void write_read_restart(const std::string& root) {
   const std::string ns = ns_name(1);
   Conv c = make_conv(11, 100, 1000, {48, 100}, 40000, 70000);
+  c.e.snaps[0].flags = Snap::kPrefix;
   {
     Store st;
     std::string why;
@@ -228,9 +229,10 @@ void write_read_restart(const std::string& root) {
     check(ok && all, "read back: every piece's bytes and header data as written");
     Entry e;
     check(st.pin(st.lookup(full.data(), int(full.size()), int(full.size())).entry, &e) && e.tokens == c.e.tokens &&
-              e.vocab == c.e.vocab && e.vocab_scanned == 100 && e.snaps.size() == 2 && e.snaps[1].dctx == 101 &&
+              e.vocab == c.e.vocab && e.vocab_scanned == 100 && e.snaps.size() == 2 &&
+              e.snaps[0].flags == Snap::kPrefix && e.snaps[1].flags == Snap::kQuery && e.snaps[1].dctx == 101 &&
               e.fills == c.e.fills,
-          "the entry's record: tokens, fills, restore points, draft rows");
+          "the entry's record: tokens, fills, restore points (including kPrefix), draft rows");
     st.unpin(e.key, true);
     const auto s = st.stats();
     check(s.entries == 2 && s.pieces == 15 && s.held == dir_bytes(st.dir() + "/kv") + dir_bytes(st.dir() + "/st") +
