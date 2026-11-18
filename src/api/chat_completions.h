@@ -23,7 +23,8 @@ ojson chat_error(const std::string& message, const std::string& type = "invalid_
 std::pair<int, ojson> chat_failure(const ChatResult& res);
 
 // The reply's token limit: max_completion_tokens, else max_tokens, else 16384. A null field counts as absent, as
-// OpenAI's API has it (SDKs send unset fields as null); another non-number throws (a 400).
+// OpenAI's API has it (SDKs send unset fields as null). A supplied limit must be a positive integer that fits int;
+// otherwise throws ApiError (400), naming the selected field.
 int chat_max_tokens(const ojson& body);
 
 // Structured output of a request (src/engine/grammar.h): response_format (json_object; json_schema with its strict),

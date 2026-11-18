@@ -739,6 +739,31 @@ void chat_events() {
       threw = true;
     }
     check(threw, "chat: a max_tokens that is not a number still throws (a 400)");
+    for (const char* key : {"max_tokens", "max_completion_tokens"}) {
+      for (const char* value : {"0", "-1", "-2147483649", "2147483648", "4294967297",
+                                "9223372036854775807", "18446744073709551615", "1.5", "1.0", "1e100",
+                                "true", "false", "\"5\"", "[]", "{}"}) {
+        ojson body = J((std::string("{\"") + key + "\":" + value + "}").c_str());
+        bool rejected = false;
+        try {
+          chat_max_tokens(body);
+        } catch (const ApiError& e) {
+          rejected = e.status == 400 && e.type == "invalid_request_error" && e.param == key;
+        } catch (const std::exception&) {}
+        check(rejected, std::string("chat: rejects ") + key + "=" + value + " with a field-specific 400");
+      }
+      check(chat_max_tokens(ojson{{key, 1}}) == 1 && chat_max_tokens(ojson{{key, 2147483647}}) == 2147483647,
+            std::string("chat: preserves positive int boundaries for ") + key);
+    }
+    check(mt(R"({"max_completion_tokens": 7, "max_tokens": "ignored"})") == 7,
+          "chat: a valid preferred limit still ignores the legacy field");
+    bool preferred_rejected = false;
+    try {
+      mt(R"({"max_completion_tokens": 4294967297, "max_tokens": 7})");
+    } catch (const ApiError& e) {
+      preferred_rejected = e.status == 400 && e.param == "max_completion_tokens";
+    }
+    check(preferred_rejected, "chat: an invalid preferred limit does not fall back to the legacy field");
   }
   {
     ChatResult big = result("error");
