@@ -425,6 +425,89 @@ const char* const Tokenizer::kFlintSplit[3] = {
     "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
     " ?[\\p{P}\\p{S}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"};
 
+const char* Tokenizer::kLfm2Split =
+    "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}|"
+    " ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+
+// LFM2's pre-tokenizer (Liquid, LFM3; HF tokenizers applies this one Isolated split, then ByteLevel
+// without its regex):
+//   (?i:'s|'t|'re|'ve|'m|'ll|'d) — a contraction of its own, even one a space+punctuation run would
+//     otherwise swallow (" 'tis" splits as " '" and "tis": the space matches first, and the quote with it)
+//   [^\r\n\p{L}\p{N}]?\p{L}+ — an optional non-letter, non-digit, non-newline character (a space, a
+//     combining mark, a symbol) with the letters after it
+//   \p{N}{1,3} — digits in threes
+//    ?[^\s\p{L}\p{N}]+[\r\n]* — punctuation, symbols and combining marks (a mark is not a letter here,
+//     unlike Qwen's split), then newlines
+//   \s*[\r\n]+|\s+(?!\S)|\s+ — as Qwen's split matches them
+// Matched position by position, alternatives in order, greedy with backtracking, as HF's regex engine
+// does. Goldens: HF tokenizers 0.22.1 on this regex (tools/tokenizer_test.cpp).
+void pretokenize_lfm2(const std::string& s, std::vector<std::string>& out) {
+  std::vector<CP> cps = to_cps(s);
+  const size_t n = cps.size();
+  auto at = [&](size_t i) -> uint32_t { return i < n ? cps[i].c : 0xFFFFFFFF; };
+  auto L = [&](size_t i) { return i < n && is_L(cps[i].c); };
+  size_t i = 0;
+  while (i < n) {
+    size_t j = i;
+    const uint32_t c = cps[i].c;
+    // 1. a contraction, case-insensitive (U+017F, the long s, folds to s)
+    if (c == '\'' && i + 1 < n) {
+      const uint32_t a = at(i + 1) == 0x17F ? 's' : at(i + 1) | 32, b = i + 2 < n ? at(i + 2) | 32 : 0;
+      if (a == 's' || a == 't' || a == 'm' || a == 'd') j = i + 2;
+      else if (((a == 'r' || a == 'v') && b == 'e') || (a == 'l' && b == 'l')) j = i + 3;
+    }
+    // 2. [^\r\n\p{L}\p{N}]?\p{L}+ — letters without their combining marks
+    if (j == i) {
+      size_t k = i;
+      if (!is_nl(c) && !is_L(c) && !is_N(c) && L(i + 1)) k = i + 1;
+      if (L(k)) {
+        while (L(k)) ++k;
+        j = k;
+      }
+    }
+    // 3. \p{N}{1,3}
+    if (j == i && is_N(c)) {
+      size_t k = i;
+      while (k < n && k - i < 3 && is_N(cps[k].c)) ++k;
+      j = k;
+    }
+    // 4.  ?[^\s\p{L}\p{N}]+[\r\n]* — a mark belongs here (it is neither \s, \p{L} nor \p{N})
+    if (j == i) {
+      size_t k = i;
+      auto punct = [&](size_t q) {
+        if (q >= n) return false;
+        const uint32_t x = cps[q].c;
+        return !is_space(x) && !is_L(x) && !is_N(x);
+      };
+      if (c == ' ' && punct(i + 1)) k = i + 1;
+      if (punct(k)) {
+        while (punct(k)) ++k;
+        while (k < n && is_nl(cps[k].c)) ++k;
+        j = k;
+      }
+    }
+    // 5-7. \s*[\r\n]+|\s+(?!\S)|\s+
+    if (j == i && is_space(c)) {
+      size_t k = i;
+      while (k < n && is_space(cps[k].c)) ++k;  // maximal whitespace run [i, k)
+      size_t last_nl = n;
+      for (size_t q = i; q < k; ++q)
+        if (is_nl(cps[q].c)) last_nl = q;
+      if (last_nl != n) {
+        j = last_nl + 1;                         // \s*[\r\n]+
+      } else if (k < n && k - i > 1) {
+        j = k - 1;                               // \s+(?!\S): leave one space for the next word
+      } else {
+        j = k;                                   // \s+
+      }
+    }
+    if (j == i) j = i + 1;  // unreachable for valid input; never stall
+    const uint32_t b0 = cps[i].off, b1 = j < n ? cps[j].off : uint32_t(s.size());
+    out.emplace_back(s.substr(b0, b1 - b0));
+    i = j;
+  }
+}
+
 void Tokenizer::load(const std::string& path) {
   double t0 = now_ms();
   std::ifstream f(path);
@@ -434,7 +517,8 @@ void Tokenizer::load(const std::string& path) {
   if (model["type"] != "BPE") fatal("only BPE tokenizers are supported");
   // Tekken (Mistral, Nemotron 3.5): its Split regex, no normalizer, whole words looked up first (ignore_merges).
   // Flint (Recursive): exactly its Sequence of three Isolated splits (pretokenize_flint), then ByteLevel without its
-  // regex. Anything else gets Qwen's split with NFC.
+  // regex. LFM2 (Liquid, LFM3): exactly its one Isolated split (pretokenize_lfm2), then ByteLevel without its regex.
+  // Anything else gets Qwen's split with NFC.
   static const char* kTekken =
       "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+|"
       "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*|"
@@ -451,6 +535,10 @@ void Tokenizer::load(const std::string& path) {
         isolated(seq[2], kFlintSplit[2]) && seq[3].is_object() && seq[3].value("type", "") == "ByteLevel" &&
         !seq[3].value("add_prefix_space", true) && !seq[3].value("use_regex", true))
       split_ = Split::Flint;
+    else if (seq.size() == 2 && isolated(seq[0], kLfm2Split) && seq[1].is_object() &&
+             seq[1].value("type", "") == "ByteLevel" && !seq[1].value("add_prefix_space", true) &&
+             !seq[1].value("use_regex", true))
+      split_ = Split::Lfm2;
     else
       for (auto& p : seq)
         if (p.value("type", "") == "Split" && p.contains("pattern") && p["pattern"].contains("Regex") &&
@@ -641,6 +729,7 @@ void Tokenizer::encode_plain(const std::string& text, std::vector<int>& out) con
   std::vector<std::string> words;
   if (split_ == Split::Flint) pretokenize_flint(nfc_ ? nfc(text) : text, words);
   else if (split_ == Split::Tekken) pretokenize_tekken(nfc_ ? nfc(text) : text, words);
+  else if (split_ == Split::Lfm2) pretokenize_lfm2(nfc_ ? nfc(text) : text, words);
   else pretokenize(nfc_ ? nfc(text) : text, words);
   for (auto& w : words) bpe(w, out);
 }
