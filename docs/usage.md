@@ -721,10 +721,15 @@ model writes its reply in the same turn.
 
 A sampled request's `top_k` is honored as given. `top_k` 1 to 64 runs on the GPU's two-pass top-k sampler, with every
 speculative loop. `top_k` 0 or below means no truncation, and `top_k` above 64 keeps exactly that many tokens: those
-requests are sampled over the whole vocabulary (`sample_full`, `src/model/sampler.h`) in plain decode steps, without
-the drafter, so they decode slower: on an M5 Pro at temperature 0.7, top-p 0.95, 512 tokens, the 35B-A3B wrote
-~110 tok/s at top_k 0 against ~160 at top_k 40, the 4B ~92 against ~163 at top_k 20. Before kapitsa#1286 every
-`top_k` was clamped to 32 without a word. A request that leaves `top_k` out gets the model's default (Qwen: 20; a
+requests are sampled over the whole vocabulary (`sample_full`, `src/model/sampler.h`). A Nemotron-H model with a
+block drafter (LiLiCorr, DSpark) keeps its drafter: KFlash's tree verify samples each row over the whole vocabulary
+at the RNG step its position's plain step takes, and keeps the longest path whose drafts equal those samples, so a
+seed gives what plain steps give (`tests/test_topk_full_tree.py`). Such a request decodes alone, not in a batch. On
+an M5 Pro, Lightning with DSpark, temperature 1.0, top-p 0.95, 400 tokens: ~154-166 tok/s at top_k 0 against
+~165-172 with top_k left out, and ~91-96 in plain steps before. Every other model decodes these requests in plain
+steps, without the drafter, so they decode slower: on an M5 Pro at temperature 0.7, top-p 0.95, 512 tokens, the
+35B-A3B wrote ~110 tok/s at top_k 0 against ~160 at top_k 40, the 4B ~92 against ~163 at top_k 20. Before
+kapitsa#1286 every `top_k` was clamped to 32 without a word. A request that leaves `top_k` out gets the model's default (Qwen: 20; a
 `generation_config.json` without one: 32), so it stays on the two-pass sampler. Clover's own loops apply no top-k at all.
 
 ### Structured output

@@ -69,10 +69,10 @@ struct Sample {
   uint32_t seed, step, out_index;
 };
 
-struct SampleFull {  // sample_full (sample.metal): K 0 = no truncation
+struct SampleFull {  // sample_full (sample.metal): K 0 = no truncation; dstep 1: step + dstep[out_index]
   uint32_t V, K;
   float temp, top_p;
-  uint32_t seed, step, out_index;
+  uint32_t seed, step, out_index, dstep;
 };
 
 struct Qmm {
