@@ -128,6 +128,17 @@ bool pre_m3_gpu(const DeviceFacts&);    // apple_family() < 9: M1 and M2
 bool simd_gpu(const DeviceFacts&);      // apple_family == 9: M3, M4 (not M2, which is family 8)
 bool m1_max_32(const DeviceFacts&);     // name "Apple M1 Max" and 32 cores (#393: kept as guard, CORE4 measured)
 
+// Nemotron-H's last-arrival merges (nh_x4_moe_dn_sum's expert sums, the fused one-token MoE's routing, the 9-32 row
+// split-K GEMMs): fused into the kernels that make the partials, or each in a dispatch of its own (split). Split on
+// macOS 14 (the library has no device fences), with NI_NH_SPLIT=1, and on an Ultra: there the fused merges answered
+// garbage on Super-VL (kapitsa#1301). `why` names the reason for the load log.
+struct NhMergePath {
+  bool split;
+  const char* why;
+};
+NhMergePath nh_merge_path(const DeviceFacts&, bool fences, const char* env);  // env: NI_NH_SPLIT's value or null
+NhMergePath nh_merge_path();  // the live GPU, macOS version and NI_NH_SPLIT
+
 bool matrix_units();
 bool legacy_gpu();
 bool wide_cores();

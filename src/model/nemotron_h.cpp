@@ -561,13 +561,10 @@ std::vector<float> nh_host_f32(const SafetensorsIndex& idx, const std::string& p
 }
 
 bool NemotronH::split_merges() {
-  static const bool split = [] {
-    // macOS 14 always splits: its library is compiled without the merges (NH_FENCES 0), so NI_NH_SPLIT=0 may only
-    // turn the split off where the fences exist (Gpu::compile_library: Metal 3.2+, macOS 15)
-    if (!__builtin_available(macOS 15.0, *)) return true;
-    if (const char* v = getenv("NI_NH_SPLIT")) return atoi(v) != 0;
-    return false;
-  }();
+  // macOS 14 always splits: its library is compiled without the merges (NH_FENCES 0), so NI_NH_SPLIT=0 may only turn
+  // the split off where the fences exist (Gpu::compile_library: Metal 3.2+, macOS 15). An Ultra splits too: Super-VL's
+  // fused merges answered garbage on an M5 Ultra and NI_NH_SPLIT=1 fixed it (kapitsa#1301; nh_merge_path)
+  static const bool split = nh_merge_path().split;
   return split;
 }
 
@@ -1258,6 +1255,11 @@ void NemotronH::alloc_buffers() {
   sd_ = g.alloc(size_t(cfg_.hidden) * 4, "nh_shared_down");
   if (const char* v = getenv("NI_NH_FUSE")) fuse_dec_ = atoi(v) != 0;
   if (split_) fuse_dec_ = false;  // (its routing merges in the last router threadgroup)
+  {
+    const NhMergePath mp = nh_merge_path();
+    logi("Nemotron-H: %s (%s)", mp.split ? "merges in dispatches of their own, one-token MoE not fused" : "fused merges",
+         mp.why);
+  }
   if (const char* v = getenv("NI_NH_ROUTE_BUCKET")) route_bucket_ = atoi(v) != 0;
   // a verify's IQ2 routed experts' down projection: 4 simdgroups per threadgroup on the M5 (16 rows of a tile; tools/
   // nh_x2moe_bench, a 5-row harness verify's 29 experts: 52.0 against 59.1 us with 1, 52.8 with 2, 52.0 with 8; the

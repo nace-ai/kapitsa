@@ -3,6 +3,8 @@
 
 #include "metal/gpu.h"
 
+#include <cstdlib>
+
 namespace ni {
 
 DeviceFacts facts_from_gpu(long ram_bytes, bool ane) {
@@ -44,6 +46,12 @@ bool ultra_gpu() { return Gpu::get().name().find("Ultra") != std::string::npos; 
 bool pre_m3_gpu() { return Gpu::get().apple_family() < 9; }
 
 bool simd_gpu() { return Gpu::get().apple_family() == 9; }  // M3, M4
+
+NhMergePath nh_merge_path() {
+  bool fences = false;
+  if (__builtin_available(macOS 15.0, *)) fences = true;
+  return nh_merge_path(facts_from_gpu(0, false), fences, getenv("NI_NH_SPLIT"));
+}
 
 bool m1_max_32() { return Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32; }
 

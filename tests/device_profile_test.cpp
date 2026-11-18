@@ -196,6 +196,20 @@ int main() {
   const auto ultra = ni::resolve_device(mac(10, 80, "Apple M5 Ultra", 512L << 30));
   CHECK(ni::default_matches(*row("ultra_gpu"), ultra) && row("ultra_gpu")->exclusive);
   CHECK(std::string(row("ultra_gpu")->where).find("#421") != std::string::npos);
+  CHECK(std::string(row("ultra_gpu")->where).find("kapitsa#1301") != std::string::npos);
+  // Nemotron-H's merges (kapitsa#1301): split on the reporter's M5 Ultra (64 cores, 96 GB) and any Ultra, and on
+  // macOS 14; fused on one-die Macs; NI_NH_SPLIT overrides where the fences exist
+  const auto m5u64 = mac(10, 64, "Apple M5 Ultra", 96L << 30), m5pro20 = mac(10, 20, "Apple M5 Pro", g48);
+  const auto m3u = mac(9, 80, "Apple M3 Ultra", 256L << 30), m1u = mac(7, 64, "Apple M1 Ultra", 128L << 30);
+  CHECK(ni::nh_merge_path(m5u64, true, nullptr).split && ni::nh_merge_path(m3u, true, nullptr).split);
+  CHECK(ni::nh_merge_path(m1u, true, nullptr).split);
+  CHECK(std::string(ni::nh_merge_path(m5u64, true, nullptr).why).find("Ultra") != std::string::npos);
+  CHECK(!ni::nh_merge_path(m5pro20, true, nullptr).split);
+  CHECK(!ni::nh_merge_path(mac(10, 40, "Apple M5 Max", 128L << 30), true, nullptr).split);
+  CHECK(!ni::nh_merge_path(mac(9, 20, "Apple M4 Pro", g48), true, nullptr).split);
+  CHECK(ni::nh_merge_path(m5pro20, false, nullptr).split && ni::nh_merge_path(m5pro20, false, "0").split);
+  CHECK(ni::nh_merge_path(m5pro20, true, "1").split && !ni::nh_merge_path(m5u64, true, "0").split);
+  CHECK(std::string(ni::nh_merge_path(m5u64, true, "0").why) == "NI_NH_SPLIT=0");
   CHECK(ni::format_profile(ultra, false).find("exclusive") != std::string::npos);
   const auto m2p = ni::resolve_device(mac(8, 10, "Apple M2", 24L << 30));
   CHECK(ni::default_matches(*row("pre_m3_gpu"), m1p) && ni::default_matches(*row("pre_m3_gpu"), m2p));

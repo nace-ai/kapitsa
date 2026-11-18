@@ -1,6 +1,7 @@
 #include "engine/device_profile.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <sstream>
 
@@ -134,7 +135,7 @@ const DefaultRow kDefaults[] = {
     {"m1_max_32", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, "Apple M1 Max", "64", 0, 0, false,
      "4 sites; shape guard: 32 cores; 35B group of 64 (hidden 2048, intermediate 512, else 32); also the 35B 4096-row prefill chunk, the 35B q4-head v8 default, and the drafter CORE4 path (measured on M5 and the 32-core M1 Max)", false},
     {"ultra_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
-     "1 site; correctness guard: two dies; fused merges failed past a 32-key tile on the old arrival (#421); the new arrival's fused merges are unverified on an Ultra", false},
+     "1 site; correctness guard: two dies; Flint's fused merges failed past a 32-key tile on the old arrival (#421), the new arrival's are unverified on an Ultra; Nemotron-H's fused merges answered garbage on Super-VL's plain decoding and doubled tokens under LiLiCorr on an M5 Ultra (macOS 27.2.1), NI_NH_SPLIT=1 fixed both (kapitsa#1301; nh_merge_path)", false},
     {"pre_m3_gpu", Knob::kNone, ModelClass::kOther, DefaultScope::kGuard, nullptr, "split", 0, 0, true,
      "1 site; correctness guard: apple_family under 9; fused merges produced garbage on an M1 Max on 0.2.15, old arrival (#478); the new arrival is unverified on M1 and M2", false},
     // Fast profile only (docs/profiles.md): Flash-Next's sparse prefill attention on the matrix units, Q and P as hi + lo
@@ -343,5 +344,12 @@ bool ultra_gpu(const DeviceFacts& f) { return f.name.find("Ultra") != std::strin
 bool pre_m3_gpu(const DeviceFacts& f) { return f.apple_family < 9; }
 
 bool simd_gpu(const DeviceFacts& f) { return f.apple_family == 9; }  // M3, M4; not M2 (family 8)
+
+NhMergePath nh_merge_path(const DeviceFacts& f, bool fences, const char* env) {
+  if (!fences) return {true, "macOS 14: no device fences in the library"};
+  if (env) return atoi(env) != 0 ? NhMergePath{true, "NI_NH_SPLIT=1"} : NhMergePath{false, "NI_NH_SPLIT=0"};
+  if (ultra_gpu(f)) return {true, "an Ultra: two dies, kapitsa#1301"};
+  return {false, "NI_NH_SPLIT=1 splits them"};
+}
 
 }  // namespace ni
