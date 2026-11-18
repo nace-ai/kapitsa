@@ -107,7 +107,7 @@ class TokenTable {
   int tc_open_ = -1, tc_close_ = -1;
   // the trie, in preorder: node 0 is the root; node i's subtree is [i, end_[i])
   std::vector<uint8_t> byte_, depth_;
-  std::vector<int32_t> tok_;
+  std::vector<int32_t> tok_, dup_next_;
   std::vector<uint32_t> end_;
   int max_depth_ = 0;
   mutable std::mutex mu_;
