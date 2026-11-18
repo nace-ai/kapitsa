@@ -1,5 +1,5 @@
-// Socket-free regression of the production StreamJob and httplib provider, not a copied implementation.
 #include "server/http_stream.h"
+#include "server/disconnect.h"
 #include "api/common.h"
 #include <httplib/httplib.h>
 
@@ -9,6 +9,10 @@
 #include <stdexcept>
 #include <thread>
 #include <vector>
+
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 namespace {
 using namespace ni;
@@ -262,6 +266,67 @@ struct CopyFailure {
   void operator()(const ChatResult&) const {}
 };
 
+bool late_disconnect_before_prompt() {
+  auto seen = std::make_shared<Observed>();
+  std::atomic<bool> started = false, release = false;
+  std::shared_ptr<ExecutionSession> execution;
+  server::ServingServer srv;
+  srv.Post("/v1/responses", [&](const httplib::Request&, httplib::Response& response) {
+    server::stream_reply({}, std::make_shared<Writer>(Mode::Success, seen), response,
+      [&](auto observer) {
+        execution = detail::ExecutionFactory::bind(
+          [&](const ChatRequest&, detail::ChatObserver&, detail::StopToken stop) {
+            started = true;
+            const auto deadline = std::chrono::steady_clock::now() + 5s;
+            while (!stop.stop_requested() && !release && std::chrono::steady_clock::now() < deadline)
+              std::this_thread::sleep_for(1ms);
+            seen->saw_cancel = stop.stop_requested();
+            seen->work_exited = true;
+            ChatResult result;
+            result.finish_reason = stop.stop_requested() ? "cancelled" : "length";
+            return result;
+          }, std::move(observer));
+        return execution;
+      }, [&](const ChatResult&, httplib::Response& res) { res.status = 499; },
+      [&](const ChatResult&) { ++seen->afters; },
+      {[] {}, [&](const ChatResult& result) {
+        ++seen->meters;
+        seen->result_reason = result.finish_reason;
+      }});
+  });
+  const int port = srv.bind_to_any_port("127.0.0.1");
+  if (port < 0) return false;
+  std::thread server([&] { srv.listen_after_bind(); });
+  const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(static_cast<uint16_t>(port));
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  const std::string request = "POST /v1/responses HTTP/1.1\r\nHost: localhost\r\n"
+                              "Content-Type: application/json\r\nContent-Length: 2\r\n\r\n{}";
+  const bool connected = fd >= 0 && ::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof addr) == 0;
+  const bool sent = connected && ::send(fd, request.data(), request.size(), 0) == ssize_t(request.size());
+  const auto wait_for = [](const std::atomic<bool>& flag, auto timeout) {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!flag && std::chrono::steady_clock::now() < deadline) std::this_thread::sleep_for(1ms);
+    return flag.load();
+  };
+  const bool running = sent && wait_for(started, 2s);
+  if (fd >= 0) ::close(fd);
+  const bool stopped = running && wait_for(seen->work_exited, 1500ms) && seen->saw_cancel;
+  if (running) execution->cancel();
+  release = true;
+  srv.stop();
+  server.join();
+  const bool ok = stopped && seen->begins == 0 && seen->deltas == 0 && seen->afters == 0 &&
+                  seen->meters == 1 && seen->result_reason == "cancelled";
+  std::cout << Json{{"case", "late-disconnect-before-prompt"}, {"passed", ok},
+                    {"started", running}, {"stopped_before_cleanup", stopped},
+                    {"begins", seen->begins.load()}, {"deltas", seen->deltas.load()},
+                    {"meter_done", seen->meters}, {"reason", seen->result_reason}}.dump() << '\n';
+  return ok;
+}
+
 bool completion_setup_failure() {
   auto bound = std::make_shared<bool>(false);
   std::shared_ptr<ExecutionSession> execution;
@@ -292,7 +357,8 @@ bool completion_setup_failure() {
 }  // namespace
 
 int main() {
-  bool ok = completion_setup_failure();
+  bool ok = late_disconnect_before_prompt();
+  ok = completion_setup_failure() && ok;
   for (const auto& [name, mode] : std::vector<std::pair<const char*, Mode>>{
          {"success", Mode::Success}, {"empty-end", Mode::EmptyEnd}, {"framed-engine-error", Mode::EngineError},
          {"pre-stream-error", Mode::PreStreamError}, {"begin-throws", Mode::BeginThrows},

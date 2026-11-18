@@ -1,4 +1,5 @@
 #include "server/http_stream.h"
+#include "server/disconnect.h"
 #include "api/common.h"
 #include <httplib/httplib.h>
 
@@ -114,6 +115,8 @@ void server::stream_reply(const ChatRequest& r, std::shared_ptr<api::StreamWrite
   auto completion = std::make_shared<StreamCompletion>(execution, meter);
   completion->start(r);
   {
+    std::unique_ptr<DisconnectWatch> watch;
+    if (tl_serving_socket != INVALID_SOCKET) watch = std::make_unique<DisconnectWatch>(tl_serving_socket, *execution);
     std::unique_lock<std::mutex> lk(job->mu);
     job->cv.wait(lk, [&] { return job->started || job->terminal != StreamJob::Terminal::Pending; });
   }
