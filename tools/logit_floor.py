@@ -169,7 +169,7 @@ def main():
                     help="the --also paths only reorder the default's sums: their drift is the reorder_gate")
     ap.add_argument("--keep", action="store_true", help="keep the dumps")
     ap.add_argument("--reuse", action="store_true",
-                    help="compare the dumps --work already holds, not run them again (one build's on one Mac: "
+                    help="compare the dumps --work already holds, not run them again (the requested model, one build on one Mac: "
                          "\"measured\" records how many and their dates)")
     ap.add_argument("--rescore", action="store_true",
                     help="no dumps: the floors and gates of the model's JSON again from its sources (no GPU)")
@@ -205,9 +205,15 @@ def main():
     def dump(name, run_paths, *extra, env=None):
         d = os.path.join(work, name)
         extra = (*extra, *rows)
-        if a.reuse and all(os.path.exists(os.path.join(d, p, "meta.json")) for p in ["prefill", *run_paths]):
-            reused.extend(dump_metas(d))
-            return d
+        if a.reuse and os.path.isdir(d):
+            metas = dump_metas(d)
+            for meta in metas:
+                if meta.get("model") != model:
+                    sys.exit(f"--reuse: expected model {model!r} in {d}, found {meta.get('model')!r}")
+            if all(os.path.exists(os.path.join(d, p, "meta.json")) for p in ["prefill", *run_paths]):
+                reused.extend(metas)
+                reused_dirs.add(d)
+                return d
         cmd = [a.bin, a.model, d, "--paths", ",".join(run_paths), *extra]
         env = {**cond, **(env or {})}
         print("$", " ".join(([f"{k}={v}" for k, v in env.items()]) + cmd), flush=True)
@@ -220,11 +226,16 @@ def main():
     def cmp(d1, d2, path):
         return lc.compare(lc.Dump(os.path.join(d1, path)), lc.Dump(os.path.join(d2, path)))
 
+    reused_dirs = set()
+
+    def discard(d):
+        # Keep reused evidence until the floor is written. Fresh dumps can be released as each comparison ends.
+        if not a.keep and d not in reused_dirs:
+            shutil.rmtree(d)
+
     def once(d1, d2, path):
-        """cmp, then d2 deleted unless --keep (disk: 768 rows a path are ~0.4 GB a dump on Flint)."""
         s = cmp(d1, d2, path)
-        if not a.keep:
-            shutil.rmtree(d2)
+        discard(d2)
         return s
 
     def measure():
@@ -233,8 +244,7 @@ def main():
         with open(os.path.join(da, ref, "meta.json")) as f:
             meta = json.load(f)
         sources = {"repeat": {"paths": {p: summary(cmp(da, db, p)) for p in ["prefill"] + paths}}}
-        if not a.keep:
-            shutil.rmtree(db)  # (disk: a dump is ~190 MB per path on the Qwen models)
+        discard(db)
         if "batch" in paths:
             s = lc.compare(lc.Dump(os.path.join(da, "verify")), lc.Dump(os.path.join(da, "batch")))
             sources["batch"] = summary(s)

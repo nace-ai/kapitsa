@@ -6,7 +6,8 @@ numpy giving the same numbers. CPU only, stdlib only (numpy too when it is insta
 
 usage: test_logit_compare.py
 """
-import array, json, math, os, random, subprocess, sys, tempfile
+import array, json, math, os, random, shutil, subprocess, sys, tempfile
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOOLS = os.path.join(HERE, "..", "tools")
@@ -462,6 +463,43 @@ with tempfile.TemporaryDirectory() as tmp:
     with open(out, "rb") as f:
         check(p.returncode != 0 and "non-finite" in p.stderr and "sequence 0 prefix 4" in p.stderr
               and f.read() == saved_floor, "non-finite logits cannot replace a measured floor", p.stderr)
+    # A shared --work can hold a complete run of a different model, or just one stale path.
+    cache = Path(tmp) / "reuse-work"
+    other = Path(tmp) / "other-model"
+    other.mkdir()
+    shutil.copyfile(os.path.join(mdir, "config.json"), other / "config.json")
+
+    def run_floor(model_dir, work, *flags):
+        return subprocess.run([sys.executable, os.path.join(TOOLS, "logit_floor.py"), model_dir, "--bin", fake,
+                               "--rows", "3", "--out", out, "--work", work, *flags], capture_output=True, text=True)
+
+    seed = run_floor(mdir, cache, "--keep")
+    check(seed.returncode == 0, "create a reusable floor fixture", seed.stderr)
+    saved = Path(out).read_bytes()
+    for case, requested in [("other-model", other), ("mixed", mdir), ("missing-model", mdir)]:
+        work = Path(tmp) / ("reuse-" + case)
+        shutil.copytree(cache, work)
+        if case != "other-model":
+            metadata = work / "chunk" / "verify" / "meta.json"
+            info = json.loads(metadata.read_bytes())
+            if case == "mixed":
+                info["model"] = other.name
+            else:
+                del info["model"]
+            metadata.write_text(json.dumps(info))
+        def contents():
+            return {p.relative_to(work): p.read_bytes() for p in work.rglob("*") if p.is_file()}
+        before = contents()
+        result = run_floor(requested, work, "--reuse")
+        check(result.returncode != 0 and "--reuse" in result.stderr and "model" in result.stderr
+              and Path(out).read_bytes() == saved and contents() == before,
+              f"--reuse refuses {case} and preserves the prior floor and dumps", result.stderr)
+
+    result = run_floor(mdir + "/", cache, "--reuse")
+    check(result.returncode == 0 and json.loads(Path(out).read_bytes())["measured"]["reused"]["dumps"] == 8
+          and "$ " not in result.stdout and not cache.exists(),
+          "--reuse accepts the same recorded model and cleans up after success", result.stderr)
+
     lc_saved, lf_mac = lc.FLOORS, lf.this_mac
     try:  # --rescore without --out: this Mac's file
         lc.FLOORS = os.path.join(tmp, "floors2")
