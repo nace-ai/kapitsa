@@ -94,7 +94,7 @@ for p in ["prefill"] + paths:
     with open(os.path.join(d, "logits.f32"), "wb") as f:
         f.write(array.array("f", data).tobytes())
     with open(os.path.join(d, "meta.json"), "w") as f:
-        json.dump({"model": "fm", "path": p, "build": "test", "mac": "Apple M5 Pro", "macos": "26", "date": "now",
+        json.dump({"model": a[0].rstrip("/").rsplit("/", 1)[-1], "model_dir": a[0], "path": p, "build": "test", "mac": "Apple M5 Pro", "macos": "26", "date": "now",
                    "records": len(recs), "source": "fake", "env": {k: v for k, v in env.items() if v},
                    "ane": {"evals": 0}, "verify": "chain"}, f)
 '''
@@ -469,9 +469,9 @@ with tempfile.TemporaryDirectory() as tmp:
     other.mkdir()
     shutil.copyfile(os.path.join(mdir, "config.json"), other / "config.json")
 
-    def run_floor(model_dir, work, *flags):
+    def run_floor(model_dir, work, *flags, cwd=None):
         return subprocess.run([sys.executable, os.path.join(TOOLS, "logit_floor.py"), model_dir, "--bin", fake,
-                               "--rows", "3", "--out", out, "--work", work, *flags], capture_output=True, text=True)
+                               "--rows", "3", "--out", out, "--work", work, *flags], capture_output=True, text=True, cwd=cwd)
 
     seed = run_floor(mdir, cache, "--keep")
     check(seed.returncode == 0, "create a reusable floor fixture", seed.stderr)
@@ -494,6 +494,51 @@ with tempfile.TemporaryDirectory() as tmp:
         check(result.returncode != 0 and "--reuse" in result.stderr and "model" in result.stderr
               and Path(out).read_bytes() == saved and contents() == before,
               f"--reuse refuses {case} and preserves the prior floor and dumps", result.stderr)
+
+    # Keep a named alias. A parent after a symlink must follow the filesystem, as when opening the model.
+    inner = Path(mdir) / "inner"
+    inner.mkdir()
+    alias = Path(tmp) / "alias"
+    alias.symlink_to(mdir, target_is_directory=True)
+    nested_link = Path(tmp) / "nested-link"
+    nested_link.symlink_to(inner, target_is_directory=True)
+    for arg, expected in [(".", "fm"), (str(alias) + "/.", "alias"), (str(nested_link) + "/..", "fm")]:
+        work = Path(tmp) / "path-work"
+        result = run_floor(arg, work, "--keep", cwd=mdir)
+        meta = work / "a" / "verify" / "meta.json"
+        check(result.returncode == 0 and meta.exists() and json.loads(meta.read_bytes())["model"] == expected
+              and json.loads(Path(out).read_bytes())["model"] == expected,
+              f"floor and producer use {expected} for {os.path.basename(arg)}", result.stderr)
+        if meta.exists():
+            shutil.rmtree(work)
+
+    saved = Path(out).read_bytes()
+    result = run_floor(mdir + "/absent/..", Path(tmp) / "absent-work", "--keep")
+    check(result.returncode != 0 and Path(out).read_bytes() == saved,
+          "an absent component before .. still fails the model lookup", result.stderr)
+
+    result = run_floor(mdir + "/absent/..", Path(tmp) / "absent-work", "--rescore")
+    check(result.returncode == 0 and json.loads(Path(out).read_bytes())["model"] == json.loads(saved)["model"],
+          "--rescore with an explicit floor needs no model directory", result.stderr)
+
+    # Some older dumps recorded "." as the model. Only a named directory in their own metadata identifies it.
+    legacy = Path(tmp) / "legacy"
+    shutil.copytree(cache, legacy)
+    for meta in legacy.rglob("meta.json"):
+        info = json.loads(meta.read_bytes())
+        info.update(model=".", model_dir=".")
+        meta.write_text(json.dumps(info))
+    prior = Path(out).read_bytes()
+    result = run_floor(".", legacy, "--reuse", "--keep", cwd=other)
+    check(result.returncode != 0 and "--reuse" in result.stderr and Path(out).read_bytes() == prior,
+          "--reuse refuses a bare dot from another working directory", result.stderr)
+    for meta in legacy.rglob("meta.json"):
+        info = json.loads(meta.read_bytes())
+        info["model_dir"] = "fm/."
+        meta.write_text(json.dumps(info))
+    result = run_floor(mdir, legacy, "--reuse")
+    check(result.returncode == 0 and "$ " not in result.stdout and not legacy.exists(),
+          "--reuse accepts a legacy name/. label from its recorded directory", result.stderr)
 
     result = run_floor(mdir + "/", cache, "--reuse")
     check(result.returncode == 0 and json.loads(Path(out).read_bytes())["measured"]["reused"]["dumps"] == 8
