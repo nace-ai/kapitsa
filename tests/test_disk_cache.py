@@ -320,23 +320,40 @@ def functional(tmp, log):
     # 6. a DFlash drafter (the server's own choice, or --server-args "--dflash <drafter>"): the prompt's prefix checkpoint
     #    has no drafter ring, and the save at stop used to dereference its null ring (a segfault: the server died at
     #    SIGTERM). Runs when the server's log says it loads a DFlash2 drafter.
-    s = Server(os.path.join(tmp, "home-dflash"), log)
+    dflash_home = os.path.join(tmp, "home-dflash")
+    s = Server(dflash_home, log)
     if "DFlash2 drafter" not in s.text()[s.start_at:]:
         print("SKIP the drafter step: this server loads no DFlash2 drafter", flush=True)
         s.stop()
     else:
         # (a long system block, a short user turn: the prefix checkpoint sits at the end of the system block)
-        c7 = [{"role": "system", "content": "You are a coding agent. Repository notes:\n" + CORPUS_TEXT[:TOKENS * 4]},
-              {"role": "user", "content": "Summarize the notes in one sentence."}]
-        f7 = {"role": "user", "content": "Name one thing in them that could fail, in one sentence."}
+        system7 = {"role": "system", "content": "You are a coding agent. Repository notes:\n" + CORPUS_TEXT[:TOKENS * 4]}
+        c7 = [system7, {"role": "user", "content": "Summarize the notes in one sentence."}]
+        c8 = [system7, {"role": "user", "content": "Name one risk in the notes, in one sentence."}]
+
+        # A different first query must reuse only the shared system prefix, not c7's later turn checkpoint.
+        s.stop()
+        s = Server(os.path.join(tmp, "home-dflash-ram"), log, cache="0")
+        a7_ram, _, _, _ = chat(c7)
+        chat([{"role": "user", "content": "Say hello in five words."}], max_tokens=8)
+        r8_ram, u8_ram, _, _ = chat(c8)
+        check(cached(u8_ram) > TOKENS // 2, "with a drafter: the RAM path reuses the shared system prefix", u8_ram)
+        s.stop()
+
+        s = Server(dflash_home, log)
         a7, _, _, _ = chat(c7)
         chat([{"role": "user", "content": "Say hello in five words."}], max_tokens=8)  # (a second conversation)
         check(s.p.poll() is None, "with a drafter: the server runs after a long prompt")
+        check(a7 == a7_ram, "with a drafter: the first turn matches the RAM path",
+              f"\n RAM: {a7_ram!r}\n SSD: {a7!r}")
         s.stop()
         check(s.p.returncode in (0, -signal.SIGTERM), "with a drafter: the save at stop does not crash", s.p.returncode)
-        s = Server(os.path.join(tmp, "home-dflash"), log)
-        _, w7, _, _ = chat(turn2(c7, a7, f7))
-        check(cached(w7) > TOKENS // 2, "with a drafter: the follow-up is cached after a restart", w7)
+        s = Server(dflash_home, log)
+        d8, w8, _, _ = chat(c8)
+        check(cached(w8) == cached(u8_ram) and cached(w8) > TOKENS // 2,
+              "with a drafter: the shared prefix is cached after a restart", w8)
+        check(d8 == r8_ram, "with a drafter: the restored prefix writes the RAM path's text",
+              f"\n RAM: {r8_ram!r}\n SSD: {d8!r}")
         s.stop()
 
 
