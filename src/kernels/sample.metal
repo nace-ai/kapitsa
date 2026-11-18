@@ -209,7 +209,9 @@ NI_INLINE void sample_stage2_impl(const device float* cv, const device uint* ci,
 // exp((l - max) / T) over the kept tokens. The cuts are found by bisecting on the logits' order keys (32 passes over
 // the row for top-k, 32 for top-p), ties at a cut taken by lowest id as the sorted lists take them. The draw walks the
 // kept tokens in id order: the same law as sample_stage2's walk in value order, not the same token for a given uniform.
-// One threadgroup of 1024 threads; simdgroup s owns ids [s * seg, (s + 1) * seg), its lanes 32 apart.
+// One threadgroup of 1024 threads per row; simdgroup s owns ids [s * seg, (s + 1) * seg), its lanes 32 apart. A grid of
+// R threadgroups samples R rows of V logits in one dispatch: row g reads logits + g * V and writes tokens[out_index + g]
+// (a KFlash tree verify's rows, each at its own RNG step: the plain step's draw for that row's position, kapitsa#1286).
 struct SampleFullParams {
   uint V;
   uint K;          // 0 = no truncation
@@ -218,6 +220,7 @@ struct SampleFullParams {
   uint seed;
   uint step;
   uint out_index;  // tokens[out_index] = sampled id
+  uint dstep;      // 1: the draw's RNG step is step + dstep[out_index] (a KFlash tree verify's row: P + its depth)
 };
 
 constant constexpr uint kFullAll = 0xffffffffu;
@@ -346,9 +349,12 @@ NI_INLINE void full_sort(threadgroup uint* lk, threadgroup uint* li, uint tid, u
     }
 }
 
-[[kernel]] void sample_full(const device float* logits [[buffer(0)]], device int* tokens [[buffer(1)]],
+[[kernel]] void sample_full(const device float* logits_rows [[buffer(0)]], device int* tokens [[buffer(1)]],
                             device float* out_probs [[buffer(2)]], constant SampleFullParams& p [[buffer(3)]],
+                            const device int* dstep [[buffer(4)]], uint row [[threadgroup_position_in_grid]],
                             uint tid [[thread_position_in_threadgroup]], uint ntg [[threads_per_threadgroup]]) {
+  const device float* logits = logits_rows + ulong(row) * p.V;
+  const uint out_index = p.out_index + row, step = p.step + (p.dstep ? uint(dstep[out_index]) : 0u);
   threadgroup float sf[32];
   threadgroup uint su[32];
   const uint nsg = (ntg + 31) >> 5, sg = tid >> 5;
@@ -359,7 +365,10 @@ NI_INLINE void full_sort(threadgroup uint* lk, threadgroup uint* li, uint tid, u
   for (uint i = r.lo + r.lane; i < r.hi; i += 32) mx = max(mx, full_logit(logits, i));
   const float m = tg_max(mx, sf, tid, ntg);
   if (!(m > -INFINITY)) {  // every token masked
-    if (tid == 0) tokens[p.out_index] = 0, out_probs[0] = m;
+    if (tid == 0) {
+      tokens[out_index] = 0;
+      if (row == 0) out_probs[0] = m;  // (row 0's: one row's maximum, as a one-row dispatch writes it)
+    }
     return;
   }
   // The list path: when top-k keeps at most kFullList tokens, or top-p truncates an untruncated row, the best
@@ -425,7 +434,7 @@ NI_INLINE void full_sort(threadgroup uint* lk, threadgroup uint* li, uint tid, u
           kt += w;
           if (w > 0.0f) last = li[q];
         }
-        const float u = float(pcg_hash(p.seed ^ pcg_hash(p.step)) & 0xffffff) / 16777216.0f * kt;
+        const float u = float(pcg_hash(p.seed ^ pcg_hash(step)) & 0xffffff) / 16777216.0f * kt;
         uint chosen = last;  // (u past the last interval: a rounding gap; the last token with weight)
         float a = 0.0f;
         for (uint q = 0; q < keep; ++q) {
@@ -435,8 +444,8 @@ NI_INLINE void full_sort(threadgroup uint* lk, threadgroup uint* li, uint tid, u
             break;
           }
         }
-        tokens[p.out_index] = int(chosen);
-        out_probs[0] = m;
+        tokens[out_index] = int(chosen);
+        if (row == 0) out_probs[0] = m;
       }
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -494,7 +503,7 @@ NI_INLINE void full_sort(threadgroup uint* lk, threadgroup uint* li, uint tid, u
     kt += sf[j];
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  const float u = float(pcg_hash(p.seed ^ pcg_hash(p.step)) & 0xffffff) / 16777216.0f * kt;
+  const float u = float(pcg_hash(p.seed ^ pcg_hash(step)) & 0xffffff) / 16777216.0f * kt;
   uint pick = 0xffffffffu, last = 0;
   {
     uint run = base;
@@ -529,8 +538,8 @@ NI_INLINE void full_sort(threadgroup uint* lk, threadgroup uint* li, uint tid, u
   last = r.lane < nsg ? su[r.lane] : 0u;
   last = simd_max(last);
   if (tid == 0) {
-    tokens[p.out_index] = int(pick != 0xffffffffu ? pick : last);  // (no interval held u: a rounding gap at the end)
-    out_probs[0] = m;
+    tokens[out_index] = int(pick != 0xffffffffu ? pick : last);  // (no interval held u: a rounding gap at the end)
+    if (row == 0) out_probs[0] = m;
   }
 }
 

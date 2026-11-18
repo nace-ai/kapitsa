@@ -3,9 +3,10 @@
 // The two-pass top-k sampler (topk_stage1 + sample_stage2 and their _rows forms, sample.metal / verify.metal) keeps at
 // most kTopkMax candidates per row: stage 2 holds 4 per thread of its 1024 (4096) over stage 1's lists, topk_lists(),
 // and the speculative acceptance (dfl_dist_rows, dfl_accept: two candidates per simdgroup lane) 64. A sampled request whose
-// top_k it cannot hold (top_k <= 0: no truncation; above kTopkMax) is honored exactly instead: the engine decodes it in
-// plain steps, and each step samples the whole vocabulary (sample_full). Greedy requests and top_k 1..kTopkMax take
-// the two-pass sampler as before.
+// top_k it cannot hold (top_k <= 0: no truncation; above kTopkMax) is honored exactly instead: each token is sampled
+// over the whole vocabulary (sample_full), in plain steps, or on Nemotron-H's KFlash tree loop in its verify
+// (enc_sample_full_rows: each row at its position's plain RNG step). Greedy requests and top_k 1..kTopkMax take the
+// two-pass sampler as before.
 #pragma once
 #include "metal/gpu.h"
 #include "model/model.h"
@@ -53,5 +54,11 @@ inline bool verify_pass_ok(const SamplingParams& sp) { return !full_vocab(sp); }
 // row's largest logit (as sample_stage2 writes). One threadgroup.
 void enc_sample_full(Encoder& e, const Buffer& logits, uint32_t V, const Buffer& tokens, int out_index,
                      const Buffer& sprob, const SamplingParams& sp, uint32_t step);
+// R consecutive logits rows sampled over the whole vocabulary in one dispatch (a threadgroup per row): row r into
+// tokens[out_index + r], at RNG step step + dstep[out_index + r] (dstep: int32 at dstep_off; a KFlash tree verify's
+// depths, so each row draws as the plain step at its position would)
+void enc_sample_full_rows(Encoder& e, const Buffer& logits, uint32_t V, int R, const Buffer& tokens, int out_index,
+                          const Buffer& sprob, const SamplingParams& sp, uint32_t step, const Buffer& dstep,
+                          size_t dstep_off);
 
 }  // namespace ni

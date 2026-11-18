@@ -8,7 +8,8 @@
 Starts `kapitsa serve` on the model and sends sampled requests (temperature 0.7) that leave top_k out on the
 OpenAI chat completions, Ollama /api/chat and /api/generate, Anthropic /v1/messages and OpenAI /v1/responses
 routes, then the same with an explicit top_k 0 on chat completions and Ollama, and top_k 40 and 64. Since #1286 a
-request's top_k <= 0 or above 64 is sampled over the whole vocabulary in plain steps (src/model/sampler.h), which the
+request's top_k <= 0 or above 64 is sampled over the whole vocabulary (src/model/sampler.h; in plain steps, or in
+Nemotron-H's KFlash tree verify: tests/test_topk_full_tree.py), which the
 engine logs as "sampled over the whole vocabulary". The check: no request without a top_k, or with top_k 40 or 64,
 logs it (each keeps the two-pass sampler and the model's speculative loop), and each explicit top_k 0 does.
 
@@ -178,7 +179,7 @@ def review(a, tmp):
         # a greedy speculative turn after a turn in plain steps, against the same turn after a re-prefill
         c1 = [{"role": "user", "content": PROMPT}]
         m, new = s.chat(dict(nt, messages=c1, temperature=0.7, top_k=0, max_tokens=128))
-        check(FULL in new, "turn 1 at top_k 0: plain steps")
+        check(FULL in new, "turn 1 at top_k 0: " + ("KFlash's tree verify" if "tree verify" in new else "plain steps"))
         c2 = c1 + [{"role": "assistant", "content": m["content"]}, {"role": "user", "content": "Now tell it in verse."}]
         m2, new2 = s.chat(dict(nt, messages=c2, temperature=0, max_tokens=256))
         s.chat(dict(nt, messages=[{"role": "user", "content": "Name three rivers."}], temperature=0, max_tokens=8))
@@ -252,7 +253,9 @@ def main():
                 took_full = FULL in new
                 ok = took_full == full
                 failures += not ok
-                print(f"{'PASS' if ok else 'FAIL'}: {name}: {'whole vocabulary, plain steps' if took_full else 'two-pass'}"
+                how = "two-pass" if not took_full else (
+                    "whole vocabulary, " + ("tree verify" if "tree verify" in new else "plain steps"))
+                print(f"{'PASS' if ok else 'FAIL'}: {name}: {how}"
                       f"{', speculative' if spec else ''}, {rates[-1] if rates else '?'} tok/s")
         finally:
             p.terminate()

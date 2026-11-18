@@ -2550,8 +2550,8 @@ void NemotronH::enc_head(Encoder& e, int R, const Buffer& out, size_t out_row_st
 
 void NemotronH::enc_sample(Encoder& e, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
                            uint32_t step, const Buffer* dstep, size_t dstep_off) {
-  // top_k <= 0 or above the two passes' 64 (sampler.h): the whole vocabulary; a tree verify's rows (dstep) never sample
-  // that way: such a request decodes in plain steps
+  // top_k <= 0 or above the two passes' 64 (sampler.h): the whole vocabulary (a tree verify's rows: encode_accept_tree
+  // samples them in one dispatch)
   if (full_vocab(sp) && !dstep) {
     enc_sample_full(e, lrow, uint32_t(cfg_.vocab), tokens, out_index, sprob_, sp, step);
     return;
@@ -2839,10 +2839,15 @@ void NemotronH::encode_accept(Encoder& e, Seq& s, int pos, int R, int K, const S
 }
 
 void NemotronH::encode_accept_tree(Encoder& e, Seq& s, int pos, const SamplingParams& sp) {
-  // row r draws at position pos + depth(r): the tree buffer's depths
-  for (int r = 0; r < kMaxRows; ++r)
-    enc_sample(e, logits_.view(size_t(r) * cfg_.vocab * 4, size_t(cfg_.vocab) * 4), samp_, r, sp, uint32_t(pos), &tree_,
-               size_t(kf::kDep) * 4);
+  // row r draws at position pos + depth(r): the tree buffer's depths. A full-vocabulary request (sampler.h): every row in
+  // one sample_full dispatch, each at the RNG step its position's plain step takes (kapitsa#1286)
+  if (full_vocab(sp))
+    enc_sample_full_rows(e, logits_, uint32_t(cfg_.vocab), kMaxRows, samp_, 0, sprob_, sp, uint32_t(pos), tree_,
+                         size_t(kf::kDep) * 4);
+  else
+    for (int r = 0; r < kMaxRows; ++r)
+      enc_sample(e, logits_.view(size_t(r) * cfg_.vocab * 4, size_t(cfg_.vocab) * 4), samp_, r, sp, uint32_t(pos),
+                 &tree_, size_t(kf::kDep) * 4);
   const struct {
     uint32_t P, R, gst, pad;
   } ap{uint32_t(pos), uint32_t(kMaxRows), 0u, 0u};

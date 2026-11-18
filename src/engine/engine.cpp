@@ -2977,12 +2977,19 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   sp.top_k = r.top_k;
   sp.seed = r.seed ? r.seed : uint32_t(std::random_device{}());
   // kapitsa#1286: a top_k the two-pass sampler cannot hold (<= 0: no truncation; above its 64) is sampled over the whole
-  // vocabulary (sampler.h), in plain steps: the speculative loops' verifies and acceptances keep 64 candidates per row.
+  // vocabulary (sampler.h). Nemotron-H's KFlash tree loop (LiLiCorr, DSpark: full_tree) samples its verify's rows that
+  // way (encode_accept_tree: each row at the RNG step its position's plain step takes; the acceptance keeps the longest
+  // path whose drafts equal those samples, so every token is the target's own draw), so its drafter stays on, outside
+  // batches. The other speculative loops' verifies and acceptances keep 64 candidates per row: plain steps there.
   // (Clover's own loops draw from the whole vocabulary already, its pick kernel applying no top-k: they are kept.)
-  const bool full_steps = full_vocab(sp) && !clover_own;
+  const bool full_tree = full_vocab(sp) && lili_ && kf_budget_;
+  const bool full_steps = full_vocab(sp) && !clover_own && !full_tree;
   if (full_steps)
     logi("chat: top_k %d at temperature %.2f: sampled over the whole vocabulary, plain steps (kapitsa#1286)", sp.top_k,
          sp.temperature);
+  else if (full_tree)
+    logi("chat: top_k %d at temperature %.2f: sampled over the whole vocabulary, in KFlash's tree verify (kapitsa#1286)",
+         sp.top_k, sp.temperature);
   // Structured output: the matcher's state. A reply held from its first token samples that token (in the prompt's last
   // chunk) under the grammar's first mask; with reasoning on the grammar starts after </think>.
   GrammarState gst;
@@ -3283,7 +3290,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
                      s.mask_rows == 0 && !vpf_split;
     if (!vpf && q35_ && dfl_ && p >= 1024 && n - p <= vpf_max)  // (why a cached short suffix took the prefill path)
       logd("prefill: %d suffix rows after %d cached, not as verify passes:%s%s%s%s%s%s%s%s", n - p, p, vpf_on ? "" : " NI_VPF=0",
-           full_steps ? " whole vocabulary" : "", vpf_forced || vpf_default ? "" : " not the default (MoE, size, drafter, tile)",
+           full_vocab(sp) ? " whole vocabulary" : "", vpf_forced || vpf_default ? "" : " not the default (MoE, size, drafter, tile)",
            p == start ? "" : " not the cache's end", T == n - p ? "" : " more than one chunk", pbound <= p ? "" : " a boundary before",
            s.embeds || s.mask_rows ? " images or a mask" : "", vpf_split ? " split (a boundary, under NI_VPF_SPLIT_MIN)" : "");
     Checkpoint* snap = nullptr;
@@ -3849,6 +3856,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         m_prev = 0;
       }
     };
+    if (full_tree) slot.decoding = false;  // (decodes alone: a batch forming does not wait for it)
     bool go = handle(s.tokens()[n]);
     while (go) {
       if (!next) {  // the drafting half from the host's P (nothing of this request in flight)
@@ -3890,8 +3898,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       // drafting pass builds the next cycle's tree from the host's accepted path, so they never chain.)
       // (Nemotron-H's batched passes take no masks, as for a reply under a grammar: a request whose reasoning is still
       // capped decodes alone, handing over to plain steps near the cap, until its control ends; then it may join)
-      slot.decoding = !tc.armed();  // (not counted by batch_wanted() while it cannot join, or a batch waits for it)
-      const bool join = !tc.armed() && batch_wanted(), turn = !join && contended();
+      // (a full-vocabulary request decodes alone: the batched passes sample two-pass)
+      slot.decoding = !tc.armed() && !full_tree;  // (not counted by batch_wanted() while it cannot join, or a batch waits for it)
+      const bool join = !tc.armed() && !full_tree && batch_wanted(), turn = !join && contended();
       if (chain && !kft && !join && !turn && P + 8 + 2 * B + 2 <= s.cap) {
         next = g.begin();
         lili_->encode_draft_chained(*next, s, d, P);

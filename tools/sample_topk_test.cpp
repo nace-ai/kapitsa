@@ -9,6 +9,8 @@
 // probabilities; exp((l - max) / T) over it): no draw outside the kept set, the number of distinct ids, and a
 // chi-square test (cells with expected count < 5 pooled). top_k 0 must reach ranks past 32, top_k 40 and 64 (the two
 // passes since the cap went to 64) their 40 and 64, and top_k 100 its 100.
+// Each sample_full case also samples 8 copies of the row in one dispatch at RNG steps base + depth (a KFlash tree
+// verify's rows, enc_sample_full_rows): every row must draw the one-row step's token at its depth.
 // --two-pass routes every case through the two-pass sampler with the clamp main had before #1286
 // (clamp(top_k <= 0 ? 32 : top_k, 1, 32)): top_k 0 and 100 then fail, which is the bug.
 // Takes the GPU lock (NI_LOCK_HELD=1 when the caller holds it).
@@ -275,6 +277,24 @@ void run_case(Gpu1& G, const Case& c, uint32_t V, int draws, bool two_pass) {
   }
   printf("  draw order: %s\n", list ? "value (list path)" : "id (bisection path)");
   check(wrong == 0, "every draw is the id its uniform selects in the kept law (" + std::to_string(wrong) + " not)");
+  // a KFlash tree verify's form (NemotronH::encode_accept_tree): 8 rows in one dispatch, row r at RNG step base +
+  // depth(r) from the tree's depths: each row must draw what the one-row step at that position drew
+  {
+    constexpr int R = 8;
+    const int dep[R] = {0, 1, 1, 2, 3, 2, 4, 7};
+    Buffer rows = G.g.alloc(size_t(R) * V * 4), out = G.g.alloc(R * 4), ds = G.g.alloc(R * 4);
+    for (int r = 0; r < R; ++r) memcpy(rows.as<float>() + size_t(r) * V, l.data(), size_t(V) * 4);
+    memcpy(ds.as<int>(), dep, sizeof dep);
+    long miss = 0, rows_drawn = 0;
+    for (int base = 0; base + 7 < draws; base += std::max(1, draws / 64)) {
+      auto e = G.g.begin();
+      enc_sample_full_rows(*e, rows, V, R, out, 0, G.sprob, sp, uint32_t(base), ds, 0);
+      e->commit_and_wait();
+      for (int r = 0; r < R; ++r, ++rows_drawn) miss += out.as<int>()[r] != tk[base + dep[r]];
+    }
+    check(miss == 0, "8 tree rows in one dispatch draw the one-row steps' tokens at their depths (" +
+                         std::to_string(miss) + " of " + std::to_string(rows_drawn) + " differ)");
+  }
 }
 
 int cpu_checks() {
