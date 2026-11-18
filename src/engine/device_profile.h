@@ -25,7 +25,7 @@ enum class ModelClass { kOther, kQwen35Shape, kQwen35A3b, kQwen27bDense };
 // compile error, not a default that silently reads as off. kNone is a documentation row (a class or a guard the
 // call site still reads itself); default_on never looks one up.
 enum class Knob { kPfWave, kKflashHist, kGemmSlices, kHcWide, kMoe4Dx, kTreeG6, kKflashNarrow, kQwen9bQ4, kKflashBlock16, kAneProjFast,
-                  kNone };
+                  kMoe8eDownN64, kNone };
 
 // A row's device half. A class matches its own chips, and kMatrix also matches kWide (a wide chip has matrix
 // units). kName is a narrow exception: the name must match, and the row

@@ -1421,7 +1421,7 @@ NI_MOE8E_GU_T(moe8e_gu_r2, 2, 8)
 // down (K == 512): grid (N / 128, max(tiles, 1)) x 128 threads; lane = (column c of 4, group g of 8), columns
 // n0 + 4 i + c (i < 4) per pass (4 RT chains), two passes of 16 columns per simdgroup. Codes as 1024 + q (the down
 // tile's CM 0 operands), inputs h from moe8e_gu_t; writes out[(t * k + slot) * N] as moe8_down does.
-template <uint RT>
+template <uint RT, uint PP>
 NI_INLINE void moe8e_down_t(const device uint32_t* W, const device ushort* S, const device ushort* B,
                             const device float* hs, const device float* hsum, device float* out,
                             constant Moe8eParams& p, const device uint* sm, const device uint* ntiles,
@@ -1459,8 +1459,8 @@ NI_INLINE void moe8e_down_t(const device uint32_t* W, const device ushort* S, co
   const device ushort* Bb = shr ? SB : B + e * p.s_stride;
   const uint c4 = lane >> 3, g = lane & 7;
   threadgroup float* dt = dots + sg * (16 * RT * 8);
-  for (uint pp = 0; pp < 2; ++pp) {
-    const uint n0 = tg.x * 128 + sg * 32 + pp * 16;
+  for (uint pp = 0; pp < PP; ++pp) {
+    const uint n0 = tg.x * (64 * PP) + sg * (16 * PP) + pp * 16;
     uint4 w[4][2];
     _Pragma("clang loop unroll(full)")
     for (int c = 0; c < 4; ++c) {
@@ -1520,7 +1520,7 @@ NI_INLINE void moe8e_down_t(const device uint32_t* W, const device ushort* S, co
     simdgroup_barrier(mem_flags::mem_threadgroup);
   }
 }
-#define NI_MOE8E_DOWN_T(NAME, RT)                                                                               \
+#define NI_MOE8E_DOWN_T(NAME, RT, PP)                                                                           \
   [[kernel]] void NAME(const device uint32_t* W [[buffer(0)]], const device ushort* S [[buffer(1)]],           \
                        const device ushort* B [[buffer(2)]], const device float* hs [[buffer(3)]],             \
                        const device float* hsum [[buffer(4)]], device float* out [[buffer(5)]],                \
@@ -1533,9 +1533,11 @@ NI_INLINE void moe8e_down_t(const device uint32_t* W, const device ushort* S, co
     threadgroup vec<half, RT> xa[32 * 8], xb[32 * 8];                                                          \
     threadgroup float dots[4 * 16 * RT * 8];                                                                   \
     threadgroup float tsx[RT * 8];                                                                             \
-    moe8e_down_t<RT>(W, S, B, hs, hsum, out, p, sm, ntiles, SW, SS, SB, sh_out, tg, tid, sg, lane, xa, xb, dots, tsx); \
+    moe8e_down_t<RT, PP>(W, S, B, hs, hsum, out, p, sm, ntiles, SW, SS, SB, sh_out, tg, tid, sg, lane, xa, xb, \
+                         dots, tsx);                                                                           \
   }
-NI_MOE8E_DOWN_T(moe8e_down_r2, 2)
+NI_MOE8E_DOWN_T(moe8e_down_r2, 2, 2)
+NI_MOE8E_DOWN_T(moe8e_down_r2_n64, 2, 1)
 
 // GPU self-check of the MMA rounding the moe8e passes rely on: grid (64) x 32 threads; threadgroup i chains two
 // MMAs on pseudo-random operands (A: 4-bit codes as subnormal halves for even i, as 1024 + q for odd i; B: halves

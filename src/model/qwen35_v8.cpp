@@ -1077,9 +1077,13 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
   // scalar passes: 8 simdgroups x 4 columns per threadgroup, inputs staged (hidden <= 2048)
   constexpr uint32_t s_nsg = 8, SR = 4;
   if (small && D > 2048) fatal("moe8s2: hidden %d > 2048", D);
+  static const bool edn64 = [] {
+    if (const char* v = getenv("NI_V8_MOE_EDN64")) return atoi(v) != 0;
+    return default_on(Knob::kMoe8eDownN64, ModelFacts{});
+  }();
   kp::Moe8Plan pp{uint32_t(R), uint32_t(k), uint32_t(E), I / 64, uint32_t(D / (8 * dn_nf * dn_cs)), uint32_t(li),
                   uint32_t(small), emu ? I / 64 : I / (SR * s_nsg), emu ? uint32_t(D) / 128 : uint32_t(D) / (SR * s_nsg),
-                  v8_rlim_ ? 1u : 0u, uint32_t(split), shs ? 1u : 0u, sep ? 1u : 0u, uint32_t(D) / 128,
+                  v8_rlim_ ? 1u : 0u, uint32_t(split), shs ? 1u : 0u, sep ? 1u : 0u, uint32_t(D) / (edn64 ? 64 : 128),
                   topk_in_plan ? 1u : 0u};
   e.use(pipe8("moe8_plan"));
   e.buf(0, ridx_); e.buf(1, v8tiles_); e.buf(2, v8nt_); e.buf(3, v8slot_); e.buf(4, v8args_);
@@ -1129,7 +1133,7 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
     e.buf(16, L.su.w->buf); e.buf(17, L.su.s->buf); e.buf(18, L.su.b->buf);
     e.dispatch_indirect(v8args_, args_off, 256);
     kp::Moe8e dq{I, uint32_t(D), dw, ds, uint32_t(k)};
-    e.use(pipe8("moe8e_down_r2"));
+    e.use(pipe8(edn64 ? "moe8e_down_r2_n64" : "moe8e_down_r2"));
     e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
     e.buf(3, h); e.buf(4, hsum); e.buf(5, v8out_);
     e.val(6, dq);
@@ -1254,13 +1258,17 @@ void Qwen35::moe8_replay(Encoder& e, int li, int mask) {
         e.buf(6, v8sm_); e.buf(7, v8nt_);
         e.dispatch(uint32_t(D) / 32, S, 1, 256);
       } else {
+        static const bool edn64 = [] {
+    if (const char* v = getenv("NI_V8_MOE_EDN64")) return atoi(v) != 0;
+    return default_on(Knob::kMoe8eDownN64, ModelFacts{});
+  }();
         kp::Moe8e dq{I, uint32_t(D), dw, ds, uint32_t(k)};
-        e.use(pipe8("moe8e_down_r2"));
+        e.use(pipe8(edn64 ? "moe8e_down_r2_n64" : "moe8e_down_r2"));
         e.buf(3, v8hsc_); e.buf(4, v8hse_); e.buf(5, v8out_);
         e.val(6, dq);
         e.buf(7, v8sm_); e.buf(8, v8nt_);
         e.buf(9, L.sd.w->buf); e.buf(10, L.sd.s->buf); e.buf(11, L.sd.b->buf); e.buf(12, v8sh_);
-        e.dispatch(uint32_t(D) / 128, S, 1, 128);
+        e.dispatch(uint32_t(D) / (edn64 ? 64 : 128), S, 1, 128);
       }
     }
     if (grp) e.group_end();

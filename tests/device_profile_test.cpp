@@ -84,7 +84,9 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 19);  // +1: 9B mixed-format catalog policy (#493); +1: kflash_block16; +1: ane_proj_fast
+  CHECK(ni::default_count() == 20);  // +1: 9B mixed-format catalog policy (#493); +1: kflash_block16; +1: ane_proj_fast; +1: moe8e_down_n64
+  const ni::DefaultRow* edn = row("moe8e_down_n64");
+  CHECK(edn && edn->scope == ni::DefaultScope::kMatrix && edn->live && !edn->exclusive && edn->win_pct == 12);
   // ane_proj_fast: the 27B on the Apple M6 by name (slower on the M5 Pro; the 4B was over its bar; the fast profile reads it)
   const ni::DefaultRow* proj = row("ane_proj_fast");
   CHECK(proj && proj->scope == ni::DefaultScope::kName && proj->live && proj->exclusive && proj->win_pct >= 10 &&

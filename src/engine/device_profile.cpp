@@ -119,6 +119,11 @@ const DefaultRow kDefaults[] = {
     // the call site keeps its checks (DFlash2::plan_block_rows).
     {"kflash_block16", Knob::kKflashBlock16, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 22, 0, false,
      "Mac mini M6, M5 Pro", true},
+    // NI_V8_MOE_EDN64: 64-column tile (1 pass per simdgroup) for moe8e_down_r2 instead of 128-column (2 passes).
+    // Doubles threadgroup count per expert tile on 12-core M6 and halves register pressure: moe8e_down_r2 5.91 -> 2.27 ms/step
+    // (2.61x, -12% verify cycle, bitwise identical).
+    {"moe8e_down_n64", Knob::kMoe8eDownN64, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 12, 0, false,
+     "Mac mini M6", true},
     // Capability classes the call sites still read. Not a name gate: the predicate is the class. The site count is
     // calls outside this module; tests/test_profile_gates.py checks the where string against that count.
     {"matrix_units", Knob::kNone, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "class", 0, 0, false,
