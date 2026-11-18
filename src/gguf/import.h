@@ -14,6 +14,9 @@
 // Recursive's Flint (arch "flint", build_flint): only a file whose routed experts are IQ blocks, kept as stored (an
 // APFS clone of the GGUF); attention, the dense MLP and the shared expert become 4-bit group 64, the embedding 3-bit
 // group 64, the LM head 6-bit group 64, and the router stays bf16.
+// Liquid's LFM3 (arch "lfm3", build_lfm3): every linear keeps its own format (a Q4_1 file's codes as stored), the
+// norms and conv taps become bf16 parameters, and the tied lm_head is the embedding; the layer schedule comes from
+// the per-layer head_count_kv and sliding_window_pattern.
 #pragma once
 #include <string>
 
