@@ -40,6 +40,7 @@ class Tokenizer {
   std::vector<std::string> id_to_bytes_;              // id -> raw bytes
   std::unordered_map<uint64_t, std::pair<int, int>> merges_; // (a,b) -> (rank, merged id)
   std::vector<std::pair<std::string, int>> added_;    // content -> id, longest first
+  bool added_first_[256] = {};
   std::vector<bool> special_;
   std::vector<bool> added_id_;
   int byte_id_[256];
