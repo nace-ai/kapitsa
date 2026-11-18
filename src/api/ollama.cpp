@@ -41,9 +41,9 @@ static void parse_options(const ojson& opts, ChatRequest& r) {
   if (!opts.is_object()) return;
   if (opts.contains("temperature") && opts["temperature"].is_number()) r.temperature = opts["temperature"];
   if (opts.contains("top_p") && opts["top_p"].is_number()) r.top_p = opts["top_p"];
-  if (opts.contains("top_k") && opts["top_k"].is_number()) r.top_k = opts["top_k"];
+  if (opts.contains("top_k") && opts["top_k"].is_number()) r.top_k = clamp_top_k(opts["top_k"]);
   if (opts.contains("seed") && opts["seed"].is_number()) {
-    r.seed = uint32_t(opts["seed"].get<int64_t>());
+    r.seed = extract_seed_u32(opts["seed"]);
     // Splash backend seed (same logic as the OpenAI path in parse_request)
     const ojson& s = opts["seed"];
     if (s.is_number_unsigned()) r.splash_seed = s.get<uint64_t>();
