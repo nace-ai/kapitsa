@@ -334,7 +334,7 @@ class DFlash2 {
   void set_h0(const float* rows8xH);
   void clear_h0() { h0_set_ = false; }
   // Per-stage copies (cycle-0 style intermediates) into named buffers; see dflash2.cpp.
-  void set_debug(bool on) { debug_ = on; }
+  void set_debug(bool on);
   // draft attention kernel: 0 = default (simdgroup-matrix; NI_KFLASH_ATTN=scalar), 1 = scalar, 2 = mma
   void set_attn_variant(int v) { attn_variant_ = v; }
   // prompt context commit: rows <= threshold go through 8-row chunks (-1: NI_KFLASH_PF8, default 256)

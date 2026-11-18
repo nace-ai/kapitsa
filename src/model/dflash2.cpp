@@ -661,12 +661,12 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
              "a no-op, the 16-row choice untouched)", cv, block_ - 1);
     }
   }
-  alloc_buffers();
   {  // reduced draft head (default on): NI_KFLASH_HEAD=n rows (0 = the full vocabulary)
     const char* v = kenv("HEAD");
     if (v && *v) build_head(atoi(v), true);
     else build_head(0, false);
   }
+  alloc_buffers();
   {
     // The low-rank shortlist head (SlimSpec, arXiv 2605.10453, without training: build_lowrank): the reduced head's
     // 4-bit GEMM (98,304 rows, 134 MB per drafting pass) becomes a rank-768 one (40 MB) whose chunk top-16s the
@@ -946,7 +946,7 @@ void DFlash2::load_v8_packed_coeff() {
 
 void DFlash2::alloc_buffers() {
   Gpu& g = Gpu::get();
-  const size_t H = cfg_.H, I = cfg_.I, V = cfg_.vocab, G4 = 4 * (cfg_.H / cfg_.conv_gs);
+  const size_t H = cfg_.H, I = cfg_.I, G4 = 4 * (cfg_.H / cfg_.conv_gs);
   const size_t nH = cfg_.target_layers.size() * H;
   const size_t Kx = std::max({nH, size_t(4096), H, I});
   const size_t KV = size_t(cfg_.NL) * 2048;
@@ -969,10 +969,11 @@ void DFlash2::alloc_buffers() {
   Vb_ = g.alloc(8 * B * 128 * 4, "dfl_Vb");
   part_o_ = g.alloc(size_t(max_splits_) * 32 * B * 128 * 4, "dfl_part_o");
   part_ml_ = g.alloc(size_t(max_splits_) * 32 * B * 2 * 4, "dfl_part_ml");
+  const size_t Vd = head_rows();
   u_ = g.alloc(B * H * 4, "dfl_u");
-  logits_ = g.alloc(B * V * 4, "dfl_logits");
+  logits_ = g.alloc(B * Vd * 4, "dfl_logits");
   sel_ = g.alloc(B * kRank * 4, "dfl_sel");
-  const size_t ntg = (V + 2047) / 2048;
+  const size_t ntg = (Vd + 2047) / 2048;
   tk_v_ = g.alloc(D * ntg * 16 * 4, "dfl_tk_v");
   tk_i_ = g.alloc(D * ntg * 16 * 4, "dfl_tk_i");
   cand_v_ = g.alloc(D * 16 * 4, "dfl_cand_v");
@@ -1021,13 +1022,17 @@ void DFlash2::alloc_buffers() {
   y8_ = g.alloc(B * H * 4, "dfl_y8");
   c8_ = g.alloc(B * H * 4, "dfl_c8");
   kv8_ = g.alloc(B * KV * 4, "dfl_kv8");
-  cdbg_ = g.alloc(size_t(kCtxKeep) * H * 4, "dfl_c");
   memset(capt_.ptr(), 0, capt_.size);
   for (Buffer* b : {&h_, &n_, &xh_, &xs_, &xh2_, &xs2_, &hh_, &gu_g_, &gu_u_, &hs_, &dyn_, &q_, &kv_, &Q_, &Kb_, &Vb_, &part_o_, &part_ml_, &u_,
                     &logits_, &sel_, &tk_v_, &tk_i_, &cand_v_, &cand_i_, &edges_, &walk_s_, &qprob_, &walk_k_, &capt_,
-                    &y8_, &c8_, &kv8_, &cdbg_, &rope_cs_, &dist_id_, &dist_p_, &dist_keep_, &acc_, &kdyn_, &gst_,
+                    &y8_, &c8_, &kv8_, &rope_cs_, &dist_id_, &dist_p_, &dist_keep_, &acc_, &kdyn_, &gst_,
                     &tree_buf_, &kf_clq_, &kf_tok_, &kf_next_, &kf_live_})
     resident_ += b->size;
+}
+
+void DFlash2::set_debug(bool on) {
+  debug_ = on;
+  if (on && !cdbg_) cdbg_ = Gpu::get().alloc(size_t(kCtxKeep) * size_t(cfg_.H) * 4, "dfl_c");
 }
 
 void DFlash2::build_head(int n_req, bool explicit_n) {
@@ -1222,12 +1227,17 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
     }
   }
   // alloc_buffers(), term for term, at the rows the block drafts: Bk rows, Tk 8-row tiles, Dk lattice depth
+  const char* hv = kenv("HEAD");
+  const char* ids = kenv("HEAD_IDS");
+  const size_t req = hv && *hv ? size_t(std::max(0, atoi(hv))) : ids && *ids ? size_t(kHeadRows) : size_t(kHeadRowsIdOrder);
+  const size_t special0 = target.eos.empty() ? V : std::min<size_t>(V, size_t(*std::min_element(target.eos.begin(), target.eos.end())));
+  const size_t Vd = (req > 0 && req < V) ? std::max(req, V - special0) : V;
   const size_t nH = nT * H, Kx = std::max({nH, size_t(4096), H, I}), KV = NL * 2048, G4 = 4 * (H / std::max<size_t>(gs, 1)),
-               ntg = (V + 2047) / 2048, Bk = size_t(std::max(block_rows, int(kB))), Tk = Bk / 8, Dk = Bk - 1;
+               ntg = (Vd + 2047) / 2048, Bk = size_t(std::max(block_rows, int(kB))), Tk = Bk / 8, Dk = Bk - 1;
   size_t b = 5 * Bk * H * 4 + 2 * Bk * I * 4 + 16 * Tk * Kx * 2 + Tk * Kx / 64 * 8 * 4 + 16 * Tk * H * 2 + Tk * H / 64 * 8 * 4 +
              16 * Tk * I * 2 + Tk * I / 64 * 8 * 4 + Bk * G4 * 4 + Bk * 4096 * 4 + Bk * 2048 * 4 + 32 * Bk * 128 * 4 +
-             2 * 8 * Bk * 128 * 4 + 32 * (32 * Bk * 128 * 4 + 32 * Bk * 2 * 4) + Bk * V * 4 + Bk * kRank * 4 +
-             2 * Dk * ntg * 16 * 4 + 8 * nH * 2 + Bk * KV * 4 + size_t(kCtxKeep) * H * 4 + (64 << 10);
+             2 * 8 * Bk * 128 * 4 + 32 * (32 * Bk * 128 * 4 + 32 * Bk * 2 * 4) + Bk * Vd * 4 + Bk * kRank * 4 +
+             2 * Dk * ntg * 16 * 4 + 8 * nH * 2 + Bk * KV * 4 + (64 << 10);
   const char* v8 = kenv("V8");
   // A native 4-bit group-64 head row includes its packed codes, scales and biases.
   const bool head_q4 = head_row_bytes == size_t(target.hidden) / 2 + size_t(target.hidden) / 64 * 4;
@@ -1754,9 +1764,11 @@ void DFlash2::encode_prefill_commit(Encoder& e, DFlashSeq& d) {
     }
     enc_qmm_rows(e, fc_, xph_, yph_, cn);
     {
-      kp::DflNorm p{H, cfg_.eps, 16.0f, 1u};
+      kp::DflNorm p{H, cfg_.eps, 16.0f, debug_ ? 1u : 0u};
       e.use(dpipe("dfl_rows_norm_half"));
-      e.buf(0, yph_); e.buf(1, hnorm_->buf); e.buf(2, cph_); e.buf(3, cdbg_, size_t(c0) * H * 4);
+      e.buf(0, yph_); e.buf(1, hnorm_->buf); e.buf(2, cph_);
+      if (debug_) e.buf(3, cdbg_, size_t(c0) * H * 4);
+      else e.buf(3, yph_);
       e.val(4, p);
       e.dispatch(uint32_t(cn), 1, 1, 256);
     }
@@ -1900,9 +1912,9 @@ void DFlash2::enc_commit_from(Encoder& e, DFlashSeq& d, int m, const Buffer& src
     enc_qmm8(e, {{&fc_, y8_, H, 16.0f / fs}}, xh_, xs_, nH, nH, int(BT));
   }
   {
-    kp::DflNorm p{H, cfg_.eps, fs, 1u};
+    kp::DflNorm p{H, cfg_.eps, fs, debug_ ? 1u : 0u};
     e.use(dpipe("dfl_norm_x8"));
-    e.buf(0, y8_); e.buf(1, hnorm_->buf); e.buf(2, cdbg_); e.buf(3, xh_); e.buf(4, xs_);
+    e.buf(0, y8_); e.buf(1, hnorm_->buf); e.buf(2, debug_ ? cdbg_ : y8_); e.buf(3, xh_); e.buf(4, xs_);
     e.val(5, p);
     e.dispatch(B, 1, 1, 256);
   }
