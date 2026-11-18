@@ -275,6 +275,24 @@ void run_case(Gpu1& G, const Case& c, uint32_t V, int draws, bool two_pass) {
   }
   printf("  draw order: %s\n", list ? "value (list path)" : "id (bisection path)");
   check(wrong == 0, "every draw is the id its uniform selects in the kept law (" + std::to_string(wrong) + " not)");
+  // a KFlash tree verify's form (NemotronH::encode_accept_tree): 8 rows in one dispatch, row r at RNG step base +
+  // depth(r) from the tree's depths: each row must draw what the one-row step at that position drew
+  {
+    constexpr int R = 8;
+    const int dep[R] = {0, 1, 1, 2, 3, 2, 4, 7};
+    Buffer rows = G.g.alloc(size_t(R) * V * 4), out = G.g.alloc(R * 4), ds = G.g.alloc(R * 4);
+    for (int r = 0; r < R; ++r) memcpy(rows.as<float>() + size_t(r) * V, l.data(), size_t(V) * 4);
+    memcpy(ds.as<int>(), dep, sizeof dep);
+    long miss = 0, rows_drawn = 0;
+    for (int base = 0; base + 7 < draws; base += std::max(1, draws / 64)) {
+      auto e = G.g.begin();
+      enc_sample_full_rows(*e, rows, V, R, out, 0, G.sprob, sp, uint32_t(base), ds, 0);
+      e->commit_and_wait();
+      for (int r = 0; r < R; ++r, ++rows_drawn) miss += out.as<int>()[r] != tk[base + dep[r]];
+    }
+    check(miss == 0, "8 tree rows in one dispatch draw the one-row steps' tokens at their depths (" +
+                         std::to_string(miss) + " of " + std::to_string(rows_drawn) + " differ)");
+  }
 }
 
 int cpu_checks() {

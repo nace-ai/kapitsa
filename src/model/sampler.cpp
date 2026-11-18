@@ -36,13 +36,29 @@ void enc_sample_full(Encoder& e, const Buffer& logits, uint32_t V, const Buffer&
                      const Buffer& sprob, const SamplingParams& sp, uint32_t step) {
   static const Pipeline pl = Gpu::get().pipeline("sample_full");
   const kp::SampleFull p{V, sp.top_k > 0 ? uint32_t(sp.top_k) : 0u, sp.temperature, sp.top_p, sp.seed, step,
-                         uint32_t(out_index)};
+                         uint32_t(out_index), 0u};
   e.use(pl);
   e.buf(0, logits);
   e.buf(1, tokens);
   e.buf(2, sprob);
   e.val(3, p);
+  e.buf(4, tokens);  // (no depths: dstep 0)
   e.dispatch(1, 1, 1, 1024);
+}
+
+void enc_sample_full_rows(Encoder& e, const Buffer& logits, uint32_t V, int R, const Buffer& tokens, int out_index,
+                          const Buffer& sprob, const SamplingParams& sp, uint32_t step, const Buffer& dstep,
+                          size_t dstep_off) {
+  static const Pipeline pl = Gpu::get().pipeline("sample_full");
+  const kp::SampleFull p{V, sp.top_k > 0 ? uint32_t(sp.top_k) : 0u, sp.temperature, sp.top_p, sp.seed, step,
+                         uint32_t(out_index), 1u};
+  e.use(pl);
+  e.buf(0, logits);
+  e.buf(1, tokens);
+  e.buf(2, sprob);
+  e.val(3, p);
+  e.buf(4, dstep, dstep_off);
+  e.dispatch(uint32_t(R), 1, 1, 1024);
 }
 
 }  // namespace ni
