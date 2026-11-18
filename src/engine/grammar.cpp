@@ -1689,6 +1689,7 @@ TokenTable::TokenTable(const Tokenizer& tok, int model_vocab, const std::vector<
   vocab_ = std::max(model_vocab, ntok_);
   bytes_.resize(size_t(ntok_));
   sym_.assign(size_t(ntok_), -1);
+  dup_next_.assign(size_t(ntok_), -1);
   for (int id : eos)
     if (id >= 0 && id < ntok_) eos_.push_back(id);
   std::vector<int> text;
@@ -1721,8 +1722,13 @@ TokenTable::TokenTable(const Tokenizer& tok, int model_vocab, const std::vector<
       byte_.push_back(uint8_t(s[k])), depth_.push_back(uint8_t(std::min<size_t>(k + 1, 255)));
       tok_.push_back(-1), end_.push_back(0);
     }
-    if (tok_[path.back()] >= 0) ++dups;  // (two ids with the same bytes: the first is the one the trie gives)
-    else tok_[path.back()] = id;
+    if (tok_[path.back()] >= 0) {
+      dup_next_[size_t(id)] = tok_[path.back()];
+      tok_[path.back()] = id;
+      ++dups;
+    } else {
+      tok_[path.back()] = id;
+    }
     max_depth_ = std::max(max_depth_, int(s.size()));
     prev = &s;
   }
@@ -1779,10 +1785,13 @@ const TokenTable::Bulk& TokenTable::bulk(uint32_t node, int lexer, int sigma) co
     }
     if (!alive) continue;
     if (left) {
-      exits.push_back({s.substr(k + 1), id, chars});
+      const std::string rest = s.substr(k + 1);
+      for (int t = id; t >= 0; t = dup_next_[size_t(t)]) exits.push_back({rest, t, chars});
     } else {
-      b->stay.push_back(id);
-      b->stay_n.push_back(uint16_t(chars));
+      for (int t = id; t >= 0; t = dup_next_[size_t(t)]) {
+        b->stay.push_back(t);
+        b->stay_n.push_back(uint16_t(chars));
+      }
     }
   }
   if (b->stay.size() > 4096) {
@@ -1994,7 +2003,7 @@ void GrammarMatcher::walk_thread(const Thread& th, uint32_t* words) const {
       i = T.end_[i];
       continue;
     }
-    if (T.tok_[i] >= 0) set_bit(words, T.tok_[i]);
+    for (int t = T.tok_[i]; t >= 0; t = T.dup_next_[size_t(t)]) set_bit(words, t);
     int lexer, sigma;
     int64_t lo, hi;
     if (cur.n == 1 && pure_text(*g_, cur.t[0], &lexer, &sigma, &lo, &hi)) {  // the rest of every token below: free text first
