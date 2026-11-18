@@ -179,7 +179,7 @@ def review(a, tmp):
         # a greedy speculative turn after a turn in plain steps, against the same turn after a re-prefill
         c1 = [{"role": "user", "content": PROMPT}]
         m, new = s.chat(dict(nt, messages=c1, temperature=0.7, top_k=0, max_tokens=128))
-        check(FULL in new, "turn 1 at top_k 0: plain steps")
+        check(FULL in new, "turn 1 at top_k 0: " + ("KFlash's tree verify" if "tree verify" in new else "plain steps"))
         c2 = c1 + [{"role": "assistant", "content": m["content"]}, {"role": "user", "content": "Now tell it in verse."}]
         m2, new2 = s.chat(dict(nt, messages=c2, temperature=0, max_tokens=256))
         s.chat(dict(nt, messages=[{"role": "user", "content": "Name three rivers."}], temperature=0, max_tokens=8))
