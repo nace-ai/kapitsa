@@ -318,6 +318,7 @@ void File::read(const Tensor& t, uint64_t off, void* dst, size_t n) const {
   size_t done = 0;
   while (done < n) {
     const ssize_t r = pread(fds_[size_t(t.part)], d + done, n - done, off_t(t.offset + off + done));
+    if (r < 0 && errno == EINTR) continue;
     if (r <= 0) throw Error("Can't read " + paths_[size_t(t.part)] + " (" + (r < 0 ? strerror(errno) : "end of file") + ").");
     done += size_t(r);
   }
