@@ -505,10 +505,15 @@ void Tokenizer::load(const std::string& path) {
       merges_[(uint64_t(uint32_t(ia->second)) << 32) | uint32_t(ib->second)] = {rank, im->second};
     ++rank;
   }
+  added_.clear();
+  std::fill(std::begin(added_first_), std::end(added_first_), false);
   for (auto& a : j["added_tokens"]) {
     int id = a["id"];
     std::string content = a["content"];
-    added_.push_back({content, id});
+    if (!content.empty()) {
+      added_first_[uint8_t(content[0])] = true;
+      added_.push_back({content, id});
+    }
     id_to_bytes_[id] = content;
     special_[id] = a.value("special", false);
     added_id_[id] = true;
@@ -650,7 +655,7 @@ std::vector<int> Tokenizer::encode(const std::string& text, size_t split_at, int
   size_t start = 0, i = 0;
   while (i < text.size()) {
     bool hit = false;
-    if (text[i] == '<' || text[i] == '[') {
+    if (added_first_[uint8_t(text[i])]) {
       for (auto& [content, id] : added_) {
         if (text.compare(i, content.size(), content) == 0) {
           encode_plain(text.substr(start, i - start), out);

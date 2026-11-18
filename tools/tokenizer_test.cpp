@@ -329,6 +329,28 @@ int main() {
   check_bpe_merges();
   check_lmstudio_pretokenizer();
 
+  // added_tokens whose content does not start with '<' or '[' (e.g. "@@TOOL@@") are matched whole and set split_index,
+  // and an empty content entry in added_tokens is skipped without looping forever.
+  {
+    json av = json::object();
+    av["a"] = 0;
+    av["b"] = 1;
+    json aj = {{"added_tokens", json::array({{{"id", 2}, {"content", "@@TOOL@@"}, {"special", true}},
+                                             {{"id", 3}, {"content", "<|im_end|>"}, {"special", true}},
+                                             {{"id", 4}, {"content", ""}, {"special", true}}})},
+               {"normalizer", nullptr},
+               {"pre_tokenizer", nullptr},
+               {"model", {{"type", "BPE"}, {"vocab", av}, {"merges", json::array()}}}};
+    ni::Tokenizer atok;
+    load(atok, aj);
+    int split_idx = -1;
+    const std::vector<int> got = atok.encode("ab@@TOOL@@a<|im_end|>", 2, &split_idx);
+    const std::vector<int> want_ids = {0, 1, 2, 0, 3};
+    check(got == want_ids && split_idx == 2,
+          "added_tokens not starting with '<' or '[' are recognized whole, set split_index, and skip empty content",
+          "ids " + ids_str(got) + ", split_index " + std::to_string(split_idx));
+  }
+
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;
 }
