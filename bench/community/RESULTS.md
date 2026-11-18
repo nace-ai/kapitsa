@@ -24,7 +24,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [MacBook Pro (16-inch, 2026) · M5 Max 40-core GPU · 128 GB](#macbook-pro-16-inch-2026--m5-max-40-core-gpu--128-gb) | 1 |
 | [MacBook Pro (16-inch, 2026) · M5 Pro 20-core GPU · 48 GB](#macbook-pro-16-inch-2026--m5-pro-20-core-gpu--48-gb) | 3 |
 | [MacBook Pro (16-inch, 2026) · M5 Pro 20-core GPU · 64 GB](#macbook-pro-16-inch-2026--m5-pro-20-core-gpu--64-gb) | 2 |
-| [Mac Studio (2025) · M3 Ultra 80-core GPU · 512 GB](#mac-studio-2025--m3-ultra-80-core-gpu--512-gb) | 4 |
+| [Mac Studio (2025) · M3 Ultra 80-core GPU · 512 GB](#mac-studio-2025--m3-ultra-80-core-gpu--512-gb) | 5 |
 | [Mac Studio (2025) · M4 Max 40-core GPU · 48 GB](#mac-studio-2025--m4-max-40-core-gpu--48-gb) | 2 |
 | [Mac Studio (2025) · M4 Max 40-core GPU · 128 GB](#mac-studio-2025--m4-max-40-core-gpu--128-gb) | 2 |
 | [MacBook Pro (14-inch, 2025) · M5 10-core GPU · 32 GB](#macbook-pro-14-inch-2025--m5-10-core-gpu--32-gb) | 7 |
@@ -399,6 +399,12 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
 | [2026-10-24](results/kapitsa-bench-2026-10-24-m3-ultra-qwen3.8-27b-4bit-2fec89.json) | 161.1 tok/s | 166.0 tok/s | 464 tok/s | 456 tok/s | 0.11 s | 0.11 s | 19.3 GB | pass | KFlash | 0.2.15 | 27.0.1 | – |
+
+### Qwen3.8 27B · Nace Q4
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-11-18](results/kapitsa-bench-2026-11-18-m3-ultra-qwen3.8-27b-q4-c74a10.json) | 154.6 tok/s ⚠ | 169.5 tok/s ⚠ | 448 tok/s ⚠ | 436 tok/s ⚠ | 0.11 s ⚠ | 0.13 s ⚠ | 19.7 GB | pass ⚠ | KFlash | 0.2.37 | 27.2.1 | contention (decode, decode_greedy, prefill_4000, prefill_16000, tools) |
 
 ### Recursive Flint 40B-A2.5B · 4-bit
 
