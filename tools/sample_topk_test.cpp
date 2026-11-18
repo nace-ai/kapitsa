@@ -9,6 +9,8 @@
 // probabilities; exp((l - max) / T) over it): no draw outside the kept set, the number of distinct ids, and a
 // chi-square test (cells with expected count < 5 pooled). top_k 0 must reach ranks past 32, top_k 40 and 64 (the two
 // passes since the cap went to 64) their 40 and 64, and top_k 100 its 100.
+// Each sample_full case also samples 8 copies of the row in one dispatch at RNG steps base + depth (a KFlash tree
+// verify's rows, enc_sample_full_rows): every row must draw the one-row step's token at its depth.
 // --two-pass routes every case through the two-pass sampler with the clamp main had before #1286
 // (clamp(top_k <= 0 ? 32 : top_k, 1, 32)): top_k 0 and 100 then fail, which is the bug.
 // Takes the GPU lock (NI_LOCK_HELD=1 when the caller holds it).
