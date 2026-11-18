@@ -16,6 +16,7 @@
 #include "loader/safetensors.h"
 #include "model/model.h"
 
+#include <array>
 #include <deque>
 #include <map>
 #include <memory>
@@ -30,6 +31,19 @@ struct FlintConfig {
   int moe_I = 0, shared_I = 0, experts = 0, top_k = 0;
   int window = 0;                       // sliding window, a row's own position included
   double theta = 1e4;
+  double rope_theta = 1e4;
+  int dense_layers = 2;
+  bool mellum = false;           // true when model_type == "mellum"
+  std::vector<char> mlp_kind;    // 'D' dense, 'M' sparse MoE per layer
+  bool is_dense(int l) const { return l < int(mlp_kind.size()) ? mlp_kind[size_t(l)] == 'D' : l < dense_layers; }
+  bool full_rope = false;        // full-attention layers also use RoPE
+  double full_rope_theta = 0.0;
+  double yarn_factor = 0.0;      // > 0 when full_attention uses rope_type == "yarn"
+  int yarn_orig_max_pos = 8192;
+  double yarn_beta_fast = 32.0;
+  double yarn_beta_slow = 1.0;
+  float full_rope_mscale = 1.0f;
+  bool router_softmax = false;   // fp32 softmax over E experts instead of bf16 sigmoid
   float eps = 1e-6f;
   std::vector<char> kind;               // per layer: 'S' sliding-window attention, 'F' full attention
   std::vector<bool> rope;               // per layer: RoPE on q and k
@@ -77,6 +91,7 @@ class Flint : public Model {
   explicit Flint(const std::string& path, int prefill_chunk = 2048);
   ~Flint() override;
   static bool is_model(const std::string& dir);  // config.json's model_type is "flint"
+  static bool is_mellum(const std::string& dir);
   static FlintConfig read_config(const std::string& dir);
   static MemPlan plan(const std::string& path, int prefill_chunk = 2048);
   // KV cache bytes per position (full-attention layers) and per conversation (sliding-window rings)
@@ -187,10 +202,13 @@ class Flint : public Model {
   std::vector<Buffer> router_bufs_;
   const Tensor* final_norm_ = nullptr;
   Buffer inv_freq_;              // fp32 [hd / 2]: RoPE's inverse frequencies
+  Buffer inv_freq_full_;
+  Buffer zero_sink_;
+  Tensor zero_sink_tensor_;
   // (cos, sin) per frequency at one position, as flint_attn_d2 takes them inline (the last position asked for)
-  const float* rope_cs(int pos);
-  std::vector<float> rope_cs_;
-  int rope_pos_ = -1;
+  const float* rope_cs(int pos, bool full = false);
+  int rope_cs_pos_[2] = {-1, -1};
+  std::array<float, 128> rope_cs_[2]{};
   int ring_rows_ = 0;
   int tmax_ = 2048;
   size_t mem_budget_ = 0;

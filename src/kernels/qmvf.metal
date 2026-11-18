@@ -316,11 +316,44 @@ NI_INLINE void qmvf6_multi(const device uint32_t* w0, const device bfloat* s0, c
       for (uint k = lane; k < p.K; k += 32) xn[(t0 + t) * p.K + k] = x[(t0 + t) * p.x_ld + k] * inv * float(nw[k]);
   }
 }
+
+template <int NT, int ROWS, bool NORM>
+NI_INLINE void qmvf6_gu(const device uint32_t* w0, const device bfloat* s0, const device bfloat* b0, device float* y0,
+                        const device uint32_t* w1, const device bfloat* s1, const device bfloat* b1,
+                        const device float* x, constant QmvfParams& p, const device bfloat* nw, uint2 tgp, uint sg,
+                        uint nsg, uint lane) {
+  const uint t0 = tgp.x * NT;
+  const uint N = p.N[0];
+  const uint row0 = (tgp.y * nsg + sg) * ROWS;
+  if (row0 >= N) return;
+  float ag[ROWS][NT], au[ROWS][NT], ss[NT], ssu[NT];
+  qmvf6_core<NT, ROWS, NORM>(w0, s0, b0, x, p.x_ld, t0, p.R, p.K, N, nw, row0, lane, ag, ss);
+  qmvf6_core<NT, ROWS, NORM>(w1, s1, b1, x, p.x_ld, t0, p.R, p.K, N, nw, row0, lane, au, ssu);
+  const uint yld = p.y_ld[0];
+  for (int t = 0; t < NT; ++t) {
+    float inv = 1.0f;
+    if (NORM) inv = metal::precise::rsqrt(simd_sum(ss[t]) / float(p.K) + p.eps);
+    for (int r = 0; r < ROWS; ++r) {
+      float g = simd_sum(ag[r][t]), u = simd_sum(au[r][t]);
+      if (NORM) {
+        g *= inv;
+        u *= inv;
+      }
+      const uint row = row0 + r;
+      if (lane == 0 && row < N && t0 + uint(t) < p.R) y0[(t0 + t) * yld + row] = silu(g) * u;
+    }
+  }
+}
 #define NI_QMVF6(NAME, NT, ROWS, NORM)                                                                       \
   [[kernel]] void NAME(NI_QMVF_ARGS) {                                                                    \
     qmvf6_multi<NT, ROWS, NORM>(w0, s0, b0, y0, w1, s1, b1, y1, w2, s2, b2, y2, w3, s3, b3, y3, x, p, nw, xn, tgp, sg, \
                                 nsg, lane);                                                               \
   }
+#define NI_QMVF6_GU(NAME, NT, ROWS, NORM)                                                                    \
+  [[kernel]] void NAME(NI_QMVF_ARGS) {                                                                    \
+    qmvf6_gu<NT, ROWS, NORM>(w0, s0, b0, y0, w1, s1, b1, x, p, nw, tgp, sg, nsg, lane);                   \
+  }
 NI_QMVF6(qmvf_b6_t1_r4, 1, 4, false)
 NI_QMVF6(qmvf_b6_t1_r4_norm, 1, 4, true)
+NI_QMVF6_GU(qmvf_gu_b6_t1_r4_norm, 1, 4, true)
 #endif

@@ -44,7 +44,17 @@ class Tokenizer {
   std::vector<bool> special_;
   std::vector<bool> added_id_;
   int byte_id_[256];
-  enum class Split { Qwen, Tekken, Flint };  // the pre-tokenizer split, from tokenizer.json's pre_tokenizer
+ public:
+  enum class Split {
+    Qwen,      // (?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+
+    Tekken,    // Mistral / Nemotron 3.5
+    Gpt2,      // 's|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+  (Nemotron-H / StarCoder2)
+    Flint,     // Split([^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]*[\p{Ll}\p{Lm}\p{Lo}\p{M}]+..., Digits(individual))
+    Mellum,    // Sequence(Digits(individual_digits=true), ByteLevel(use_regex=true))
+  };
+  Split split() const { return split_; }
+
+ private:
   Split split_ = Split::Qwen;
   bool nfc_ = true;             // NFC-normalize the text first (Qwen; Tekken and Flint have no normalizer)
   bool ignore_merges_ = false;  // a word found whole in the vocabulary is one token (HF BPE ignore_merges)

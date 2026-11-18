@@ -19,9 +19,12 @@ int main(int argc, char** argv) {
   if (names.empty()) {  // every Flint kernel of the library, and the base library's that src/model/flint.cpp runs
     for (const std::string& n : g.function_names())
       if (n.rfind("flint_", 0) == 0) names.push_back(n);
-    for (const char* n : {"qmvf_b4_t1_r4", "qmvf_b4_t1_r4_norm", "qmvf_gu_b4_t1_r4_norm", "embed_f8g64", "embed_q4",
+    for (const char* n : {"qmvf_b4_t1_r4", "qmvf_b4_t1_r4_norm", "qmvf_gu_b4_t1_r4_norm", "qmvf_b6_t1_r4",
+                          "qmvf_b6_t1_r4_norm", "qmvf_gu_b6_t1_r4_norm", "embed_f8g64", "embed_f6g64", "embed_q4",
                           "rows_to_half", "qmr_k32_w14_m32_n128", "qmr_k64_w14_m16_n64", "qmr_k64_w12_m8_n64",
-                          "qrf_f16_m32_n128", "qrf_f16_m16_n64", "qrf_f16_m8_n64", "moe_bucket3", "qrm_gu_k32_m32_n64",
+                          "qrf_f16_m32_n128", "qrf_f16_m16_n64", "qrf_f16_m8_n64", "qrf_f6g64_m32_n128",
+                          "qrf_f6g64_m16_n64", "qrf_f6g64_m8_n64", "qrmf_gu_f6g64_m32_n64_f32", "qrmf_dn_f6g64_m32_n128",
+                          "moeg_gu_rows_f6g64_f6g64", "moeg_down_rows_f6g64_f6g64_w", "moe_bucket3", "qrm_gu_k32_m32_n64",
                           "qrm_dn_k32_m32_n128", "swiglu_half", "moe_combine", "moe_gate_up3_r2", "moe_down2_w", "moe_gate_up", "moe_down", "moe4_unique", "moe4_gate_up",
                           "moe4_down", "moe_bucket", "qmm_moe_b4_m16_n64",
                           "topk_stage1", "sample_stage2", "copy_u32", "kv_regrow", "flint_route"})

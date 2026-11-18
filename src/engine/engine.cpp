@@ -408,11 +408,18 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   model_->set_mem_budget(budget_);
   std::string src = chat_template_source(opts_.model_dir);
   if (src.empty()) fatal("no chat template in %s", opts_.model_dir.c_str());
+<<<<<<< ours
   if (flint_) src = flint_template(src);
   tmpl_ = std::make_unique<minja::chat_template>(src, flint_ ? "<|begin_of_text|>" : "",
                                                  flint_ ? "<|end_of_text|>" : "<|im_end|>");
   preserve_thinking_default_ = !flint_ && !nh_ && !dory_ && preserve_thinking_template(src);
   reasoning_effort_template_ = !flint_ && !nh_ && !dory_ && src.find("reasoning_effort") != std::string::npos;
+=======
+  const bool glm_tmpl = flint_ && !flint_->config().mellum;
+  if (glm_tmpl) src = flint_template(src);
+  tmpl_ = std::make_unique<minja::chat_template>(src, glm_tmpl ? "<|begin_of_text|>" : "",
+                                                 glm_tmpl ? "<|end_of_text|>" : "<|im_end|>");
+>>>>>>> theirs
   think_open_ = tok_.find("<think>");
   think_close_ = tok_.find("</think>");
   if (think_open_ < 0 && think_close_ < 0) {  // Hy4-flash: its tags carry the template's HYTK suffix
@@ -819,6 +826,7 @@ std::string unsupported_model(const std::string& model_dir) {
   };
   const nlohmann::json t = j.contains("text_config") && j["text_config"].is_object() ? j["text_config"] : j;
   const std::string mt = type(j), tt = type(t);
+<<<<<<< ours
   // (a pack in a quantization format with no kernels is refused here too: before its weights are read, not after)
   // (and a noncausal pack, which only kapitsa-systemone scores: thrown here, so a model switch is refused and the old
   // model stays up, and the memory plan is not read first)
@@ -830,9 +838,14 @@ std::string unsupported_model(const std::string& model_dir) {
   if (qwen_layout(j) == QwenLayout::qwen35) return family();
   if (mt.empty() && tt.empty() && t.contains("linear_num_value_heads") && t.contains("num_hidden_layers"))
     return family();
+=======
+  if (mt == "mellum" || mt == "qwen3_5" || mt == "qwen3_5_moe" || tt == "qwen3_5_text" || tt == "qwen3_5_moe_text") return "";
+  if (mt.empty() && tt.empty() && t.contains("linear_num_value_heads") && t.contains("num_hidden_layers")) return "";
+>>>>>>> theirs
   const std::string runs = " Kapitsa runs the Qwen3.5 family (Qwen3.5, 3.6 and 3.8: qwen3_5, qwen3_5_moe), "
                            "Qwen3.8-Flash-Next (qwen4_exp), NVIDIA's Nemotron-H (nemotron_h: Nemotron Nano, Nemotron 3.5), "
-                           "Nemotron Labs Dory (dory), Recursive's Flint (flint) and DiffuSpace's Clover (clover_moe).";
+                           "Nemotron Labs Dory (dory), Recursive's Flint (flint), JetBrains's Mellum 2.1 (mellum) "
+                           "and DiffuSpace's Clover (clover_moe).";
   const std::string what = !mt.empty() ? mt : tt;
   if (what.empty()) return model_dir + " is not a model Kapitsa runs: its config.json names no model_type." + runs;
   return model_dir + " is a " + what + " model (its config.json's model_type), an architecture Kapitsa does not run." +
@@ -2263,7 +2276,7 @@ std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) con
       return render_chat(*tmpl_, q, add_generation_prompt, images);
     }
   }
-  return render_chat(*tmpl_, r, add_generation_prompt, images, flint_ != nullptr);
+  return render_chat(*tmpl_, r, add_generation_prompt, images, flint_ && !flint_->config().mellum);
 }
 
 // Flint's chat template is written for Jinja2, and minja (third_party, not edited) differs from it in three places the
@@ -2663,7 +2676,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // task, an agent's next conversation) then reuses the block however early it diverges.
   int pbound = -1;
   if (prefix_ckpt_ && images.empty()) {
-    const size_t off = text.find(flint_ ? "<|user|>" : "<|im_start|>user");
+    const size_t off = text.find(flint_ && !flint_->config().mellum ? "<|user|>" : "<|im_start|>user");
     if (off != std::string::npos && off > 0) {
       const std::vector<int> pt = tok_.encode(text.substr(0, off));
       if (pt.size() >= 64 && int(pt.size()) < n && (boundary < 0 || int(pt.size()) < boundary) &&
@@ -2694,8 +2707,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     std::string why;
     if (grammar_calls(*r.grammar) && (tc_open_ < 0 || tc_close_ < 0))
       why = "this model has no <tool_call> / </tool_call> tokens: its replies cannot be held to tool calls";
-    else if (grammar_calls(*r.grammar) && flint_)
+    else if (grammar_calls(*r.grammar) && flint_ && !flint_->config().mellum)
       why = "Flint writes its tool calls in GLM's markup, which the tool-call grammar does not hold yet: send "
+            "tool_choice \"auto\" and non-strict tools";
+    else if (grammar_calls(*r.grammar) && flint_ && flint_->config().mellum)
+      why = "Mellum writes its tool calls in JSON markup, which the tool-call grammar does not hold yet: send "
             "tool_choice \"auto\" and non-strict tools";
     else if (think && think_close_ < 0)
       why = "this model writes its reasoning's end as text: structured output needs reasoning off with it";
@@ -3523,9 +3539,13 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // (Nemotron-H, Dory and Flint: the whitespace before </think> stays in the reasoning, as their templates render
   // returned turns, unless the template writes a newline of its own there: think_ws_; the Nano 9B v2's tags as text;
   // Flint's calls in GLM's markup)
+  const bool glm = flint_ && !flint_->config().mellum;
+  const bool mellum = flint_ && flint_->config().mellum;
   OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
-                      think_tools, (nh_ != nullptr || dory_ != nullptr || flint_ != nullptr) && think_ws_, text_tags_,
-                      flint_ ? CallFormat::Glm : CallFormat::QwenXml);
+                      think_tools, (nh_ != nullptr || dory_ != nullptr || glm) && think_ws_, text_tags_,
+                      glm      ? CallFormat::Glm
+                      : mellum ? CallFormat::Json
+                               : CallFormat::QwenXml);
   const auto& eos = stop_ids_;
   double t1 = now_ms();
   int gen = 0;
@@ -4830,7 +4850,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
     return;
   }
   const size_t mpos = text.rfind(marker);
-  const size_t cut = mpos == std::string::npos ? std::string::npos : text.rfind(flint_ ? "<|user|>" : "<|im_start|>", mpos);
+  const size_t cut = mpos == std::string::npos ? std::string::npos : text.rfind(flint_ && !flint_->config().mellum ? "<|user|>" : "<|im_start|>", mpos);
   if (cut == std::string::npos) return logd("history: nothing, no marker in the rendered text");
   text.resize(cut);
   std::vector<int> t2 = tok_.encode(text);

@@ -114,8 +114,9 @@ NI_INLINE size_t flint_kv_index(constant FlintPrepP& p, uint kvh, uint t, uint d
   if (p.rope) {
     row[d] = x;
     threadgroup_barrier(mem_flags::mem_threadgroup);
+    const float msc = p.rope == 2 ? inv[kFD / 2] : 1.0f;
     const float ang = float(p.pos0 + (p.tree ? uint(tree[kKfDep + t]) : t)) * inv[d % (kFD / 2)];
-    const float cs = metal::precise::cos(ang), sn = metal::precise::sin(ang);
+    const float cs = metal::precise::cos(ang) * msc, sn = metal::precise::sin(ang) * msc;
     x = d < kFD / 2 ? row[d] * cs - row[d + kFD / 2] * sn : row[d] * cs + row[d - kFD / 2] * sn;
   }
   if (is_q) q_out[(size_t(t) * p.Hq + h) * kFD + d] = x;
@@ -532,51 +533,24 @@ struct FlintAcceptP {
   acc[0] = int(a);
 }
 
+NI_INLINE void flint_topk_row(const device float* logits, uint E, uint k, uint lane, device uint* idx,
+                              device float* wts, uint softmax = 0, uint shared = 1);
+
 // ---- MoE routing ----
 struct FlintRouteP {
-  uint R, k;
+  uint R, k, E, softmax, shared;
 };
-// Sigmoid top-k of R rows of 256 logits (each rounded to bf16 first): idx[r k + j] the experts, lowest index on ties;
-// wts[r (k + 1) + j] their scores over the sum of the k (+ 1e-20, as the reference), wts[r (k + 1) + k] = 1 (the
-// shared expert's). grid: ceil(R / 8) threadgroups x 256 threads (a row per simdgroup).
+// Sigmoid top-k of R rows of 256 logits (each rounded to bf16 first), or fp32 softmax top-k (Mellum): idx[r k + j] the
+// experts, lowest index on ties; wts[r (k + 1) + j] their scores over the sum of the k (+ 1e-20 for sigmoid),
+// wts[r (k + 1) + k] = 1 (or 0 when there is no shared expert). grid: ceil(R / 8) threadgroups x 256 threads.
 [[kernel]] void flint_route(const device float* logits [[buffer(0)]], device uint* idx [[buffer(1)]],
                             device float* wts [[buffer(2)]], constant FlintRouteP& p [[buffer(3)]],
                             uint tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
                             uint lane [[thread_index_in_simdgroup]]) {
-  constexpr uint per = 8;
+  const uint E = p.E ? p.E : 256;
   const uint r = tg * 8 + sg;
   if (r >= p.R) return;
-  float v[per];
-  NI_UNROLL for (uint i = 0; i < per; ++i) {
-    const float z = float(bfloat(logits[size_t(r) * 256 + lane * per + i]));
-    v[i] = 1.0f / (1.0f + metal::precise::exp(-z));
-  }
-  uint taken = 0;
-  float sel_sum = 0.0f, my_w[8];
-  uint my_i[8];
-  for (uint j = 0; j < p.k; ++j) {
-    float best = -1.0f;
-    uint bi = 0xffffffffu;
-    NI_UNROLL for (uint i = 0; i < per; ++i)
-      if (!(taken & (1u << i)) && v[i] > best) {
-        best = v[i];
-        bi = lane * per + i;
-      }
-    const float gbest = simd_max(best);
-    const uint win = simd_min(best == gbest ? bi : 0xffffffffu);
-    if (win != 0xffffffffu && win / per == lane) taken |= 1u << (win % per);
-    my_w[j] = gbest;
-    my_i[j] = win;
-    sel_sum += gbest;
-  }
-  if (lane == 0) {
-    const float s = sel_sum + 1e-20f;
-    for (uint j = 0; j < p.k; ++j) {
-      idx[r * p.k + j] = my_i[j];
-      wts[r * (p.k + 1) + j] = my_w[j] / s;
-    }
-    wts[r * (p.k + 1) + p.k] = 1.0f;
-  }
+  flint_topk_row(logits + size_t(r) * E, E, p.k, lane, idx + r * p.k, wts + r * (p.k + 1), p.softmax, p.shared);
 }
 
 // ---- prefill SwiGLU into half rows that cannot overflow ----
@@ -637,13 +611,30 @@ struct FlintRouterTopkP {
   float eps;
   uint write_xn;
   uint split;
+  uint softmax;
+  uint shared;
 };
+
 NI_INLINE void flint_topk_row(const device float* logits, uint E, uint k, uint lane, device uint* idx,
-                              device float* wts) {
+                              device float* wts, uint softmax, uint shared) {
+  const uint per = E / 32;
   float v[8];
-  for (uint i = 0; i < 8; ++i) {
-    const float z = float(bfloat(logits[lane * 8 + i]));
-    v[i] = 1.0f / (1.0f + metal::precise::exp(-z));
+  if (softmax) {
+    float lmax = -INFINITY;
+    for (uint i = 0; i < per; ++i) lmax = max(lmax, logits[lane * per + i]);
+    const float mx = simd_max(lmax);
+    float lsum = 0.0f;
+    for (uint i = 0; i < per; ++i) {
+      v[i] = metal::precise::exp(logits[lane * per + i] - mx);
+      lsum += v[i];
+    }
+    const float inv_s = 1.0f / simd_sum(lsum);
+    for (uint i = 0; i < per; ++i) v[i] *= inv_s;
+  } else {
+    for (uint i = 0; i < per; ++i) {
+      const float z = float(bfloat(logits[lane * per + i]));
+      v[i] = 1.0f / (1.0f + metal::precise::exp(-z));
+    }
   }
   uint taken = 0;
   float sel_sum = 0.0f, my_w[8];
@@ -651,27 +642,28 @@ NI_INLINE void flint_topk_row(const device float* logits, uint E, uint k, uint l
   for (uint j = 0; j < k; ++j) {
     float best = -1.0f;
     uint bi = 0xffffffffu;
-    for (uint i = 0; i < 8; ++i)
+    for (uint i = 0; i < per; ++i)
       if (!(taken & (1u << i)) && v[i] > best) {
         best = v[i];
-        bi = lane * 8 + i;
+        bi = lane * per + i;
       }
     const float gbest = simd_max(best);
     const uint win = simd_min(best == gbest ? bi : 0xffffffffu);
-    if (win != 0xffffffffu && win / 8 == lane) taken |= 1u << (win % 8);
+    if (win != 0xffffffffu && win / per == lane) taken |= 1u << (win % per);
     my_w[j] = gbest;
     my_i[j] = win;
     sel_sum += gbest;
   }
   if (lane == 0) {
-    const float s = sel_sum + 1e-20f;
+    const float s = softmax ? sel_sum : (sel_sum + 1e-20f);
     for (uint j = 0; j < k; ++j) {
       idx[j] = my_i[j];
       wts[j] = my_w[j] / s;
     }
-    wts[k] = 1.0f;
+    wts[k] = shared ? 1.0f : 0.0f;
   }
 }
+
 [[kernel]] void flint_router_topk(const device float* x [[buffer(0)]], const device bfloat* nw [[buffer(1)]],
                                   const device bfloat* W [[buffer(2)]], device float* logits [[buffer(3)]],
                                   device float* xn [[buffer(4)]], constant FlintRouterTopkP& p [[buffer(5)]],
@@ -711,7 +703,7 @@ NI_INLINE void flint_topk_row(const device float* logits, uint E, uint k, uint l
   // the last threadgroup to finish: every row's logits are written
   if (!flint_arrive(cnt, ntgs, tid, last)) return;
   for (uint r = sg; r < p.R; r += nsg)
-    flint_topk_row(logits + size_t(r) * p.E, p.E, p.k, lane, idx + r * p.k, wts + r * (p.k + 1));
+    flint_topk_row(logits + size_t(r) * p.E, p.E, p.k, lane, idx + r * p.k, wts + r * (p.k + 1), p.softmax, p.shared);
   if (p.write_xn)
     for (uint i = tid; i < p.R * p.D; i += ntg) {
       const uint r = i / p.D, k = i % p.D;
@@ -729,7 +721,7 @@ NI_INLINE void flint_topk_row(const device float* logits, uint E, uint k, uint l
                                         uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]],
                                         uint ntg [[threads_per_threadgroup]]) {
   for (uint r = sg; r < p.R; r += nsg)
-    flint_topk_row(logits + size_t(r) * p.E, p.E, p.k, lane, idx + r * p.k, wts + r * (p.k + 1));
+    flint_topk_row(logits + size_t(r) * p.E, p.E, p.k, lane, idx + r * p.k, wts + r * (p.k + 1), p.softmax, p.shared);
   if (p.write_xn)
     for (uint i = tid; i < p.R * p.D; i += ntg) {
       const uint r = i / p.D, k = i % p.D;

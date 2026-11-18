@@ -448,7 +448,8 @@ NI_INLINE void moeg_down_rows_impl(const device uint32_t* dw, const device bfloa
   constexpr int ROWS = 2;
   const uint r = tgp.y;
   const uint Imax = max(p.I, p.SI);
-  for (uint i = tid; i < (p.k + 1) * Imax / 4; i += ntg)
+  const uint nslots = p.SI ? p.k + 1 : p.k;
+  for (uint i = tid; i < nslots * Imax / 4; i += ntg)
     ((threadgroup float4*)hs)[i] = ((const device float4*)(h + r * (p.k + 1) * Imax))[i];
   threadgroup_barrier(mem_flags::mem_threadgroup);
   const uint row0 = (tgp.x * nsg + sg) * ROWS;
@@ -456,7 +457,7 @@ NI_INLINE void moeg_down_rows_impl(const device uint32_t* dw, const device bfloa
   uint rows[ROWS];
   for (int q = 0; q < ROWS; ++q) rows[q] = min(row0 + q, p.D - 1);
   float tot[ROWS] = {0.0f, 0.0f};
-  for (uint slot = 0; slot <= p.k; ++slot) {
+  for (uint slot = 0; slot < nslots; ++slot) {
     float a[ROWS] = {0.0f, 0.0f};
     if (slot == p.k) {
       wf_rows_acc<FD, GD, ROWS>(sdw, sds, sdb, hs + slot * Imax, p.SI, 0, p.SI, rows, lane, a);
@@ -1506,6 +1507,7 @@ NI_WF_LOW(NI_WF_PREFILL_SMALL)  // bf16's are in the base library (above)
 NI_WF_MOE(NI_WF_MOE_PREFILL)
 // Flint's 8-bit routed experts: the gate / up products in fp32 (model/flint.cpp, enc_moe_g_prefill)
 NI_QRMF_GU_T(qrmf_gu_f8g64_m32_n64_f32, 8, 64, 4, 64, 4, float)
+NI_QRMF_GU_T(qrmf_gu_f6g64_m32_n64_f32, 6, 64, 4, 64, 4, float)
 
 // bf16 large-M tiles with M tiles along grid x (weights shared through the cache; qrf_f16_m32_n128_mf: base library)
 NI_QRF(qrf_f16_m64_n64_mf, 16, 64, 64, 64, 1, 4, true)
@@ -1559,6 +1561,7 @@ NI_MOEG_DOWN_ROWS(moeg_down_rows_f4g64_f4g64, 4, 64, 4, 64, 9 * 512)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f4g64_f8g64_w, 4, 64, 8, 64, 7168)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f3g64_f8g64_w, 3, 64, 8, 64, 7168)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f8g64_f8g64_w, 8, 64, 8, 64, 7168)  // (Flint's 7 x 1024)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f6g64_f6g64_w, 6, 64, 6, 64, 7168)
 
 // Neural Engine split (ane_ffn.metal): weight staging from each format, and the GPU's share of the down projection
 #define NI_WF_ANE(SFX, F, GS) NI_ANE_WF(SFX, F, GS) NI_QRF_LD(qrf_##SFX##_m32_n128_ld, F, GS, 32, 128, 1, 4, false)
