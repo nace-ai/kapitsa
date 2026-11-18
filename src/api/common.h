@@ -44,6 +44,11 @@ bool apply_effort(const std::string& effort, ojson& kwargs);
 // A request's own loop count for looped models (Dory): "loops" in the body (the OpenAI clients' extra_body), 1-4,
 // else 0. Throws ApiError (400) for another value.
 int request_loops_field(const ojson& body);
+// Clamps a JSON numeric top_k value into [INT32_MIN, INT32_MAX] without 32-bit wrap-around (e.g. 2^32 + 1 -> 1)
+// or float-to-int overflow undefined behavior.
+int clamp_top_k(const ojson& v);
+// Extracts a 32-bit PRNG seed from a JSON numeric field without float-to-int overflow undefined behavior.
+uint32_t extract_seed_u32(const ojson& v);
 // A request's thinking budget beyond the API's own field (src/engine/think_control.h), on Messages, Chat Completions
 // and Responses (not the Ollama routes): "thinking_control" in the body, {"hard_cap": tokens (0 or more),
 // "close_text": text forced before </think> at the cap, "end_on_tool_call": a tool call inside the reasoning ends the

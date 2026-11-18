@@ -2712,6 +2712,34 @@ void thinking_budget_mapping() {
         "thinking budget: thinking disabled or absent is no cap");
   check(think_cap_of(-1, -1) == -1 && think_cap_of(-1, 4096) == 4096 && think_cap_of(300, 4096) == 300,
         "thinking budget: thinking_control's cap over budget_tokens, none without either");
+  // Unsigned 64-bit JSON integers > INT64_MAX (e.g. 2^63..2^64-1) and 32-bit wrap values (2^32 + 1)
+  {
+    const ChatRequest big_b = messages_prompt(
+        J(R"({"model": "m", "max_tokens": 100, "messages": [{"role": "user", "content": "hi"}],
+              "thinking": {"type": "enabled", "budget_tokens": 18446744073709551615}})"),
+        nullptr);
+    check(big_b.thinking_budget == INT32_MAX,
+          "thinking budget: uint64 budget_tokens > INT64_MAX clamps to INT32_MAX instead of wrapping to 0");
+    ChatRequest big_hc;
+    request_think_field(J(R"({"thinking_control": {"hard_cap": 18446744073709551615}})"), big_hc);
+    check(big_hc.think_cap == INT32_MAX,
+          "thinking budget: uint64 hard_cap > INT64_MAX clamps to INT32_MAX instead of wrapping negative");
+    const MessagesRequest big_m = messages_request(
+        J(R"({"model": "m", "max_tokens": 18446744073709551615, "top_k": 4294967297,
+              "messages": [{"role": "user", "content": "hi"}]})"));
+    check(big_m.chat.max_tokens == INT32_MAX && big_m.chat.top_k == INT32_MAX,
+          "anthropic: uint64 max_tokens > INT64_MAX and top_k = 2^32 + 1 clamp to INT32_MAX (not -1 or greedy 1)");
+    const ResponsesRequest big_r = responses_request(
+        J(R"({"model": "m", "input": "hi", "max_output_tokens": 18446744073709551615, "top_k": 4294967297})"),
+        ResponseStore());
+    check(big_r.chat.max_tokens == INT32_MAX && big_r.chat.top_k == INT32_MAX,
+          "responses: uint64 max_output_tokens > INT64_MAX and top_k = 2^32 + 1 clamp to INT32_MAX");
+    check(clamp_top_k(J("4294967297")) == INT32_MAX && clamp_top_k(J("1e100")) == INT32_MAX &&
+              clamp_top_k(J("-4294967297")) == INT32_MIN && clamp_top_k(J("-1")) == -1,
+          "clamp_top_k: clamps out-of-range integers and floats without 32-bit wrap-around");
+    check(extract_seed_u32(J("42")) == 42u && extract_seed_u32(J("1e100")) <= UINT32_MAX,
+          "extract_seed_u32: handles integer and huge float seeds without UB");
+  }
 }
 
 

@@ -142,7 +142,7 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
   r.max_tokens = api::chat_max_tokens(b);
   if (b.contains("temperature") && b["temperature"].is_number()) r.temperature = b["temperature"];
   if (b.contains("top_p") && b["top_p"].is_number()) r.top_p = b["top_p"];
-  if (b.contains("top_k") && b["top_k"].is_number()) r.top_k = b["top_k"];
+  if (b.contains("top_k") && b["top_k"].is_number()) r.top_k = api::clamp_top_k(b["top_k"]);
   for (auto [name, field] : {std::pair<const char*, float*>{"presence_penalty", &r.presence_penalty},
                              {"frequency_penalty", &r.frequency_penalty},
                              {"repetition_penalty", &r.repetition_penalty},
@@ -151,7 +151,7 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
   if (b.contains("ignore_eos") && b["ignore_eos"].is_boolean()) r.ignore_eos = b["ignore_eos"];
   if (b.contains("cache_salt")) r.cache_salt = b["cache_salt"];
   if (b.contains("prompt_cache_key") && b["prompt_cache_key"].is_string()) r.cache_key = b["prompt_cache_key"];
-  if (b.contains("seed") && b["seed"].is_number()) r.seed = uint32_t(b["seed"].get<int64_t>());
+  if (b.contains("seed") && b["seed"].is_number()) r.seed = api::extract_seed_u32(b["seed"]);
   // the Splash backend's seed, as Splash's frontend.py:1153-1162 reads it: absent or -1 random, another integer in
   // [-2^63, 2^64) its 64 bits, anything else refused. JSON integers outside that range parse here as floats, as do 5.0 and 1e3.
   if (b.contains("seed")) {

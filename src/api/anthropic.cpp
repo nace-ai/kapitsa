@@ -289,6 +289,8 @@ ChatRequest messages_prompt(const ojson& body, bool* show_thinking) {
   // looped models (Engine::request_loops): thinking off (disabled, absent) 1 loop, a budget by its size, adaptive or
   // enabled without a budget the server's default; output_config.effort or a "loops" field first
   if (!think) r.thinking_budget = 0;
+  else if (th.contains("budget_tokens") && th["budget_tokens"].is_number_unsigned())
+    r.thinking_budget = int(std::min<uint64_t>(th["budget_tokens"].get<uint64_t>(), uint64_t(INT32_MAX)));
   else if (th.contains("budget_tokens") && th["budget_tokens"].is_number_integer())
     r.thinking_budget = int(std::clamp<int64_t>(th["budget_tokens"].get<int64_t>(), 0, INT32_MAX));
   if (think && r.thinking_budget == 0) r.think_cap = 0;  // budget_tokens 0: a cap of 0 (thinking disabled is no cap)
@@ -354,15 +356,19 @@ MessagesRequest messages_request(const ojson& body) {
   if (!r.messages.empty() && r.messages.back()["role"] == "assistant")
     bad("a final assistant message (a prefill of the reply) is not supported; end the messages with a user turn");
   if (body.contains("max_tokens")) {
-    if (!body["max_tokens"].is_number_integer() || body["max_tokens"].get<int64_t>() < 1)
+    const ojson& mt = body["max_tokens"];
+    if (mt.is_number_unsigned() && mt.get<uint64_t>() >= 1)
+      r.max_tokens = int(std::min<uint64_t>(mt.get<uint64_t>(), uint64_t(INT32_MAX)));
+    else if (mt.is_number_integer() && mt.get<int64_t>() >= 1)
+      r.max_tokens = int(std::min<int64_t>(mt.get<int64_t>(), INT32_MAX));
+    else
       bad("max_tokens: must be a positive integer");
-    r.max_tokens = int(std::min<int64_t>(body["max_tokens"].get<int64_t>(), INT32_MAX));
   } else {
     r.max_tokens = 32768;
   }
   if (body.contains("temperature") && body["temperature"].is_number()) r.temperature = body["temperature"];
   if (body.contains("top_p") && body["top_p"].is_number()) r.top_p = body["top_p"];
-  if (body.contains("top_k") && body["top_k"].is_number()) r.top_k = body["top_k"];
+  if (body.contains("top_k") && body["top_k"].is_number()) r.top_k = clamp_top_k(body["top_k"]);
   if (body.contains("stop_sequences") && body["stop_sequences"].is_array())
     for (const auto& s : body["stop_sequences"])
       if (s.is_string() && !s.get<std::string>().empty()) r.stop.push_back(s);

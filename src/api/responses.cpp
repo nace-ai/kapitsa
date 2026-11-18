@@ -344,13 +344,17 @@ ResponsesRequest responses_request(const ojson& body, const ResponseStore& store
 
   r.max_tokens = 32768;
   if (body.contains("max_output_tokens") && !body["max_output_tokens"].is_null()) {
-    if (!body["max_output_tokens"].is_number_integer() || body["max_output_tokens"].get<int64_t>() < 1)
+    const ojson& mt = body["max_output_tokens"];
+    if (mt.is_number_unsigned() && mt.get<uint64_t>() >= 1)
+      r.max_tokens = int(std::min<uint64_t>(mt.get<uint64_t>(), uint64_t(INT32_MAX)));
+    else if (mt.is_number_integer() && mt.get<int64_t>() >= 1)
+      r.max_tokens = int(std::min<int64_t>(mt.get<int64_t>(), INT32_MAX));
+    else
       bad("max_output_tokens: must be a positive integer", "max_output_tokens");
-    r.max_tokens = int(std::min<int64_t>(body["max_output_tokens"].get<int64_t>(), INT32_MAX));
   }
   if (body.contains("temperature") && body["temperature"].is_number()) r.temperature = body["temperature"];
   if (body.contains("top_p") && body["top_p"].is_number()) r.top_p = body["top_p"];
-  if (body.contains("top_k") && body["top_k"].is_number()) r.top_k = body["top_k"];
+  if (body.contains("top_k") && body["top_k"].is_number()) r.top_k = clamp_top_k(body["top_k"]);
   if (body.contains("prompt_cache_key") && body["prompt_cache_key"].is_string()) r.cache_key = body["prompt_cache_key"];
   const ojson reasoning = body.contains("reasoning") && body["reasoning"].is_object() ? body["reasoning"] : ojson::object();
   apply_effort(str(reasoning, "effort"), r.template_kwargs);
