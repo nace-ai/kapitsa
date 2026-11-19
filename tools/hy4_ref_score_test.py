@@ -65,6 +65,19 @@ def main():
                       "--vs-ids", d / "ids4.txt")
         check("--vs with the same prompt and as many rows scores", rc == 0 and "top-1" in out, out)
 
+        # A caller can pipe --json - straight into a JSON reader, including with per-row reporting.
+        proc = subprocess.run([sys.executable, str(SCRIPT), "score", "--cand", str(d / "cand.f32"),
+                               "--ids", str(d / "ids4.txt"), "--vs", str(d / "other4.f32"),
+                               "--vs-ids", str(d / "ids4.txt"), "--per-row", "--json", "-"],
+                              capture_output=True, text=True)
+        try:
+            report = json.loads(proc.stdout)
+        except json.JSONDecodeError:
+            report = {}
+        check("--json - emits a single JSON report and keeps row diagnostics on stderr",
+              proc.returncode == 0 and len(report.get("per_row", {}).get("ids4", [])) == 4
+              and "row " in proc.stderr, proc.stdout + proc.stderr)
+
         rc, out = run("--cand", d / "cand.f32", "--ids", d / "ids4.txt", "--vs", d / "other3.f32",
                       "--vs-ids", d / "ids4.txt")
         check("--vs with 3 rows against 4 is refused", rc != 0 and "3 rows, the candidate 4" in out, out)

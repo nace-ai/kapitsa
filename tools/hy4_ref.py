@@ -173,6 +173,7 @@ def ref_for_ids(ref, ids):
 
 
 def cmd_score(a):
+    summary = sys.stderr if a.json == "-" else sys.stdout
     out = {"prompts": {}}
     all_kl, all_top1 = [], []
     per_row = {}
@@ -211,14 +212,14 @@ def cmd_score(a):
         jobs = []
         for p in prompts:
             if p not in cand.rows or p not in ref.rows:
-                print(f"{p}: missing in {'candidate' if p not in cand.rows else 'reference'}; skipped")
+                print(f"{p}: missing in {'candidate' if p not in cand.rows else 'reference'}; skipped", file=summary)
                 continue
             jobs.append((p, ref.rows[p], cand.rows[p]))
     sel = set(parse_rows(a.rows, 1 << 30).tolist()) if a.rows else None
     for p, rrows, crows in jobs:
         if set(rrows) != set(crows):
             print(f"{p}: the reference has {len(rrows)} rows, the candidate {len(crows)}: scoring the "
-                  f"{len(set(rrows) & set(crows))} both have")
+                  f"{len(set(rrows) & set(crows))} both have", file=summary)
         rows = [i for i in sorted(set(rrows) & set(crows)) if sel is None or i in sel]
         if not rows:
             sys.exit(f"{p}: no row in both the reference and the candidate")
@@ -231,18 +232,18 @@ def cmd_score(a):
         ]
         all_kl.append(kl)
         all_top1.append(top1)
-        print(fmt(p, s))
+        print(fmt(p, s), file=summary)
         if a.per_row:
             for e in per_row[p]:
                 kls = "nonfinite" if e["kl"] is None else f"{e['kl']:.5f}"
                 print(f"  row {e['row']:4d}  KL {kls:>10s}  argmax ref {e['ref']:6d} cand {e['cand']:6d}"
-                      f"{'' if e['top1'] else '  MISS'}")
+                      f"{'' if e['top1'] else '  MISS'}", file=summary)
     if len(jobs) > 1:
         kl, top1 = np.concatenate(all_kl), np.concatenate(all_top1)
         s = stats(list(range(len(kl))), kl, top1)
         s["row_range"] = s["kl_max_row"] = s["first_divergent_row"] = None  # pooled: no row numbers
         out["overall"] = s
-        print(fmt("overall", s))
+        print(fmt("overall", s), file=summary)
     if a.json:
         out["per_row"] = per_row
         txt = json.dumps(out, indent=2) + "\n"
