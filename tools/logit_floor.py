@@ -38,6 +38,7 @@ Mac's, logit_compare.floor_name).
 import argparse
 import json
 import os
+from pathlib import Path
 import shutil
 import subprocess
 import sys
@@ -169,15 +170,15 @@ def main():
                     help="the --also paths only reorder the default's sums: their drift is the reorder_gate")
     ap.add_argument("--keep", action="store_true", help="keep the dumps")
     ap.add_argument("--reuse", action="store_true",
-                    help="compare the dumps --work already holds, not run them again (one build's on one Mac: "
+                    help="compare the dumps --work already holds, not run them again (the requested model, one build on one Mac: "
                          "\"measured\" records how many and their dates)")
     ap.add_argument("--rescore", action="store_true",
                     help="no dumps: the floors and gates of the model's JSON again from its sources (no GPU)")
     a = ap.parse_args()
     if a.reorder and not a.also:
         ap.error("--reorder compares the --also paths with the default: give one")
-    model = os.path.basename(os.path.normpath(a.model))
     if a.rescore:
+        model = os.path.basename(os.path.normpath(a.model))
         path = a.out or lc.floor_name(model, this_mac())
         with open(path) as f:
             result = json.load(f)
@@ -192,9 +193,20 @@ def main():
             f.write(dumps(result))
         print("->", path)
         return
+    # logit_dump records the final path component. Keep a named symlink and resolve a bare "." or final ".."
+    # through the filesystem so a symlink followed by ".." still selects its actual parent.
+    directory = Path(a.model)
+    if directory.name in ("", ".."):
+        if not os.path.isdir(a.model):
+            ap.error(f"cannot open model directory {a.model}")
+        directory = directory.resolve()
+    model = directory.name
+    if not model:
+        ap.error("the model directory needs a name")
+    model_dir = str(directory)
     work = a.work or os.path.join(HERE, "..", "build", "logit_floor", model)
     # the paths the model has, as logit_dump decides its class (a Qwen under a new model_type takes its layout's)
-    r = subprocess.run([a.bin, a.model, work, "--list-paths"], capture_output=True, text=True)
+    r = subprocess.run([a.bin, model_dir, work, "--list-paths"], capture_output=True, text=True)
     if r.returncode or not r.stdout.strip():
         sys.exit(f"logit_dump --list-paths failed ({r.returncode}): {r.stderr.strip()}")
     paths = r.stdout.strip().split(",")
@@ -205,10 +217,21 @@ def main():
     def dump(name, run_paths, *extra, env=None):
         d = os.path.join(work, name)
         extra = (*extra, *rows)
-        if a.reuse and all(os.path.exists(os.path.join(d, p, "meta.json")) for p in ["prefill", *run_paths]):
-            reused.extend(dump_metas(d))
-            return d
-        cmd = [a.bin, a.model, d, "--paths", ",".join(run_paths), *extra]
+        if a.reuse and os.path.isdir(d):
+            metas = dump_metas(d)
+            for meta in metas:
+                label = meta.get("model")
+                # Older dumps of "name/." recorded "." as the model. Bare "." and ".." carry no portable name.
+                old_dir = meta.get("model_dir")
+                if label == "." and isinstance(old_dir, str) and os.path.basename(old_dir.rstrip("/")) == ".":
+                    label = Path(old_dir).name
+                if label != model:
+                    sys.exit(f"--reuse: expected model {model!r} in {d}, found {meta.get('model')!r}; regenerate the dump")
+            if all(os.path.exists(os.path.join(d, p, "meta.json")) for p in ["prefill", *run_paths]):
+                reused.extend(metas)
+                reused_dirs.add(d)
+                return d
+        cmd = [a.bin, model_dir, d, "--paths", ",".join(run_paths), *extra]
         env = {**cond, **(env or {})}
         print("$", " ".join(([f"{k}={v}" for k, v in env.items()]) + cmd), flush=True)
         r = subprocess.run(cmd, env=dict(os.environ, **env))
@@ -220,11 +243,16 @@ def main():
     def cmp(d1, d2, path):
         return lc.compare(lc.Dump(os.path.join(d1, path)), lc.Dump(os.path.join(d2, path)))
 
+    reused_dirs = set()
+
+    def discard(d):
+        # Keep reused evidence until the floor is written. Fresh dumps can be released as each comparison ends.
+        if not a.keep and d not in reused_dirs:
+            shutil.rmtree(d)
+
     def once(d1, d2, path):
-        """cmp, then d2 deleted unless --keep (disk: 768 rows a path are ~0.4 GB a dump on Flint)."""
         s = cmp(d1, d2, path)
-        if not a.keep:
-            shutil.rmtree(d2)
+        discard(d2)
         return s
 
     def measure():
@@ -233,8 +261,7 @@ def main():
         with open(os.path.join(da, ref, "meta.json")) as f:
             meta = json.load(f)
         sources = {"repeat": {"paths": {p: summary(cmp(da, db, p)) for p in ["prefill"] + paths}}}
-        if not a.keep:
-            shutil.rmtree(db)  # (disk: a dump is ~190 MB per path on the Qwen models)
+        discard(db)
         if "batch" in paths:
             s = lc.compare(lc.Dump(os.path.join(da, "verify")), lc.Dump(os.path.join(da, "batch")))
             sources["batch"] = summary(s)
