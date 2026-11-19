@@ -1,5 +1,6 @@
 // Streamed routed experts: Qwen3.8-Flash-Next's Q2_0 experts (src/model/moe_q20.h) on a Mac whose memory holds only
-// part of them. An arena of slots in GPU memory holds experts, each one's six planes at the offsets of q20::slot_layout,
+// part of them (and any other format's experts by their SlotPlanes: MLX affine 4-bit, src/model/moe_a4.h). An arena
+// of slots in GPU memory holds experts, each one's planes at the offsets of its SlotPlanes (Q2_0: q20::slot_layout),
 // and a slot table per layer (E words, chunk << 28 | page) says where; the expert kernels read through it
 // (q20::Experts::arena), so resident and streamed experts run the same kernels and give the same outputs.
 //
@@ -328,9 +329,34 @@ struct PlaneSrc {
   uint64_t off = 0, stride = 0;
   uint32_t len = 0;
 };
-// A layer's six planes in q20::Experts order: gate codes, gate d, up codes, up d, down codes, down d
+// The most planes an expert has: MLX affine experts (src/model/moe_a4.h) have nine, (w, scales, biases) of gate, up and
+// down; Q2_0's have six
+constexpr int kMaxPlanes = 9;
+// An expert's planes inside an arena slot: plane j's len[j] bytes at byte at[j], j < n; bytes: the slot, whole 16 KiB
+// pages. Built from Q2_0's SlotLayout (its six planes at the same offsets, so its slots are what they were) or by hand.
+struct SlotPlanes {
+  uint32_t n = 0;
+  uint32_t at[kMaxPlanes] = {}, len[kMaxPlanes] = {};
+  uint32_t bytes = 0;
+  SlotPlanes() = default;
+  SlotPlanes(const SlotLayout& q)  // NOLINT: implicit, so Q2_0's callers pass their SlotLayout as before
+      : n(6), bytes(q.bytes) {
+    const uint32_t cb = q.uc, db = q.ud - q.gd;
+    const uint32_t a[6] = {q.gc, q.gd, q.uc, q.ud, q.dc, q.dd}, l[6] = {cb, db, cb, db, cb, db};
+    for (int j = 0; j < 6; ++j) at[j] = a[j], len[j] = l[j];
+  }
+  uint32_t max_len() const {
+    uint32_t m = 0;
+    for (uint32_t j = 0; j < n; ++j) m = std::max(m, len[j]);
+    return m;
+  }
+};
+// A layer's planes in the slot layout's order (SlotPlanes; Q2_0: q20::Experts order, gate codes, gate d, up codes, up d,
+// down codes, down d); planes past the layout's n are unused. planes: where this layer's planes go in a slot when its
+// layout differs from the store's (moe_a4's layers in different formats: same n, bytes the store's); n 0: the store's.
 struct LayerSrc {
-  PlaneSrc p[6];
+  PlaneSrc p[kMaxPlanes];
+  SlotPlanes planes;
 };
 
 class ExpertCache {
@@ -376,9 +402,9 @@ class ExpertCache {
     uint64_t ready = 0, go = 0;
   };
 
-  // nslots slots (at least 3 E, or every expert); the files' planes must match lay
-  ExpertCache(const std::vector<std::string>& files, const std::vector<LayerSrc>& layers, uint32_t E, SlotLayout lay,
-              uint32_t nslots, const Memory& mem, const Sync& sync, const Options& o);
+  // nslots slots (at least 3 E, or every expert); the files' planes must match lay (plane j of every layer len[j] bytes)
+  ExpertCache(const std::vector<std::string>& files, const std::vector<LayerSrc>& layers, uint32_t E,
+              const SlotPlanes& lay, uint32_t nslots, const Memory& mem, const Sync& sync, const Options& o);
   // Stop external post callers first; keep Memory, the copied request's referenced ids/prediction arrays,
   // and Sync captures alive until destruction returns.
   // Joins the active CPU producer and drains reads. The owner must separately retire GPU users of those buffers.
@@ -439,7 +465,8 @@ class ExpertCache {
   void t1_drop(int layer);  // out of T1 (evict, or hit's promotion to T2): the floor up when the layer empties
 
   uint32_t L_ = 0, E_ = 0, nslots_ = 0;
-  SlotLayout lay_;
+  SlotPlanes lay_;
+  const SlotPlanes& lay_of(uint32_t l) const { return src_[l].planes.n ? src_[l].planes : lay_; }
   Memory mem_;
   Sync sync_;
   bool complete_ = false, direct_ = false, scan_victim_on_ = true;
@@ -490,14 +517,21 @@ class ExpertStore {
   };
   ExpertStore(const std::vector<std::string>& files, const std::vector<LayerSrc>& layers, uint32_t E, SlotLayout lay,
               const Options& o);
+  // Any format's planes (moe_a4.h's nine): experts() then carries no Q2_0 layout; use arena0/1() and table() instead
+  ExpertStore(const std::vector<std::string>& files, const std::vector<LayerSrc>& layers, uint32_t E,
+              const SlotPlanes& planes, const Options& o);
   ~ExpertStore();
   ExpertStore(const ExpertStore&) = delete;
   ExpertStore& operator=(const ExpertStore&) = delete;
 
   bool complete() const { return cache_->complete(); }
   uint32_t slots() const { return cache_->slots(); }
-  size_t arena_bytes() const { return size_t(cache_->slots()) * lay_.bytes; }
-  Experts experts(int layer) const;   // layer's experts through its slot table
+  size_t arena_bytes() const { return size_t(cache_->slots()) * planes_.bytes; }
+  Experts experts(int layer) const;   // layer's experts through its slot table (Q2_0)
+  // The arena's chunks (arena1 = arena0 for one chunk) and a layer's slot table (E words chunk << 28 | page)
+  const Buffer& arena0() const { return chunk_[0]; }
+  const Buffer& arena1() const { return chunk_[1]; }
+  Buffer table(int layer) const { return table_.view(size_t(layer) * E_ * 4, size_t(E_) * 4); }
   std::vector<Buffer> buffers() const;  // the arena and the slot tables (residency)
   // A layer's handshake: begin() after the dispatches that write its routing (ids: n uint32 expert ids, in GPU memory),
   // end() before its expert kernels; work encoded between them does not need the experts and overlaps the turn. See
@@ -510,7 +544,9 @@ class ExpertStore {
   std::string describe() const;
 
  private:
-  SlotLayout lay_;
+  void init(const std::vector<std::string>& files, const std::vector<LayerSrc>& layers, const Options& o);
+  SlotLayout lay_;     // Q2_0's (experts()); zero for other formats
+  SlotPlanes planes_;  // what the cache reads into a slot
   uint32_t E_ = 0;
   Buffer chunk_[2], table_;
   std::shared_ptr<void> ev_;  // MTLSharedEvent; outlives cache_ even on constructor failure

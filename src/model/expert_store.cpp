@@ -97,19 +97,27 @@ size_t auto_store_kv(size_t kv_per_pos, int planned_ctx, int slots) {
 // ---- ExpertCache ----
 
 ExpertCache::ExpertCache(const std::vector<std::string>& files, const std::vector<LayerSrc>& layers, uint32_t E,
-                         SlotLayout lay, uint32_t nslots, const Memory& mem, const Sync& sync, const Options& o)
+                         const SlotPlanes& lay, uint32_t nslots, const Memory& mem, const Sync& sync, const Options& o)
     : L_(uint32_t(layers.size())), E_(E), nslots_(nslots), lay_(lay), mem_(mem), sync_(sync), direct_(o.direct),
       scan_victim_on_(o.scan_victim), src_(layers) {
   try {
     if (!L_ || !E_) fatal("expert store: no layers");
     if (lay_.bytes % kPage) fatal("expert store: slots of %u bytes (not whole 16 KiB pages)", lay_.bytes);
-    // the planes must be the slot layout's: codes cb = uc, d db = ud - gd
-    const uint32_t cb = lay_.uc, db = lay_.ud - lay_.gd;
-    const uint32_t want[6] = {cb, db, cb, db, cb, db};
-    for (const LayerSrc& s : src_)
-      for (int j = 0; j < 6; ++j)
-        if (s.p[j].len != want[j] || s.p[j].file < 0 || s.p[j].file >= int(files.size()))
+    // the planes must be the slot layout's, each inside the slot
+    if (lay_.n == 0 || lay_.n > uint32_t(kMaxPlanes)) fatal("expert store: %u planes an expert", lay_.n);
+    for (uint32_t j = 0; j < lay_.n; ++j)
+      if (lay_.len[j] == 0 || lay_.at[j] > lay_.bytes || lay_.len[j] > lay_.bytes - lay_.at[j])
+        fatal("expert store: plane %u is outside the slot", j);
+    for (const LayerSrc& s : src_) {
+      const SlotPlanes& q = s.planes.n ? s.planes : lay_;
+      if (q.n != lay_.n || q.bytes != lay_.bytes) fatal("expert store: a layer's slot layout differs in planes or size");
+      for (uint32_t j = 0; j < q.n; ++j)
+        if (q.len[j] == 0 || q.at[j] > q.bytes || q.len[j] > q.bytes - q.at[j])
+          fatal("expert store: a layer's plane %u is outside the slot", j);
+      for (uint32_t j = 0; j < lay_.n; ++j)
+        if (s.p[j].len != q.len[j] || s.p[j].file < 0 || s.p[j].file >= int(files.size()))
           fatal("expert store: a layer's planes do not match the slot layout");
+    }
     const size_t keys = size_t(L_) * E_;
     if (nslots_ > keys) nslots_ = uint32_t(keys);
     if (nslots_ < keys && nslots_ < 3 * E_)
@@ -130,10 +138,10 @@ ExpertCache::ExpertCache(const std::vector<std::string>& files, const std::vecto
       fds_.push_back(std::move(opened));
     }
     for (uint32_t l = 0; l < L_; ++l)
-      for (int j = 0; j < 6; ++j) {
+      for (uint32_t j = 0; j < lay_.n; ++j) {
         const PlaneSrc& p = src_[l].p[j];
         if (!valid_extent(p, E_, sizes[p.file]))
-          fatal("expert store: invalid extent at layer %u plane %d in %s", l, j, files[p.file].c_str());
+          fatal("expert store: invalid extent at layer %u plane %u in %s", l, j, files[p.file].c_str());
       }
     std::memset(mem_.table, 0, keys * 4);
     slot_of_.assign(keys, -1);
@@ -161,7 +169,9 @@ ExpertCache::ExpertCache(const std::vector<std::string>& files, const std::vecto
       // Allocate on the constructing thread: even a cold store must report a
       // staging allocation failure before its constructor returns.
       void* mem = nullptr;
-      const size_t cap = size_t(std::max(lay_.uc, lay_.ud - lay_.gd)) + 2 * kPage;
+      uint32_t longest = lay_.max_len();
+      for (uint32_t l = 0; l < L_; ++l) longest = std::max(longest, lay_of(l).max_len());
+      const size_t cap = size_t(longest) + 2 * kPage;
       if (posix_memalign(&mem, kPage, cap)) fatal("expert store: out of memory");
       std::unique_ptr<uint8_t, decltype(&free)> stage(static_cast<uint8_t*>(mem), free);
       readers_.emplace_back([this, recover, stage = std::move(stage)] {
@@ -545,14 +555,14 @@ void ExpertCache::trim_ghosts() {
 void ExpertCache::load(int k, bool urgent) {
   const uint32_t l = uint32_t(k) / E_, e = uint32_t(k) % E_;
   const LayerSrc& s = src_[l];
+  const SlotPlanes& lay = lay_of(l);
   uint8_t* base = slot_ptr(slot_of_[size_t(k)]);
-  const uint32_t at[6] = {lay_.gc, lay_.gd, lay_.uc, lay_.ud, lay_.dc, lay_.dd};
-  pending_[size_t(k)].store(6, std::memory_order_relaxed);
+  pending_[size_t(k)].store(int(lay_.n), std::memory_order_relaxed);
   {
     std::lock_guard<std::mutex> lk(io_mu_);
-    for (int j = 0; j < 6; ++j) {
+    for (uint32_t j = 0; j < lay_.n; ++j) {
       const PlaneSrc& p = s.p[j];
-      (urgent ? urgent_ : normal_).push_back(Job{fds_[size_t(p.file)].get(), p.off + uint64_t(e) * p.stride, p.len, base + at[j], k});
+      (urgent ? urgent_ : normal_).push_back(Job{fds_[size_t(p.file)].get(), p.off + uint64_t(e) * p.stride, p.len, base + lay.at[j], k});
     }
   }
   io_cv_.notify_all();
@@ -584,7 +594,7 @@ void ExpertCache::reader_loop(uint8_t* stage) {
     ExpertCacheTestAccess::observe(*this, ExpertCacheTestAccess::Point::BeforeRead);
 #endif
     // aligned pieces straight into the slot; others widened to their pages unless that reads half as much again
-    // (small pieces: tests' shapes; Flash-Next's are 400 KB and 50 KB)
+    // (small pieces: tests' shapes; Flash-Next's are 400 KB and 50 KB, Hy4's 1.2 MB and 74 KB)
     const bool aligned = j.off % kPage == 0 && j.len % kPage == 0 && uintptr_t(j.dst) % kPage == 0;
     const uint64_t a = j.off / kPage * kPage, b = (j.off + j.len + kPage - 1) / kPage * kPage;
     if (aligned || direct_ || (b - a) * 2 > uint64_t(j.len) * 3) {
@@ -623,19 +633,30 @@ constexpr double kHeatMs = 4.0;
 
 ExpertStore::ExpertStore(const std::vector<std::string>& files, const std::vector<LayerSrc>& layers, uint32_t E,
                          SlotLayout lay, const Options& o)
-    : lay_(lay), E_(E) {
+    : lay_(lay), planes_(lay), E_(E) {
+  init(files, layers, o);
+}
+
+ExpertStore::ExpertStore(const std::vector<std::string>& files, const std::vector<LayerSrc>& layers, uint32_t E,
+                         const SlotPlanes& planes, const Options& o)
+    : planes_(planes), E_(E) {
+  init(files, layers, o);
+}
+
+void ExpertStore::init(const std::vector<std::string>& files, const std::vector<LayerSrc>& layers, const Options& o) {
+  const uint32_t E = E_;
   Gpu& g = Gpu::get();
   const size_t keys = layers.size() * E;
-  size_t n = std::min(keys, o.bytes / lay_.bytes);
+  size_t n = std::min(keys, o.bytes / planes_.bytes);
   // at most two buffers (the kernels address chunk << 28 | page)
-  const uint32_t per = uint32_t(std::min<size_t>((g.max_buffer_length() - (size_t(1) << 20)) / lay_.bytes, size_t(1) << 26));
+  const uint32_t per = uint32_t(std::min<size_t>((g.max_buffer_length() - (size_t(1) << 20)) / planes_.bytes, size_t(1) << 26));
   if (n > size_t(2) * per) {
     logi("expert store: %zu slots exceed two Metal buffers; %u kept", n, 2 * per);
     n = size_t(2) * per;
   }
   const size_t c0 = std::min<size_t>(n, per), c1 = n - c0;
-  chunk_[0] = g.alloc(std::max<size_t>(c0, 1) * lay_.bytes, "expert_arena0", /*tracked=*/false);
-  chunk_[1] = c1 ? g.alloc(c1 * lay_.bytes, "expert_arena1", /*tracked=*/false) : chunk_[0];
+  chunk_[0] = g.alloc(std::max<size_t>(c0, 1) * planes_.bytes, "expert_arena0", /*tracked=*/false);
+  chunk_[1] = c1 ? g.alloc(c1 * planes_.bytes, "expert_arena1", /*tracked=*/false) : chunk_[0];
   table_ = g.alloc(keys * 4, "expert_slots", /*tracked=*/false);
   ev_.reset(g.new_shared_event(), [](void* p) { CFRelease(p); });
   next_value_ = Gpu::event_value(ev_.get());
@@ -647,12 +668,12 @@ ExpertStore::ExpertStore(const std::vector<std::string>& files, const std::vecto
   void* ev = ev_.get();
   ExpertCache::Sync sync{[ev] { return Gpu::event_value(ev); }, [ev](uint64_t v) { Gpu::signal_event_cpu(ev, v); },
                          Gpu::heat_on() ? std::function<void()>([] { Gpu::get().keep_warm(kHeatMs); }) : nullptr};
-  cache_ = std::make_unique<ExpertCache>(files, layers, E, lay, uint32_t(n), mem, sync, o.cache);
+  cache_ = std::make_unique<ExpertCache>(files, layers, E, planes_, uint32_t(n), mem, sync, o.cache);
   const StoreStats st = cache_->stats();
   logi("expert store: %u slots of %.2f MB (%.2f GB, %.1f%% of the %zu experts) in %s (up to %.2f GB each); %zu read "
        "at load in %.0f ms (%.2f GB/s)%s",
-       cache_->slots(), lay_.bytes / 1e6, arena_bytes() / 1e9, 100.0 * cache_->slots() / double(keys), keys,
-       c1 ? "two buffers" : "one buffer", double(per) * lay_.bytes / 1e9, cache_->filled(), cache_->fill_ms(),
+       cache_->slots(), planes_.bytes / 1e6, arena_bytes() / 1e9, 100.0 * cache_->slots() / double(keys), keys,
+       c1 ? "two buffers" : "one buffer", double(per) * planes_.bytes / 1e9, cache_->filled(), cache_->fill_ms(),
        cache_->fill_ms() > 0 ? st.bytes / 1e6 / cache_->fill_ms() : 0.0,
        cache_->complete() ? " (all of them: no handshakes)" : "");
   cache_->reset_stats();
