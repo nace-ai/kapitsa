@@ -463,24 +463,26 @@ void Tokenizer::load(const std::string& path) {
   }
   uint32_t b2u[256];
   byte_unicode(b2u);
-  std::unordered_map<uint32_t, uint8_t> u2b;
-  for (int b = 0; b < 256; ++b) u2b[b2u[b]] = uint8_t(b);
+  int16_t u2b[324];
+  std::fill(std::begin(u2b), std::end(u2b), int16_t(-1));
+  for (int b = 0; b < 256; ++b) u2b[b2u[b]] = int16_t(b);
 
   int max_id = 0;
-  for (auto& [tok, id] : model["vocab"].items()) max_id = std::max(max_id, id.get<int>());
+  const auto& vobj = model["vocab"];
+  for (auto& [tok, id] : vobj.items()) max_id = std::max(max_id, id.get<int>());
   for (auto& a : j["added_tokens"]) max_id = std::max(max_id, a["id"].get<int>());
+  vocab_.reserve(vobj.size());
   id_to_bytes_.assign(max_id + 1, "");
   special_.assign(max_id + 1, false);
   added_id_.assign(max_id + 1, false);
-  for (auto& [tok, idj] : model["vocab"].items()) {
+  for (auto& [tok, idj] : vobj.items()) {
     int id = idj.get<int>();
     vocab_[tok] = id;
     std::string raw;
-    for (auto& c : to_cps(tok)) {
-      auto it = u2b.find(c.c);
-      raw += it != u2b.end() ? char(it->second) : '?';
-    }
-    id_to_bytes_[id] = raw;
+    raw.reserve(tok.size());
+    for (auto& c : to_cps(tok))
+      raw.push_back((c.c < 324 && u2b[c.c] >= 0) ? char(u2b[c.c]) : '?');
+    id_to_bytes_[id] = std::move(raw);
   }
   for (int b = 0; b < 256; ++b) {
     std::string u;
@@ -488,21 +490,31 @@ void Tokenizer::load(const std::string& path) {
     auto it = vocab_.find(u);
     byte_id_[b] = it == vocab_.end() ? -1 : it->second;
   }
+  const auto& marr = model["merges"];
+  merges_.reserve(marr.size());
   int rank = 0;
-  for (auto& m : model["merges"]) {
-    std::string a, b;
+  std::string a_tmp, b_tmp, ab;
+  for (auto& m : marr) {
+    const std::string* ap = nullptr;
+    const std::string* bp = nullptr;
     if (m.is_array()) {
-      a = m[0];
-      b = m[1];
+      ap = &m[0].get_ref<const std::string&>();
+      bp = &m[1].get_ref<const std::string&>();
     } else {
-      std::string s = m;
+      const std::string& s = m.get_ref<const std::string&>();
       size_t sp = s.find(' ');
-      a = s.substr(0, sp);
-      b = s.substr(sp + 1);
+      a_tmp.assign(s, 0, sp);
+      b_tmp.assign(s, sp + 1, std::string::npos);
+      ap = &a_tmp;
+      bp = &b_tmp;
     }
-    auto ia = vocab_.find(a), ib = vocab_.find(b), im = vocab_.find(a + b);
-    if (ia != vocab_.end() && ib != vocab_.end() && im != vocab_.end())
-      merges_[(uint64_t(uint32_t(ia->second)) << 32) | uint32_t(ib->second)] = {rank, im->second};
+    auto ia = vocab_.find(*ap), ib = vocab_.find(*bp);
+    if (ia != vocab_.end() && ib != vocab_.end()) {
+      ab.assign(*ap).append(*bp);
+      auto im = vocab_.find(ab);
+      if (im != vocab_.end())
+        merges_[(uint64_t(uint32_t(ia->second)) << 32) | uint32_t(ib->second)] = {rank, im->second};
+    }
     ++rank;
   }
   added_.clear();
