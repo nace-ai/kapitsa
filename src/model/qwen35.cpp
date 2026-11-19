@@ -568,15 +568,16 @@ void Qwen35::prewarm_pipelines() {
           names.insert(n);
       } else if (L.eg && !L.eg.q4() && L.eg.bits != 4) {
         moe_gen = true;
-        names.insert("qrmf_gu_" + L.eg.fmt() + "_m32_n64");
-        names.insert("qrmf_dn_" + L.eg.fmt() + "_m32_n128");
-        names.insert("qmmsf_moe_gu_" + L.eg.fmt());
-        names.insert("qmmsf_moe_dn_" + L.eg.fmt());
+        names.insert("qrmf_gu_" + moe_gu_fmt(L.eg, L.eu) + "_m32_n64");
+        names.insert("qrmf_dn_" + L.ed.fmt() + "_m32_n128");
+        names.insert("qmmsf_moe_gu_" + moe_gu_fmt(L.eg, L.eu));
+        names.insert("qmmsf_moe_dn_" + L.ed.fmt());
       }
-      if (L.eg && !L.eg.exl3 && !moe_rows_kernel(true, L.eg, L.sg).empty() && !(L.eg.q4() && L.sg.q4())) {
-        names.insert(moe_rows_kernel(true, L.eg, L.sg));
+      if (L.eg && !L.eg.exl3 && !moe_gu_rows_kernel(L.eg, L.eu, L.sg).empty() && !(L.eg.q4() && L.sg.q4())) {
+        names.insert(moe_gu_rows_kernel(L.eg, L.eu, L.sg));
         names.insert(moe_rows_kernel(false, L.ed, L.sd, moe_wide()));
-        names.insert("moe8g_gu_" + L.eg.fmt() + "_" + L.sg.fmt());  // when instantiated (else not created)
+        names.insert("moe8g_gu_" + moe_gu_fmt(L.eg, L.eu) + "_" + L.sg.fmt());  // when instantiated (else not created)
+        names.insert("moe8g_down_" + L.ed.fmt() + "_" + L.sd.fmt());
       }
     }
     see(lm_head_);
@@ -920,11 +921,14 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok, const 
   return L;
 }
 
-// Mixed-width routed experts in one layer (OptiQ packs: 2-bit gate or up next to 3-bit others): the fused expert kernels
-// read gate, up and down in one format, so each narrower affine tensor is re-coded at the layer's widest width. A b-bit
-// code q with scale s and bias z is the same code at more bits (w = s q + z), so the weights are unchanged. Tensors
-// already at the widest width are not touched; a layer whose tensors share one width runs natively (f2g128 / f3g128); an all-2-bit group-64 layer is refused by check_formats.
+// Mixed-width routed experts in one layer: 2/3-bit group-128 gate, up and down each run at their own width (OptiQ packs:
+// 2-bit gate or up next to 3-bit others; expert_formats_ok), so nothing is re-coded. Any other mix has no per-projection
+// kernels: the fused expert kernels read gate, up and down in one format, so each narrower affine tensor is re-coded at the
+// layer's widest width. A b-bit code q with scale s and bias z is the same code at more bits (w = s q + z), so the weights
+// are unchanged. Tensors already at the widest width are not touched; an all-2-bit group-64 layer is refused by
+// check_formats.
 void Qwen35::promote_expert_bits(Layer& L) {
+  if (expert_g128(L.eg) && expert_g128(L.eu) && expert_g128(L.ed)) return;
   QLinear* ex[3] = {&L.eg, &L.eu, &L.ed};
   int widest = 0;
   for (QLinear* q : ex)
@@ -1877,6 +1881,19 @@ std::string moe_rows_kernel(bool gate_up, const QLinear& e, const QLinear& s, bo
   if (!have.count(pair)) return "";
   return (gate_up ? "moeg_gu_rows_" : "moeg_down_rows_") + pair;
 }
+// Per-projection routed experts: the fused gate/up kernels take a (gate, up) format pair, down its own format.
+bool expert_g128(const QLinear& q) {
+  return q.gs == 128 && (q.bits == 2 || q.bits == 3) && !q.iq && !q.q20 && !q.exl3;
+}
+bool expert_formats_ok(const QLinear& g, const QLinear& u, const QLinear& d) {
+  return (g.same_format(u) && g.same_format(d)) || (expert_g128(g) && expert_g128(u) && expert_g128(d));
+}
+std::string moe_gu_fmt(const QLinear& g, const QLinear& u) { return g.same_format(u) ? g.fmt() : g.fmt() + "_" + u.fmt(); }
+std::string moe_gu_rows_kernel(const QLinear& g, const QLinear& u, const QLinear& s) {
+  if (g.same_format(u)) return moe_rows_kernel(true, g, s);
+  // wfmt.metal has the 2/3-bit group-128 pairs, next to the 8-bit group-64 shared expert
+  return expert_g128(g) && expert_g128(u) && s.q8() ? "moeg_gu_rows_" + moe_gu_fmt(g, u) + "_" + s.fmt() : "";
+}
 // The routed experts' prefill GEMMs: qrm (4-bit group 64) or the generic qrmf / qmmsf_moe forms.
 static bool moe_prefill_format(const QLinear& q) {
   if (q.bits == 4) return q.gs % 32 == 0;
@@ -2195,13 +2212,16 @@ void Qwen35::check_formats() const {
       if (!why.empty()) fatal("%s: IQ experts (%s) need %s", what, L.eg.name().c_str(), why.c_str());
       return;
     }
-    if (!L.eg.same_format(L.eu) || !L.eg.same_format(L.ed) || !L.sg.same_format(L.su))
+    if (!expert_formats_ok(L.eg, L.eu, L.ed) || !L.sg.same_format(L.su))
       fatal("%s: experts' gate/up/down (or the shared expert's gate/up) differ in format", what);
-    if (!moe_prefill_format(L.eg))
+    if (!moe_prefill_format(L.eg) || !moe_prefill_format(L.eu) || !moe_prefill_format(L.ed))
       fatal("%s: %s routed experts are not supported", what, format_name(L.eg.bits, L.eg.gs).c_str());
-    if (moe_rows_kernel(true, L.eg, L.sg).empty() || moe_rows_kernel(false, L.ed, L.sd, moe_wide()).empty())
+    if (moe_gu_rows_kernel(L.eg, L.eu, L.sg).empty() || moe_rows_kernel(false, L.ed, L.sd, moe_wide()).empty())
       fatal("%s: no MoE kernels for %s experts with a %s shared expert", what, format_name(L.eg.bits, L.eg.gs).c_str(),
             format_name(L.sg.bits, L.sg.gs).c_str());
+    if (!(L.eg.same_format(L.eu) && L.eg.same_format(L.ed)))
+      logi("%s: routed experts gate %s, up %s, down %s: each projection at its own width", what, L.eg.name().c_str(),
+           L.eu.name().c_str(), L.ed.name().c_str());
   };
   for (size_t i = 0; i < layers_.size(); ++i) all(layers_[i], ("layer " + std::to_string(i)).c_str());
 }
@@ -3132,7 +3152,8 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
   // Q2_0 experts: q20::enc_prefill's 8-row tiles (no shared rows)
   const bool q20 = G.q20 && U.q20 && Dn.q20;
   // generic expert formats (wfmt.metal qmmsf_moe_*: bf16, 8/6/5/3-bit group 64): 8-row MMA tiles, no FMA rows
-  const bool gen = !G.q4() && G.bits != 4 && moe_prefill_format(G) && G.same_format(U) && G.same_format(Dn);
+  const bool gen = !G.q4() && G.bits != 4 && moe_prefill_format(G) && moe_prefill_format(U) && moe_prefill_format(Dn) &&
+                   expert_formats_ok(G, U, Dn);
   auto fits = [gen, q20](const QLinear& q) {
     if (q20) return q.q20 && q.K % 64 == 0 && q.N % 8 == 0;
     if (gen) return q.K % 64 == 0 && q.N % 8 == 0;
@@ -3190,7 +3211,7 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
     const std::string form = shortpf_exact() ? "qmms_moe3_" : moe_fma() ? "qmms_moe2_" : "qmms_moe_";
     const QLinear &SG = fold ? L.sg : G, &SU = fold ? L.su : U, &SD = fold ? L.sd : Dn;
     {
-      e.use(pipe(gen ? "qmmsf_moe_gu_" + G.fmt() : form + "gu_b4"));
+      e.use(pipe(gen ? "qmmsf_moe_gu_" + moe_gu_fmt(G, U) : form + "gu_b4"));
       e.buf(0, xh_);
       e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf);
       e.buf(4, U.w->buf); e.buf(5, U.s->buf); e.buf(6, U.b->buf);
@@ -3505,7 +3526,8 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
   const bool q20 = G.q20 && U.q20 && Dn.q20;
   // NI_MOE_QMR: qrm_gu (64 + 64 weight rows) / qrm_dn (128 rows) on 32- or 16-row tiles (4-bit g64)
   // generic expert formats: wfmt.metal's qrmf_* (the qrm design, 32-row tiles)
-  const bool gen = G.bits != 4 && moe_prefill_format(G) && G.same_format(U) && G.same_format(Dn) && G.K % 64 == 0 &&
+  const bool gen = G.bits != 4 && moe_prefill_format(G) && moe_prefill_format(U) && moe_prefill_format(Dn) &&
+                   expert_formats_ok(G, U, Dn) && G.K % 64 == 0 &&
                    Dn.K % 64 == 0 && G.N % 64 == 0 && Dn.N % 128 == 0;
   // qmtm_gu_m64_n64 / qmtm_dn_m64_n64: tile width BN 64 (gate/up: 32 gate + 32 up columns per threadgroup) and K
   // step 32, the measured best; the tensor library builds only these two.
@@ -3594,7 +3616,7 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
                G.dense() ? 0u : G.N * (G.K / G.gs), uint32_t(E)};
     const QLinear &SG = fold ? L.sg : G, &SU = fold ? L.su : U;
     e.use(pipe(qtm ? std::string("qmtm_gu_m64_n64") + moe_stage_sfx()
-               : gen ? "qrmf_gu_" + G.fmt() + "_m32_n64"
+               : gen ? "qrmf_gu_" + moe_gu_fmt(G, U) + "_m32_n64"
                : qrm ? "qrm_gu" + qm + "_n" + std::to_string(kBnGu) : "qmm_moe_gu" + m + "_n" + std::to_string(kBnGu)));
     e.buf(0, xh_);
     e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf);

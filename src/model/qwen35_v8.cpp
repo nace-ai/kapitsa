@@ -1018,12 +1018,15 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
   // the rows, as the 4-bit passes; no scalar small-expert pass), else the per-row MoE (router, top-k and expert
   // matvecs per row; row-independent)
   const bool q4 = L.eg.q4() && L.eu.q4() && L.ed.q4() && L.sg.q4() && L.su.q4() && L.sd.q4();
-  std::string combo;
+  std::string combo, dn_combo;
   if (!q4) {
     static const std::set<std::string> have = {"f16_f16",     "f8g64_f8g64", "f6g64_f6g64", "f6g64_f8g64",
-                                               "f5g64_f5g64", "f5g64_f8g64", "f4g64_f8g64", "f3g64_f8g64", "f3g128_f8g64", "f2g128_f8g64"};
-    combo = L.eg.fmt() + "_" + L.sg.fmt();
-    if (!have.count(combo) || !L.eg.same_format(L.eu) || !L.eg.same_format(L.ed) || !L.sg.same_format(L.su) ||
+                                               "f5g64_f5g64", "f5g64_f8g64", "f4g64_f8g64", "f3g64_f8g64", "f3g128_f8g64", "f2g128_f8g64",
+                                               "f2g128_f3g128_f8g64", "f3g128_f2g128_f8g64"};
+    // gate/up kernel by the (gate, up) pair, down kernel by the down format: each at its own width
+    combo = moe_gu_fmt(L.eg, L.eu) + "_" + L.sg.fmt();
+    dn_combo = L.ed.fmt() + "_" + L.sd.fmt();
+    if (!have.count(combo) || !have.count(dn_combo) || !expert_formats_ok(L.eg, L.eu, L.ed) || !L.sg.same_format(L.su) ||
         !L.sg.same_format(L.sd)) {
       enc_moe_rows(e, L, R, x_, false);
       return false;
@@ -1108,7 +1111,7 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
     // down per tile -> per (row, slot) outputs, then the fixed-order combine
     kp::Moe8Down dp{I, uint32_t(D), dw, ds, I * 8, I / 64 * 8, uint32_t(k)};
     if (!q4 && dn_nf != 2) fatal("moe8g: NI_V8_MOE_NF must be 2 for %s experts", L.eg.fmt().c_str());
-    e.use(pipe8(q4 ? "moe8_down_nf" + std::to_string(dn_nf) : "moe8g_down_" + combo));
+    e.use(pipe8(q4 ? "moe8_down_nf" + std::to_string(dn_nf) : "moe8g_down_" + dn_combo));
     e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
     e.buf(3, L.sd.w->buf); e.buf(4, L.sd.s->buf); e.buf(5, L.sd.b->buf);
     e.buf(6, v8h_); e.buf(7, v8hs_); e.buf(8, v8out_); e.buf(9, v8sh_);
