@@ -8,6 +8,7 @@
 #include "engine/think_control.h"
 #include "engine/tool_args.h"
 #include "model/flint_kv.h"
+#include "model/hy4_flash.h"
 #include "model/kv_grow.h"
 #include "model/qwen4_config.h"
 #include "splash/runtime.h"
@@ -28,6 +29,7 @@
 #include <deque>
 #include <map>
 #include <mutex>
+#include <regex>
 #include <fstream>
 #include <random>
 #include <sstream>
@@ -300,6 +302,10 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
          opts_.slots == kAutoSlots ? "the default where memory allows"
                                    : "as many as this budget holds with one full conversation, the same drafter and prefill chunk");
   }
+  // Hy4-flash runs one request at a time: its streamed experts' store and its passes are single-stream
+  if (opts_.slots > 1 && Hy4Flash::is_model(opts_.model_dir))
+    throw std::runtime_error("Hy4-flash runs one request at a time: --slots " + std::to_string(opts_.slots) +
+                             " is not supported (leave --slots out, or give 1)");
   // DFlash2 block drafter (src/model/dflash2.h), default "auto": a drafter matching the model
   // (DFlash2::find: next to it or in ~/.cache/nace-infer-models/drafters) replaces MTP; without one MTP stays.
   // --dflash none / NI_DFLASH=0 keeps MTP, --dflash <dir> names the drafter, --spec 0 turns both off. Found before
@@ -349,7 +355,12 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       defaults_.top_k = omitted_top_k(gc.contains("top_k") && gc["top_k"].is_number() ? gc["top_k"].get<int>() : 0);
     }
   };
-  if (Qwen4Exp::is_model(opts_.model_dir)) {
+  if (Hy4Flash::is_model(opts_.model_dir)) {
+    auto m = std::make_unique<Hy4Flash>(opts_.model_dir, opts_.prefill_chunk);
+    q35_ = m.get();
+    hy4_ = m.get();
+    model_ = std::move(m);
+  } else if (Qwen4Exp::is_model(opts_.model_dir)) {
     // Qwen3.8-Flash-Next; a Q2_0 pack's expert store takes what the budget leaves after the slots' state and one
     // conversation's KV cache (up to 32K tokens); the plan's context and slots also go to the model, whose store's
     // avail guard reserves every slot's KV (up to the same 32K window) against the available memory it sizes on
@@ -403,6 +414,10 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   reasoning_effort_template_ = !flint_ && !nh_ && !dory_ && src.find("reasoning_effort") != std::string::npos;
   think_open_ = tok_.find("<think>");
   think_close_ = tok_.find("</think>");
+  if (think_open_ < 0 && think_close_ < 0) {  // Hy4-flash: its tags carry the template's HYTK suffix
+    think_open_ = tok_.find("<think:opensource>");
+    think_close_ = tok_.find("</think:opensource>");
+  }
   tc_open_ = tok_.find("<tool_call>");
   tc_close_ = tok_.find("</tool_call>");
   think_space_.assign(size_t(tok_.vocab_size()), 0);
@@ -793,7 +808,7 @@ std::string unsupported_model(const std::string& model_dir) {
     return why ? why : "";
   }
   if (Qwen4Exp::is_model(model_dir) || Dory::is_model(model_dir) || NemotronH::is_model(model_dir) ||
-      Clover::is_model(model_dir))
+      Clover::is_model(model_dir) || Hy4Flash::is_model(model_dir))
     return "";
   // the Qwen3.5 family by its model_type (Hugging Face's, and what the GGUF import writes); a config that names none,
   // by the hybrid's shape, as the Hub check reads it (src/hub/fetch.cpp, check_supported)
@@ -838,7 +853,8 @@ MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
     if (const auto it = plans.find(key); it != plans.end()) return it->second;
   }
   if (const std::string why = unsupported_model(model_dir); !why.empty()) throw std::runtime_error(why);
-  const MemPlan p = Dory::is_model(model_dir)       ? Dory::plan(model_dir, prefill_chunk)
+  const MemPlan p = Hy4Flash::is_model(model_dir)   ? Hy4Flash::plan(model_dir, prefill_chunk)
+                    : Dory::is_model(model_dir)       ? Dory::plan(model_dir, prefill_chunk)
                     : Flint::is_model(model_dir)    ? Flint::plan(model_dir, prefill_chunk)
                     : Qwen4Exp::is_model(model_dir) ? Qwen4Exp::plan(model_dir, prefill_chunk)
                     : NemotronH::is_model(model_dir) ? NemotronH::plan(model_dir, prefill_chunk)
@@ -848,7 +864,7 @@ MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
   return p;
 }
 static size_t model_ane_bytes(const std::string& model_dir, const MemPlan& p) {
-  if (Dory::is_model(model_dir) || Flint::is_model(model_dir)) return 0;
+  if (Dory::is_model(model_dir) || Flint::is_model(model_dir) || Hy4Flash::is_model(model_dir)) return 0;
   return NemotronH::is_model(model_dir) ? p.ane : Qwen35::ane_plan(model_dir, p).bytes;
 }
 
@@ -991,8 +1007,8 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   // its own decoding (self-speculative or block diffusion)
   const bool clover = Clover::is_model(model_dir);
   if (clover && Clover::decode_mode() != "auto" && Clover::decode_mode() != "dflash") lp.dflash_off = true;
-  if (Dory::is_model(model_dir) || Flint::is_model(model_dir)) {
-    lp.dflash_off = true;  // no block drafter for Dory or Flint
+  if (Dory::is_model(model_dir) || Flint::is_model(model_dir) || Hy4Flash::is_model(model_dir)) {
+    lp.dflash_off = true;  // no block drafter for Dory, Flint or Hy4-flash (its DFly2 drafter: not wired yet)
   } else if (NemotronH::is_model(model_dir)) {
     // the block drafter (LiLiCorr, DSpark) in the model's dflash/ folder (auto), or the one named
     if (!lp.dflash_off) {
@@ -1166,6 +1182,8 @@ StartPlan start_plan(const std::string& model_dir, const EngineOptions& opt, siz
 }
 
 int auto_slots(const std::string& model_dir, const EngineOptions& opt, size_t budget) {
+  // Hy4-flash: one request at a time (its streamed experts' store is single-stream)
+  if (Hy4Flash::is_model(model_dir)) return 1;
   try {
     // two slots that cannot even start where one can (fits_small): one
     const int start = std::min(opt.context, 8192);
@@ -2176,6 +2194,12 @@ std::string chat_template_source(const std::string& model_dir) {
     auto cfg = nlohmann::json::parse(read_file(model_dir + "/tokenizer_config.json"), nullptr, false);
     if (cfg.is_object() && cfg.contains("chat_template") && cfg["chat_template"].is_string()) src = cfg["chat_template"];
   }
+  // Python's str.format, which minja does not have, in its one-placeholder form: 'a{}b'.format(X) -> ('a' ~ X ~ 'b')
+  // (Hy4-flash's template builds its special tokens so)
+  if (src.find("'.format(") != std::string::npos) {
+    static const std::regex fmt(R"('([^'{}\n]*)\{\}([^'{}\n]*)'\.format\(([A-Za-z_][A-Za-z_0-9]*)\))");
+    src = std::regex_replace(src, fmt, "('$1' ~ $3 ~ '$2')");
+  }
   return src;
 }
 
@@ -2656,7 +2680,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     return res;
   }
   // the reply starts inside the reasoning (the prompt ends with the think tag)
-  const bool think = !text.empty() && text.size() >= 8 && text.compare(text.size() - 8, 8, "<think>\n") == 0;
+  auto ends_with = [&](const char* t) {
+    const size_t k = strlen(t);
+    return text.size() >= k && text.compare(text.size() - k, k, t) == 0;
+  };
+  const bool think = ends_with("<think>\n") || ends_with("<think:opensource>");  // (Hy4-flash: no newline)
   res.thinking_level = request_thinking_level(r, think);
   // Structured output: the grammar's matcher on this model's vocabulary (the vocabulary's trie is built by the first
   // such request, here, before the GPU turn). The grammar holds the reply from its first token, or after </think>.

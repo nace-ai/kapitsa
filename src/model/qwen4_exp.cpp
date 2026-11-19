@@ -1,4 +1,5 @@
 #include "model/qwen4_exp.h"
+#include "model/hy4_flash.h"
 #include "engine/device_profile.h"
 #include "engine/profile.h"
 #include "loader/safetensors.h"
@@ -209,6 +210,7 @@ Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk, size_t mem_budget,
 }
 
 std::unique_ptr<Qwen35> load_qwen(const std::string& dir, int prefill_chunk, bool allow_noncausal) {
+  if (Hy4Flash::is_model(dir)) return std::make_unique<Hy4Flash>(dir, prefill_chunk);
   if (Qwen4Exp::is_model(dir)) return std::make_unique<Qwen4Exp>(dir, prefill_chunk);
   if (!allow_noncausal) Qwen35::require_causal(dir);
   return std::make_unique<Qwen35>(dir, prefill_chunk);

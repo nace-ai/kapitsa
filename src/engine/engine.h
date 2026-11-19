@@ -33,6 +33,10 @@
 #include <string>
 #include <vector>
 
+namespace ni {
+class Hy4Flash;
+}
+
 namespace ni::splash {
 class Runtime;
 }
@@ -691,6 +695,7 @@ class Engine {
   NemotronH* nh_ = nullptr;  // model_ when it is a Nemotron-H model
   Dory* dory_ = nullptr;     // model_ when it is a Dory model
   Flint* flint_ = nullptr;   // model_ when it is a Flint model
+  Hy4Flash* hy4_ = nullptr;  // model_ when it is Hy4-flash
   Clover* clover_ = nullptr;  // model_ when it is Clover (block diffusion; q35_ too)
   int flint_ngram_ = 0;      // Flint: prompt-lookup drafts per cycle (0: plain decoding)
   // Flint: self-drafts per cycle at long contexts (Flint::encode_draft; 0: none), their full-attention layers' window,
