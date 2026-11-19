@@ -1435,6 +1435,7 @@ KFlash's knobs are `NI_KFLASH_<NAME>`; each was `NI_DFLASH_<NAME>` before #362 a
 | `NI_CLOVER_BLOCK` | the model's (`32`) | Clover, `diffusion`: positions per block, a divisor of the model's block size. |
 | `NI_CLOVER_CORESET` | the model's (on) | Clover: `0` lets every row of a denoising pass route among all the experts instead of the block's shared set (the experts holding 90% of the block's routing mass). |
 | `NI_HY4_DENSE` | | Hy4-flash, debugging: `1` makes the 12 full-context layers attend to every key past 2048 tokens instead of the groups their compressed indexer selects ([Other models](#other-models)). |
+| `NI_HY4_DUMP_SEL` | | Hy4-flash, debugging: a file that `build/hy4_dump` fills with the key groups each full-context layer's indexer selected past 2048 tokens in the prompt's passes (decode steps are not recorded), for `tools/hy4_mlx_layers.py --sel-compare` to compare with MLX's. Nothing is copied when it is unset. |
 | `NI_HY4_LAYERS` | | Hy4-flash, debugging: `n` runs only the first `n` layers, then the head (for a pack whose later layers are not written yet). The outputs are not the model's. |
 | `NI_HY4_NO_ENGRAM` | | Hy4-flash, debugging: `1` skips the four Engram layers' memory lookups. The outputs are not the model's. |
 | `NI_FLINT_NGRAM` | `0` | Flint: prompt lookup's drafts per cycle when `--spec` is not given (up to 7); `0` decodes plainly. |
