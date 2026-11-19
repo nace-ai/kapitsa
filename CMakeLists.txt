@@ -74,6 +74,7 @@ add_custom_command(
           -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_hy4.cmake
   DEPENDS ${NI_HY4_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/src/kernels/quant.h
           ${CMAKE_SOURCE_DIR}/src/kernels/kv_int8.h
+          ${CMAKE_SOURCE_DIR}/src/kernels/attn.metal
           ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_hy4.cmake
   COMMENT "Embedding the Hy4-flash Metal kernels")
 
