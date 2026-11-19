@@ -55,10 +55,13 @@ bool format_supported(int bits, int gs) {
   if (gs == 64) return bits == 3 || bits == 4 || bits == 5 || bits == 6 || bits == 8;
   return gs == 32 && bits == 4;
 }
-// Routed experts only: 2-bit group 64 (a 2-bit group-128 pack read as group 64) loads when the layer's other expert
-// tensors are wider, because the loader then promotes it to that width (promote_expert_bits); no kernel reads 2-bit.
+// Routed experts only: 2/3-bit group 128 is read natively (f2g128 / f3g128 in wfmt.metal's MoE kernels, scales and biases
+// at group 128). 2-bit group 64 loads only when the layer's other expert tensors are wider, because the loader then
+// promotes it to that width (promote_expert_bits); no group-64 2-bit kernel exists.
 static bool expert_module(const std::string& m) { return m.find("switch_mlp") != std::string::npos; }
-static bool expert_format_supported(int bits, int gs) { return format_supported(bits, gs) || (bits == 2 && gs == 64); }
+static bool expert_format_supported(int bits, int gs) {
+  return format_supported(bits, gs) || (bits == 2 && gs == 64) || (gs == 128 && (bits == 2 || bits == 3));
+}
 std::string format_name(int bits, int gs) {
   return bits == 16 ? std::string("bf16") : std::to_string(bits) + "-bit group " + std::to_string(gs);
 }
@@ -86,7 +89,7 @@ std::string unsupported_quantization(const std::string& model_dir) {
   auto note = [&](const std::string& module, const std::string& m, int b, int g) {
     std::string what;  // "" = readable
     if (m == "affine") {
-      const int kg = affine_kernel_group_size(b, g);
+      const int kg = affine_kernel_group_size(b, g, expert_module(module) || module == "the default");
       // the default entry covers only modules without their own (a 2-bit default is a routed-expert recipe)
       if (!((expert_module(module) || module == "the default") ? expert_format_supported(b, kg) : format_supported(b, kg)))
         what = format_name(b, g);
@@ -113,7 +116,7 @@ std::string unsupported_quantization(const std::string& model_dir) {
   return "its config.json quantizes " + std::to_string(modules) + (modules == 1 ? " module" : " modules") + " in " +
          formats + " (" + first + (modules > 1 ? ", ..." : "") +
          "), a format Kapitsa has no kernels for. It runs MLX affine weights in bf16, 3/4/5/6/8-bit group 64 and 4-bit "
-         "group 32 (and 2/3/5/8-bit group 128 with bf16 scales; 2-bit routed experts only next to wider ones in the same "
+         "group 32 (and 2/3/5/8-bit group 128 with bf16 scales; 2-bit group 64 routed experts only next to wider ones in the same "
          "layer). Use a pack in one of those.";
 }
 std::string QLinear::fmt() const {
@@ -891,7 +894,7 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok, const 
   L.K = uint32_t(words * 32 / bits);
   L.N = uint32_t(L.w->shape[L.w->shape.size() - 2]);
   if (int64_t(L.K / gs) != L.s->shape.back() || L.K % gs) fatal("%s: bits/group mismatch", full.c_str());
-  if (affine_kernel_group_size(bits, gs) != gs && L.s->dtype == DType::BF16 && L.b->dtype == DType::BF16) {
+  if (affine_kernel_group_size(bits, gs, expert_module(full)) != gs && L.s->dtype == DType::BF16 && L.b->dtype == DType::BF16) {
     // 5/8-bit group 128 as group 64, exactly: each group's scale and bias twice (any leading dims: a
     // matrix [N, K/128] or stacked experts [E, N, K/128])
     auto split = [&](const Tensor* t) {
@@ -920,7 +923,7 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok, const 
 // Mixed-width routed experts in one layer (OptiQ packs: 2-bit gate or up next to 3-bit others): the fused expert kernels
 // read gate, up and down in one format, so each narrower affine tensor is re-coded at the layer's widest width. A b-bit
 // code q with scale s and bias z is the same code at more bits (w = s q + z), so the weights are unchanged. Tensors
-// already at the widest width are not touched; an all-2-bit layer stays 2-bit and check_formats refuses it.
+// already at the widest width are not touched; a layer whose tensors share one width runs natively (f2g128 / f3g128); an all-2-bit group-64 layer is refused by check_formats.
 void Qwen35::promote_expert_bits(Layer& L) {
   QLinear* ex[3] = {&L.eg, &L.eu, &L.ed};
   int widest = 0;
@@ -1864,12 +1867,12 @@ std::string moe_rows_kernel(bool gate_up, const QLinear& e, const QLinear& s, bo
   if (wide && !gate_up) {
     if (e.q4() && s.q4()) return "moe_down_rows_g64_w";
     const std::string pair = e.fmt() + "_" + s.fmt();
-    return pair == "f4g64_f8g64" || pair == "f3g64_f8g64" ? "moeg_down_rows_" + pair + "_w" : "";
+    return pair == "f4g64_f8g64" || pair == "f3g64_f8g64" || pair == "f3g128_f8g64" || pair == "f2g128_f8g64" ? "moeg_down_rows_" + pair + "_w" : "";
   }
   if (e.q4() && s.q4()) return gate_up ? "moe_gate_up_rows_g64" : "moe_down_rows_g64";
   if (e.bits == 4 && e.gs == 32 && s.q8()) return gate_up ? "moe_gate_up_rows_g32_s8" : "moe_down_rows_g32_s8";
   static const std::set<std::string> have = {"f16_f16",     "f8g64_f8g64", "f4g64_f8g64", "f6g64_f6g64", "f6g64_f8g64",
-                                             "f5g64_f5g64", "f5g64_f8g64", "f3g64_f8g64", "f4g64_f4g64"};
+                                             "f5g64_f5g64", "f5g64_f8g64", "f3g64_f8g64", "f4g64_f4g64", "f3g128_f8g64", "f2g128_f8g64"};
   const std::string pair = e.fmt() + "_" + s.fmt();
   if (!have.count(pair)) return "";
   return (gate_up ? "moeg_gu_rows_" : "moeg_down_rows_") + pair;
@@ -1877,7 +1880,8 @@ std::string moe_rows_kernel(bool gate_up, const QLinear& e, const QLinear& s, bo
 // The routed experts' prefill GEMMs: qrm (4-bit group 64) or the generic qrmf / qmmsf_moe forms.
 static bool moe_prefill_format(const QLinear& q) {
   if (q.bits == 4) return q.gs % 32 == 0;
-  return q.gs == 64 && (q.bits == 3 || q.bits == 5 || q.bits == 6 || q.bits == 8) || q.dense();
+  return q.gs == 64 && (q.bits == 3 || q.bits == 5 || q.bits == 6 || q.bits == 8) || (q.gs == 128 && (q.bits == 2 || q.bits == 3)) ||
+         q.dense();
 }
 
 // ---- test transforms (NI_DEQUANT, NI_REQUANT): other formats from a 4-bit model, same function ----

@@ -64,7 +64,9 @@ int main() {
   printf("packed interleave: %zu cases\n", interleaves);
   check(affine_kernel_group_size(5, 128) == 64, "5-bit group 128 reuses group-64 kernels");
   check(affine_kernel_group_size(8, 128) == 64, "8-bit group 128 keeps its group-64 path");
-  check(affine_kernel_group_size(3, 128) == 64 && affine_kernel_group_size(2, 128) == 64, "2/3-bit group 128 reuse group-64 kernels");
+  check(affine_kernel_group_size(3, 128) == 64 && affine_kernel_group_size(2, 128) == 64, "dense 2/3-bit group 128 reuse group-64 kernels");
+  check(affine_kernel_group_size(3, 128, true) == 128 && affine_kernel_group_size(2, 128, true) == 128, "routed 2/3-bit group 128 stay native");
+  check(affine_kernel_group_size(8, 128, true) == 64 && affine_kernel_group_size(5, 128, true) == 64, "routed 5/8-bit group 128 reuse group-64 kernels");
   for (int bits : {4, 6})
     check(affine_kernel_group_size(bits, 128) == 128, "other group-128 formats stay unsupported");
   for (int bits : {2, 3, 4, 5, 6, 8})

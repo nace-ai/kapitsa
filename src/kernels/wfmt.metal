@@ -1469,7 +1469,7 @@ NI_QRF(qrf_f16_m8_n64, 16, 64, 8, 64, 1, 2, false)
 #define NI_WF_LOW(X) X(f6g64, 6, 64) X(f5g64, 5, 64) X(f3g64, 3, 64) X(f4g32, 4, 32)
 #define NI_WF_NO8(X) X(f16, 16, 64) NI_WF_LOW(X)
 #define NI_WF_ALL(X) NI_WF_NO8(X) X(f8g64, 8, 64)
-#define NI_WF_MOE(X) X(f16, 16, 64) X(f8g64, 8, 64) X(f6g64, 6, 64) X(f5g64, 5, 64) X(f3g64, 3, 64)
+#define NI_WF_MOE(X) X(f16, 16, 64) X(f8g64, 8, 64) X(f6g64, 6, 64) X(f5g64, 5, 64) X(f3g64, 3, 64) X(f3g128, 3, 128) X(f2g128, 2, 128)
 
 #define NI_WF_DECODE(SFX, F, GS)                                     \
   NI_QMVG(qmvg_##SFX##_r2, F, GS, 2, false, false)                   \
@@ -1535,6 +1535,8 @@ NI_MOE8G(f5g64_f5g64, 5, 64, 5, 64)
 NI_MOE8G(f5g64_f8g64, 5, 64, 8, 64)
 NI_MOE8G(f4g64_f8g64, 4, 64, 8, 64)
 NI_MOE8G(f3g64_f8g64, 3, 64, 8, 64)
+NI_MOE8G(f3g128_f8g64, 3, 128, 8, 64)  // MLX group-128 routed experts read natively (scales and biases per 128)
+NI_MOE8G(f2g128_f8g64, 2, 128, 8, 64)
 
 // MoE rows: routed experts x shared expert formats seen in MLX packs
 NI_MOEG_GU_ROWS(moeg_gu_rows_f16_f16, 16, 64, 16, 64)
@@ -1553,11 +1555,17 @@ NI_MOEG_GU_ROWS(moeg_gu_rows_f5g64_f8g64, 5, 64, 8, 64)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f5g64_f8g64, 5, 64, 8, 64, 9 * 512)
 NI_MOEG_GU_ROWS(moeg_gu_rows_f3g64_f8g64, 3, 64, 8, 64)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f3g64_f8g64, 3, 64, 8, 64, 9 * 512)
+NI_MOEG_GU_ROWS(moeg_gu_rows_f3g128_f8g64, 3, 128, 8, 64)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f3g128_f8g64, 3, 128, 8, 64, 9 * 512)
+NI_MOEG_GU_ROWS(moeg_gu_rows_f2g128_f8g64, 2, 128, 8, 64)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f2g128_f8g64, 2, 128, 8, 64, 9 * 512)
 NI_MOEG_GU_ROWS(moeg_gu_rows_f4g64_f4g64, 4, 64, 4, 64)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f4g64_f4g64, 4, 64, 4, 64, 9 * 512)
 // wide experts ((k + 1) * max(I, SI) <= 7168 staged floats: Qwen3.8-Flash-Next's 11 x 640)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f4g64_f8g64_w, 4, 64, 8, 64, 7168)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f3g64_f8g64_w, 3, 64, 8, 64, 7168)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f3g128_f8g64_w, 3, 128, 8, 64, 7168)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f2g128_f8g64_w, 2, 128, 8, 64, 7168)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f8g64_f8g64_w, 8, 64, 8, 64, 7168)  // (Flint's 7 x 1024)
 
 // Neural Engine split (ane_ffn.metal): weight staging from each format, and the GPU's share of the down projection

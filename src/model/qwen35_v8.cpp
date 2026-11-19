@@ -1021,7 +1021,7 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
   std::string combo;
   if (!q4) {
     static const std::set<std::string> have = {"f16_f16",     "f8g64_f8g64", "f6g64_f6g64", "f6g64_f8g64",
-                                               "f5g64_f5g64", "f5g64_f8g64", "f4g64_f8g64", "f3g64_f8g64"};
+                                               "f5g64_f5g64", "f5g64_f8g64", "f4g64_f8g64", "f3g64_f8g64", "f3g128_f8g64", "f2g128_f8g64"};
     combo = L.eg.fmt() + "_" + L.sg.fmt();
     if (!have.count(combo) || !L.eg.same_format(L.eu) || !L.eg.same_format(L.ed) || !L.sg.same_format(L.su) ||
         !L.sg.same_format(L.sd)) {
