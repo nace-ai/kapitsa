@@ -90,6 +90,11 @@ ojson user_content(const ojson& c) {
 // The prompt's name for a namespaced tool
 std::string alias(const std::string& ns, const std::string& name) { return ns + "__" + name; }
 
+std::string prompt_name(const ojson& tool) {
+  const std::string ns = str(tool, "namespace"), name = str(tool, "name");
+  return ns.empty() ? name : alias(ns, name);
+}
+
 // The response an output item of ours came from: its id is <kind>_<response>_<index> (see ResponsesStream)
 std::string response_of(const ojson& it) {
   const std::string id = str(it, "id");
@@ -178,13 +183,11 @@ void add_item(const ojson& it, Conv& cv) {
     ojson& a = cv.turn(it);
     a["reasoning_content"] = (a.contains("reasoning_content") ? a["reasoning_content"].get<std::string>() : "") + r;
   } else if (type == "function_call") {
-    std::string name = str(it, "name");
-    if (!str(it, "namespace").empty()) name = alias(str(it, "namespace"), name);
-    cv.call(it, name, arguments_object(it.contains("arguments") ? it["arguments"] : ojson()));
+    cv.call(it, prompt_name(it), arguments_object(it.contains("arguments") ? it["arguments"] : ojson()));
     if (it.contains("arguments") && it["arguments"].is_string())  // the spelling of each value, as the client sent it
       tool_args::note_raw(cv.pending["tool_calls"].back()["function"], it["arguments"].get<std::string>());
   } else if (type == "custom_tool_call") {
-    cv.call(it, str(it, "name"), ojson{{"input", str(it, "input")}});
+    cv.call(it, prompt_name(it), ojson{{"input", str(it, "input")}});
   } else if (type == "function_call_output" || type == "custom_tool_call_output") {
     ojson out = it.contains("output") ? it["output"] : ojson("");
     if (out.is_object() && out.contains("content")) out = out["content"];
@@ -208,14 +211,14 @@ ojson function_tool(const std::string& name, const ojson& t) {
 }
 
 // A freeform tool as a function with one string parameter, `input` (its grammar, if any, in the description)
-ojson custom_tool(const ojson& t) {
+ojson custom_tool(const std::string& name, const ojson& t) {
   std::string about = "The input to the tool, as free text";
   const ojson fmt = t.contains("format") ? t["format"] : ojson();
   if (str(fmt, "type") == "grammar" && !str(fmt, "definition").empty())
     about += ". It must match this " + (str(fmt, "syntax").empty() ? std::string("") : str(fmt, "syntax") + " ") +
              "grammar:\n" + str(fmt, "definition");
   ojson f = ojson::object();
-  f["name"] = str(t, "name");
+  f["name"] = name;
   if (t.contains("description") && t["description"].is_string()) f["description"] = t["description"];
   f["parameters"] = {{"type", "object"},
                      {"properties", {{"input", {{"type", "string"}, {"description", about}}}}},
@@ -272,15 +275,21 @@ ResponsesRequest responses_request(const ojson& body, const ResponseStore& store
       if (type == "function" && !name.empty()) {
         r.tools.push_back(function_tool(name, t));
       } else if (type == "custom" && !name.empty()) {
-        r.tools.push_back(custom_tool(t));
+        r.tools.push_back(custom_tool(name, t));
         q.custom.insert(name);
       } else if (type == "namespace" && t.contains("tools") && t["tools"].is_array()) {
-        for (const auto& c : t["tools"])
-          if (str(c, "type") == "function" && !str(c, "name").empty()) {
-            const std::string a = alias(name, str(c, "name"));
+        for (const auto& c : t["tools"]) {
+          const std::string child = str(c, "name"), kind = str(c, "type");
+          if (child.empty() || (kind != "function" && kind != "custom")) continue;
+          const std::string a = alias(name, child);
+          if (kind == "custom") {
+            r.tools.push_back(custom_tool(a, c));
+            q.custom.insert(a);
+          } else {
             r.tools.push_back(function_tool(a, c));
-            q.namespaced[a] = {name, str(c, "name")};
           }
+          q.namespaced[a] = {name, child};
+        }
       } else {
         log_once("tool " + type + name, "responses: tool " + (name.empty() ? type : name + " (" + type + ")") +
                                             " left out: a built-in tool this server does not run");
@@ -302,10 +311,6 @@ ResponsesRequest responses_request(const ojson& body, const ResponseStore& store
       else if (type == "json_schema") schema_format(f, spec, "text.format");
       else if (type != "text") bad("text.format.type must be \"text\", \"json_object\" or \"json_schema\"", "text.format.type");
     }
-    // a function's name as the prompt declares it (a namespace's functions go by namespace__name)
-    auto prompt_name = [&](const ojson& c) {
-      return str(c, "namespace").empty() ? str(c, "name") : alias(str(c, "namespace"), str(c, "name"));
-    };
     if (body.contains("tool_choice") && !body["tool_choice"].is_null()) {
       const ojson& tc = body["tool_choice"];
       const std::string type = tc.is_string() ? tc.get<std::string>() : str(tc, "type");
@@ -523,6 +528,8 @@ std::string ResponsesStream::delta(const ChatDelta& d) {
     s += close();
     const int index = int(output_.size());
     ojson item;
+    std::string name = tc.name, ns;
+    if (auto it = namespaced_.find(tc.name); it != namespaced_.end()) ns = it->second.first, name = it->second.second;
     if (custom_.count(tc.name)) {
       // a freeform tool: its input is the call's one string argument
       const ojson args = ojson::parse(tc.arguments, nullptr, false);
@@ -530,14 +537,13 @@ std::string ResponsesStream::delta(const ChatDelta& d) {
       if (args.is_object() && args.contains("input") && args["input"].is_string()) input = args["input"];
       else if (args.is_object() && args.size() == 1 && args.begin()->is_string()) input = args.begin()->get<std::string>();
       const std::string id = item_id("ctc");
-      item = {{"id", id}, {"type", "custom_tool_call"}, {"call_id", tc.id}, {"name", tc.name}, {"input", ""}};
+      item = {{"id", id}, {"type", "custom_tool_call"}, {"call_id", tc.id}, {"name", name}, {"input", ""}};
+      if (!ns.empty()) item["namespace"] = ns;
       s += event("response.output_item.added", {{"output_index", index}, {"item", item}});
       s += event("response.custom_tool_call_input.delta", {{"item_id", id}, {"output_index", index}, {"delta", input}});
       s += event("response.custom_tool_call_input.done", {{"item_id", id}, {"output_index", index}, {"input", input}});
       item["input"] = input;
     } else {
-      std::string name = tc.name, ns;
-      if (auto it = namespaced_.find(tc.name); it != namespaced_.end()) ns = it->second.first, name = it->second.second;
       const std::string id = item_id("fc");
       item = {{"id", id}, {"type", "function_call"}, {"status", "in_progress"}, {"arguments", ""}, {"call_id", tc.id}, {"name", name}};
       if (!ns.empty()) item["namespace"] = ns;
