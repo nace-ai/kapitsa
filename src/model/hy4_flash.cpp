@@ -385,7 +385,31 @@ void Hy4Flash::alloc_hy() {
   owned_bufs_.insert(owned_bufs_.end(), {X_, u_, xn_, y_, post_a_, post_m_, xh_, qa_, kvl_, kr_, gt_, q_, att_, dg_,
                                          du_, rl_, idx_, wts_, sgb_, sub_, shb_, ysb_, lat_, ylat_, moe_scratch_, eng_v_,
                                          eng_k_, eng_pf_[0], eng_pf_[1], ix_tk_, ix_hw_, ix_q_, sel_});
+  if (getenv("NI_HY4_DUMP_SEL")) {  // debug: room for every indexed layer's selection of one pass
+    size_t nix = 0;
+    for (const Hy4Layer& L : hl_) nix += L.ix ? 1 : 0;
+    seldump_ = g.alloc(std::max<size_t>(nix, 1) * T * hy4::kIndexGroups * 4, "hy_seldump");
+    owned_bufs_.push_back(seldump_);
+  }
   Gpu::get().make_resident(owned_bufs_);
+}
+
+void Hy4Flash::write_selection() {
+  if (!seldump_ || seldump_rec_.empty()) return;
+  static FILE* f = [] {
+    const char* path = getenv("NI_HY4_DUMP_SEL");
+    FILE* fp = fopen(path, "wb");
+    if (!fp) fatal("NI_HY4_DUMP_SEL: cannot write %s", path);
+    return fp;
+  }();
+  const size_t row = hy4::kIndexGroups;
+  for (size_t k = 0; k < seldump_rec_.size() / 3; ++k) {
+    const int32_t hdr[3] = {seldump_rec_[3 * k], seldump_rec_[3 * k + 1], seldump_rec_[3 * k + 2]};
+    fwrite(hdr, 4, 3, f);
+    fwrite(seldump_.as<uint32_t>() + k * size_t(tmax_) * row, 4, size_t(hdr[2]) * row, f);
+  }
+  fflush(f);
+  seldump_rec_.clear();
 }
 
 // ---- sequences ----
@@ -590,6 +614,16 @@ void Hy4Flash::enc_attn_block(Encoder& e, Seq& s, int i, int pos0, int R, bool p
       mm(e, L.ix_q, qa_, L.q_a_norm, ix_q_, R);  // q_resid = q_a_layernorm(q_a)
       hy4::enc_index_select(e, L.at, x, pos0, R, ix_q_, 16 * 128, 0, ix_hw_, 16, 0, sel_, ix_scratch_);
       sel = &sel_;
+      if (seldump_ && prefill) {  // NI_HY4_DUMP_SEL (debug): prefill passes (a 1-row tail too), not decode steps
+        const size_t row = size_t(hy4::kIndexGroups) * 4, k = seldump_rec_.size() / 3;
+        if ((k + 1) * size_t(tmax_) * row <= seldump_.size) {
+          enc_copy(e, sel_.view(0, size_t(R) * row), seldump_.view(k * size_t(tmax_) * row, size_t(R) * row));
+          seldump_rec_.insert(seldump_rec_.end(), {i, pos0, R});
+        } else if (!seldump_full_) {  // nothing called write_selection() (kapitsa serve): stop recording
+          seldump_full_ = true;
+          logi("NI_HY4_DUMP_SEL: no write_selection() since the last pass; the selections are no longer recorded");
+        }
+      }
     }
   }
   // prefill: the attention rows in half straight into o_proj's GEMM

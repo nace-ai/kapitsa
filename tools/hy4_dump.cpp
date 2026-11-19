@@ -99,6 +99,7 @@ int main(int argc, char** argv) {
     m.encode_prefill(*e, *s, pos0, T, sp, 0, last && gen > 0);
     if (fo && pos0 < rows) m.encode_logits_rows(*e, T, lg);
     e->commit_and_wait();
+    m.write_selection();  // NI_HY4_DUMP_SEL (debug); a no-op without it
     if (fo && pos0 < rows) {
       const int w = std::min(T, rows - pos0);
       fwrite(lg.ptr(), 4, size_t(w) * V, fo);
