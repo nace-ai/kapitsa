@@ -96,6 +96,14 @@ size_t auto_store_kv(size_t kv_per_pos, int planned_ctx, int slots) {
 
 // ---- ExpertCache ----
 
+// The first two planes of q that share a byte of the slot (the readers would write both there): false if none do
+static bool planes_overlap(const SlotPlanes& q, uint32_t& a, uint32_t& b) {
+  for (a = 0; a < q.n; ++a)
+    for (b = a + 1; b < q.n; ++b)
+      if (q.at[a] < q.at[b] + q.len[b] && q.at[b] < q.at[a] + q.len[a]) return true;
+  return false;
+}
+
 ExpertCache::ExpertCache(const std::vector<std::string>& files, const std::vector<LayerSrc>& layers, uint32_t E,
                          const SlotPlanes& lay, uint32_t nslots, const Memory& mem, const Sync& sync, const Options& o)
     : L_(uint32_t(layers.size())), E_(E), nslots_(nslots), lay_(lay), mem_(mem), sync_(sync), direct_(o.direct),
@@ -108,12 +116,16 @@ ExpertCache::ExpertCache(const std::vector<std::string>& files, const std::vecto
     for (uint32_t j = 0; j < lay_.n; ++j)
       if (lay_.len[j] == 0 || lay_.at[j] > lay_.bytes || lay_.len[j] > lay_.bytes - lay_.at[j])
         fatal("expert store: plane %u is outside the slot", j);
+    uint32_t pa = 0, pb = 0;
+    if (planes_overlap(lay_, pa, pb)) fatal("expert store: planes %u and %u overlap in the slot", pa, pb);
     for (const LayerSrc& s : src_) {
       const SlotPlanes& q = s.planes.n ? s.planes : lay_;
       if (q.n != lay_.n || q.bytes != lay_.bytes) fatal("expert store: a layer's slot layout differs in planes or size");
       for (uint32_t j = 0; j < q.n; ++j)
         if (q.len[j] == 0 || q.at[j] > q.bytes || q.len[j] > q.bytes - q.at[j])
           fatal("expert store: a layer's plane %u is outside the slot", j);
+      if (s.planes.n && planes_overlap(q, pa, pb))
+        fatal("expert store: a layer's planes %u and %u overlap in the slot", pa, pb);
       for (uint32_t j = 0; j < lay_.n; ++j)
         if (s.p[j].len != q.len[j] || s.p[j].file < 0 || s.p[j].file >= int(files.size()))
           fatal("expert store: a layer's planes do not match the slot layout");
