@@ -76,6 +76,28 @@ def main():
         rc, out = run("--cand", d / "cand.f32", "--ids", d / "ids4.txt", "--vs", d / "other4.f32")
         check("--vs without --vs-ids is refused", rc != 0 and "needs --vs-ids" in out, out)
 
+        # The shorter prompt is also a prefix match for p. Both sequences have their own records.
+        write_rows(d / "short-native.f32", ref[:4])
+        (d / "short-native.f32.json").write_text(json.dumps({"input_ids": full[:4]}))
+        for order in ("short,p", "p,short"):
+            dump = d / "dump"
+            subprocess.run([sys.executable, str(SCRIPT), "fromdir", str(dump), "--ref", str(d),
+                            "--prompts", order], check=True, capture_output=True)
+            report = d / "score.json"
+            rc, out = run(dump, "--ref", d, "--prompts", "short,p", "--json", report)
+            counts = {p: s["rows"] for p, s in json.loads(report.read_text())["prompts"].items()} if rc == 0 else {}
+            check(f"shared prefix ({order}): each prompt gets its own rows", counts == {"short": 2, "p": 9}, out)
+
+        # A dump can list a sequence without recording any logits for it.
+        dump = d / "short-only"
+        subprocess.run([sys.executable, str(SCRIPT), "fromdir", str(dump), "--ref", str(d),
+                        "--prompts", "short"], check=True, capture_output=True)
+        with (dump / "sequences.txt").open("a") as f:
+            f.write(" ".join(map(str, full)) + "\n")
+        rc, out = run(dump, "--ref", d, "--prompts", "p", "--json", report)
+        rows = json.loads(report.read_text())["prompts"]["p"]["rows"] if rc == 0 else 0
+        check("an unrecorded full sequence still scores the available prefix", rows == 2, out)
+
     print("all checks passed" if not fails else f"{fails} failed")
     return 1 if fails else 0
 
