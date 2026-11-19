@@ -534,6 +534,27 @@ void responses_events() {
       "tools": [{"type": "function", "name": "exec_command", "parameters": {"type": "object"}},
                 {"type": "custom", "name": "apply_patch"},
                 {"type": "namespace", "name": "ns", "tools": [{"type": "function", "name": "f"}]}]})"), store);
+  {
+    auto body = J(R"({"input":"hi","tools":[{"type":"custom","name":"edit"},
+      {"type":"namespace","name":"docs","description":"Documents","tools":[{"type":"custom","name":"edit"}]}]})");
+    auto req = responses_request(body, store);
+    check(req.chat.tools.size() == 2 && req.chat.tools[1]["function"]["name"] == "docs__edit",
+          "responses: namespaced custom tool has its own prompt name");
+    ResponsesStream writer(req, "resp_nested", "m", 123);
+    auto events = run(writer, {call("call_E", "docs__edit", R"({"input":"two lines\nhere"})")}, result("tool_calls"));
+    const auto& item = events.back().data["response"]["output"][0];
+    check(item.value("type", "") == "custom_tool_call" && item.value("namespace", "") == "docs" &&
+              item.value("name", "") == "edit" && item.value("input", "") == "two lines\nhere" &&
+              events[2].data["item"].value("namespace", "") == "docs",
+          "responses: a custom call carries its namespace from the first event to the completed response");
+    body["input"] = J(R"([{"type":"custom_tool_call","namespace":"docs","name":"edit","call_id":"call_E","input":"hello"},
+                          {"type":"custom_tool_call_output","call_id":"call_E","output":"ok"}])");
+    auto replay = responses_request(body, store);
+    const auto& fn = replay.chat.messages[0]["tool_calls"][0]["function"];
+    check(fn["name"] == "docs__edit" && fn["arguments"]["input"] == "hello" &&
+              replay.chat.messages[1]["tool_call_id"] == "call_E",
+          "responses: replay of a namespaced custom call and result");
+  }
   auto seq_ok = [](const std::vector<Event>& ev) {
     for (size_t i = 0; i < ev.size(); ++i)
       if (ev[i].data.value("sequence_number", -1) != int(i) || ev[i].data.value("type", "") != ev[i].name) return false;
