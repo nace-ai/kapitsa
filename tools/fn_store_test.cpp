@@ -164,24 +164,65 @@ uint8_t byte_of(uint32_t l, uint32_t plane, uint32_t e, uint32_t i) {
 struct Pack {
   std::vector<std::string> files;
   std::vector<LayerSrc> layers;
-  SlotLayout lay;
+  SlotLayout lay;     // Q2_0's (the six-plane packs)
+  SlotPlanes planes;  // what the cache reads: lay's planes, or nine_planes()
   uint32_t E = 0;
 };
 
-// L layers in two files: in file 0 each plane starts on a page (aligned); in file 1 at an odd offset (widened reads)
-Pack make_pack(const std::string& dir, uint32_t L, uint32_t E) {
+// MLX affine 4-bit experts' nine planes (src/model/moe_a4.h) at D = I = 256: (w, scales, biases) of gate, up and down
+// in that order; the three code planes of 32 KiB first, on pages 0, 2 and 4, then the six scale / bias planes of 2 KiB
+// back to back; a slot of 7 pages
+SlotPlanes nine_planes() {
+  SlotPlanes q;
+  q.n = 9;
+  const uint32_t cb = 256 * 256 / 2, sb = 256 * 256 / 32;
+  for (uint32_t m = 0; m < 3; ++m) {
+    q.at[3 * m] = m * cb, q.len[3 * m] = cb;
+    for (uint32_t j = 1; j < 3; ++j) q.at[3 * m + j] = 3 * cb + (2 * m + j - 1) * sb, q.len[3 * m + j] = sb;
+  }
+  q.bytes = (3 * cb + 6 * sb + 16383) / 16384 * 16384;
+  return q;
+}
+
+// MLX affine experts' nine planes at D = I = 256 in moe_a4's slot layout for gate / up of (bg, gg) and down of (bd, gd):
+// the three code planes each from a page boundary, then the six scale / bias planes back to back. bytes: at least the
+// layout's (a slot sized for the largest layer of a mixed pack)
+SlotPlanes affine_planes(uint32_t bg, uint32_t gg, uint32_t bd, uint32_t gd, uint32_t bytes = 0) {
+  SlotPlanes q;
+  q.n = 9;
+  uint32_t at = 0;
+  for (uint32_t m = 0; m < 3; ++m) {
+    q.at[3 * m] = at, q.len[3 * m] = 256 * 256 / 8 * (m == 2 ? bd : bg);
+    at += (q.len[3 * m] + 16383) / 16384 * 16384;
+  }
+  for (uint32_t m = 0; m < 3; ++m)
+    for (uint32_t j = 1; j < 3; ++j) {
+      q.at[3 * m + j] = at, q.len[3 * m + j] = 256 * 256 / (m == 2 ? gd : gg) * 2;
+      at += q.len[3 * m + j];
+    }
+  q.bytes = std::max(bytes, (at + 16383) / 16384 * 16384);
+  return q;
+}
+
+// L layers in two files: in file 0 each plane starts on a page (aligned); in file 1 at an odd offset (widened reads).
+// The six Q2_0 planes of slot_layout(D, I), or any other planes (names: the two files' base names). per_layer: layer l's
+// own planes per_layer[l % size] (LayerSrc::planes; the same n and bytes as planes)
+Pack make_pack(const std::string& dir, uint32_t L, uint32_t E, const SlotPlanes* planes = nullptr,
+               const char* const* names = nullptr, const std::vector<SlotPlanes>* per_layer = nullptr) {
   Pack p;
   p.E = E;
   p.lay = slot_layout(D, I);
-  const uint32_t cb = p.lay.uc, db = p.lay.ud - p.lay.gd;
-  const uint32_t len[6] = {cb, db, cb, db, cb, db};
-  p.files = {dir + "/a.safetensors", dir + "/b.safetensors"};
+  p.planes = planes ? *planes : SlotPlanes(p.lay);
+  const uint32_t n = p.planes.n;
+  p.files = {dir + "/" + (names ? names[0] : "a.safetensors"), dir + "/" + (names ? names[1] : "b.safetensors")};
   uint64_t end[2] = {16384, 16384 + 777};
   std::vector<std::vector<uint8_t>> img(2);
   for (uint32_t l = 0; l < L; ++l) {
     LayerSrc s;
+    if (per_layer) s.planes = (*per_layer)[l % per_layer->size()];
+    const uint32_t* len = per_layer ? s.planes.len : p.planes.len;
     const int f = int(l % 2);
-    for (uint32_t j = 0; j < 6; ++j) {
+    for (uint32_t j = 0; j < n; ++j) {
       PlaneSrc& pl = s.p[j];
       pl.file = f;
       if (f == 0) end[0] = (end[0] + 16383) / 16384 * 16384;
@@ -210,7 +251,7 @@ struct Arena {
   std::vector<uint8_t*> mem;
   ExpertCache::Memory m;
   std::vector<uint32_t> table;
-  Arena(const SlotLayout& lay, uint32_t nslots, uint32_t L, uint32_t E) {
+  Arena(const SlotPlanes& lay, uint32_t nslots, uint32_t L, uint32_t E) {
     const uint32_t per = (nslots + 1) / 2;
     for (int c = 0; c < 2; ++c) {
       void* p = nullptr;
@@ -234,17 +275,15 @@ const uint8_t* slot_bytes(const Arena& a, const SlotLayout& lay, uint32_t w) {
   return a.m.chunk[c] + size_t(page) * 16384;
 }
 
-bool expert_ok(const Arena& a, const SlotLayout& lay, uint32_t l, uint32_t e, uint32_t E) {
+bool expert_ok(const Arena& a, const SlotPlanes& lay, uint32_t l, uint32_t e, uint32_t E) {
   const uint32_t w = a.m.table[size_t(l) * E + e];
-  const uint8_t* s = slot_bytes(a, lay, w);
-  const uint32_t at[6] = {lay.gc, lay.gd, lay.uc, lay.ud, lay.dc, lay.dd};
-  const uint32_t cb = lay.uc, db = lay.ud - lay.gd;
-  const uint32_t len[6] = {cb, db, cb, db, cb, db};
-  for (uint32_t j = 0; j < 6; ++j)
-    for (uint32_t i = 0; i < len[j]; i += 97)
-      if (s[at[j] + i] != byte_of(l, j, e, i)) return false;
-  for (uint32_t j = 0; j < 6; ++j)  // the last byte of each plane too
-    if (s[at[j] + len[j] - 1] != byte_of(l, j, e, len[j] - 1)) return false;
+  const uint8_t* s = a.m.chunk[w >> 28] + size_t(w & 0x0FFFFFFFu) * 16384;
+  if ((w & 0x0FFFFFFFu) % (lay.bytes / 16384)) return false;  // a slot starts on a slot boundary
+  for (uint32_t j = 0; j < lay.n; ++j)
+    for (uint32_t i = 0; i < lay.len[j]; i += 97)
+      if (s[lay.at[j] + i] != byte_of(l, j, e, i)) return false;
+  for (uint32_t j = 0; j < lay.n; ++j)  // the last byte of each plane too
+    if (s[lay.at[j] + lay.len[j] - 1] != byte_of(l, j, e, lay.len[j] - 1)) return false;
   return true;
 }
 
@@ -266,8 +305,12 @@ struct Step {
 };
 
 // Posts the steps (as an encoder would, a pass at a time), then plays the GPU through them; returns the checks failed
-int run_pass(ExpertCache& c, Event& ev, const Arena& a, const SlotLayout& lay, uint64_t& value,
-             const std::vector<Step>& steps, std::mt19937& rng) {
+int run_pass(ExpertCache& c, Event& ev, const Arena& a, const SlotPlanes& lay_all, uint64_t& value,
+             const std::vector<Step>& steps, std::mt19937& rng, const std::vector<LayerSrc>* src = nullptr) {
+  // layer l's planes: its own (LayerSrc::planes) when it has them
+  const auto lay_of = [&](uint32_t l) -> const SlotPlanes& {
+    return src && (*src)[l].planes.n ? (*src)[l].planes : lay_all;
+  };
   int bad = 0;
   std::vector<ExpertCache::Req> rs(steps.size());
   for (size_t i = 0; i < steps.size(); ++i) {
@@ -289,18 +332,18 @@ int run_pass(ExpertCache& c, Event& ev, const Arena& a, const SlotLayout& lay, u
   for (size_t i = 0; i < steps.size(); ++i) {
     // the experts of the previous handshake are still intact (no read-ahead overwrote them before this ready)
     for (auto [l, e] : in_use)
-      if (!expert_ok(a, lay, uint32_t(l), e, c.experts())) ++bad;
+      if (!expert_ok(a, lay_of(uint32_t(l)), uint32_t(l), e, c.experts())) ++bad;
     in_use.clear();
     ev.v.store(rs[i].ready, std::memory_order_release);
     while (ev.v.load(std::memory_order_acquire) < rs[i].go) std::this_thread::yield();
     for (uint32_t e : steps[i].ids) {
-      if (!expert_ok(a, lay, uint32_t(steps[i].layer), e, c.experts())) ++bad;
+      if (!expert_ok(a, lay_of(uint32_t(steps[i].layer)), uint32_t(steps[i].layer), e, c.experts())) ++bad;
       in_use.push_back({steps[i].layer, e});
     }
     if (rng() % 4 == 0) std::this_thread::sleep_for(std::chrono::microseconds(rng() % 300));  // let read-ahead land
   }
   for (auto [l, e] : in_use)
-    if (!expert_ok(a, lay, uint32_t(l), e, c.experts())) ++bad;
+    if (!expert_ok(a, lay_of(uint32_t(l)), uint32_t(l), e, c.experts())) ++bad;
   return bad;
 }
 
@@ -595,6 +638,76 @@ void case_verify_prefill(const Pack& p) {
          "evictions\n",
          nslots, (unsigned long long)s.handshakes, (unsigned long long)s.lookups, (unsigned long long)s.misses,
          (unsigned long long)s.prefetches, (unsigned long long)s.evictions);
+}
+
+// Nine planes an expert (MLX affine 4-bit, src/model/moe_a4.h's slot layout at D = I = 256): decode passes of top-16
+// with predictions, then prefill chunks (scan, every next-layer expert read ahead), in the minimum arena of 3 E slots;
+// every routed expert's nine planes must be in its slot, at its offsets, and stay there while in use. With layers in
+// their own layouts (a mixed 3- / 4-bit pack: LayerSrc::planes), each at its layer's offsets.
+void case_nine(const Pack& p, const char* what = "nine planes") {
+  const uint32_t L = uint32_t(p.layers.size()), E = p.E, k = 16;
+  const uint32_t nslots = 3 * E;
+  Arena a(p.planes, nslots, L, E);
+  Event ev;
+  ExpertCache::Options o;
+  o.readers = 5;
+  ExpertCache c(p.files, p.layers, E, p.planes, nslots, a.m, ev.sync(), o);
+  CHECK(!c.complete(), "%s: complete", what);
+  std::mt19937 rng(19);
+  uint64_t value = 0;
+  int bad = 0;
+  for (int pass = 0; pass < 30; ++pass) {
+    std::vector<Step> steps(L);
+    std::vector<std::vector<uint32_t>> ids(L);
+    for (uint32_t l = 0; l < L; ++l) ids[l] = topk(rng, E, k);
+    for (uint32_t l = 0; l < L; ++l) {
+      Step& s = steps[l];
+      s.layer = int(l);
+      if (pass % 5 == 4) {  // a prefill chunk of 64 rows
+        for (int r = 0; r < 64; ++r)
+          for (uint32_t e : topk(rng, E, k)) s.ids.push_back(e);
+        s.scan = true;
+        s.pred_all = l + 1 < L;
+        s.pred_layer = l + 1 < L ? int(l + 1) : -1;
+      } else {
+        s.ids = ids[l];
+        if (l + 1 < L) {
+          s.pred_layer = int(l + 1);
+          s.pred = ids[l + 1];
+          for (int j = 0; j < 3; ++j) s.pred[size_t(j)] = uint32_t(rng() % E);
+        }
+      }
+    }
+    bad += run_pass(c, ev, a, p.planes, value, steps, rng, &p.layers);
+  }
+  const StoreStats s = c.stats();
+  CHECK(bad == 0, "%s: %d experts not in their slots", what, bad);
+  CHECK(s.evictions > 0 && s.misses > 0 && s.prefetch_used > 0, "%s: evictions %llu, misses %llu, read ahead "
+        "and routed %llu", what, (unsigned long long)s.evictions, (unsigned long long)s.misses,
+        (unsigned long long)s.prefetch_used);
+  check_sums(s, what);
+  printf("%s (slot of %u pages), %u slots: %llu turns, %llu lookups, %llu misses, %llu read ahead (%llu routed), "
+         "%llu evictions, %.1f MB read\n",
+         what, p.planes.bytes / 16384, nslots, (unsigned long long)s.handshakes, (unsigned long long)s.lookups,
+         (unsigned long long)s.misses, (unsigned long long)s.prefetches, (unsigned long long)s.prefetch_used,
+         (unsigned long long)s.evictions, s.bytes / 1e6);
+}
+
+// The six Q2_0 planes through SlotPlanes are the slot layout's offsets, lengths and size as they were
+void case_q20_planes() {
+  for (auto [d, i] : {std::pair<uint32_t, uint32_t>{512, 256}, {2560, 640}, {256, 128}}) {
+    const SlotLayout q = slot_layout(d, i);
+    const SlotPlanes s(q);
+    const uint32_t at[6] = {q.gc, q.gd, q.uc, q.ud, q.dc, q.dd};
+    const uint32_t cb = i * d / 4, db = i * d / 32;
+    bool ok = s.n == 6 && s.bytes == q.bytes && s.max_len() == std::max(cb, db);
+    for (int j = 0; j < 6; ++j) ok &= s.at[j] == at[j] && s.len[j] == (j % 2 ? db : cb);
+    CHECK(ok, "Q2_0 planes of D %u, I %u differ from slot_layout", d, i);
+  }
+  const SlotPlanes n = nine_planes();
+  CHECK(n.bytes == 7 * 16384 && n.at[3] == 32768 && n.at[6] == 65536 && n.at[1] == 98304 && n.at[8] == 98304 + 5 * 2048,
+        "nine planes: layout");
+  printf("slot planes: Q2_0's six as slot_layout's, nine planes laid out\n");
 }
 
 // ARC: decoding's hot set (routed again and again) outlives a prompt's sweep of every expert
@@ -2261,6 +2374,28 @@ int main(int argc, char** argv) {
     case_shutdown_prefetch(p);
     case_shutdown_waiting(p);
     if (!shutdown_only) {
+      case_q20_planes();
+      {
+        const SlotPlanes nine = nine_planes();
+        const char* const names[2] = {"c.safetensors", "d.safetensors"};
+        const Pack p9 = make_pack(dir, 5, 64, &nine, names);
+        case_nine(p9);
+        for (const std::string& f : p9.files) unlink(f.c_str());
+        // a mixed pack: 4-bit group 64, 3-bit group 64, 3-bit group 128 with a 4-bit group 32 down, 3-bit group 32
+        // with a 3-bit group 128 down, each layer at its own offsets in slots of the largest layout's size
+        std::vector<SlotPlanes> mix = {affine_planes(4, 64, 4, 64), affine_planes(3, 64, 3, 64),
+                                       affine_planes(3, 128, 4, 32), affine_planes(3, 32, 3, 128)};
+        uint32_t most = 0;
+        for (const SlotPlanes& q : mix) most = std::max(most, q.bytes);
+        for (SlotPlanes& q : mix) q.bytes = most;
+        CHECK(most == 8 * 16384 && affine_planes(4, 64, 4, 64).bytes == nine.bytes && mix[0].at[8] == nine.at[8] && mix[1].len[0] == 24576 &&
+                  mix[2].len[7] == 4096 && mix[2].len[1] == 1024,
+              "mixed planes: layout");
+        const char* const mnames[2] = {"e.safetensors", "f.safetensors"};
+        const Pack pm = make_pack(dir, 5, 64, &mix[0], mnames, &mix);
+        case_nine(pm, "mixed 3-/4-bit planes");
+        for (const std::string& f : pm.files) unlink(f.c_str());
+      }
       case_decode(p, false);
       case_decode(p, true);
       case_verify_prefill(p);
