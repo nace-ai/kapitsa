@@ -1,5 +1,8 @@
 // Hy4-flash checks against a reference: every row's logits of a prompt, and greedy tokens after it.
-//   hy4_dump <model> --ids FILE [--out F.f32] [--rows N] [--gen N] [--chunk R]
+//   hy4_dump <model> --ids FILE [--out F.f32] [--rows N] [--gen N] [--chunk R] [--verify] [--spec N]
+// --verify: prefill all but the last 6 prompt tokens, then one 6-row verify pass over them; --out gets the verify's 6
+// logit rows (rows n-6 .. n-1 of a plain run's). --spec N: N tokens greedy with the DFly2 drafter after the prompt
+// (prints them, the cycles, accepted tokens per cycle and tok/s).
 // FILE: comma- or whitespace-separated token ids. --out writes float32 [n, vocab] for rows 0..n-1 (n = --rows, default
 // every prompt row): row p is the distribution of token p + 1. --gen N: N greedy tokens after the prompt (decode
 // passes), printed as ids with tok/s. Takes the GPU lock (BENCH_GPU_LOCK, default /tmp/kapitsa-gpu.lock) unless the
@@ -11,6 +14,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -47,7 +51,9 @@ int main(int argc, char** argv) {
     return 1;
   }
   std::string dir = argv[1], ids_file, out;
-  int rows = -1, gen = 0, chunk = 512;
+  int rows = -1, gen = 0, chunk = 512, spec = 0;
+  std::string spec_check;  // --spec-check F.f32: teacher-forced logits of the prompt + these tokens (a debugging aid)
+  bool verify = false, verify_draft = false;
   for (int i = 2; i < argc; ++i) {
     const std::string a = argv[i];
     auto next = [&]() -> std::string {
@@ -59,6 +65,10 @@ int main(int argc, char** argv) {
     else if (a == "--rows") rows = atoi(next().c_str());
     else if (a == "--gen") gen = atoi(next().c_str());
     else if (a == "--chunk") chunk = atoi(next().c_str());
+    else if (a == "--verify") verify = true;
+    else if (a == "--verify-draft") verify = verify_draft = true;  // the drafter runs first (its tokens discarded)
+    else if (a == "--spec") spec = atoi(next().c_str());
+    else if (a == "--spec-check") spec_check = next();
     else fatal("unknown argument %s", a.c_str());
   }
   const std::vector<int> ids = read_ids(ids_file);
@@ -84,7 +94,7 @@ int main(int argc, char** argv) {
     if (ids[size_t(i)] < 0 || ids[size_t(i)] >= V)
       fatal("id %d (at %d) is outside the vocabulary (0 .. %d)", ids[size_t(i)], i, V - 1);
   Gpu& g = Gpu::get();
-  auto s = m.new_seq(n + gen + 32);
+  auto s = m.new_seq(n + gen + spec + 32);
   memcpy(s->tokens(), ids.data(), size_t(n) * 4);
   Buffer lg = g.alloc(size_t(chunk) * V * 4, "hy4_dump_logits");
   FILE* fo = out.empty() ? nullptr : fopen(out.c_str(), "wb");
@@ -92,11 +102,43 @@ int main(int argc, char** argv) {
   SamplingParams sp;
   sp.temperature = 0.0f;
   const double tp = now_ms();
+  if (verify) {
+    constexpr int R = Hy4Flash::kSpecRows;
+    if (n <= R) fatal("--verify needs more than %d ids", R);
+    const int np = n - R;
+    for (int pos0 = 0; pos0 < np; pos0 += chunk) {
+      auto e = g.begin();
+      m.encode_prefill(*e, *s, pos0, std::min(chunk, np - pos0), sp, 0, false);
+      e->commit_and_wait();
+    }
+    if (verify_draft) {  // the prefill's last row must sample t0 for the drafter: rerun the last prompt row sampled
+      auto e0 = g.begin();
+      m.encode_prefill(*e0, *s, np - 1, 1, sp, 0, true);
+      e0->commit_and_wait();
+      memcpy(s->tokens(), ids.data(), size_t(n) * 4);
+      if (!getenv("HY4_DUMP_SKIP_DRAFT")) {  // (the control: the re-prefilled row alone)
+        auto ed = g.begin();
+        m.encode_draft(*ed, *s, np);
+        ed->commit_and_wait();
+      }
+      memcpy(s->tokens(), ids.data(), size_t(n) * 4);
+    }
+    auto e = g.begin();
+    m.encode_verify(*e, *s, np, R);
+    m.encode_accept(*e, *s, np, R, sp);
+    e->commit_and_wait();
+    if (fo) {
+      fwrite(m.verify_logits().ptr(), 4, size_t(R) * V, fo);
+      fclose(fo);
+    }
+    printf("verify at %d: accepted %d (the prompt's own tokens as drafts)\n", np, m.accepted());
+    return 0;
+  }
   for (int pos0 = 0; pos0 < n; pos0 += chunk) {
     const int T = std::min(chunk, n - pos0);
     const bool last = pos0 + T == n;
     auto e = g.begin();
-    m.encode_prefill(*e, *s, pos0, T, sp, 0, last && gen > 0);
+    m.encode_prefill(*e, *s, pos0, T, sp, 0, last && (gen > 0 || spec > 0));
     if (fo && pos0 < rows) m.encode_logits_rows(*e, T, lg);
     e->commit_and_wait();
     m.write_selection();  // NI_HY4_DUMP_SEL (debug); a no-op without it
@@ -124,6 +166,61 @@ int main(int argc, char** argv) {
     for (int t : outs) printf(" %d", t);
     printf("\n");
     if (gen > 1) fprintf(stderr, "decode %d tokens: %.1f s (%.2f tok/s)\n", gen - 1, dt / 1000, (gen - 1) * 1000.0 / dt);
+  }
+  if (spec > 0) {
+    if (!m.has_dfly()) fatal("--spec: no DFly2 drafter in %s", dir.c_str());
+    constexpr int B = Hy4Flash::kSpecRows;
+    int P = n, cycles = 0;
+    const double td = now_ms();
+    double tdraft = 0;
+    std::vector<int> hist(B + 1, 0);
+    while (P - n < spec) {
+      const double c0 = now_ms();
+      auto e1 = g.begin();
+      m.encode_draft(*e1, *s, P);
+      e1->commit_and_wait();
+      tdraft += now_ms() - c0;
+      auto e2 = g.begin();
+      m.encode_verify(*e2, *s, P, B);
+      m.encode_accept(*e2, *s, P, B, sp);
+      e2->commit_and_wait();
+      const int a = m.accepted();
+      if (!spec_check.empty()) {  // each verify row against the teacher-forced row of its position
+        FILE* rf = fopen(spec_check.c_str(), "rb");
+        std::vector<float> ref(static_cast<size_t>(V));
+        const float* vl = m.verify_logits().as<float>();
+        fprintf(stderr, "cycle %d P %d accepted %d:", cycles, P, a);
+        for (int r = 0; r < B && rf; ++r) {
+          if (fseeko(rf, off_t(P + r) * V * 4, SEEK_SET) || fread(ref.data(), 4, size_t(V), rf) != size_t(V)) break;
+          const float* c = vl + size_t(r) * V;
+          double ma = -1e30, mc = -1e30, sa = 0, sc = 0, kl = 0;
+          int aa = 0, ac = 0;
+          for (int v = 0; v < V; ++v) {
+            if (ref[size_t(v)] > ma) ma = ref[size_t(v)], aa = v;
+            if (c[v] > mc) mc = c[v], ac = v;
+          }
+          for (int v = 0; v < V; ++v) sa += exp(ref[size_t(v)] - ma), sc += exp(c[v] - mc);
+          for (int v = 0; v < V; ++v) {
+            const double la = ref[size_t(v)] - ma - log(sa), lc = c[v] - mc - log(sc);
+            kl += exp(la) * (la - lc);
+          }
+          fprintf(stderr, " [r%d KL %.1e%s]", r, kl, aa == ac ? "" : " MISS");
+        }
+        fprintf(stderr, "\n");
+        if (rf) fclose(rf);
+      }
+      ++hist[size_t(a + 1)];
+      P += a + 1;
+      ++cycles;
+    }
+    const double dt = now_ms() - td;
+    printf("spec:");
+    for (int i = n; i < P; ++i) printf(" %d", s->tokens()[i]);
+    printf("\n");
+    fprintf(stderr, "spec %d tokens in %d cycles (%.2f tokens/cycle; per-cycle histogram 1..6:", P - n, cycles,
+            double(P - n) / cycles);
+    for (int k = 1; k <= B; ++k) fprintf(stderr, " %d", hist[size_t(k)]);
+    fprintf(stderr, "): %.1f s, %.2f tok/s, draft %.1f ms/cycle\n", dt / 1000, (P - n) * 1000.0 / dt, tdraft / cycles);
   }
   return 0;
 }

@@ -565,6 +565,12 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     if ((v = getenv("NI_FLINT_SELF_MIN")) && *v) flint_self_min_ = std::max(0, atoi(v));
   }
 
+  // Hy4-flash: its DFly2 drafter (the checkpoint's own). Its 6-row verify reads up to 6x the routed experts of a decode
+  // step, so with experts streamed from the SSD it was slower than plain decoding (M5 Pro 48 GB, experts on an external
+  // SSD, 26% in memory, 19 Nov 2026: 1.04x on code, 0.57x on prose). On by default only where every expert is in memory
+  // (not measured yet); --spec N turns it on, --spec 0 off.
+  hy4_spec_ = hy4_ && hy4_->has_dfly() && spec_asked != 0 && (spec_asked > 0 || hy4_->experts_resident());
+
   // NI_PREFIX_CKPT=0: no prefix checkpoint. Not with LiLiCorr / KFlash drafters (their context has no rewind to an
   // empty ring).
   {
@@ -1182,7 +1188,7 @@ StartPlan start_plan(const std::string& model_dir, const EngineOptions& opt, siz
 }
 
 int auto_slots(const std::string& model_dir, const EngineOptions& opt, size_t budget) {
-  // Hy4-flash: one request at a time (its streamed experts' store is single-stream)
+  // Hy4-flash: one request at a time (its DFly2 loop and the streamed experts' store are single-stream)
   if (Hy4Flash::is_model(model_dir)) return 1;
   try {
     // two slots that cannot even start where one can (fits_small): one
@@ -3619,7 +3625,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       tr_margin.push_back(a - b);
     }
   };
-  if (live) live->spec.store(full_steps ? 0 : lili_ ? 3 : dfl_ ? 2 : depth > 0 ? 1 : 0, std::memory_order_relaxed),
+  if (live) live->spec.store(full_steps ? 0 : lili_ ? 3 : dfl_ || hy4_spec_ ? 2 : depth > 0 ? 1 : 0, std::memory_order_relaxed),
       live->phase.store(2, std::memory_order_relaxed);
   // batched decode: this request decodes (other requests' batch_wanted() counts it) until its loop ends
   struct Decoding {
@@ -3656,7 +3662,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   }();
   const bool flint_self = flint_self_ > 0 && n >= flint_self_min_;  // Flint drafts itself this request
   const bool spec_loop =
-      !full_steps && (lili_ || dfl_ || dory_spec_ > 0 || nh_ngram_ > 0 || flint_ngram_ > 0 || flint_self || depth > 0);
+      !full_steps && (lili_ || dfl_ || dory_spec_ > 0 || nh_ngram_ > 0 || flint_ngram_ > 0 || flint_self || hy4_spec_ || depth > 0);
   const bool g_dfl = gm && dfl_ && grammar_spec && !full_steps;
   const bool g_direct = gm && !g_dfl && (g_on || !spec_loop);
   g_in_spec = gm && !g_direct && !g_on;
@@ -4347,6 +4353,47 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       e2->commit_and_wait();
       const int a = flint_->accepted();
       if (!self) kfw.observe(int(nd.size()), a, now_ms() - kf_t0);
+      const int* tk = s.tokens();
+      int m = 0;
+      while (m < a + 1) {
+        ++m;
+        if (!handle(tk[P + m])) {
+          go = false;
+          break;
+        }
+      }
+      ++spec_cycles_;
+      ++req_cycles;
+      spec_accepted_ += m;
+      cycle_done(m);
+      P += m;
+      if (go && contended()) yield_turn(res);
+    }
+    fed_until = P;
+  } else if (hy4_spec_) {
+    // Hy4-flash with its DFly2 drafter: a cycle drafts 5 tokens from the target's kept hidden and caches, then
+    // verifies them with the pending token in one 6-row pass; each row samples at its own position (plain decoding's
+    // draw), the drafts that agree are accepted. Two command buffers: the verify's Engram rows hash the drafts on the
+    // host. Rows past the accepted ones leave latent rows the next pass writes again before any row reads them.
+    int P = n;
+    req_cycles = 0;
+    bool go = handle(s.tokens()[n]);
+    constexpr int B = Hy4Flash::kSpecRows;
+    while (go) {
+      if (P + 2 * B + 2 > s.cap && s.cap < s.limit) grow_kv(std::min(s.limit, P + 2 * B + 2), [] {});
+      if (P + B + 1 >= s.cap) {
+        finish = "length";
+        res.context_full = true;
+        break;
+      }
+      auto e1 = g.begin();
+      hy4_->encode_draft(*e1, s, P);
+      e1->commit_and_wait();
+      auto e2 = g.begin();
+      hy4_->encode_verify(*e2, s, P, B);
+      hy4_->encode_accept(*e2, s, P, B, sp);
+      e2->commit_and_wait();
+      const int a = hy4_->accepted();
       const int* tk = s.tokens();
       int m = 0;
       while (m < a + 1) {
