@@ -181,11 +181,11 @@ Headers hub_headers() {
   return h;
 }
 
-std::string url_path(const std::string& p) {
+std::string url_encode(const std::string& p, bool keep_slashes) {
   static const char* hexd = "0123456789ABCDEF";
   std::string o;
   for (unsigned char c : p) {
-    if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~' || c == '/') {
+    if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~' || (keep_slashes && c == '/')) {
       o += char(c);
     } else {
       o += '%';
@@ -197,7 +197,7 @@ std::string url_path(const std::string& p) {
 }
 
 std::string file_url(const std::string& repo, const std::string& commit, const std::string& path) {
-  return endpoint() + "/" + repo + "/resolve/" + commit + "/" + url_path(path);
+  return endpoint() + "/" + repo + "/resolve/" + url_encode(commit, false) + "/" + url_encode(path, true);
 }
 
 std::string hf_cache_root() {
@@ -361,7 +361,7 @@ HttpResult get_retry(HttpClient& c, const std::string& url, uint64_t a = 0, uint
 
 Listing list_repo(HttpClient& c, const std::string& repo, const std::string& revision) {
   const std::string rev = revision.empty() ? "main" : revision;
-  const std::string url = endpoint() + "/api/models/" + repo + "/revision/" + url_path(rev) + "?blobs=true";
+  const std::string url = endpoint() + "/api/models/" + repo + "/revision/" + url_encode(rev, false) + "?blobs=true";
   HttpResult r = get_retry(c, url);
   if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
   if (!r.ok()) throw Error(failure(r, repo, rev, "the file list of " + repo));
