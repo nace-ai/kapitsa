@@ -1586,24 +1586,54 @@ for streamed in (False, True):
           "maximum context length" in e["error"]["message"], str(e)[:300])
 def hold(tag):
     """a stream that writes until its client goes, open once its first token is out (it has a slot)"""
-    body = {"messages": [{"role": "user", "content": f"[{tag}] Count from 1 to 100000, one number per line, nothing else."}],
-            "max_tokens": 20000, "temperature": 0, "top_k": 1, "stream": True, "chat_template_kwargs": {"enable_thinking": False}}
+    # A counting prompt may stop after a few numbers. The grammar forbids EOS until an array far longer than this
+    # observation can finish; the client, not the model's willingness to count, releases the slot.
+    body = {"messages": [{"role": "user", "content": f"[{tag}] Write a JSON array of 100000 ones."}],
+            "max_tokens": 20000, "temperature": 0, "top_k": 1, "stream": True, "chat_template_kwargs": {"enable_thinking": False},
+            "response_format": {"type": "json_schema", "json_schema": {"name": "slot_holder", "schema": {
+                "type": "array", "minItems": 100000, "items": {"const": 1}}}}}
     r = urllib.request.urlopen(urllib.request.Request(BASE + "/v1/chat/completions", data=json.dumps(body).encode(),
                                                       headers={"Content-Type": "application/json", **auth()}), timeout=600)
     for line in r:
         if line.startswith(b"data: {") and choice(json.loads(line[6:])).get("delta", {}).get("content"):
             break
-    return r
-holders = [hold(f"hold {i} {time.time()}") for i in range(SLOTS)]
+    else:
+        r.close()
+        raise RuntimeError("slot holder ended before its first token")
+    release = threading.Event()
+    def drain():
+        try:
+            for _ in r:
+                if release.is_set():
+                    break
+        finally:
+            r.close()
+    reader = threading.Thread(target=drain, daemon=True)
+    reader.start()
+    return release, reader
+holders = []
 ev = []
 waiting = threading.Thread(target=chat_stream, args=(counting(f"wait {time.time()}", 8), ev))
-waiting.start()
-t0 = time.time()
-while time.time() - t0 < 45 and sum(is_keepalive(d) for _, d in list(ev)) < 2:
-    time.sleep(0.2)
-for h in holders:  # their clients go: they stop at their next token, and the waiting request gets a slot
-    h.close()
+held = True
+try:
+    for i in range(SLOTS):
+        holders.append(hold(f"hold {i} {time.time()}"))
+    waiting.start()
+    t0 = time.time()
+    while time.time() - t0 < 45 and sum(is_keepalive(d) for _, d in list(ev)) < 2:
+        if not all(reader.is_alive() for _, reader in holders):
+            held = False
+            break
+        time.sleep(0.2)
+    held = held and all(reader.is_alive() for _, reader in holders)
+finally:
+    for release, _ in holders:
+        release.set()
+    for _, reader in holders:
+        reader.join(timeout=5)
 waiting.join()
+check("chat stream: every holder stays active until the test releases it",
+      held and all(not reader.is_alive() for _, reader in holders), "holder ended early or did not close")
 keep = [t for t, d in ev if is_keepalive(d)]
 first = next((t for t, d in ev if choice(d).get("delta", {}).get("content")), None)
 check("chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first "
