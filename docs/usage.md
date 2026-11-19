@@ -284,10 +284,12 @@ the SSD through a cache sized to the memory left (src/model/moe_a4.h), and the E
 files on the CPU each pass. Past 2048 tokens the 12 full-context layers attend to the 512 groups of 4 keys their
 compressed indexer selects, as the reference does (`NI_HY4_DENSE=1` attends to every key instead, a debugging switch).
 Its `<think:opensource>` tags are read as reasoning. It decodes plainly: the checkpoint's DFly2 drafter is not loaded,
-and the SSD prefix cache does not save its conversations. On an M5 Pro with 48 GB and the experts on an external SSD
-(26% of them in memory), greedy decode ran at 4.6-5.5 tok/s and a 3,000-token prompt at 26.7 tok/s, with the
-pack's 4-bit group-64 experts: the other expert formats are checked against a CPU reference at Hy4's shape
-(`tools/a4moe_check.cpp`) but have not run the whole model.
+and the SSD prefix cache does not save its conversations. One run on an M5 Pro with 48 GB (macOS 26.5.2, 19 Nov 2026),
+with the pack's 8-bit trunk and 4-bit group-64 experts on an external SSD (26% of the experts in memory), took five
+512-token prompts and generated 64 tokens greedily after each: prefill ran at 27.9-28.2 tok/s, and decode at
+3.14-4.06 tok/s over the 63 timed tokens. These are that run's timings, not a comparison between builds. The other
+expert formats are checked against a CPU reference at Hy4's shape (`tools/a4moe_check.cpp`) but have not run the
+whole model.
 
 Refused, with a message: other architectures, other quantizations (MLX's `mxfp4`, `nvfp4` and `mxfp8` modes among
 them; NVIDIA's own NVFP4 checkpoints of the catalog's Nemotron models are read as they are), mixture-of-experts
