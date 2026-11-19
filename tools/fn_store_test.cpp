@@ -693,6 +693,67 @@ void case_nine(const Pack& p, const char* what = "nine planes") {
          (unsigned long long)s.evictions, s.bytes / 1e6);
 }
 
+// Layouts the constructor refuses, each with its own message: planes that overlap in the slot (the store's or a
+// layer's), a plane empty or past the slot, a store of 0 or more than kMaxPlanes planes, a layer whose plane count or
+// slot size differs from the store's, and a layer whose sources do not match its planes. p: a pack of nine planes.
+void case_layout_rejected(const Pack& p) {
+  FatalRecovery recover;
+  const uint32_t L = uint32_t(p.layers.size()), E = p.E;
+  int cases = 0;
+  const auto expect = [&](const char* what, const SlotPlanes& lay, const std::vector<LayerSrc>& layers,
+                          const char* message) {
+    ++cases;
+    Arena a(p.planes, 3 * E, L, E);
+    Event ev;
+    std::string got = "(constructed)";
+    try {
+      ExpertCache c(p.files, layers, E, lay, 3 * E, a.m, ev.sync(), ExpertCache::Options{});
+    } catch (const FatalError& e) {
+      got = e.what();
+    }
+    CHECK(got.find(message) != std::string::npos, "%s: expected \"%s\", got \"%s\"", what, message, got.c_str());
+  };
+  const auto with_layer = [&](uint32_t l, const SlotPlanes& q) {
+    std::vector<LayerSrc> v = p.layers;
+    v[l].planes = q;
+    return v;
+  };
+  SlotPlanes q = p.planes;
+  q.at[8] = q.at[7] + q.len[7] - 1;  // the last plane's first byte is plane 7's last
+  expect("store planes overlapping", q, p.layers, "planes 7 and 8 overlap in the slot");
+  q = p.planes;
+  q.at[1] = q.len[0] - 16384;  // a scale plane inside the gate codes' last page
+  expect("layer planes overlapping", p.planes, with_layer(2, q), "a layer's planes 0 and 1 overlap in the slot");
+  q = p.planes;
+  q.len[4] = 0;
+  expect("empty plane", q, p.layers, "plane 4 is outside the slot");
+  q = p.planes;
+  q.at[8] = q.bytes - q.len[8] + 1;
+  expect("plane past the slot", q, p.layers, "plane 8 is outside the slot");
+  q = p.planes;
+  q.at[0] = q.bytes - q.len[0] + 16384;
+  expect("layer plane past the slot", p.planes, with_layer(1, q), "a layer's plane 0 is outside the slot");
+  q = p.planes;
+  q.n = 0;
+  expect("no planes", q, p.layers, "0 planes an expert");
+  q = p.planes;
+  q.n = uint32_t(kMaxPlanes) + 1;
+  expect("too many planes", q, p.layers, "planes an expert");
+  q = p.planes;
+  q.n = 8;
+  expect("layer of 8 planes", p.planes, with_layer(3, q), "a layer's slot layout differs in planes or size");
+  q = p.planes;
+  q.bytes += 16384;
+  expect("layer of a larger slot", p.planes, with_layer(0, q), "a layer's slot layout differs in planes or size");
+  std::vector<LayerSrc> v = p.layers;
+  v[4].p[5].len -= 1;
+  expect("layer source shorter than its plane", p.planes, v, "a layer's planes do not match the slot layout");
+  v = p.layers;
+  v[1].p[2].file = int(p.files.size());
+  expect("layer source in no file", p.planes, v, "a layer's planes do not match the slot layout");
+  printf("slot layouts refused: %d cases, each with its message\n", cases);
+}
+
 // The six Q2_0 planes through SlotPlanes are the slot layout's offsets, lengths and size as they were
 void case_q20_planes() {
   for (auto [d, i] : {std::pair<uint32_t, uint32_t>{512, 256}, {2560, 640}, {256, 128}}) {
@@ -2380,6 +2441,7 @@ int main(int argc, char** argv) {
         const char* const names[2] = {"c.safetensors", "d.safetensors"};
         const Pack p9 = make_pack(dir, 5, 64, &nine, names);
         case_nine(p9);
+        case_layout_rejected(p9);
         for (const std::string& f : p9.files) unlink(f.c_str());
         // a mixed pack: 4-bit group 64, 3-bit group 64, 3-bit group 128 with a 4-bit group 32 down, 3-bit group 32
         // with a 3-bit group 128 down, each layer at its own offsets in slots of the largest layout's size
