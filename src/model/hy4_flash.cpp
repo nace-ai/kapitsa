@@ -4,6 +4,7 @@
 #include "model/hy4_kernels.h"
 #include "model/kparams.h"
 #include "model/moe_a4.h"
+#include "model/sampler.h"
 #include "util/json_file.h"
 #include "util/log.h"
 
@@ -330,6 +331,39 @@ void Hy4Flash::load(const std::string& dir) {
   prewarm_pipelines();
   for (const std::string& n : hy4::kernel_names()) hy4::pipeline(n, false);
   for (const std::string& n : store_->kernel_names()) hy4::pipeline(n, false);
+  {  // the verify's rows (speculative decoding)
+    Gpu& g = Gpu::get();
+    const size_t D = size_t(cfg_.hidden), V = size_t(cfg_.vocab);
+    htgt_ = g.alloc(D * 4, "hy_htgt");
+    hn_ = g.alloc(size_t(kSpecRows) * D * 4, "hy_hn");
+    vlog_ = g.alloc(size_t(kSpecRows) * V * 4, "hy_vlog");
+    samp_ = g.alloc(16 * 4, "hy_samp");
+    acc_ = g.alloc(16, "hy_acc");
+    g.make_resident({htgt_, hn_, vlog_, samp_, acc_});
+    hy4::pipeline("hy4_pick_row", false);
+    hy4::pipeline("hy4_accept", false);
+  }
+  // the DFly2 drafter (model-dfly.safetensors): needs the whole trunk; NI_HY4_DFLY=0 leaves it out
+  const char* dv = getenv("NI_HY4_DFLY");
+  if (Hy4Dfly::present(dir) && !(dv && dv[0] == '0') && cfg_.layers == t.at("num_hidden_layers").get<int>()) {
+    const Hy4DflyConfig dc = Hy4DflyConfig::from_json(dir + "/config.json");
+    for (int L : dc.kv_layers)
+      if (L < 0 || L >= cfg_.layers || hl_[size_t(L)].at.window != 0)
+        fatal("hy4 dfly: target layer %d is not a full-context layer", L);
+    dfly_kv_ = dc.kv_layers;
+    for (size_t k = 0; k < dfly_kv_.size(); ++k) {
+      Hy4Layer& T = hl_[size_t(dfly_kv_[k])];
+      if (!T.ix) fatal("hy4 dfly: target layer %d has no indexer", dfly_kv_[k]);
+      T.dfly = int(k);
+      dsel_.push_back(Gpu::get().alloc(hy4::kIndexGroups * 4, "hy_dsel"));
+      dsel_rows_.push_back(Gpu::get().alloc(size_t(kSpecRows) * hy4::kIndexGroups * 4, "hy_dsel_rows"));
+    }
+    Gpu::get().make_resident(dsel_);
+    Gpu::get().make_resident(dsel_rows_);
+    dfly_ = std::make_unique<Hy4Dfly>(dir, dc, embed_, lm_head_);
+    Gpu::get().make_resident(dfly_->buffers());
+    logi("DFly2 drafter: %d layers over target layers' caches, %.2f GB", int(dc.kv_layers.size()), dfly_->weight_bytes() / 1e9);
+  }
   logi("loaded %s: Hy4-flash, %d layers, %.1f GB of resident weights in %.0f ms; %s; routed experts: %s", dir.c_str(),
        cfg_.layers, ws_.total_bytes() / 1e9, now_ms() - t0, formats_summary().c_str(), store_->describe().c_str());
 }
@@ -415,7 +449,7 @@ void Hy4Flash::write_selection() {
 // ---- sequences ----
 
 // Every layer caches the 576-wide MLA latent rows (hy4_ops.h, LatentCache) in s.kc[i]: the sliding layers' are rings of
-// ring_cap() rows (allocated once), the full-context layers' grow linearly.
+// ring_cap() rows (allocated once), the full-context layers' grow linearly (the DFly2 drafter reads those).
 uint32_t Hy4Flash::ring_cap() const { return uint32_t(hcc_window_ + tmax_); }
 
 hy4::LatentCache Hy4Flash::lat_of(const Seq& s, int i) const {
@@ -624,6 +658,12 @@ void Hy4Flash::enc_attn_block(Encoder& e, Seq& s, int i, int pos0, int R, bool p
           logi("NI_HY4_DUMP_SEL: no write_selection() since the last pass; the selections are no longer recorded");
         }
       }
+      // the drafter's: a verify's rows kept for encode_accept's pick; a prefill's or a step's last row now
+      if (L.dfly >= 0) {
+        const size_t k = size_t(L.dfly), n = size_t(R) * hy4::kIndexGroups * 4;
+        if (!prefill && R > 1 && R <= kSpecRows) enc_copy(e, sel_.view(0, n), dsel_rows_[k].view(0, n));
+        else hy4::enc_index_pick(e, sel_, R, nullptr, R - 1, dsel_[k]);
+      }
     }
   }
   // prefill: the attention rows in half straight into o_proj's GEMM
@@ -715,6 +755,7 @@ void Hy4Flash::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp
   enc_layers(e, s, pos, 1, false);
   enc_head(e, 1, 0);
   if (!sample) return;
+  if (dfly_) hy4::enc_rmsnorm(e, uint32_t(cfg_.hidden), 1, u_, *final_norm_, cfg_.eps, htgt_);
   enc_sample(e, s, u_, pos + 1, sp, step);
   engram_after_sample(e, s, pos + 1);
 }
@@ -740,6 +781,7 @@ void Hy4Flash::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const Samplin
   }
   if (sample) {
     enc_head(e, 1, size_t(T - 1));
+    if (dfly_) hy4::enc_rmsnorm(e, uint32_t(cfg_.hidden), 1, u_, *final_norm_, cfg_.eps, htgt_);
     enc_sample(e, s, u_, pos0 + T, sp, step);
     engram_after_sample(e, s, pos0 + T);
   }
@@ -778,6 +820,94 @@ void Hy4Flash::restore(Encoder& e, Seq& s, const Checkpoint& c) {
       if (s.kc[size_t(i)]) enc_copy(e, c.conv[k], s.kc[size_t(i)]);
       ++k;
     }
+}
+
+bool Hy4Flash::experts_resident() const { return store_ && store_->complete(); }
+
+// ---- DFly2 speculative decoding ----
+void Hy4Flash::encode_draft(Encoder& e, Seq& s, int P) {
+  if (!dfly_) fatal("hy4: no DFly2 drafter");
+  if (P + kSpecRows >= s.cap) fatal("context full (%d)", s.cap);
+  std::vector<hy4::LatentCache> cs;
+  cs.reserve(dfly_kv_.size());
+  for (int L : dfly_kv_) cs.push_back(lat_of(s, L));
+  Hy4Dfly::In in;
+  in.h = htgt_;
+  in.t0 = s.tok.view(size_t(P) * 4, 4);
+  in.a = P;
+  for (hy4::LatentCache& c : cs) in.caches.push_back(&c);
+  if (P > int(hy4::kIndexDense))
+    for (const Buffer& b : dsel_) in.sel.push_back(&b);
+  dfly_->draft(e, in, s.tok.view(size_t(P + 1) * 4, size_t(Hy4Dfly::kDraft) * 4));
+}
+
+void Hy4Flash::encode_verify(Encoder& e, Seq& s, int P, int R) {
+  if (R < 1 || R > kSpecRows) fatal("hy4 verify of %d rows", R);
+  if (P + R >= s.cap) fatal("context full (%d)", s.cap);
+  eng_cur_ = eng_pf_[eng_pf_next_];
+  eng_pf_next_ ^= 1;
+  eng_stride_ = size_t(R) * 1536 * 4;
+  wait_ticket_ = 0;
+  pend_ = Pending{};
+  gather_engram(s.tokens(), P, R, eng_cur_);
+  enc_embed(e, s.tok, P, R, u_);
+  hy4::enc_hc_expand(e, uint32_t(cfg_.hidden), R, u_, X_);
+  enc_layers(e, s, P, R, false);
+  enc_head(e, R, 0);
+  hy4::enc_rmsnorm(e, uint32_t(cfg_.hidden), R, u_, *final_norm_, cfg_.eps, hn_);
+  mm(e, lm_head_, hn_, nullptr, vlog_, R);
+}
+
+void Hy4Flash::enc_sample_row(Encoder& e, const Buffer& lrow, const Buffer& tokens, int out_index,
+                              const SamplingParams& sp, uint32_t step) {
+  const uint32_t V = uint32_t(cfg_.vocab);
+  if (full_vocab(sp)) {
+    enc_sample_full(e, lrow, V, tokens, out_index, sprob_, sp, step);
+    return;
+  }
+  const uint32_t K = topk_k(sp);
+  const kp::TopkStage ts{V, K, topk_chunk(K)};
+  const uint32_t ntg = topk_lists(V, K);
+  e.use(Gpu::get().pipeline("topk_stage1"));
+  e.buf(0, lrow);
+  e.buf(1, cand_v_);
+  e.buf(2, cand_i_);
+  e.val(3, ts);
+  e.dispatch(ntg, 1, 1, topk_threads(K));
+  const kp::Sample p2{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, uint32_t(out_index)};
+  e.use(Gpu::get().pipeline("sample_stage2"));
+  e.buf(0, cand_v_);
+  e.buf(1, cand_i_);
+  e.buf(2, tokens);
+  e.buf(3, sprob_);
+  e.val(4, p2);
+  e.dispatch(1, 1, 1, 1024);
+}
+
+void Hy4Flash::encode_accept(Encoder& e, Seq& s, int P, int R, const SamplingParams& sp) {
+  const size_t V = size_t(cfg_.vocab);
+  // row r's token is position P+r+1's: plain decoding draws it with step P+r (encode_step's step = pos)
+  for (int r = 0; r < R; ++r) enc_sample_row(e, vlog_.view(size_t(r) * V * 4, V * 4), samp_, r, sp, uint32_t(P + r));
+  struct {
+    uint32_t P, K;
+  } ap{uint32_t(P), uint32_t(R - 1)};
+  e.use(hy4::pipeline("hy4_accept"));
+  e.buf(0, samp_);
+  e.buf(1, s.tok);
+  e.buf(2, acc_);
+  e.val(3, ap);
+  e.dispatch(1, 1, 1, 1);
+  if (dfly_) {
+    const uint32_t D = uint32_t(cfg_.hidden);
+    if (P + R > int(hy4::kIndexDense))
+      for (size_t k = 0; k < dsel_.size(); ++k) hy4::enc_index_pick(e, dsel_rows_[k], R, &acc_, 0, dsel_[k]);
+    e.use(hy4::pipeline("hy4_pick_row"));
+    e.buf(0, hn_);
+    e.buf(1, acc_);
+    e.buf(2, htgt_);
+    e.val(3, D);
+    e.dispatch((D + 255) / 256, 1, 1, 256);
+  }
 }
 
 }  // namespace ni

@@ -283,13 +283,15 @@ their own files, with the Engram hash multipliers in `config.json`. The trunk st
 the SSD through a cache sized to the memory left (src/model/moe_a4.h), and the Engram rows are read from their mapped
 files on the CPU each pass. Past 2048 tokens the 12 full-context layers attend to the 512 groups of 4 keys their
 compressed indexer selects, as the reference does (`NI_HY4_DENSE=1` attends to every key instead, a debugging switch).
-Its `<think:opensource>` tags are read as reasoning. It decodes plainly: the checkpoint's DFly2 drafter is not loaded,
-and the SSD prefix cache does not save its conversations. One run on an M5 Pro with 48 GB (macOS 26.5.2, 19 Nov 2026),
-with the pack's 8-bit trunk and 4-bit group-64 experts on an external SSD (26% of the experts in memory), took five
-512-token prompts and generated 64 tokens greedily after each: prefill ran at 27.9-28.2 tok/s, and decode at
-3.14-4.06 tok/s over the 63 timed tokens. These are that run's timings, not a comparison between builds. The other
-expert formats are checked against a CPU reference at Hy4's shape (`tools/a4moe_check.cpp`) but have not run the
-whole model.
+Its `<think:opensource>` tags are read as reasoning. The SSD prefix cache does not save its conversations. The
+checkpoint's DFly2 drafter (`model-dfly.safetensors`) drafts 5 tokens a cycle, verified in one 6-row pass, when every
+expert fits in memory; with experts streamed it decodes plainly, as the drafter measured slower there (1.04x on code,
+0.57x on prose on the M5 Pro below). `--spec N` turns it on, `--spec 0` off, `NI_HY4_DFLY=0` leaves it unloaded.
+One run on an M5 Pro with 48 GB (macOS 26.5.2, 19 Nov 2026), with the pack's 8-bit trunk and 4-bit group-64 experts
+on an external SSD (26% of the experts in memory), took five 512-token prompts and generated 64 tokens greedily after
+each: prefill ran at 27.9-28.2 tok/s, and decode at 3.14-4.06 tok/s over the 63 timed tokens. These are that run's
+timings, not a comparison between builds. The other expert formats are checked against a CPU reference at Hy4's shape
+(`tools/a4moe_check.cpp`) but have not run the whole model.
 
 Refused, with a message: other architectures, other quantizations (MLX's `mxfp4`, `nvfp4` and `mxfp8` modes among
 them; NVIDIA's own NVFP4 checkpoints of the catalog's Nemotron models are read as they are), mixture-of-experts
@@ -1435,6 +1437,7 @@ KFlash's knobs are `NI_KFLASH_<NAME>`; each was `NI_DFLASH_<NAME>` before #362 a
 | `NI_CLOVER_BLOCK` | the model's (`32`) | Clover, `diffusion`: positions per block, a divisor of the model's block size. |
 | `NI_CLOVER_CORESET` | the model's (on) | Clover: `0` lets every row of a denoising pass route among all the experts instead of the block's shared set (the experts holding 90% of the block's routing mass). |
 | `NI_HY4_DENSE` | | Hy4-flash, debugging: `1` makes the 12 full-context layers attend to every key past 2048 tokens instead of the groups their compressed indexer selects ([Other models](#other-models)). |
+| `NI_HY4_DFLY` | | Hy4-flash: `0` does not load the DFly2 drafter ([Other models](#other-models)). |
 | `NI_HY4_DUMP_SEL` | | Hy4-flash, debugging: a file that `build/hy4_dump` fills with the key groups each full-context layer's indexer selected past 2048 tokens; it records prefill passes, not decode steps, for `tools/hy4_mlx_layers.py --sel-compare` to compare with MLX's. Nothing is copied when it is unset. |
 | `NI_HY4_LAYERS` | | Hy4-flash, debugging: `n` runs only the first `n` layers, then the head (for a pack whose later layers are not written yet). The outputs are not the model's. |
 | `NI_HY4_NO_ENGRAM` | | Hy4-flash, debugging: `1` skips the four Engram layers' memory lookups. The outputs are not the model's. |

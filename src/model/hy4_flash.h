@@ -3,9 +3,12 @@
 // routed experts (top 16, MLX affine 3- or 4-bit, streamed from the SSD: src/model/moe_a4.h) plus a shared expert, a
 // dense layer 0 and Engram hashed n-gram memories at 4 layers (src/model/hy4_engram.h). Text only. The reference
 // semantics are transformers' modeling_hy_v4_flash.py; the blocks no other model has are in src/model/hy4_ops.h.
+// Speculative decoding with the checkpoint's own DFly2 drafter (src/model/hy4_dfly.h): encode_draft, encode_verify,
+// encode_accept (accept while the draft equals the row's own sample: plain decoding's tokens at any temperature).
 // Past 2048 keys the sparse layers attend to the 512 groups of 4 keys their compressed indexer selects.
-// Not yet: the checkpoint's DFly2 drafter (its weights are not loaded), the SSD prefix cache.
+// Not yet: the SSD prefix cache.
 #pragma once
+#include "model/hy4_dfly.h"
 #include "model/hy4_ops.h"
 #include "model/qwen35.h"
 
@@ -38,6 +41,7 @@ struct Hy4Layer {
   bool ix = false;
   QLinear ix_tk, ix_hw, ix_q;
   hy4::IndexerWeights ixw;
+  int dfly = -1;  // the DFly2 drafter layer that reads this layer's cache (-1: none)
   // dense MLP (layer 0)
   QLinear mg, mu, md;
   const Tensor* post_fc2_norm = nullptr;
@@ -83,6 +87,20 @@ class Hy4Flash : public Qwen35 {
   void encode_logits_rows(Encoder& e, int T, const Buffer& out) override;
   std::string formats_summary() const override;
   bool block_drafter_ok() const override { return false; }
+  // ---- DFly2 speculative decoding: tokens[P] is the pending token (sampled, not yet fed), P the committed length
+  static constexpr int kSpecRows = Hy4Dfly::kBlock;  // a verify: the pending token and 5 drafts
+  bool has_dfly() const { return bool(dfly_); }
+  bool experts_resident() const;  // every routed expert in memory (the store reads nothing from the SSD)
+  // d1..d5 into tokens[P+1 .. P+5] on the GPU, from the target hidden the last prefill / verify kept
+  void encode_draft(Encoder& e, Seq& s, int P);
+  // the target over tokens[P .. P+R-1] (R <= kSpecRows). The Engram rows hash those tokens on the host: call it after
+  // the drafts' command buffer completed.
+  void encode_verify(Encoder& e, Seq& s, int P, int R);
+  // each row's sample at its own position's step; accepts drafts while they equal it, writes the first differing
+  // sample after them (tokens[P+1+a]), and keeps that row's normed hidden for the next draft
+  void encode_accept(Encoder& e, Seq& s, int P, int R, const SamplingParams& sp);
+  int accepted() const { return acc_.as<int>()[0]; }
+  const Buffer& verify_logits() const { return vlog_; }  // fp32 [R, vocab] of the last verify
   // NI_HY4_DUMP_SEL=<file> (debug): every indexed layer's selection of a pass past kIndexDense keys is copied aside;
   // write_selection(), after the pass completed, appends them to the file: per layer and pass an int32 header
   // [layer, pos0, R], then uint32 [R][kIndexGroups] (row t's group ids ascending, min(G, 511) + 1 of them with
@@ -91,6 +109,11 @@ class Hy4Flash : public Qwen35 {
 
  private:
   void load(const std::string& dir);
+  void enc_sample_row(Encoder& e, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
+                      uint32_t step);
+  std::unique_ptr<Hy4Dfly> dfly_;
+  Buffer htgt_, hn_, vlog_, samp_, acc_;
+  std::vector<int> dfly_kv_;  // the target layers whose caches the drafter reads
   uint32_t ring_cap() const;
   hy4::LatentCache lat_of(const Seq& s, int i) const;
   hy4::IndexerCache ix_of(const Seq& s, int i) const;  // an indexed layer's (s.ixk / s.ixb), empty before grow_kv
@@ -126,8 +149,10 @@ class Hy4Flash : public Qwen35 {
   // activations (rows: tmax_)
   Buffer X_, u_, xn_, y_, post_a_, post_m_, xh_;
   Buffer qa_, kvl_, kr_, gt_, q_, att_, attn_scratch_;
-  // the indexer: raw projections, a call's selections [T][512], its scratch
+  // the indexer: raw projections, a call's selections [T][512], its scratch; per drafter layer the selection row of
+  // the last accepted token (dsel_) and a verify's rows to pick it from (dsel_rows_)
   Buffer ix_tk_, ix_hw_, ix_q_, sel_, ix_scratch_;
+  std::vector<Buffer> dsel_, dsel_rows_;
   Buffer seldump_;                // NI_HY4_DUMP_SEL: [indexed layers][tmax][kIndexGroups] uint32
   std::vector<int> seldump_rec_;  // (layer, pos0, R) per selection copied since the last write_selection()
   bool seldump_full_ = false;
