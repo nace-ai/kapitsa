@@ -1,5 +1,6 @@
 // What --model names (catalog names with an optional variant, Hugging Face repos, folders) and where models live.
 #include "hub/hub.h"
+#include "util/json_file.h"
 
 #include <pwd.h>
 #include <sys/stat.h>
@@ -107,6 +108,26 @@ std::string tilde(const std::string& path) {
 static bool is_dir(const std::string& p) {
   struct stat st;
   return stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+// Older folders flattened a slash to a dash. Use one only when its manifest identifies this revision.
+static std::string repo_cache_dir(const std::string& folder, const std::string& repo, const std::string& rev) {
+  if (rev.empty()) return folder;
+  if (rev.find_first_of("/-") == std::string::npos) return folder + "@" + rev;
+  std::string dir = folder + "@";
+  for (char c : rev) {
+    if (c == '/') dir += "%2F";
+    else if (c == '-') dir += "%2D";
+    else dir += c;
+  }
+  if (is_dir(dir)) return dir;
+  std::string flat = rev;
+  std::replace(flat.begin(), flat.end(), '/', '-');
+  const std::string old = folder + "@" + flat;
+  const auto m = json_file(old + "/.kapitsa/manifest.json");
+  if (m && m->contains("repo") && m->at("repo") == repo && m->contains("revision") && m->at("revision") == rev)
+    return old;
+  return dir;
 }
 
 // "org/name" or "org/name@revision" (also https://huggingface.co/org/name): false if `s` is not that shape.
@@ -259,12 +280,7 @@ ModelRef resolve(const std::string& arg0) {
     r.name = rev.empty() ? repo : repo + "@" + rev;
     r.id = repo;
     std::string folder = repo.substr(0, repo.find('/')) + "--" + repo.substr(repo.find('/') + 1);
-    if (!rev.empty()) {
-      std::string rv = rev;
-      std::replace(rv.begin(), rv.end(), '/', '-');
-      folder += "@" + rv;
-    }
-    r.dir = models_dir() + "/" + folder;
+    r.dir = repo_cache_dir(models_dir() + "/" + folder, repo, rev);
     return r;
   }
   // a folder of the models dir by its name (kapitsa import's conversions)
