@@ -614,7 +614,7 @@ void Hy4Flash::enc_attn_block(Encoder& e, Seq& s, int i, int pos0, int R, bool p
       mm(e, L.ix_q, qa_, L.q_a_norm, ix_q_, R);  // q_resid = q_a_layernorm(q_a)
       hy4::enc_index_select(e, L.at, x, pos0, R, ix_q_, 16 * 128, 0, ix_hw_, 16, 0, sel_, ix_scratch_);
       sel = &sel_;
-      if (seldump_ && prefill && R > 1) {  // NI_HY4_DUMP_SEL (debug): prefill passes only, as hy4_dump writes them
+      if (seldump_ && prefill) {  // NI_HY4_DUMP_SEL (debug): prefill passes (a 1-row tail too), not decode steps
         const size_t row = size_t(hy4::kIndexGroups) * 4, k = seldump_rec_.size() / 3;
         if ((k + 1) * size_t(tmax_) * row <= seldump_.size) {
           enc_copy(e, sel_.view(0, size_t(R) * row), seldump_.view(k * size_t(tmax_) * row, size_t(R) * row));
