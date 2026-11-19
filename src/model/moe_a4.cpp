@@ -64,12 +64,14 @@ Scratch scratch_of(const Shape& sh, size_t R) {
 }
 
 std::string kname(const std::string& base, const Fmt& f, bool slot) {
-  return base + "_b" + std::to_string(f.bits) + "g" + std::to_string(f.gs) + (slot ? "_slot" : "");
+  return base + (f.q20 ? "_q20" : "_b" + std::to_string(f.bits) + "g" + std::to_string(f.gs)) + (slot ? "_slot" : "");
 }
 Pipeline pipe(const std::string& base, const Fmt& f, const Experts& x) {
   return hy4::pipeline(kname(base, f, x.arena));
 }
-bool fmt_ok(const Fmt& f) { return (f.bits == 3 || f.bits == 4) && (f.gs == 32 || f.gs == 64 || f.gs == 128); }
+bool fmt_ok(const Fmt& f) {
+  return f.q20 ? f.bits == 2 && f.gs == 64 : (f.bits == 3 || f.bits == 4) && (f.gs == 32 || f.gs == 64 || f.gs == 128);
+}
 
 SlotParams slot_params(const Experts& x) {
   SlotParams L{};
@@ -84,7 +86,9 @@ void bind_mat(Encoder& e, const Experts& x, int m, int i) {
     return;
   }
   const Buffer* b[3][3] = {{&x.gw, &x.gs, &x.gb}, {&x.uw, &x.us, &x.ub}, {&x.dw, &x.ds, &x.db}};
-  for (int j = 0; j < 3; ++j) e.buf(i + j, *b[m][j]);
+  const bool q20 = (m == 2 ? x.dn : x.gu).q20;
+  // Q2_0 has no bias allocation; bind its scale buffer to the unused argument.
+  for (int j = 0; j < 3; ++j) e.buf(i + j, *b[m][q20 && j == 2 ? 1 : j]);
 }
 
 void enc_rows_path(Encoder& e, const Experts& x, const Shape& sh, int R, const Buffer& xin, const Buffer& idx,
@@ -153,7 +157,9 @@ void enc_tiles_path(Encoder& e, const Experts& x, const Shape& sh, int R, const 
 
 }  // namespace
 
-std::string fmt_name(const Fmt& f) { return std::to_string(f.bits) + "-bit group " + std::to_string(f.gs); }
+std::string fmt_name(const Fmt& f) {
+  return (f.q20 ? "Q2_0 " : "") + std::to_string(f.bits) + "-bit group " + std::to_string(f.gs);
+}
 
 std::vector<std::string> kernel_names(const Fmt& gu, const Fmt& dn) {
   std::vector<std::string> v = {"a4_x_half", "moe_bucket3", "a4_combine"};
@@ -171,6 +177,7 @@ std::vector<std::string> kernel_names() {
   for (uint32_t bits : {3u, 4u})
     for (uint32_t gs : {32u, 64u, 128u})
       for (const std::string& n : kernel_names(Fmt{bits, gs}, Fmt{bits, gs})) all.insert(n);
+  for (const std::string& n : kernel_names(Fmt{2, 64, true}, Fmt{2, 64, true})) all.insert(n);
   return {all.begin(), all.end()};
 }
 
@@ -190,7 +197,7 @@ bool formats_ok(const Shape& sh, const Fmt& gu, const Fmt& dn, std::string* why)
   if (!shapes_ok(sh, why)) return false;
   for (const Fmt* f : {&gu, &dn}) {
     if (!fmt_ok(*f)) {
-      if (why) *why = fmt_name(*f) + " (the kernels read 3- or 4-bit, group 32, 64 or 128)";
+      if (why) *why = fmt_name(*f) + " (expected affine 3/4-bit group 32/64/128 or Q2_0 2-bit group 64)";
       return false;
     }
   }
@@ -213,7 +220,7 @@ SlotLayout slot_layout(const Shape& sh, const Fmt& gu, const Fmt& dn) {
   }
   for (uint32_t m = 0; m < 3; ++m) {
     const Fmt& f = m == 2 ? dn : gu;
-    for (uint32_t j = 0; j < 2; ++j) {
+    for (uint32_t j = 0; j < (f.q20 ? 1u : 2u); ++j) {
       L.off[3 * m + 1 + j] = at;
       L.len[3 * m + 1 + j] = sh.I * sh.D / f.gs * 2;
       at += L.len[3 * m + 1 + j];
@@ -333,9 +340,12 @@ Store::Store(const std::string& dir, const std::vector<int>& layers, const Shape
   auto config_fmt = [&](const std::string& module, Fmt* f) {
     if (!quant.is_object()) return false;
     const nlohmann::json& q = quant.contains(module) && quant[module].is_object() ? quant[module] : quant;
-    if (!q.contains("bits") || !q.contains("group_size")) return false;
-    f->bits = q["bits"].get<uint32_t>();
-    f->gs = q["group_size"].get<uint32_t>();
+    const std::string mode = q.value("mode", "affine");
+    if (mode != "affine" && mode != "q2_0") fatal("a4 store: unsupported mode %s for %s", mode.c_str(), module.c_str());
+    f->q20 = mode == "q2_0";
+    if (!f->q20 && (!q.contains("bits") || !q.contains("group_size"))) return false;
+    f->bits = q.value("bits", 2u);
+    f->gs = q.value("group_size", 64u);
     return true;
   };
   // where each tensor is: the index's weight map, else every *.safetensors of the folder
@@ -378,7 +388,7 @@ Store::Store(const std::string& dir, const std::vector<int>& layers, const Shape
     if (t == h->second.end()) fatal("a4 store: %s is not in %s", n.c_str(), w->second.c_str());
     return t->second;
   };
-  std::map<std::pair<uint32_t, uint32_t>, int> mix;  // (bits, gs) of gate/up and down -> layers, for the log
+  std::map<std::pair<std::string, std::string>, int> mix;  // gate/up and down formats -> layers, for the log
   uint32_t slot_bytes = 0;
   for (size_t li = 0; li < layers.size(); ++li) {
     // each matrix's format from its planes' shapes: codes [E, out, in * bits / 32], scales [E, out, in / gs]
@@ -394,9 +404,13 @@ Store::Store(const std::string& dir, const std::vector<int>& layers, const Shape
       f[mi].bits = uint32_t(uint64_t(W.shape[2]) * 32 / in);
       f[mi].gs = uint32_t(in / uint64_t(S.shape[2]));
       Fmt c;
-      if (config_fmt(base, &c) && c != f[mi])
-        fatal("a4 store: %s is %s by its shapes, %s by config.json", base.c_str(), fmt_name(f[mi]).c_str(),
-              fmt_name(c).c_str());
+      if (config_fmt(base, &c)) {
+        f[mi].q20 = c.q20;
+        if (c != f[mi])
+          fatal("a4 store: %s is %s by its shapes, %s by config.json", base.c_str(), fmt_name(f[mi]).c_str(),
+                fmt_name(c).c_str());
+      }
+      if (f[mi].q20 && where.count(base + ".biases")) fatal("a4 store: Q2_0 matrix %s has a bias plane", base.c_str());
     }
     if (f[0] != f[1])
       fatal("a4 store: layer %d's gate (%s) and up (%s) differ in format", layers[li], fmt_name(f[0]).c_str(),
@@ -406,9 +420,9 @@ Store::Store(const std::string& dir, const std::vector<int>& layers, const Shape
     m.dn[li] = f[2];
     m.lay[li] = slot_layout(sh, f[0], f[2]);
     slot_bytes = std::max(slot_bytes, m.lay[li].bytes);
-    ++mix[{f[0].bits * 1000 + f[0].gs, f[2].bits * 1000 + f[2].gs}];
+    ++mix[{fmt_name(f[0]), fmt_name(f[2])}];
     for (int mi = 0; mi < 3; ++mi)
-      for (int pi = 0; pi < 3; ++pi) {
+      for (int pi = 0; pi < (f[mi].q20 ? 2 : 3); ++pi) {
         const std::string n = "model.layers." + std::to_string(layers[li]) + ".mlp.switch_mlp." + kMat[mi] + "_proj." +
                               kPart[pi];
         const StTensor& T = tensor(n);
@@ -416,7 +430,7 @@ Store::Store(const std::string& dir, const std::vector<int>& layers, const Shape
         const Fmt& fm = f[mi];
         const std::vector<int64_t> want = {int64_t(sh.E), int64_t(out), int64_t(pi == 0 ? in * fm.bits / 32 : in / fm.gs)};
         const uint64_t row_bytes = pi == 0 ? uint64_t(in) * fm.bits / 8 : uint64_t(in) / fm.gs * 2;
-        const char* dt = pi == 0 ? "U32" : "BF16";
+        const char* dt = pi == 0 ? "U32" : fm.q20 ? "F16" : "BF16";
         if (T.dtype != dt || T.shape != want || T.len != uint64_t(sh.E) * out * row_bytes)
           fatal("a4 store: %s is %s [%s], not %s [%lld, %lld, %lld]", n.c_str(), T.dtype.c_str(),
                 [&] {
@@ -431,15 +445,17 @@ Store::Store(const std::string& dir, const std::vector<int>& layers, const Shape
           fi = fidx.emplace(path, int(files.size())).first;
           files.push_back(path);
         }
-        q20::PlaneSrc& p = src[li].p[mi * 3 + pi];
+        q20::SlotPlanes& lp = src[li].planes;
+        const uint32_t active = lp.n++;
+        lp.at[active] = m.lay[li].off[mi * 3 + pi];
+        lp.len[active] = m.lay[li].len[mi * 3 + pi];
+        q20::PlaneSrc& p = src[li].p[active];
         p.file = fi->second;
         p.off = T.off;
         p.stride = T.len / sh.E;
         p.len = uint32_t(T.len / sh.E);
       }
     q20::SlotPlanes& lp = src[li].planes;  // the layer's planes in its own layout
-    lp.n = 9;
-    for (int j = 0; j < 9; ++j) lp.at[j] = m.lay[li].off[j], lp.len[j] = m.lay[li].len[j];
     lp.bytes = m.lay[li].bytes;
   }
   // every slot holds the largest layer's expert
@@ -449,9 +465,8 @@ Store::Store(const std::string& dir, const std::vector<int>& layers, const Shape
   for (q20::LayerSrc& l : src) l.planes.bytes = slot_bytes;
   std::string mix_s;
   for (const auto& [k, n] : mix) {
-    const Fmt a{k.first / 1000, k.first % 1000}, b{k.second / 1000, k.second % 1000};
-    mix_s += (mix_s.empty() ? "" : ", ") + std::to_string(n) + " x " + fmt_name(a) +
-             (a == b ? std::string() : " (down " + fmt_name(b) + ")");
+    mix_s += (mix_s.empty() ? "" : ", ") + std::to_string(n) + " x " + k.first +
+             (k.first == k.second ? std::string() : " (down " + k.second + ")");
   }
   // the arena: the caller's bytes, NI_EXPERT_STORE=<GB>|all, else 42% of the RAM (~20 GB on a 48 GB Mac: room for
   // the resident weights, ~8 GB for Hy4, the KV caches and the rest) or what the GPU's working set leaves after what

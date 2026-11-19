@@ -1,11 +1,12 @@
 #include "common.h"
 
-// ---- Routed experts in MLX affine 3- or 4-bit, group 32 / 64 / 128, with a clamped SwiGLU (Hy4-flash;
+// ---- Routed experts in MLX affine 3- or 4-bit, or Q2_0, with a clamped SwiGLU (Hy4-flash;
 // src/model/moe_a4.h) ----
 // An expert is three matrices, gate and up [I, D] and down [D, I], each three planes: codes [N][K * BITS / 32] uint32
 // (each row a little-endian bit stream, value j at bits [BITS j, BITS j + BITS): MLX's packing, for 3 bits eight
 // values in three bytes), scales and biases [N][K/GS] bf16, weight = code * scale + bias. Gate and up share a format
-// (BITS, GS); down has its own. Kernel names carry the format: a4_gu_rows_b3g64_slot. The planes are either stacked
+// (BITS, GS); down has its own. BITS == 2 is Q2_0 only: GS 64, signed f16 d, (code - 1) * d, no bias.
+// Kernel names carry the format: a4_gu_rows_b3g64_slot or a4_gu_rows_q20. The planes are either stacked
 // over the experts ([E][N][...]: w0..w2 = the matrix's codes, scales, biases) or one slot of the store's arena read
 // through the layer's slot table (SLOT: w0 = arena chunk 0, w1 = chunk 1, w2 = the slot table of E words
 // chunk << 28 | page, the planes at A4Slot's byte offsets), as zq2moe.metal's q20_mat<SLOT> does for Q2_0.
@@ -96,6 +97,32 @@ NI_INLINE float a3_dot16(const device uint32_t* row, uint k0, thread const float
 NI_A3_ROWS(a3_rows_tg, threadgroup)
 NI_A3_ROWS(a3_rows_dx, device)
 
+// Q2_0 rows: each lane owns 16 consecutive codes, all sharing one signed f16 scale.
+#define NI_A4_Q20_ROWS(NAME, XSPACE)                                                                              \
+  template <int ROWS>                                                                                            \
+  NI_INLINE void NAME(const device uint32_t* w, const device half* scales, XSPACE const float* x,                 \
+                      uint N, uint K, uint row0, uint lane, thread float* acc) {                                 \
+    const uint wpr = K / 16, gpr = K / 64;                                                                       \
+    for (int r = 0; r < ROWS; ++r) acc[r] = 0.0f;                                                                \
+    for (uint k0 = lane * 16; k0 < K; k0 += 512) {                                                              \
+      float xv[16];                                                                                              \
+      for (int j = 0; j < 16; ++j) xv[j] = x[k0 + j];                                                           \
+      for (int r = 0; r < ROWS; ++r) {                                                                          \
+        const uint row = min(row0 + r, N - 1);                                                                   \
+        uint codes = w[ulong(row) * wpr + k0 / 16];                                                              \
+        float dot = 0.0f;                                                                                        \
+        for (int j = 0; j < 16; ++j) {                                                                          \
+          dot = fma(float(int(codes & 3u) - 1), xv[j], dot);                                                     \
+          codes >>= 2;                                                                                           \
+        }                                                                                                        \
+        acc[r] += float(scales[ulong(row) * gpr + k0 / 64]) * dot;                                               \
+      }                                                                                                          \
+    }                                                                                                            \
+    for (int r = 0; r < ROWS; ++r) acc[r] = simd_sum(acc[r]);                                                    \
+  }
+NI_A4_Q20_ROWS(a4_q20_rows_tg, threadgroup)
+NI_A4_Q20_ROWS(a4_q20_rows_dx, device)
+
 NI_INLINE float a4_swiglu(float g, float u, float lim) {
   if (lim > 0.0f) {
     g = min(g, lim);
@@ -122,7 +149,10 @@ NI_INLINE void a4_gu_rows_impl(const device uchar* g0, const device uchar* g1, c
   const A4Mat G = a4_mat<SLOT, BITS, GS>(g0, g1, g2, e, p.I, p.D, L, 0),
               U = a4_mat<SLOT, BITS, GS>(u0, u1, u2, e, p.I, p.D, L, 1);
   float ag[ROWS], au[ROWS];
-  if (BITS == 4) {
+  if (BITS == 2) {
+    a4_q20_rows_tg<ROWS>(G.w, (const device half*)G.s, xs, p.I, p.D, row0, lane, ag);
+    a4_q20_rows_tg<ROWS>(U.w, (const device half*)U.s, xs, p.I, p.D, row0, lane, au);
+  } else if (BITS == 4) {
     qmv2_rows<4, 16, ROWS, GS>(G.w, G.s, G.b, xs, p.I, p.D, row0, lane, ag);
     qmv2_rows<4, 16, ROWS, GS>(U.w, U.s, U.b, xs, p.I, p.D, row0, lane, au);
   } else {
@@ -148,6 +178,7 @@ NI_INLINE void a4_gu_rows_impl(const device uchar* g0, const device uchar* g1, c
     a4_gu_rows_impl<SLOT, BITS, GS, 2>(g0, g1, g2, u0, u1, u2, x, idx, h, p, L, tgp, tid, ntg2.x, sg, nsg, lane, xs); \
   }
 #define NI_A4_ALL(X, BASE)                                                                                       \
+  X(BASE##_q20, false, 2, 64) X(BASE##_q20_slot, true, 2, 64)                                                    \
   X(BASE##_b3g32, false, 3, 32) X(BASE##_b3g32_slot, true, 3, 32)                                                \
   X(BASE##_b3g64, false, 3, 64) X(BASE##_b3g64_slot, true, 3, 64)                                                \
   X(BASE##_b3g128, false, 3, 128) X(BASE##_b3g128_slot, true, 3, 128)                                            \
@@ -172,7 +203,8 @@ NI_INLINE void a4_dn_rows_impl(const device uchar* d0, const device uchar* d1, c
     const uint e = min(idx[pair], p.E - 1);
     const A4Mat W = a4_mat<SLOT, BITS, GS>(d0, d1, d2, e, p.D, p.I, L, 2);
     float a[ROWS];
-    if (BITS == 4) qmv2_rows_dx<4, 16, ROWS, GS>(W.w, W.s, W.b, h + ulong(pair) * p.I, p.D, p.I, row0, lane, a);
+    if (BITS == 2) a4_q20_rows_dx<ROWS>(W.w, (const device half*)W.s, h + ulong(pair) * p.I, p.D, p.I, row0, lane, a);
+    else if (BITS == 4) qmv2_rows_dx<4, 16, ROWS, GS>(W.w, W.s, W.b, h + ulong(pair) * p.I, p.D, p.I, row0, lane, a);
     else a3_rows_dx<GS, ROWS>(W.w, W.s, W.b, h + ulong(pair) * p.I, p.D, p.I, row0, lane, a);
     const float ws = wts[pair];
     for (int i = 0; i < ROWS; ++i) tot[i] += ws * a[i];
@@ -264,9 +296,18 @@ NI_INLINE void a4_tile(const device half* X, const device uint* xrows, uint x_ld
       if (i < BN * 4) {
         _Pragma("clang loop unroll(full)")
         for (int q = 0; q < NP; ++q) {
-          const float sc = float(M[q].s[ulong(n) * gpr + g]), bi = float(M[q].b[ulong(n) * gpr + g]);
+          const ulong group = ulong(n) * gpr + g;
+          const float sc = BITS == 2 ? float(((const device half*)M[q].s)[group]) : float(M[q].s[group]);
+          const float bi = BITS == 2 ? 0.0f : float(M[q].b[group]);
           half4 lo, hi;
-          if (BITS == 4) {
+          if (BITS == 2) {
+            // Each lane decodes 8 values from one half of a 16-value word.
+            const uint32_t word = M[q].w[ulong(n) * wpr + k0 / 16 + (i % 4) / 2] >> (16 * (i % 2));
+            for (int c = 0; c < 4; ++c) {
+              lo[c] = half(sc * float(int((word >> (2 * c)) & 3u) - 1));
+              hi[c] = half(sc * float(int((word >> (2 * c + 8)) & 3u) - 1));
+            }
+          } else if (BITS == 4) {
             const uint32_t word = M[q].w[ulong(n) * wpr + k0 / 8 + i % 4];
             for (int c = 0; c < 4; ++c) {
               lo[c] = half(sc * float((word >> (4 * c)) & 15u) + bi);

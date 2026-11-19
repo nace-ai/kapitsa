@@ -1,4 +1,4 @@
-// Routed experts in MLX affine 3- or 4-bit, group 32 / 64 / 128, streamed from SSD through an arena of slots (Hy4-flash:
+// Routed experts in MLX affine 3- or 4-bit, group 32 / 64 / 128, or Q2_0, streamed through an arena of slots (Hy4-flash:
 // 41 MoE layers x 512 experts x 3 matrices of 1536 x 1536, 83.6 GB at 4-bit group 64; src/model/expert_store.h holds
 // the cache). The format is per layer, and within a layer gate / up share one and down may have another. The experts'
 // SwiGLU clamps: gate <= limit, -limit <= up <= limit (Hy4's swiglu_limit 10). The router, the shared expert, the
@@ -21,16 +21,19 @@ struct Shape {
   float limit = 10.0f;  // swiglu_limit; <= 0: no clamp
 };
 
-// A matrix's MLX affine format: bits 3 or 4, group size 32, 64 or 128
+// Affine: bits 3 or 4, groups 32 / 64 / 128, bf16 scale and bias. Q2_0: bits 2, group 64,
+// signed f16 scale d, weight = (code - 1) * d, no bias plane.
 struct Fmt {
   uint32_t bits = 4, gs = 64;
-  bool operator==(const Fmt& o) const { return bits == o.bits && gs == o.gs; }
+  bool q20 = false;
+  bool operator==(const Fmt& o) const { return bits == o.bits && gs == o.gs && q20 == o.q20; }
   bool operator!=(const Fmt& o) const { return !(*this == o); }
 };
 std::string fmt_name(const Fmt& f);  // "3-bit group 64"
 
 // One layer's experts: stacked planes (tests; gate/up w [E, I, D * bits / 32] uint32, s/b [E, I, D / gs] bf16, down
 // likewise [E, D, I * bits / 32] / [E, D, I / gs]) or slots of the store's arena through the layer's slot table.
+// Q2_0 uses the same code and scale shapes, f16 scales, and leaves gb / ub / db unallocated.
 struct Experts {
   Buffer gw, gs, gb, uw, us, ub, dw, ds, db;
   Buffer a0, a1, slots;
@@ -46,13 +49,14 @@ std::vector<std::string> kernel_names(const Fmt& gu, const Fmt& dn);
 // Whether the kernels take these shapes (why: the first reason they don't): D and I multiples of 64, D <= 2048 (the
 // rows path stages x in threadgroup memory), 1 <= k <= 16, E <= 512 (the prefill bucketing)
 bool shapes_ok(const Shape& sh, std::string* why = nullptr);
-// shapes_ok and the formats: bits 3 or 4, group 32 / 64 / 128 dividing the matrices' K (D for gate / up, I for down)
+// shapes_ok and the formats, with group size dividing K (D for gate / up, I for down).
 bool formats_ok(const Shape& sh, const Fmt& gu, const Fmt& dn, std::string* why = nullptr);
 
 // An expert's slot in the store's arena: the nine planes' byte offsets (Experts::off order) and the slot's bytes in
 // whole 16 KiB pages. The three code planes come first, each on a page boundary, then the six scale / bias planes back
 // to back. Hy4 at 4-bit group 64: code planes of 72 pages, scale / bias planes of 73,728 B, 243 pages a slot; 3-bit
-// group 64: 54-page code planes, 189 pages; 3-bit group 128: 176 pages.
+// group 64: 54-page code planes, 189 pages; 3-bit group 128: 176 pages; Q2_0: 36-page codes, 122 pages.
+// A Q2_0 matrix's bias offset and length are zero. The store submits only the populated planes.
 struct SlotLayout {
   uint32_t off[9] = {}, len[9] = {};
   uint32_t bytes = 0;
@@ -75,7 +79,8 @@ void enc_rows(Encoder& e, const Experts& x, const Shape& sh, int R, const Buffer
 
 // The pack's streamed experts. dir: the model folder (MLX safetensors; the planes are
 // model.layers.{L}.mlp.switch_mlp.{gate,up,down}_proj.{weight,scales,biases}, [E, out, in * bits / 32] and
-// [E, out, in / gs]). layers: the trunk layer indices that have routed experts. Each layer's formats come from its
+// [E, out, in / gs]). Q2_0 requires quantization mode "q2_0", F16 scales and no biases; affine2 is refused.
+// layers: the trunk layer indices that have routed experts. Each layer's formats come from its
 // planes' shapes (checked against config.json's quantization entries when the folder has one); every slot is the
 // largest layer's (a layer in a smaller format leaves the rest of its slot unused). arena_bytes 0: decide from free
 // memory (NI_EXPERT_STORE=<GB>|all overrides).

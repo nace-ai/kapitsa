@@ -1,18 +1,19 @@
-// Checks the MLX affine routed experts (3- or 4-bit, group 32 / 64 / 128) with the clamped SwiGLU (src/model/moe_a4.h,
+// Checks the MLX affine routed experts (3- or 4-bit, group 32 / 64 / 128) and Q2_0 with the clamped SwiGLU (src/model/moe_a4.h,
 // src/kernels/hy4/a4moe.metal) against a CPU reference in double, and times them. No model: the experts are random weights
 // quantized as mx.quantize does (affine, each row's codes a little-endian bit stream, bf16 scales and biases, value =
 // code * scale + bias).
 //   check  (default) enc_rows on stacked planes and through a slot arena (shuffled slot words, two chunks) for
 //          R = 1, 8, 512 on both paths: max abs / rel error against the reference, stacked == arena bit for bit; for
-//          every format (gate / up and down alike, then two mixed pairs) or the one --fmt names
+//          every format (gate / up and down alike, then mixed pairs) or the one --fmt names
 //   time   R = 1 (auto) and 8 .. 512 (both paths) at the given shape, every expert resident (stacked and arena)
 //   store  a fake pack in /tmp (model-experts-LNN.safetensors + model.safetensors.index.json), a4::Store over it with
 //          an arena of 3 E slots (evictions), decode / verify / prefill passes through begin / end / enc_rows against
 //          the reference and the stacked planes (bit for bit); --mixed: the layers cycle through four formats
 // Options: --small (D = I = 256, E = 64, top-16; for shader validation), --hy4 (D = I = 1536, E = 512, top-16: the
 // default for time), --seed N, --layers N (store: default 4; 2 layers fit the minimum arena whole: no evictions),
-// --fmt B/G[:B/G] (gate / up's bits and group, then down's; default 4/64).
+// --fmt B/G[:B/G] (gate / up's bits and group, then down's; default 4/64); q2_0 names Q2_0 2/64.
 // Takes no lock: run it under lockf -k -t 600 /tmp/kapitsa-gpu.lock build/a4moe_check ...
+#include "gguf/quant.h"
 #include "metal/gpu.h"
 #include "model/hy4_kernels.h"
 #include "model/moe_a4.h"
@@ -82,16 +83,24 @@ struct Mat {
   Buffer w, s, b;
   size_t wrow() const { return size_t(K) * f.bits / 8; }  // bytes of a row's codes
   size_t wbytes() const { return size_t(N) * wrow(); }    // one expert
-  size_t sbytes() const { return size_t(N) * (K / f.gs) * 2; }  // one expert's scales (biases the same)
+  size_t sbytes() const { return size_t(N) * (K / f.gs) * 2; }
+  size_t bbytes() const { return f.q20 ? 0 : sbytes(); }
   const uint32_t* wp(uint32_t e) const { return w.as<uint32_t>() + size_t(e) * wbytes() / 4; }
   const uint16_t* sp(uint32_t e) const { return s.as<uint16_t>() + size_t(e) * sbytes() / 2; }
-  const uint16_t* bp(uint32_t e) const { return b.as<uint16_t>() + size_t(e) * sbytes() / 2; }
+  const uint16_t* bp(uint32_t e) const { return f.q20 ? nullptr : b.as<uint16_t>() + size_t(e) * sbytes() / 2; }
   // row n of expert e dequantized; the codes read byte by byte, LSB first (MLX: for 3 bits eight values in three
   // bytes, value j at bits 3j of the 24)
   void row(uint32_t e, uint32_t n, double* out) const {
     const uint8_t* w0 = reinterpret_cast<const uint8_t*>(wp(e)) + size_t(n) * wrow();
     const uint32_t gpr = K / f.gs;
-    const uint16_t *s0 = sp(e) + size_t(n) * gpr, *b0 = bp(e) + size_t(n) * gpr;
+    const uint16_t* s0 = sp(e) + size_t(n) * gpr;
+    if (f.q20) {
+      // Independent byte decoder: four consecutive signed codes per byte, one IEEE half d per 64 weights.
+      for (uint32_t k = 0; k < K; ++k)
+        out[k] = double(int((w0[k / 4] >> (2 * (k % 4))) & 3u) - 1) * double(gguf::from_f16(s0[k / 64]));
+      return;
+    }
+    const uint16_t* b0 = bp(e) + size_t(n) * gpr;
     for (uint32_t k = 0; k < K; ++k) {
       uint32_t c = 0;
       for (uint32_t bit = 0; bit < f.bits; ++bit) {
@@ -132,7 +141,7 @@ Mat make_mat(uint32_t E, uint32_t N, uint32_t K, const a4::Fmt& f, float sigma, 
   m.N = N, m.K = K, m.f = f;
   m.w = abuf(size_t(E) * m.wbytes(), "a4_w");
   m.s = abuf(size_t(E) * m.sbytes(), "a4_s");
-  m.b = abuf(size_t(E) * m.sbytes(), "a4_b");
+  if (!f.q20) m.b = abuf(size_t(E) * m.bbytes(), "a4_b");
   parallel_for(size_t(E) * N, [&](size_t en) {
     std::mt19937 rng(g_seed * 7919u + salt * 104729u + uint32_t(en));
     std::normal_distribution<float> nd(0.0f, 1.0f);
@@ -140,7 +149,20 @@ Mat make_mat(uint32_t E, uint32_t N, uint32_t K, const a4::Fmt& f, float sigma, 
     const float rs = sigma * (0.5f + float(en % 7) * 0.25f);
     uint32_t* w = m.w.as<uint32_t>() + en * m.wrow() / 4;
     const uint32_t gpr = K / f.gs;
-    uint16_t *s = m.s.as<uint16_t>() + en * gpr, *b = m.b.as<uint16_t>() + en * gpr;
+    uint16_t* s = m.s.as<uint16_t>() + en * gpr;
+    if (f.q20) {
+      for (uint32_t gi = 0; gi < gpr; ++gi) {
+        const _Float16 d = _Float16(((en + gi) % 2 ? -1.0f : 1.0f) * rs * (0.5f + float(gi % 5) * 0.25f));
+        std::memcpy(s + gi, &d, 2);
+        // All four codes occur in every group, with word/byte order varying by expert, row and group.
+        for (uint32_t k = 0; k < 64; ++k) {
+          const uint32_t at = gi * 64 + k, code = uint32_t(k + gi + en) % 4;
+          w[at / 16] |= code << (2 * (at % 16));
+        }
+      }
+      return;
+    }
+    uint16_t* b = m.b.as<uint16_t>() + en * gpr;
     std::vector<float> g(f.gs);
     for (uint32_t gi = 0; gi < gpr; ++gi) {
       const float off = rs * 0.5f * nd(rng);
@@ -203,7 +225,7 @@ Arena make_arena(const Model& m) {
       const Mat& X = *M[mi];
       std::memcpy(base + L.off[3 * mi], X.wp(uint32_t(e)), X.wbytes());
       std::memcpy(base + L.off[3 * mi + 1], X.sp(uint32_t(e)), X.sbytes());
-      std::memcpy(base + L.off[3 * mi + 2], X.bp(uint32_t(e)), X.sbytes());
+      if (!X.f.q20) std::memcpy(base + L.off[3 * mi + 2], X.bp(uint32_t(e)), X.bbytes());
     }
   });
   return a;
@@ -377,7 +399,7 @@ void run_time() {
   const Buffer scratch = abuf(a4::scratch_bytes(SH, 512), "a4_scratch");
   const Buffer y = abuf(size_t(512) * SH.D * 4, "a4_y");
   std::mt19937 rng(g_seed + 77);
-  const double expert_mb = (2.0 * (m.g.wbytes() + 2 * m.g.sbytes()) + m.d.wbytes() + 2 * m.d.sbytes()) / 1e6;
+  const double expert_mb = (2.0 * (m.g.wbytes() + m.g.sbytes() + m.g.bbytes()) + m.d.wbytes() + m.d.sbytes() + m.d.bbytes()) / 1e6;
   for (int R : {1, 8, 32, 64, 128, 256, 512}) {
     const int n = R <= 8 ? 40 : 8;
     std::vector<Rows> rs;
@@ -429,11 +451,13 @@ void run_store(int nlayers, bool mixed) {
   std::vector<int> layers;
   std::vector<Model> lm;
   nlohmann::json index = {{"metadata", {{"total_size", 0}}}, {"weight_map", nlohmann::json::object()}};
+  nlohmann::json quant = {{"bits", FGU.bits}, {"group_size", FGU.gs}, {"mode", FGU.q20 ? "q2_0" : "affine"}};
   for (int l = 0; l < nlayers; ++l) {
     const int trunk = 1 + 2 * l;  // trunk layers 1, 3, 5, ...
     layers.push_back(trunk);
     // --mixed: the four formats in turn (the slots are the largest's)
-    static const a4::Fmt kMix[4][2] = {{{3, 64}, {3, 64}}, {{4, 64}, {4, 64}}, {{3, 128}, {4, 32}}, {{3, 32}, {3, 128}}};
+    static const a4::Fmt kMix[4][2] = {{{2, 64, true}, {2, 64, true}}, {{4, 64}, {4, 64}},
+                                      {{3, 128}, {2, 64, true}}, {{2, 64, true}, {3, 128}}};
     const a4::Fmt gu = mixed ? kMix[l % 4][0] : FGU, dn = mixed ? kMix[l % 4][1] : FDN;
     lm.push_back(make_model(SH.E, 10 + uint32_t(l), gu, dn));
     const Model& m = lm.back();
@@ -450,19 +474,25 @@ void run_store(int nlayers, bool mixed) {
     for (int mi : {2, 0, 1}) {
       const Mat& X = *M[mi];
       const std::string base = "model.layers." + std::to_string(trunk) + ".mlp.switch_mlp." + names[mi] + "_proj.";
+      if (X.f != FGU)
+        quant[base.substr(0, base.size() - 1)] = {{"bits", X.f.bits}, {"group_size", X.f.gs},
+                                                  {"mode", X.f.q20 ? "q2_0" : "affine"}};
       const std::vector<int64_t> ws = {int64_t(SH.E), int64_t(X.N), int64_t(X.K * X.f.bits / 32)},
                                  ss = {int64_t(SH.E), int64_t(X.N), int64_t(X.K / X.f.gs)};
       meta.push_back({base + "weight", {"U32", ws}});
       data.push_back({X.w.ptr(), size_t(SH.E) * X.wbytes()});
-      meta.push_back({base + "scales", {"BF16", ss}});
+      meta.push_back({base + "scales", {X.f.q20 ? "F16" : "BF16", ss}});
       data.push_back({X.s.ptr(), size_t(SH.E) * X.sbytes()});
-      meta.push_back({base + "biases", {"BF16", ss}});
-      data.push_back({X.b.ptr(), size_t(SH.E) * X.sbytes()});
+      if (!X.f.q20) {
+        meta.push_back({base + "biases", {"BF16", ss}});
+        data.push_back({X.b.ptr(), size_t(SH.E) * X.bbytes()});
+      }
     }
     write_safetensors(dir + "/" + fn, meta, data);
     for (const auto& mt : meta) index["weight_map"][mt.first] = fn;
   }
   std::ofstream(dir + "/model.safetensors.index.json") << index.dump(1);
+  std::ofstream(dir + "/config.json") << nlohmann::json{{"quantization", quant}}.dump(1);
   uint32_t slot = 0;
   for (const Model& m : lm) slot = std::max(slot, a4::slot_layout(SH, m.g.f, m.d.f).bytes);
   const size_t arena = size_t(3) * SH.E * slot;
@@ -534,6 +564,7 @@ void run_store(int nlayers, bool mixed) {
     unlink((dir + fn).c_str());
   }
   unlink((dir + "/model.safetensors.index.json").c_str());
+  unlink((dir + "/config.json").c_str());
   rmdir(dir.c_str());
 }
 
@@ -545,6 +576,10 @@ int main(int argc, char** argv) {
   int nlayers = 4;
   bool mixed = false, fmt_given = false;
   auto parse_fmt = [](const std::string& v, a4::Fmt& f) {
+    if (v == "q2_0") {
+      f = a4::Fmt{2, 64, true};
+      return;
+    }
     unsigned b = 0, g = 0;
     if (std::sscanf(v.c_str(), "%u/%u", &b, &g) != 2) fatal("--fmt: %s is not BITS/GROUP", v.c_str());
     f = a4::Fmt{b, g};
@@ -564,7 +599,7 @@ int main(int argc, char** argv) {
       if (c != std::string::npos) parse_fmt(v.substr(c + 1), FDN);
       fmt_given = true;
     }
-    else if (a == "check" || a == "time" || a == "store") mode = a;
+    else if (a == "check" || a == "time" || a == "store" || a == "layout") mode = a;
     else {
       std::fprintf(stderr, "a4moe_check: unknown argument %s (see the comment at the top of tools/a4moe_check.cpp)\n",
                    a.c_str());
@@ -574,6 +609,25 @@ int main(int argc, char** argv) {
   if (hy4 || (mode == "time" && !small)) SH = a4::Shape{1536, 1536, 16, 512, 10.0f};
   std::string why;
   if (!a4::formats_ok(SH, FGU, FDN, &why)) fatal("shapes / formats: %s", why.c_str());
+  const a4::Shape hy4_shape{1536, 1536, 16, 512, 10.0f};
+  const a4::Fmt q20{2, 64, true};
+  CHECK(a4::formats_ok(hy4_shape, q20, q20), "Q2_0 format rejected");
+  CHECK(!a4::formats_ok(hy4_shape, a4::Fmt{2, 64}, q20), "affine2 must be rejected");
+  CHECK(!a4::formats_ok(hy4_shape, a4::Fmt{2, 32, true}, q20), "Q2_0 group 32 must be rejected");
+  CHECK(!a4::formats_ok(hy4_shape, a4::Fmt{4, 64, true}, q20), "Q2_0 bits 4 must be rejected");
+  const a4::SlotLayout l = a4::slot_layout(hy4_shape, q20, q20);
+  CHECK(l.bytes == 122 * 16384, "Q2_0 Hy4 slot: %u bytes, expected %u", l.bytes, 122 * 16384);
+  for (int m = 0; m < 3; ++m)
+    CHECK(l.len[m * 3] == 589824 && l.len[m * 3 + 1] == 73728 &&
+              l.len[m * 3 + 2] == 0 && l.off[m * 3 + 2] == 0, "Q2_0 Hy4 plane sizes for matrix %d", m);
+  if (mode == "layout") {
+    const auto names = a4::kernel_names();
+    CHECK(std::find(names.begin(), names.end(), "a4_gu_rows_q20_slot") != names.end(), "missing Q2_0 slot kernel");
+    for (const std::string& name : names)
+      CHECK(name.find("_b2g") == std::string::npos, "affine2 kernel exported: %s", name.c_str());
+    std::printf("Q2_0 layout / format checks: %s\n", g_fail ? "FAILED" : "passed");
+    return g_fail ? 1 : 0;
+  }
   Gpu& g = Gpu::get();
   std::printf("%s, %d GPU cores; D %u, I %u, E %u, top-%u, limit %.1f; slot %u pages\n", g.name().c_str(),
               g.core_count(), SH.D, SH.I, SH.E, SH.k, SH.limit, a4::slot_layout(SH, FGU, FDN).bytes / 16384);
@@ -592,6 +646,9 @@ int main(int argc, char** argv) {
         for (uint32_t gs : {64u, 32u, 128u}) run_check(512, a4::Fmt{bits, gs}, a4::Fmt{bits, gs});
       run_check(512, a4::Fmt{3, 64}, a4::Fmt{4, 64});
       run_check(512, a4::Fmt{4, 128}, a4::Fmt{3, 32});
+      run_check(512, q20, q20);
+      run_check(512, q20, a4::Fmt{4, 32});
+      run_check(512, a4::Fmt{3, 128}, q20);
     }
   } else if (mode == "time") {
     run_time();
