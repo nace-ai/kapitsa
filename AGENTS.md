@@ -113,6 +113,7 @@ python3 tests/test_logit_compare.py
 python3 tests/test_sampled_tokens_harness.py # stand-in ni_run executables and temporary locks; no GPU
 python3 tests/test_logit_dump.py build      # its output directory only, before the lock and the model
 python3 tools/qwen4_exp_pack_test.py         # needs: numpy; the Flash-Next converter's n-gram table from a config.json
+python3 tools/hy4_ref_score_test.py          # needs: numpy; hy4_ref.py score's file checks on synthetic logits
 python3 tests/test_structured.py --cli build    # with a model folder's tokenizer when one is downloaded
 ```
 

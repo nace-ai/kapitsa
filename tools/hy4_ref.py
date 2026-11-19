@@ -13,7 +13,8 @@
   Both: per prompt (and pooled), top-1 agreement, KL(ref || cand) mean / p50 / p95 / p99 / max (float64
   log-softmax), the first row whose argmax differs (the first divergent greedy row), rows with non-finite values
   (left out of the KL, counted as top-1 misses). --per-row prints every row; --json OUT (or -) writes all of it.
-  --vs OTHER: OTHER (same formats; with --cand, a .f32 of the same prompt) is the reference instead (Kapitsa vs MLX).
+  --vs OTHER: OTHER (same formats; with --cand, a .f32 of the same prompt, its ids in --vs-ids FILE, as many rows)
+  is the reference instead (Kapitsa vs MLX).
   hy4_ref.py fromdir OUT [--rows A:B] [--prompts ID,..]
       The reference in logit_dump's --from layout (one folder, one sequence per prompt; records need L >= 2 and the
       next token, so rows 1..510).
@@ -190,8 +191,13 @@ def cmd_score(a):
         if r.size % V:
             sys.exit(f"{rf}: not a whole number of {V}-wide fp32 rows")
         r = r.reshape(-1, V)
-        if r.shape[0] > len(ids):
-            sys.exit(f"{rf}: {r.shape[0]} rows for {len(ids)} ids (--vs takes a file of the same prompt)")
+        if a.vs:  # (a reference from --ref may be longer: its prompt starts with the ids, ref_for_ids)
+            if not a.vs_ids:
+                sys.exit("--vs with --cand needs --vs-ids FILE, the prompt OTHER's rows belong to")
+            if read_ids_file(a.vs_ids) != ids:
+                sys.exit(f"{a.vs}: its prompt ({a.vs_ids}) is not the candidate's ({a.ids})")
+            if r.shape[0] != m.shape[0]:
+                sys.exit(f"{rf}: {r.shape[0]} rows, the candidate {m.shape[0]}: --vs compares the same prompt's rows")
         pid = Path(a.ids).stem if a.vs else rf.name.removesuffix("-native.f32")
         jobs = [(pid, {i: r[i] for i in range(r.shape[0])}, {i: m[i] for i in range(m.shape[0])})]
         out.update(reference=str(rf), candidate=a.cand_file)
@@ -611,6 +617,7 @@ def main():
     s.add_argument("--ids")
     s.add_argument("--per-row", action="store_true")
     s.add_argument("--vs")
+    s.add_argument("--vs-ids")
     s.add_argument("--rows")
     s.add_argument("--prompts")
     s.add_argument("--ref", default=REF_DIR)

@@ -67,6 +67,7 @@ int main(int argc, char** argv) {
   if (rows < 0 || rows > n) rows = n;
 
   if (chunk < 1) fatal("--chunk %d: a pass needs at least 1 row", chunk);
+  if (gen < 0) fatal("--gen %d: the number of tokens to generate is 0 or more", gen);
 
   bench::GpuLock lock;  // released at exit
   if (!bench::GpuLock::held_by_caller() && !lock.acquire([](const std::string& who) {
