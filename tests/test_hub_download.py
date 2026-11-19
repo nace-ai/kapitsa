@@ -39,7 +39,8 @@ def download_checks(kapitsa, check):
             if self.server.unavailable:
                 self.send_error(404)
                 return
-            if self.path == "/api/models/test/resume/revision/main?blobs=true":
+            if self.path in ("/api/models/test/resume/revision/main?blobs=true",
+                             "/api/models/test/resume/revision/refs%2Fpr%2F123?blobs=true"):
                 data = json.dumps(listing).encode()
             elif self.path.startswith("/test/resume/resolve/fixture-revision/"):
                 name = self.path.rsplit("/", 1)[1]
@@ -82,10 +83,17 @@ def download_checks(kapitsa, check):
                        HUGGING_FACE_HUB_TOKEN="", HF_TOKEN_PATH=str(root / "no-token"),
                        KAPITSA_NO_AUTO_UPDATE="1", KAPITSA_NO_PROMPT="1", NI_LOG="0")
 
-            def pull(home):
-                return subprocess.run([kapitsa, "pull", "test/resume"],
+            def pull(home, model_ref="test/resume"):
+                return subprocess.run([kapitsa, "pull", model_ref],
                                       env=dict(env, KAPITSA_HOME=str(home)),
                                       capture_output=True, text=True, timeout=30)
+
+            revision_home = root / "revision"
+            result = pull(revision_home, "test/resume@refs/pr/123")
+            downloaded = list((revision_home / "models").glob("*/model.safetensors"))
+            check("pull: a revision with slashes is one URL segment",
+                  result.returncode == 0 and len(downloaded) == 1
+                  and downloaded[0].read_bytes() == files["model.safetensors"], result.stderr)
 
             home = root / "adopt"
             model = home / "models" / "test--resume"
