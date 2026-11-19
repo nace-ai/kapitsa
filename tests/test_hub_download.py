@@ -209,6 +209,29 @@ def download_checks(kapitsa, check):
                 check(f"pull: valid resume state ({label}) fetches only missing bytes",
                       result.returncode == 0 and final.exists() and final.read_bytes() == data
                       and fetched == spans, result.stderr)
+
+            server.unavailable = True
+            revisions = ("refs/pr/123", "refs-pr-123")
+            for saved, requested in (revisions, revisions[::-1]):
+                home = root / ("legacy-" + saved.replace("/", "_"))
+                legacy = home / "models" / "test--resume@refs-pr-123"
+                meta = legacy / ".kapitsa" / "manifest.json"
+                meta.parent.mkdir(parents=True)
+                data = saved.encode()
+                (legacy / "model.safetensors").write_bytes(data)
+                meta.write_text(json.dumps({"repo": "test/resume", "revision": saved,
+                                            "files": [{"path": "model.safetensors", "size": len(data)}]}))
+                server.requests.clear()
+                def pull_revision(ref):
+                    return subprocess.run([kapitsa, "pull", "test/resume@" + ref],
+                                          env=dict(env, KAPITSA_HOME=str(home)), capture_output=True, text=True, timeout=30)
+                exact = pull_revision(saved)
+                check("pull: reuse the matching legacy revision " + saved,
+                      exact.returncode == 0 and not server.requests, exact.stderr)
+                other = pull_revision(requested)
+                check("pull: a different ref cannot reuse the legacy revision " + saved,
+                      other.returncode != 0 and server.requests and (legacy / "model.safetensors").read_bytes() == data
+                      and json.loads(meta.read_bytes())["revision"] == saved, other.stderr)
     finally:
         server.shutdown()
         server.server_close()
