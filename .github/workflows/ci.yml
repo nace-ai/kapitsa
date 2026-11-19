@@ -471,6 +471,10 @@ jobs:
         # the converter's n-gram table from a config.json, in test_nh_fp4_requant's numpy venv
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv-np/bin/python tools/qwen4_exp_pack_test.py
+      - name: hy4_ref_score_test
+        # hy4_ref.py score on tiny synthetic logit files, in the same numpy venv
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv-np/bin/python tools/hy4_ref_score_test.py
 
   metal-compile:
     # The kernels are embedded as source and built by the GPU driver when a model loads, so nothing else here
