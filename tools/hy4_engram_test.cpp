@@ -4,7 +4,8 @@
 //     modeling_hy_v4_flash.py, revision c2ec8505), written out here: the tokens before the sequence and the ids past
 //     the lookup table read as the pad id, XOR of the compressed ids times their multipliers, modulo each head's size,
 //     plus the head's offset in the table;
-//   - the fp8 e4m3 round trip on values whose result is known by hand (ties to even, subnormals);
+//   - the fp8 e4m3 round trip on values whose result is known by hand (ties to even, subnormals), then the head norm;
+//   - the head norm's eps (FLT_EPSILON), on a row small enough for eps to set the output;
 //   - rows(): the mask of pad, image and video tokens, masked rows zero, and every other row equal bit for bit to the
 //     same position gathered alone (one row: one thread), so the compaction of live rows and the 8-thread split change
 //     nothing;
@@ -182,7 +183,20 @@ int main() {
     for (int i = 0; i < kDim; ++i) bad += x[size_t(i)] != bf16_round(rstd * q[size_t(i)]);
     std::snprintf(nm, sizeof nm, "fp8 e4m3 round trip of %zu hand-checked values, then the head norm (%zu differ)", k,
                   bad);
-    check(bad == 0, nm);
+    check(bad == 0, nm);  // (eps is a 1e-9 part of this row's mean square: the next case pins it)
+  }
+  // ---- the head norm's eps: a row of 2^-14, whose mean square (3.7e-9) is 3% of FLT_EPSILON, so the output is
+  // x / sqrt(x^2 + eps), about 0.17 (0.12 with eps doubled, 1 without it). The fp8 round trip and bf16 move x by
+  // under 1%, hence the 3% bound ----
+  {
+    std::vector<float> x(kDim, 0x1p-14f);
+    e.finish_head(x.data(), 0);
+    const float v = 0x1p-14f, want = v / std::sqrt(v * v + FLT_EPSILON);
+    float worst = 0;
+    for (float y : x) worst = std::max(worst, std::fabs(y / want - 1.0f));
+    std::snprintf(nm, sizeof nm, "head norm's eps: a row of 2^-14 within %.1f%% of x / sqrt(x^2 + eps) = %.3f",
+                  100.0 * worst, want);
+    check(worst < 0.03f, nm);
   }
 
   // ---- rows(): mask, masked rows zero, live rows equal to each position gathered alone ----

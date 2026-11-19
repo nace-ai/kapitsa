@@ -152,8 +152,9 @@ def main():
         qerr = float(np.abs(ref32 - w).max() / np.abs(w).max())
         ok = bad32 == 0 and badmx == 0 and bfmax <= 1.0
         fails += not ok
+        ref = "mx.dequantize" if mx else "the NumPy copy of mx.dequantize"
         print(f"{bits}-bit group {gs:3d}, rows of {dim}: {rows * dim} values, {bad32} differ from fp32 scale * code + bias, "
-              f"{badmx} from mx.dequantize (fp32 scales), bf16 mx.dequantize at {bfmax:.2f} of its rounding bound; "
+              f"{badmx} from {ref} (fp32 scales), bf16 {ref} at {bfmax:.2f} of its rounding bound; "
               f"quantization error {qerr:.3f} of max |w|: {'ok' if ok else 'FAILED'}")
     try:
         os.rmdir(work)
