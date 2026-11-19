@@ -76,11 +76,13 @@ class Source:
             seqs = [list(map(int, ln.split())) for ln in open(self.path / "sequences.txt") if ln.strip()]
             recs = [tuple(map(int, ln.split())) for ln in open(self.path / "records.txt") if ln.strip()]
             lg = np.memmap(self.path / "logits.f32", dtype="<f4", mode="r").reshape(-1, V)
+            recorded = {si for si, _ in recs}
             for p in prompts:
                 ids = ref_ids(p, ref_dir)
                 match = [s for s, t in enumerate(seqs) if t == ids[: len(t)]]
                 if match:
-                    s = match[0]
+                    # Prefer the most specific sequence when one prompt is a prefix of another.
+                    s = max(match, key=lambda i: (i in recorded, len(seqs[i])))
                     self.rows[p] = {L - 1: lg[k] for k, (si, L) in enumerate(recs) if si == s}
             return
         for p in prompts:
