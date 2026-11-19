@@ -83,6 +83,11 @@ class Hy4Flash : public Qwen35 {
   void encode_logits_rows(Encoder& e, int T, const Buffer& out) override;
   std::string formats_summary() const override;
   bool block_drafter_ok() const override { return false; }
+  // NI_HY4_DUMP_SEL=<file> (debug): every indexed layer's selection of a pass past kIndexDense keys is copied aside;
+  // write_selection(), after the pass completed, appends them to the file: per layer and pass an int32 header
+  // [layer, pos0, R], then uint32 [R][kIndexGroups] (row t's group ids ascending, min(G, 511) + 1 of them with
+  // G = (pos0 + t) / 4, the last one G; the rest of the row unused). Nothing is copied when the variable is unset.
+  void write_selection();
 
  private:
   void load(const std::string& dir);
@@ -123,6 +128,9 @@ class Hy4Flash : public Qwen35 {
   Buffer qa_, kvl_, kr_, gt_, q_, att_, attn_scratch_;
   // the indexer: raw projections, a call's selections [T][512], its scratch
   Buffer ix_tk_, ix_hw_, ix_q_, sel_, ix_scratch_;
+  Buffer seldump_;                // NI_HY4_DUMP_SEL: [indexed layers][tmax][kIndexGroups] uint32
+  std::vector<int> seldump_rec_;  // (layer, pos0, R) per selection copied since the last write_selection()
+  bool seldump_full_ = false;
   Buffer dg_, du_, rl_, idx_, wts_, sgb_, sub_, shb_, ysb_, lat_, ylat_, moe_scratch_;
   Buffer eng_v_, eng_k_;
   // prefill Engram rows (gather_engram's layout for T rows), two of them: the host writes a chunk's rows while the
