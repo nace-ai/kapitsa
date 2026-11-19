@@ -508,6 +508,7 @@ class Engine {
     // prompt is read through it and never overwritten by a turn boundary, so a new question that shares the system
     // prompt and tools restores it however early it diverges. It has no drafter snapshot (the ring starts empty).
     bool prefix = false;
+    bool temporary = false;  // an intermediate prefill checkpoint used only in this slot
   };
   struct Slot {
     std::unique_ptr<Seq> seq;
@@ -771,6 +772,7 @@ class Engine {
     return narrow_chunk_ > 0 && narrow_chunk_ < C && rows < 2 * int64_t(C) ? narrow_chunk_ : C;
   }
   int context_fit_ = 0;  // see context_fit()
+  bool trimmed_turn_cache_ = false;  // plain Qwen35 recurrent state can resume from a completed chunk
   bool prefix_copy_ = true;   // a slot without the prefix checkpoint copies another's (NI_PREFIX_COPY=0: reads it)
   bool prefix_ckpt_ = false;  // slots keep a prefix checkpoint (TurnCheckpoint::prefix)
   size_t fixed_bytes_ = 0;  // allocated at start (model, buffers, slots' state): context_fit_'s base
