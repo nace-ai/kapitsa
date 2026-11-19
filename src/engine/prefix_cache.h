@@ -13,8 +13,9 @@
 //   <ns>/e/<key>    an entry: one conversation's tokens, its KV blocks and the states it can resume from (its
 //                   header data: the digest of the prompt_cache_key it was sent with, or none)
 // A conversation's next turns share the blocks of the turns before (a write adds the new blocks and states only).
-// Every file is a 4 KiB header (magic, kind, namespace, key, sizes, CRC-32C of the payload and of the header) and the
-// payload, written to a temporary file that is then renamed, read and written with F_NOCACHE.
+// Every file is a 16 KiB header (4 KiB in v1 files, accepted on read: magic, kind, namespace, key, sizes, CRC-32C of
+// the payload and of the header) and the payload, written to a temporary file that is then renamed, read and written
+// with F_NOCACHE.
 #pragma once
 #include <atomic>
 #include <cstdint>
@@ -76,7 +77,7 @@ struct Snap {
   uint32_t flags = 0;
   int32_t dctx = 0, dvalid = 0;  // the drafter ring's committed positions and its lowest valid one (DFlash2)
   Key state;
-  static constexpr uint32_t kLive = 1, kQuery = 2;  // the slot's live state; a checkpoint at a user query
+  static constexpr uint32_t kLive = 1, kQuery = 2, kPrefix = 4;  // the slot's live state; a user query; a prefix checkpoint
 };
 
 struct Entry {

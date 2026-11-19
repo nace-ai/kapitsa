@@ -286,7 +286,7 @@ struct Engine::Disk {
       const int c = p.src[i];
       std::vector<Buffer> bufs;
       en.model_->disk_state(s, c < 0 ? nullptr : &slot.ckpts[size_t(c)], bufs);
-      if (en.dfl_) {
+      if (en.dfl_ && !(sn.flags & pcache::Snap::kPrefix)) {
         const DFlashSeq& r = c < 0 ? *slot.dseq : *slot.dckpts[size_t(c)];
         bufs.push_back(r.ring_k), bufs.push_back(r.ring_v);
       }
@@ -423,15 +423,18 @@ std::unique_ptr<Engine::DiskPlan> Engine::disk_plan(const Slot& slot) const {
   };
   std::vector<C> cs;
   if (slot.live_ok && live >= d.min_pos) cs.push_back({live, -1, pcache::Snap::kLive});
-  for (size_t i = 0; i < slot.ckpts.size(); ++i) {
-    const TurnCheckpoint& c = slot.ckpts[i];
-    // the prefix checkpoint has no drafter ring (dckpts[i] is null): a restore from it could not rebuild the ring
-    if (dfl_ && c.prefix) continue;
-    std::vector<Buffer> bufs;  // (a checkpoint without its whole state, as Dory's rings when memory was short: none)
-    model_->disk_state(*slot.seq, &c, bufs);
-    const bool whole = std::all_of(bufs.begin(), bufs.end(), [](const Buffer& b) { return b.mtl != nullptr; });
-    if (c.pos >= d.min_pos && c.pos <= live && !(slot.live_ok && c.pos == live) && whole)
-      cs.push_back({c.pos, int(i), c.query ? pcache::Snap::kQuery : 0u});
+  for (bool want_prefix : {false, true}) {
+    for (size_t i = 0; i < slot.ckpts.size(); ++i) {
+      const TurnCheckpoint& c = slot.ckpts[i];
+      if (c.prefix != want_prefix) continue;
+      if (dfl_ && !c.prefix && !slot.dckpts[i]) continue;
+      std::vector<Buffer> bufs;  // (a checkpoint without its whole state, as Dory's rings when memory was short: none)
+      model_->disk_state(*slot.seq, &c, bufs);
+      const bool whole = std::all_of(bufs.begin(), bufs.end(), [](const Buffer& b) { return b.mtl != nullptr; });
+      const bool dup = std::any_of(cs.begin(), cs.end(), [&](const C& x) { return x.pos == c.pos; });
+      if (c.pos >= d.min_pos && c.pos <= live && !dup && whole)
+        cs.push_back({c.pos, int(i), (c.query ? pcache::Snap::kQuery : 0u) | (c.prefix ? pcache::Snap::kPrefix : 0u)});
+    }
   }
   if (cs.empty()) return nullptr;
   std::sort(cs.begin(), cs.end(), [](const C& a, const C& b) { return a.pos < b.pos; });
@@ -469,8 +472,12 @@ std::unique_ptr<Engine::DiskPlan> Engine::disk_plan(const Slot& slot) const {
     sn.pos = c.pos;
     sn.flags = c.flags;
     if (dfl_) {
-      const DFlashSeq& r = c.src < 0 ? *slot.dseq : *slot.dckpts[size_t(c.src)];
-      sn.dctx = r.ctx, sn.dvalid = r.valid_lo;
+      if (c.flags & pcache::Snap::kPrefix) {
+        sn.dctx = c.pos, sn.dvalid = c.pos;
+      } else {
+        const DFlashSeq& r = c.src < 0 ? *slot.dseq : *slot.dckpts[size_t(c.src)];
+        sn.dctx = r.ctx, sn.dvalid = r.valid_lo;
+      }
     }
     const int fb = c.pos / kBlockRows;
     const pcache::Key at = chain(fb == 0 ? d.ns_key : full[size_t(fb - 1)], fb * kBlockRows, c.pos);
@@ -944,7 +951,8 @@ bool Engine::disk_restore(Slot& slot, const pcache::Hit& hit) {
   }
   std::vector<Buffer> bufs;
   model_->disk_state(s, nullptr, bufs);
-  if (dfl_) bufs.push_back(slot.dseq->ring_k), bufs.push_back(slot.dseq->ring_v);
+  if (dfl_ && !(sn.flags & pcache::Snap::kPrefix))
+    bufs.push_back(slot.dseq->ring_k), bufs.push_back(slot.dseq->ring_v);
   Gather st;
   pcache::Hasher h;
   for (const Buffer& b : bufs) st.add(b.ptr(), b.size), h.u64(b.size);
@@ -1013,7 +1021,10 @@ bool Engine::disk_restore(Slot& slot, const pcache::Hit& hit) {
       if (spans[k].pos + spans[k].n <= P) slot.img_spans.push_back(spans[k]), slot.img_digests.push_back(digests[k]);
   }
   for (TurnCheckpoint& c : slot.ckpts) c.pos = -1;
-  if (dfl_) slot.dseq->ctx = sn.dctx, slot.dseq->valid_lo = sn.dvalid;
+  if (dfl_) {
+    if (sn.flags & pcache::Snap::kPrefix) DFlash2::reset(*slot.dseq);
+    slot.dseq->ctx = sn.dctx, slot.dseq->valid_lo = sn.dvalid;
+  }
   if (d.mtp && q35_) q35_->draft_vocab_restore(s, e.vocab, e.vocab_scanned);
   slot.turns = std::max(slot.turns, 2);
   slot.live_ok = false;
