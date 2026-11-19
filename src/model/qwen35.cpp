@@ -684,6 +684,12 @@ Qwen35Config Qwen35::read_config(const std::string& dir) {
   return c;
 }
 
+void Qwen35::load_quant_config(const std::string& dir) {
+  json root = read_json(dir + "/config.json");
+  quant_cfg_ = root.contains("quantization") ? root["quantization"] : json::object();
+  expert_quant_ = root.contains("expert_quant") ? root["expert_quant"] : json::object();
+}
+
 void Qwen35::load_config(const std::string& dir) {
   json root = read_json(dir + "/config.json");
   quant_cfg_ = root.contains("quantization") ? root["quantization"] : json::object();

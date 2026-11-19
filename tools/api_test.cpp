@@ -3075,6 +3075,51 @@ static void ollama_unit() {
   }
 }
 
+// chat_template_source's rewrite of Python's one-placeholder str.format, which minja does not have (Hy4-flash's
+// template builds its special tokens with it): 'a{}b'.format(x) becomes ('a' ~ x ~ 'b') in a chat_template.jinja and in
+// tokenizer_config.json's chat_template, renders as Python would, and leaves every other form and template unchanged.
+void chat_template_format_unit() {
+  char tmpl[] = "/tmp/api_test_format.XXXXXX";
+  if (!mkdtemp(tmpl)) {
+    check(false, "template format: mkdtemp");
+    return;
+  }
+  const std::string dir = tmpl;
+  const auto write = [&](const std::string& name, const std::string& text) {
+    FILE* f = fopen((dir + "/" + name).c_str(), "w");
+    if (f) fputs(text.c_str(), f), fclose(f);
+  };
+  const auto render = [](const std::string& src, const nlohmann::json& vars) {
+    try {
+      const auto ctx = minja::Context::make(minja::Value(nlohmann::ordered_json::parse(vars.dump())));
+      return minja::Parser::parse(src, {false, false, false})->render(ctx);
+    } catch (const std::exception& e) {
+      return std::string("(error: ") + e.what() + ")";
+    }
+  };
+  const std::string hy = "{{ '<|hy_{}|>'.format(role) }}{% set t = 'x{}y'.format(n) %}[{{ t }}]{{ '{}'.format(role) }}";
+  write("chat_template.jinja", hy);
+  std::string src = chat_template_source(dir);
+  check(src == "{{ ('<|hy_' ~ role ~ '|>') }}{% set t = ('x' ~ n ~ 'y') %}[{{ t }}]{{ ('' ~ role ~ '') }}",
+        "template format: '...{}...'.format(x) rewritten", src);
+  check(render(src, {{"role", "user"}, {"n", 3}}) == "<|hy_user|>[x3y]user", "template format: renders as Python's",
+        render(src, {{"role", "user"}, {"n", 3}}));
+  // forms the rewrite does not take stay as they were: two placeholders, an expression, a named placeholder
+  const std::string other = "{{ '{}{}'.format(a, b) }}{{ 'a{}'.format(x.y) }}{{ '{k}'.format(k=1) }}";
+  write("chat_template.jinja", other);
+  check(chat_template_source(dir) == other, "template format: other forms unchanged", chat_template_source(dir));
+  const std::string plain = "{{ messages[0]['content'] | upper }}{{ 'a{}b' }}";
+  write("chat_template.jinja", plain);
+  check(chat_template_source(dir) == plain, "template format: a template without '.format( unchanged");
+  // no chat_template.jinja: tokenizer_config.json's chat_template, rewritten the same way
+  unlink((dir + "/chat_template.jinja").c_str());
+  write("tokenizer_config.json", nlohmann::json{{"chat_template", hy}}.dump());
+  check(chat_template_source(dir) == src, "template format: tokenizer_config.json's chat_template rewritten",
+        chat_template_source(dir));
+  unlink((dir + "/tokenizer_config.json").c_str());
+  rmdir(dir.c_str());
+}
+
 int main(int argc, char** argv) {
   stop_filter_unit();
   anthropic_mapping();
@@ -3091,6 +3136,7 @@ int main(int argc, char** argv) {
   thinking_level_unit();
   disk_wait_unit();
   disk_saved_unit();
+  chat_template_format_unit();
   disk_retry_wiring_unit();
   history_gate_unit();
   kflash_lookup_unit();

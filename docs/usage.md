@@ -275,6 +275,20 @@ drawn at it, top-k and top-p not applied). Structured output is refused in its o
 denoising pass's kernels against the reference implementation on random data, and `build/clover_bench MODEL_DIR` times
 the self-speculative cycles.
 
+Tencent's [Hy4-flash](https://huggingface.co/tencent/Hy4-flash) (`hy_v4_flash`) runs from a folder of its MLX pack,
+text only (`kapitsa serve --model DIR`): the trunk in the MLX formats Kapitsa reads for Qwen3.5 (the pack's is
+8-bit), the 512 routed experts of each layer in MLX affine 3- or 4-bit with groups of 32, 64 or 128 (a format per layer,
+read from the tensors' shapes; anything else is refused) in `model-experts-*.safetensors`, and the four Engram tables in
+their own files, with the Engram hash multipliers in `config.json`. The trunk stays in memory; the experts stream from
+the SSD through a cache sized to the memory left (src/model/moe_a4.h), and the Engram rows are read from their mapped
+files on the CPU each pass. Past 2048 tokens the 12 full-context layers attend to the 512 groups of 4 keys their
+compressed indexer selects, as the reference does (`NI_HY4_DENSE=1` attends to every key instead, a debugging switch).
+Its `<think:opensource>` tags are read as reasoning. It decodes plainly: the checkpoint's DFly2 drafter is not loaded,
+and the SSD prefix cache does not save its conversations. On an M5 Pro with 48 GB and the experts on an external SSD
+(26% of them in memory), greedy decode ran at 4.6-5.5 tok/s and a 3,000-token prompt at 26.7 tok/s, with the
+pack's 4-bit group-64 experts: the other expert formats are checked against a CPU reference at Hy4's shape
+(`tools/a4moe_check.cpp`) but have not run the whole model.
+
 Refused, with a message: other architectures, other quantizations (MLX's `mxfp4`, `nvfp4` and `mxfp8` modes among
 them; NVIDIA's own NVFP4 checkpoints of the catalog's Nemotron models are read as they are), mixture-of-experts
 checkpoints in the Hugging Face layout, and weights larger than this Mac's memory budget.
@@ -1418,6 +1432,9 @@ KFlash's knobs are `NI_KFLASH_<NAME>`; each was `NI_DFLASH_<NAME>` before #362 a
 | `NI_CLOVER_THRESHOLD` | the model's (`0.95`) | Clover, `diffusion`: the probability above which a masked position takes its token in a denoising pass. Lower writes more positions a pass and fewer passes a block. |
 | `NI_CLOVER_BLOCK` | the model's (`32`) | Clover, `diffusion`: positions per block, a divisor of the model's block size. |
 | `NI_CLOVER_CORESET` | the model's (on) | Clover: `0` lets every row of a denoising pass route among all the experts instead of the block's shared set (the experts holding 90% of the block's routing mass). |
+| `NI_HY4_DENSE` | | Hy4-flash, debugging: `1` makes the 12 full-context layers attend to every key past 2048 tokens instead of the groups their compressed indexer selects ([Other models](#other-models)). |
+| `NI_HY4_LAYERS` | | Hy4-flash, debugging: `n` runs only the first `n` layers, then the head (for a pack whose later layers are not written yet). The outputs are not the model's. |
+| `NI_HY4_NO_ENGRAM` | | Hy4-flash, debugging: `1` skips the four Engram layers' memory lookups. The outputs are not the model's. |
 | `NI_FLINT_NGRAM` | `0` | Flint: prompt lookup's drafts per cycle when `--spec` is not given (up to 7); `0` decodes plainly. |
 | `NI_FLINT_SELF` | `2` on an M5-class GPU with macOS 26, else `0` | Flint drafting with itself at long contexts (MagicDec, arXiv 2408.11049): from a prompt of `NI_FLINT_SELF_MIN` tokens, a cycle runs N decode steps whose full-attention layers read only the last `NI_FLINT_SELF_WIN` positions (`Flint::encode_draft`; the sliding-window layers as always), each sampled with the draw its verify row will make, then verifies them with the pending token in one pass over the whole cache. It pays where that pass's attention runs on the matrix units (`flint_attn_t_rows`), so the default is there. Interleaved on the M5 Max (512 tokens after a cold document, one server per arm): 70.3 / 69.5 -> 77.5 / 76.3 tok/s at 187K tokens of context and 60.7 / 59.6 -> 77.0 / 76.6 at 236K at temperature 0, 68.9 / 68.6 -> 74.4 / 74.1 and 60.0 / 59.2 -> 64.6 / 64.7 at the model's sampling (T 1.0, top-p 0.95, top-k 20); at 123K it was slower than plain decoding (92.3 -> 88.5), hence the minimum. The reply is plain decoding's up to the verify's near-ties, as prompt lookup's: each run left plain decoding's text at one near-tie word (`bench/results/2026-11-03-m5-max-flint-self-draft`). `0` decodes plainly; `--spec K` keeps prompt lookup alone unless this is set. |
 | `NI_FLINT_SELF_WIN` | `4096` | Flint's self-drafts: the positions their full-attention layers read (16384 accepted a few more drafts but cost more a draft: slower at 236K). |

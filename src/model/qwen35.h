@@ -571,6 +571,8 @@ class Qwen35 : public Model {
   // the Q2_0 kernels' slot-table twins run (prewarm list)
   virtual bool q20_arena() const { return false; }
   std::string tname(const std::string& canonical) const;
+  // config.json's quantization blocks for qlin (load_config's; models with their own config parsing call it)
+  static void load_quant_config(const std::string& dir);
   const Tensor* bf16_copy(const Tensor* t, float offset = 0.0f);
   void check_formats() const;
   void test_transforms();  // NI_DEQUANT / NI_REQUANT (tests: other formats from a 4-bit checkpoint)
