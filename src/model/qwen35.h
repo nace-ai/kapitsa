@@ -821,6 +821,7 @@ class Qwen35 : public Model {
   // built once: the passes of a request share them and the plan kernel copies them into its own region, so they are
   // never rewritten while a pass may still read them
   Buffer chain_tree_[kMaxTreeRows / 8 + 1];
+  void promote_expert_bits(Layer& L);
   std::deque<Tensor> owned_;
   std::vector<Buffer> owned_bufs_;
   // Explicit immutable target objects; never dynamic drafter/selector weights.

@@ -12,8 +12,9 @@
 namespace ni {
 
 // Group-128 packs can reuse these group-64 kernels by duplicating each scale and bias; the packed codes stay put.
+// (2-bit is only read as routed experts, which load_layers promotes to the layer's widest format.)
 inline int affine_kernel_group_size(int bits, int gs) {
-  return gs == 128 && (bits == 5 || bits == 8) ? 64 : gs;
+  return gs == 128 && (bits == 2 || bits == 3 || bits == 5 || bits == 8) ? 64 : gs;
 }
 
 // Bits per weight of an MLX affine tensor that is `words` uint32 per row, `groups` scales per row, group size gs: the
