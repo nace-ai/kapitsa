@@ -173,7 +173,7 @@ std::string ftype_name(int64_t t) {
       {15, "Q4_K_M"}, {16, "Q5_K_S"}, {17, "Q5_K_M"},  {18, "Q6_K"},    {19, "IQ2_XXS"}, {20, "IQ2_XS"},
       {21, "Q2_K_S"}, {22, "IQ3_XS"}, {23, "IQ3_XXS"}, {24, "IQ1_S"},   {25, "IQ4_NL"},  {26, "IQ3_S"},
       {27, "IQ3_M"},  {28, "IQ2_S"},  {29, "IQ2_M"},   {30, "IQ4_XS"},  {31, "IQ1_M"},   {32, "BF16"},
-      {36, "TQ1_0"},  {37, "TQ2_0"},  {38, "MXFP4"}};
+      {36, "TQ1_0"},  {37, "TQ2_0"},  {38, "MXFP4"},  {39, "NVFP4"}};
   auto it = m.find(t);
   return it == m.end() ? "" : it->second;
 }
@@ -1415,7 +1415,14 @@ void ollama_lookup(Source& s) {
   }
 }
 
-std::string default_name(const Source& s, const File& f) {
+bool same_import(const std::string& dir, const json& sid) {
+  std::ifstream mfs(dir + "/.kapitsa/manifest.json");
+  const json m = json::parse(mfs, nullptr, false);
+  const auto gguf = m.find("gguf");
+  return gguf != m.end() && gguf->is_object() && gguf->value("files", json()) == sid && hub::is_complete(dir);
+}
+
+std::string default_name(const Source& s, const File& f, const std::string& models, const json& sid) {
   if (!s.ollama_name.empty()) return s.ollama_name;
   std::string bn = base_name(s.path);
   static const std::string ext = ".gguf";
@@ -1425,9 +1432,15 @@ std::string default_name(const Source& s, const File& f) {
     if (bn.size() > 15 && bn[bn.size() - 15] == '-' && bn.compare(bn.size() - 9, 4, "-of-") == 0) bn = bn.substr(0, bn.size() - 15);
     return clean_name(bn);
   }
-  std::string n = f.str("general.basename", f.str("general.name", "model"));
-  if (const std::string ft = ftype_name(f.num("general.file_type", -1)); !ft.empty()) n += "-" + ft;
-  return clean_name(n);
+  const std::string n = f.str("general.basename", f.str("general.name", "model"));
+  const std::string ft = ftype_name(f.num("general.file_type", -1));
+  const std::string name = clean_name(ft.empty() ? n : n + "-" + ft);
+  // Earlier imports of an extensionless NVFP4 file used just the model name. Reuse a matching conversion.
+  if (ft == "NVFP4" && !is_dir(models + "/" + name)) {
+    const std::string legacy = clean_name(n);
+    if (!legacy.empty() && is_dir(models + "/" + legacy) && same_import(models + "/" + legacy, sid)) return legacy;
+  }
+  return name;
 }
 
 // the source files, for recognizing an earlier conversion
@@ -1580,15 +1593,14 @@ static std::string import_model_files(const ImportOptions& opt) {
       M = mf.get();
     }
   }
-  const std::string name = opt.name.empty() ? default_name(s, f) : clean_name(opt.name);
-  if (name.empty()) throw Error("--name needs letters or digits.");
-  const std::string models = hub::models_dir(), dest = models + "/" + name;
   const json sid = source_id(f, mf.get());
+  const std::string models = hub::models_dir();
+  const std::string name = opt.name.empty() ? default_name(s, f, models, sid) : clean_name(opt.name);
+  if (name.empty()) throw Error("--name needs letters or digits.");
+  const std::string dest = models + "/" + name;
   // an earlier conversion of the same files
   if (is_dir(dest) && !opt.force) {
-    std::ifstream mfs(dest + "/.kapitsa/manifest.json");
-    const json m = json::parse(mfs, nullptr, false);
-    if (!m.is_discarded() && m.contains("gguf") && m["gguf"].value("files", json()) == sid && hub::is_complete(dest)) {
+    if (same_import(dest, sid)) {
       if (opt.progress && term::fancy())
         term::line("  " + term::accent(term::kOk) + " Using " + term::bold(hub::tilde(dest)) + term::dim(", converted from " + file + " earlier"),
                    stderr);
