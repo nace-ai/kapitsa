@@ -36,6 +36,7 @@ constexpr Field kFields[] = {
     {"port", Kind::whole},          {"profile", Kind::text},         {"private", Kind::flag},
     {"local", Kind::flag},          {"peer", Kind::list},            {"context", Kind::text},
     {"slots", Kind::whole},         {"spec", Kind::whole},           {"dflash", Kind::text},
+    {"suppress_tokens", Kind::text},
     {"prefill_chunk", Kind::whole}, {"api_key", Kind::text},         {"allow_switch", Kind::flag},
     {"idle_unload", Kind::text},    {"mem_budget", Kind::gb},        {"image_max_pixels", Kind::whole},
     {"timing", Kind::text},         {"disk_cache", Kind::text},      {"loops", Kind::whole},
@@ -174,6 +175,7 @@ Options parse_options(const json& j, Source source) {
   e.slots = int(r.whole("slots", e.slots));
   e.spec_depth = int(r.whole("spec", e.spec_depth));
   e.dflash = r.text("dflash");
+  e.suppress_tokens = r.text("suppress_tokens");
   e.prefill_chunk = int(r.whole("prefill_chunk", e.prefill_chunk));
   o.api_key = r.text("api_key");
   o.allow_switch = r.flag("allow_switch");
@@ -229,9 +231,9 @@ Options parse_options(const json& j, Source source) {
   // combinations
   if (o.check_only && !o.engine_splash) refuse(r.name("check") + " needs " + r.name("engine") + " splash");
   if (o.engine_splash) {  // Splash's engine serves its model folder, here and nowhere else
-    if (!o.model.empty() || !o.split.empty() || o.allow_switch)
+    if (!o.model.empty() || !o.split.empty() || o.allow_switch || !e.suppress_tokens.empty())
       refuse(r.name("engine") + " splash serves the " + r.name("splash_model") + " folder: " + r.name("model") + ", " +
-             r.name("split") + " and " + r.name("allow_switch") + " do not apply");
+             r.name("split") + ", " + r.name("allow_switch") + " and " + r.name("suppress_tokens") + " do not apply");
     if (o.splash_kflash != "auto" && o.splash_kflash != "on" && o.splash_kflash != "off")
       refuse(r.name("splash_kflash") + " must be auto, on or off");
   } else if (!e.splash_binary.empty() || !e.splash_model.empty() || !e.splash_args.empty() ||

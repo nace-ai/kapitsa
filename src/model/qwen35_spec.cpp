@@ -1031,7 +1031,7 @@ void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Bu
   if (draft_out < 0) return;
   // greedy draft over the reduced vocabulary from the last row
   const Buffer last = mtp_post_.view(size_t(R - 1) * D * 4, size_t(D) * 4);
-  const bool full_vocab = full_draft_;
+  const bool full_vocab = full_draft_ || bool(s.suppression);
   uint32_t n0 = draft_head_[0].N, n1 = draft_head_[1].N, n2 = 0;
   DraftVocab* dv = nullptr;
   if (full_vocab) {
@@ -1049,6 +1049,7 @@ void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Bu
       for (const Seg& sg : segs) enc_qmv(e, *sg.L, last, sg.y, nullptr, nullptr);
   }
   const uint32_t V = n0 + n1 + n2, chunk = 2048, ntg = (V + chunk - 1) / chunk;
+  enc_token_suppression(e, s, dlog_, 1, int(V), int(V));
   kp::TopkStage ts{V, 1, chunk};
   e.use(pipe2("topk_stage1_rows"));
   e.buf(0, dlog_); e.buf(1, cand_v_); e.buf(2, cand_i_);

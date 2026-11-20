@@ -35,6 +35,7 @@ static json fields(const Options& o) {
           {"splash_kflash", o.splash_kflash}, {"priv", o.priv}, {"local", o.local}, {"allow_switch", o.allow_switch},
           {"verbose", o.verbose}, {"yes", o.yes}, {"model_id", e.model_id}, {"slots", e.slots},
           {"spec_depth", e.spec_depth}, {"prefill_chunk", e.prefill_chunk}, {"dflash", e.dflash},
+          {"suppress_tokens", e.suppress_tokens},
           {"mem_budget_gb", e.mem_budget_gb}, {"image_max_pixels", e.image_max_pixels}, {"loops", e.loops},
           {"loop_kv", e.loop_kv}, {"disk_cache", e.disk_cache}, {"splash_binary", e.splash_binary},
           {"splash_model", e.splash_model}, {"splash_args", e.splash_args},
@@ -94,7 +95,8 @@ int main(int argc, char** argv) {
     CHECK(none == fields(Options{}), "an empty config is Options' defaults");
     CHECK(none["slots"] == d.slots && none["spec_depth"] == d.spec_depth && none["prefill_chunk"] == d.prefill_chunk &&
               none["mem_budget_gb"] == d.mem_budget_gb && none["image_max_pixels"] == d.image_max_pixels &&
-              none["dflash"] == d.dflash && none["disk_cache"] == d.disk_cache && none["loops"] == d.loops,
+              none["dflash"] == d.dflash && none["suppress_tokens"] == d.suppress_tokens &&
+              none["disk_cache"] == d.disk_cache && none["loops"] == d.loops,
           "engine defaults untouched");
     CHECK(none["port"] == 8000 && none["timing"] == "both" && none["idle_unload_min"] == -1 &&
               none["splash_kflash"] == "auto" && none["context"] == 0,
@@ -108,12 +110,12 @@ int main(int argc, char** argv) {
   };
   const std::vector<Same> same = {
       {{"--model", "4b", "--port", "8123", "--host", "127.0.0.1", "--ctx", "128k", "--slots", "2", "--spec", "3",
-        "--dflash", "none", "--prefill-chunk", "1024", "--api-key", "k", "--allow-switch", "--idle-unload", "0.5",
+        "--dflash", "none", "--suppress-tokens", "/tmp/mask.json", "--prefill-chunk", "1024", "--api-key", "k", "--allow-switch", "--idle-unload", "0.5",
         "--mem-budget", "20.5", "--image-max-pixels", "0", "--timing", "ttft", "--disk-cache", "16G", "--loops", "3",
         "--loop-kv", "per-loop", "--split", "a:1,b:2", "--profile", "fast", "--private", "--local", "--peer", "m1",
         "--peer", "m2:9000", "--model-id", "id", "--verbose", "--yes"},
        {{"model", "4b"}, {"port", 8123}, {"host", "127.0.0.1"}, {"context", "128k"}, {"slots", 2}, {"spec", 3},
-        {"dflash", "none"}, {"prefill_chunk", 1024}, {"api_key", "k"}, {"allow_switch", true}, {"idle_unload", 0.5},
+        {"dflash", "none"}, {"suppress_tokens", "/tmp/mask.json"}, {"prefill_chunk", 1024}, {"api_key", "k"}, {"allow_switch", true}, {"idle_unload", 0.5},
         {"mem_budget", 20.5}, {"image_max_pixels", 0}, {"timing", "ttft"}, {"disk_cache", "16G"}, {"loops", 3},
         {"loop_kv", "per-loop"}, {"split", {"a:1", "b:2"}}, {"profile", "fast"}, {"private", true}, {"local", true},
         {"peer", {"m1", "m2:9000"}}, {"model_id", "id"}, {"verbose", true}, {"yes", true}}},
@@ -210,6 +212,7 @@ int main(int argc, char** argv) {
       {{"--split", ","}, "--split takes the stages' host:port, comma-separated"},
       {{"--allow-switch", "--host", "0.0.0.0"}, "--allow-switch on a network address needs --api-key"},
       {{"--splash-kflash", "on"}, "--splash-binary, --splash-model, --splash-arg"},
+      {{"--engine", "splash", "--suppress-tokens", "/tmp/mask.json"}, "--suppress-tokens"},
   };
   for (const FlagBad& b : flag_bad) {
     const std::string why = flag_refusal(b.args);

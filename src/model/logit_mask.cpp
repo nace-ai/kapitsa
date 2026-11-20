@@ -4,7 +4,21 @@
 
 namespace ni {
 
+void enc_token_suppression(Encoder& e, const Seq& s, const Buffer& logits, int rows, int vocab, int ld) {
+  if (!s.suppression) return;
+  static const Pipeline pso = Gpu::get().pipeline("logit_mask_rows");
+  const struct {
+    uint32_t V, W, ld, mrow0;
+  } p{uint32_t(vocab), uint32_t(s.suppression->words), uint32_t(ld), 0};
+  e.use(pso);
+  e.buf(0, logits);
+  e.buf(1, s.suppression->mask);
+  e.val(2, p);
+  e.dispatch((uint32_t(s.suppression->words) + 255) / 256, uint32_t(rows), 1, 256);
+}
+
 void enc_logit_mask(Encoder& e, Seq& s, const Buffer& logits, int rows, int vocab, int ld, int mask_row0) {
+  enc_token_suppression(e, s, logits, rows, vocab, ld);
   if (s.mask_rows <= 0 || !s.mask) return;
   rows = std::min(rows, s.mask_rows - mask_row0);
   if (rows <= 0) return;
