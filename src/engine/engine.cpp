@@ -11,6 +11,7 @@
 #include "model/hy4_flash.h"
 #include "model/kv_grow.h"
 #include "model/qwen4_config.h"
+#include "model/token_suppression.h"
 #include "splash/runtime.h"
 #include "util/json_file.h"
 #include "util/log.h"
@@ -36,6 +37,7 @@
 #include <stdexcept>
 #include <thread>
 #include <tuple>
+#include <typeinfo>
 
 namespace ni {
 
@@ -276,6 +278,14 @@ static bool newline_before_think_close(const minja::chat_template& tmpl) {
 }
 
 Engine::Engine(const EngineOptions& o) : opts_(o) {
+  std::string suppression_path = opts_.suppress_tokens;
+  if (suppression_path.empty()) {
+    const char* env_path = getenv("NI_SUPPRESS_TOKENS");
+    if (env_path && *env_path) suppression_path = env_path;
+  }
+  const bool suppress = !suppression_path.empty();
+  if (suppress && !opts_.splash_model.empty())
+    throw std::runtime_error("token suppression: Splash does not implement --suppress-tokens");
   if (!opts_.splash_model.empty()) {  // Splash runs the model: nothing below (plans, weights, slots) applies
     init_splash();
     return;
@@ -572,9 +582,28 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     prefix_ckpt_ = !(v && v[0] == '0' && v[1] == 0) && !lili_;
     { const char* c = getenv("NI_PREFIX_COPY"); prefix_copy_ = !(c && c[0] == '0' && c[1] == 0); }
   }
+  std::shared_ptr<const TokenSuppression> suppression;
+  if (suppress) {
+    const Model* backend = model_.get();
+    if (typeid(*backend) != typeid(Qwen35))
+      throw std::runtime_error("token suppression: --suppress-tokens currently supports the Qwen35 backend only");
+    std::vector<int> protected_ids = stop_ids_;
+    for (int t = 0; t < tok_.vocab_size(); ++t)
+      if (tok_.is_special(t)) protected_ids.push_back(t);
+    const TokenSuppressionMask parsed = token_suppression_mask(read_file(suppression_path), model_->vocab(), protected_ids);
+    auto m = std::make_shared<TokenSuppression>();
+    m->words = int(parsed.words.size());
+    const size_t bytes = parsed.words.size() * sizeof(uint32_t);
+    m->mask = Gpu::get().alloc(size_t(kf::kMaxRows) * bytes, "token_suppression");
+    for (int r = 0; r < kf::kMaxRows; ++r)
+      memcpy(m->mask.as<uint8_t>() + size_t(r) * bytes, parsed.words.data(), bytes);
+    suppression = std::move(m);
+    logi("token suppression: %zu token IDs suppressed (%s)", parsed.count, suppression_path.c_str());
+  }
   auto add_slot = [&](int limit) {
     Slot s;
     s.seq = model_->new_seq(limit, 0);  // KV cache on first use, growing with the conversation
+    s.seq->suppression = suppression;
     if (dfl_) s.dseq = dfl_->new_seq();
     if (lili_) s.lseq = lili_->new_seq();
     s.ckpts.push_back({model_->new_checkpoint()});

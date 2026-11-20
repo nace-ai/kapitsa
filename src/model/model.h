@@ -13,8 +13,14 @@
 
 namespace ni {
 
+struct TokenSuppression {
+  Buffer mask;
+  int words = 0;
+};
+
 // One conversation's state: token buffer, recurrent states, attention KV cache.
 struct Seq {
+  std::shared_ptr<const TokenSuppression> suppression;
   // Positions the attention caches hold now, which is also their row stride (every kernel takes it as
   // max_seq). It grows on demand up to `limit` (Model::reserve); encoding past it is a fatal "context full".
   int cap = 0;
@@ -69,6 +75,7 @@ struct Seq {
 // [mask_row0, mask_row0 + rows), after a GPU wait for the host's signal when s.mask_event is set. Nothing is encoded for
 // a sequence without masks (s.mask_rows 0).
 void enc_logit_mask(Encoder& e, Seq& s, const Buffer& logits, int rows, int vocab, int ld, int mask_row0 = 0);
+void enc_token_suppression(Encoder& e, const Seq& s, const Buffer& logits, int rows, int vocab, int ld);
 
 // Snapshot of a Seq's recurrent state at a position (attention KV needs no copy: entries
 // before `pos` stay valid as long as the token prefix matches).

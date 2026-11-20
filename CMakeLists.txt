@@ -165,6 +165,11 @@ target_include_directories(flint_kv_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_test(NAME flint_kv_test COMMAND flint_kv_test)
 set_tests_properties(flint_kv_test PROPERTIES TIMEOUT 30)
 
+add_executable(token_suppression_test tests/token_suppression_test.cpp)
+target_include_directories(token_suppression_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
+add_test(NAME token_suppression_test COMMAND token_suppression_test)
+set_tests_properties(token_suppression_test PROPERTIES TIMEOUT 30)
+
 # kapitsa serve's one validator (src/server/service_config.cpp): flags and --config's JSON, against the schema in docs/
 add_executable(serve_options_test tests/serve_options_test.cpp src/server/service_config.cpp)
 target_include_directories(serve_options_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

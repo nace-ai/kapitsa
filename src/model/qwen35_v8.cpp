@@ -1707,7 +1707,7 @@ void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& gro
     if (ev) e.wait_event(ev, val);
     for (size_t g = 0; g < groups.size(); ++g) {
       Seq& sq = *groups[g].s;
-      if (sq.mask_rows <= 0) continue;
+      if (sq.mask_rows <= 0 && !sq.suppression) continue;
       void* const keep = sq.mask_event;
       sq.mask_event = nullptr;  // (waited for above)
       enc_logit_mask(e, sq, rows(logits_, g, V), groups[g].R, int(V), int(V));

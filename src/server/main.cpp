@@ -403,6 +403,8 @@ static void print_serve_help() {
          "                         follow-ups; more wait for a free slot (default: up to 4, as memory allows)\n"
          "  --dflash auto|none|DIR DFlash2 drafter: auto (default) takes the one downloaded with the model;\n"
          "                         none decodes with the model's MTP head\n"
+         "  --suppress-tokens FILE suppress output token IDs listed in FILE (JSON array, {\"target_token_ids\": [...]}\n"
+         "                         object, or one ID per line; Qwen35 backend; also NI_SUPPRESS_TOKENS)\n"
          "  --spec N               MTP draft depth without a drafter (default per model; 0 = no speculation);\n"
          "                         Dory with --loop-kv per-loop: drafts per cycle (default 2 at 1-2 loops, 3 at 3-4)\n"
          "  --mem-budget GB        GPU memory Kapitsa may hold (default: what macOS recommends for this GPU, a\n"
