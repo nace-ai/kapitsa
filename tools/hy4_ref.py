@@ -217,6 +217,8 @@ def cmd_score(a):
                 print(f"{p}: missing in {'candidate' if p not in cand.rows else 'reference'}; skipped", file=summary)
                 continue
             jobs.append((p, ref.rows[p], cand.rows[p]))
+        if not jobs:
+            sys.exit("no requested prompt is present in both the reference and the candidate")
     sel = set(parse_rows(a.rows, 1 << 30).tolist()) if a.rows else None
     for p, rrows, crows in jobs:
         if set(rrows) != set(crows):

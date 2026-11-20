@@ -101,6 +101,19 @@ def main():
             counts = {p: s["rows"] for p, s in json.loads(report.read_text())["prompts"].items()} if rc == 0 else {}
             check(f"shared prefix ({order}): each prompt gets its own rows", counts == {"short": 2, "p": 9}, out)
 
+        partial = d / "partial"
+        partial.mkdir()
+        write_rows(partial / "short.f32", ref[:2])
+        rc, out = run(partial, "--ref", d, "--prompts", "short,p", "--json", report)
+        scores = json.loads(report.read_text())["prompts"] if rc == 0 else {}
+        check("a partially available prompt list still scores the available prompt",
+              list(scores) == ["short"] and scores["short"]["rows"] == 2, out)
+
+        missing_report = d / "missing.json"
+        rc, out = run(partial, "--ref", d, "--prompts", "p", "--json", missing_report)
+        check("no common prompt fails without writing a score report",
+              rc != 0 and "no requested prompt" in out and not missing_report.exists(), out)
+
         # A dump can list a sequence without recording any logits for it.
         dump = d / "short-only"
         subprocess.run([sys.executable, str(SCRIPT), "fromdir", str(dump), "--ref", str(d),
