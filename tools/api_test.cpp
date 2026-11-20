@@ -3138,6 +3138,15 @@ void chat_template_format_unit() {
   check(chat_template_source(dir) == src, "template format: tokenizer_config.json's chat_template rewritten",
         chat_template_source(dir));
   unlink((dir + "/tokenizer_config.json").c_str());
+  // tojson(ensure_ascii=False), whose keyword minja refuses (Hy4-flash's template renders its tools so): the keyword
+  // dropped, and the JSON keeps non-ASCII text as Python's does with it
+  write("chat_template.jinja", "{{ v | tojson(ensure_ascii=False) }}|{{ (w | tojson(ensure_ascii=False)) }}");
+  src = chat_template_source(dir);
+  check(src == "{{ v | tojson }}|{{ (w | tojson) }}", "template tojson: ensure_ascii=False dropped", src);
+  const std::string tj = render(src, {{"v", "caf\xc3\xa9"}, {"w", {{"k", 1}}}});
+  check(tj.rfind("\"caf\xc3\xa9\"|{", 0) == 0 && tj.find("error") == std::string::npos,
+        "template tojson: renders, non-ASCII kept", tj);
+  unlink((dir + "/chat_template.jinja").c_str());
   rmdir(dir.c_str());
 }
 

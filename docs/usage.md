@@ -283,7 +283,10 @@ their own files, with the Engram hash multipliers in `config.json`. The trunk st
 the SSD through a cache sized to the memory left (src/model/moe_a4.h), and the Engram rows are read from their mapped
 files on the CPU each pass. Past 2048 tokens the 12 full-context layers attend to the 512 groups of 4 keys their
 compressed indexer selects, as the reference does (`NI_HY4_DENSE=1` attends to every key instead, a debugging switch).
-Its `<think:opensource>` tags are read as reasoning. It decodes plainly: the checkpoint's DFly2 drafter is not loaded,
+Its `<think:opensource>` tags are read as reasoning; thinking off (`reasoning_effort` `none`, or `enable_thinking`
+false) renders the template's `no_think`, and `low` or `medium` its `high`, the least thinking it has. Its tool calls
+(`<tool_call:opensource>`, GLM's argument markup) come back as tool calls; `tool_choice` `required` or a named tool, and
+strict tools, are refused, as for Flint. It decodes plainly: the checkpoint's DFly2 drafter is not loaded,
 and the SSD prefix cache does not save its conversations. One run on an M5 Pro with 48 GB (macOS 26.5.2, 19 Nov 2026),
 with the pack's 8-bit trunk and 4-bit group-64 experts on an external SSD (26% of the experts in memory), took five
 512-token prompts and generated 64 tokens greedily after each: prefill ran at 27.9-28.2 tok/s, and decode at
