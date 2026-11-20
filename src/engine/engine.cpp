@@ -399,6 +399,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     if (sample) publisher_sampling();
     else defaults_.temperature = 0.0f, defaults_.top_p = 1.0f, defaults_.top_k = kTopkOmitted;  // (a client's temperature alone: 32, as before #1286)
   } else {
+    trimmed_turn_cache_ = true;
     auto m = std::make_unique<Qwen35>(opts_.model_dir, opts_.prefill_chunk);
     q35_ = m.get();
     model_ = std::move(m);
@@ -3107,6 +3108,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       if (!k.prefix && (!c || rank(k) < rank(*c) || (rank(k) == rank(*c) && k.pos < c->pos))) c = &k;
     logd("checkpoints: %s boundary at %d overwrites %s", query ? "query" : "tool", boundary,
          c->pos < 0 ? "an empty one" : (std::string(c->query ? "query" : "tool") + " at " + std::to_string(c->pos)).c_str());
+    c->temporary = false;
     c->query = query;
     saved_ckpt = int(c - slot.ckpts.data());
     return c;
@@ -3427,6 +3429,14 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     }
     last_chunk_row = n - 1 - p;
     p += T;
+    // A client may trim the last message before it sends the next turn. Keep an already computed
+    // chunk boundary in a spare checkpoint, leaving the other one for the exact turn boundary.
+    if (trimmed_turn_cache_ && !dfl_ && !lili_ && !mmp && start == 0 && p >= C && p > pbound && boundary - p >= 64 &&
+        boundary - p < C + 64 && slot.ckpts[0].pos < 0 && slot.ckpts[1].pos < 0) {
+      slot.ckpts[0].temporary = true;
+      slot.ckpts[0].query = false;
+      model_->save(*e, s, slot.ckpts[0], p);
+    }
     if (p == pbound) model_->save(*e, s, *prefix_slot(), pbound);
     if (p == boundary) model_->save(*e, s, *victim(), boundary);
     // DFlash2: once every prompt row is captured (a rerun included), disarm the hook and project the rows into
@@ -5162,6 +5172,7 @@ DraftResult Engine::draft(const std::string& key, const std::string& after, cons
   }
   auto save_turn = [&](Encoder& en) {
     model_->save(en, s, *uck, turn_at);
+    uck->temporary = false;
     uck->query = true;
     if (dfl_) dfl_->encode_ring_copy(en, *slot.dseq, *slot.dckpts[size_t(uck - slot.ckpts.data())]);
     uck = nullptr;

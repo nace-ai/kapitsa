@@ -426,7 +426,7 @@ std::unique_ptr<Engine::DiskPlan> Engine::disk_plan(const Slot& slot) const {
   for (bool want_prefix : {false, true}) {
     for (size_t i = 0; i < slot.ckpts.size(); ++i) {
       const TurnCheckpoint& c = slot.ckpts[i];
-      if (c.prefix != want_prefix) continue;
+      if (c.temporary || c.prefix != want_prefix) continue;
       if (dfl_ && !c.prefix && !slot.dckpts[i]) continue;
       std::vector<Buffer> bufs;  // (a checkpoint without its whole state, as Dory's rings when memory was short: none)
       model_->disk_state(*slot.seq, &c, bufs);
@@ -631,7 +631,7 @@ void Engine::disk_leaving(Slot& slot, int start, bool wait_write, bool replaced)
   // otherwise) is not resumed from.
   int deep = 0;
   for (const TurnCheckpoint& c : slot.ckpts)
-    if (c.pos >= d.min_pos && c.pos <= int(slot.tokens.size())) deep = std::max(deep, c.pos);
+    if (!c.temporary && c.pos >= d.min_pos && c.pos <= int(slot.tokens.size())) deep = std::max(deep, c.pos);
   if (deep == 0 && slot.live_ok && int(slot.tokens.size()) >= d.min_pos) deep = int(slot.tokens.size());
   if (start >= deep) return;
   std::unique_ptr<DiskPlan> p = disk_plan(slot);
