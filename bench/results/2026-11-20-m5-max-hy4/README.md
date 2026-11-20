@@ -3,7 +3,7 @@
 Tencent's Hy4-flash (`hy_v4_flash`) from `nace-ai/Hy4-flash-MLX-4bit`: an 8-bit trunk, 512 routed experts per layer
 in 4-bit group 64 (83.6 GB), four Engram tables (39.6 GB, read on the CPU). It is a model folder, not a catalog entry.
 
-Mac: MacBook Pro (16-inch, 2026), M5 Max, 40-core GPU, 128 GB, macOS 26.4 (25E246), on AC power, display asleep.
+Mac: fearampgreed's MacBook Pro (16-inch, 2026), M5 Max, 40-core GPU, 128 GB, macOS 26.4 (25E246), on AC power, display asleep, default profile.
 
 ## The README cell
 
