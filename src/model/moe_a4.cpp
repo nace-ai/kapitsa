@@ -1,6 +1,7 @@
 #include "model/moe_a4.h"
 
 #include "engine/device_profile.h"
+#include "engine/profile.h"
 
 #include "model/expert_store.h"
 #include "model/hy4_kernels.h"
@@ -78,15 +79,17 @@ Pipeline pipe(const std::string& base, const Fmt& f, const Experts& x) {
 bool fmt_ok(const Fmt& f) { return (f.bits == 3 || f.bits == 4) && (f.gs == 32 || f.gs == 64 || f.gs == 128); }
 
 // The prefill GEMMs on the M5's matrix units (src/kernels/tensor/qmt_moe_a4.metal: the qmt tile, 64-row tiles of
-// moe_bucket3) instead of a4_gu_mm / a4_dn_mm: 4-bit experts, a Mac with matrix units (macOS 26), chunks of at least
-// kQtmRows rows. The weights are the same halfs; the fp32 MMA sums run in the matrix units' order. NI_A4_QTM=0: off.
+// moe_bucket3) instead of a4_gu_mm / a4_dn_mm, for 4-bit experts and chunks of at least kQtmRows rows. A fast profile
+// member (docs/profiles.md): the fp32 sums run in the matrix units' order, which moves Hy4's outputs past the reorder
+// gate (inside its bar: MLX on the same pack), so precise keeps the simdgroup kernels. Its class is the device
+// profile's a4_qtm_fast row (matrix units; the Metal 4 library needs macOS 26). NI_A4_QTM=1 or 0 overrides either
+// profile (1 also outside the class).
 constexpr int kQtmRows = 256;
 bool qtm_on(const Experts& x, const Shape& sh, int R) {
   static const bool on = [] {
-    const char* v = getenv("NI_A4_QTM");
-    if (v && *v && atoi(v) == 0) return false;
-    if (__builtin_available(macOS 26.0, *)) return matrix_units();
-    return false;
+    bool here = false;
+    if (__builtin_available(macOS 26.0, *)) here = default_on(Knob::kA4QtmFast, ModelFacts{});
+    return profile_switch("NI_A4_QTM", here, "Hy4-flash's expert prefill GEMMs on the matrix units (NI_A4_QTM)");
   }();
   return on && R >= kQtmRows && x.gu.bits == 4 && x.dn.bits == 4 && sh.D % 64 == 0 && sh.I % 64 == 0;
 }

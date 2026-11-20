@@ -26,6 +26,7 @@ in [benchmarks.md](benchmarks.md). It runs the rows teacher-forced, full vocabul
 | Qwen3.6-35B-A3B 4-bit, M5 Pro | Splash 1.5.0 | 192 (8 windows, 512 to 3,200 tokens) | 4 | 2.1e-3 |
 | Qwen3.8 27B KQuant, Mac mini M6 | mlx-lm 0.32.2 (MLX 0.32.4), on the same weights folder; the only other engine measured on this Mac (decode 9.5 tok/s, [benchmarks](benchmarks.md)), so not shown to be the fastest | 192 (`logit_dump` step rows, 8 windows) | 0 | 2.9e-4 |
 | Qwen3.5 4B 4-bit, Mac mini M6 | mlx-lm 0.32.2 (MLX 0.32.4) | 192 (`logit_dump` step rows, 8 windows) | 2 | 7.1e-4 |
+| Hy4-flash 4-bit (`nace-ai/Hy4-flash-MLX-4bit`), M5 Max | mlx-lm 0.32.2 (MLX 0.32.4) on the same pack (`tools/hy4_mlx_layers.py`, the pack's own model file, one forward pass); the only other engine measured on this Mac, so not shown to be the fastest | 1,024 (the prompt rows of 1,024 `bench/corpus.txt` tokens, teacher-forced) | 130 | 0.259 |
 
 On Flash-Next, Splash's rows were scored from its prefix cache; on the 32 rows also scored cold, the two agree (same
 top-1 on 31 of 32 rows, mean KL at most 1.5e-2).
@@ -60,6 +61,7 @@ aggregate bar. [M4 exact bounds and narrow verify margin](../bench/results/2026-
 |---|---|---|---|---|
 | Sparse prefill attention on the matrix units, Q and P as hi + lo halves, at the usual 2048-row chunks | Qwen3.8-Flash-Next on Macs with matrix units; measured: Q2_0, M5 Pro (the 4-bit pack and the M5 Max did not run) | `NI_QSA_TATTN` | prefill 8% faster at 32K, 10% at 64K; decode the same per draft cycle (4 interleaved pairs) | 72 rows (16K, 32K, 64K windows): 4 flips, mean KL 8.8e-3, NLL +0.018 nats |
 | Segmented dense ANE prefill (#775) | Dense Qwen 2048-channel inputs through hidden 8192 on non-matrix Macs with a built-in ANE share (M4 today); measured Qwen3.5-9B on M4 Pro | `NI_ANE` | loaded 4135-token HTTP TTFT 61.94% lower at `50fadecc` (MTP off) | 576 correlated comparisons: 6 flips / mean KL 3.699283718701063e-4, against MLX 9 / 3.747187506485964e-4; all eight prefill rows also pass |
+| Hy4-flash's routed experts' prefill GEMMs on the matrix units (`src/kernels/tensor/qmt_moe_a4.metal`), chunks of 256 rows or more | Hy4-flash on Macs with matrix units; measured: the 4-bit pack, M5 Max (other M5-class Macs did not run) | `NI_A4_QTM` | `kapitsa bench`: prefill 4K 596 -> 930 tok/s (+56%), 16K 625 -> 989 (+58%), decode unchanged; `hy4_dump`, 4,096 tokens, interleaved: 664-731 -> 1,134-1,176 tok/s | the 1,024 bar rows: 86 flips, mean KL 0.137 (MLX: 130, 0.259). Precise keeps the simdgroup kernels. |
 
 
 The ANE default for these widths excludes matrix GPUs and M1 to M3 (M1 and M2 have a share only for the 2560/5120
