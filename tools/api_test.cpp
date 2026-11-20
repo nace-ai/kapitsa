@@ -3150,7 +3150,94 @@ void chat_template_format_unit() {
   rmdir(dir.c_str());
 }
 
+// OutputParser's CallFormat::Hy4 on a byte-level vocabulary with Hy4-flash's tags as added (non-special) tokens, as
+// its tokenizer has them: the list of calls, GLM's markup with :opensource tags, typed values, text when tools are off,
+// a malformed call and a call cut by max_tokens returned as the text written.
+void hy4_parser_unit() {
+  nlohmann::json vocab = nlohmann::json::object(), added = nlohmann::json::array();
+  for (int b = 0, n = 0; b < 256; ++b) {
+    const bool keep = (b >= '!' && b <= '~') || (b >= 0xA1 && b <= 0xAC) || (b >= 0xAE && b <= 0xFF);
+    const uint32_t c = keep ? uint32_t(b) : uint32_t(256 + n++);
+    vocab[c < 0x80 ? std::string(1, char(c)) : std::string{char(0xC0 | (c >> 6)), char(0x80 | (c & 0x3F))}] = b;
+  }
+  int id = 256;
+  for (const char* t : {"<think:opensource>", "</think:opensource>", "<tool_call:opensource>", "</tool_call:opensource>",
+                        "<tool_calls:opensource>", "</tool_calls:opensource>", "<arg_key:opensource>",
+                        "</arg_key:opensource>", "<arg_value:opensource>", "</arg_value:opensource>"})
+    added.push_back({{"id", id++}, {"content", t}, {"special", false}});
+  char path[] = "/tmp/api_test_hy4tok.XXXXXX";
+  const int fd = mkstemp(path);
+  if (fd < 0) {
+    check(false, "hy4 parser: mkstemp");
+    return;
+  }
+  close(fd);
+  if (FILE* f = fopen(path, "w")) {
+    fputs(nlohmann::json{{"added_tokens", added}, {"normalizer", nullptr}, {"pre_tokenizer", nullptr},
+                         {"model", {{"type", "BPE"}, {"vocab", vocab}, {"merges", nlohmann::json::array()}}}}
+              .dump()
+              .c_str(),
+          f);
+    fclose(f);
+  }
+  Tokenizer tok;
+  tok.load(path);
+  unlink(path);
+  const ojson tools = ojson::parse(R"([
+    {"type": "function", "function": {"name": "read_file", "parameters": {"type": "object", "properties": {
+      "path": {"type": "string"}, "start_line": {"type": "integer"}}}}},
+    {"type": "function", "function": {"name": "search", "parameters": {"type": "object", "properties": {
+      "query": {"type": "string"}, "filters": {"type": "object"}}}}}])");
+  struct Out {
+    std::string content, reasoning;
+    std::vector<ToolCall> calls;
+  };
+  const auto run = [&](const std::string& text, bool parse_tools, bool ended = true) {
+    OutputParser p(tok, tok.find("<think:opensource>"), tok.find("</think:opensource>"),
+                   tok.find("<tool_call:opensource>"), tok.find("</tool_call:opensource>"), false, parse_tools, tools,
+                   false, false, {}, CallFormat::Hy4);
+    Out o;
+    const auto add = [&](const ChatDelta& d) {
+      o.content += d.content;
+      o.reasoning += d.reasoning;
+      for (auto& c : d.tool_calls) o.calls.push_back(c);
+    };
+    for (int i : tok.encode(text)) add(p.push(i));
+    add(p.finish(ended));
+    return o;
+  };
+  const std::string two =
+      "<tool_calls:opensource><tool_call:opensource>read_file<arg_key:opensource>path</arg_key:opensource>"
+      "<arg_value:opensource>src/main.py</arg_value:opensource><arg_key:opensource>start_line</arg_key:opensource>"
+      "<arg_value:opensource>3</arg_value:opensource></tool_call:opensource><tool_call:opensource>search"
+      "<arg_key:opensource>query</arg_key:opensource><arg_value:opensource>a \"b\"</arg_value:opensource>"
+      "<arg_key:opensource>filters</arg_key:opensource><arg_value:opensource>{\"ext\": [\"py\"]}"
+      "</arg_value:opensource></tool_call:opensource></tool_calls:opensource>\n";
+  Out o = run("I'll look.\n" + two, true);
+  check(o.calls.size() == 2 && o.calls[0].name == "read_file" &&
+            ojson::parse(o.calls[0].arguments) == ojson({{"path", "src/main.py"}, {"start_line", 3}}) &&
+            o.calls[1].name == "search" &&
+            ojson::parse(o.calls[1].arguments) == ojson({{"query", "a \"b\""}, {"filters", {{"ext", {"py"}}}}}),
+        "hy4 parser: two calls in one list, typed values", o.calls.size() == 2 ? o.calls[0].arguments + " " + o.calls[1].arguments : "");
+  check(o.content == "I'll look.", "hy4 parser: the text before the list, nothing of the list's tags", o.content);
+  o = run("<think:opensource>plan</think:opensource>" + two, true);
+  check(o.calls.size() == 2 && o.reasoning == "plan" && o.content.empty(), "hy4 parser: calls after reasoning",
+        o.reasoning + "|" + o.content);
+  o = run(two, false);
+  check(o.calls.empty() && o.content == two.substr(0, two.size() - 1),  // the turn's trailing newline dropped
+        "hy4 parser: tools off, the tags stay text", o.content);
+  const std::string bad = "<tool_call:opensource>read file<arg_key:opensource>path</arg_key:opensource>"
+                          "</tool_call:opensource>";
+  o = run("<tool_calls:opensource>" + bad + "</tool_calls:opensource>", true);
+  check(o.calls.empty() && o.content == bad, "hy4 parser: a malformed call returned as its text", o.content);
+  const std::string cut = "<tool_call:opensource>read_file<arg_key:opensource>pa";
+  o = run("<tool_calls:opensource>" + cut, true, false);
+  check(o.calls.empty() && o.content == cut, "hy4 parser: a call cut by max_tokens returned with its own tag",
+        o.content);
+}
+
 int main(int argc, char** argv) {
+  hy4_parser_unit();
   stop_filter_unit();
   anthropic_mapping();
   responses_mapping();

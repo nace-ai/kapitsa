@@ -107,7 +107,7 @@ class OutputParser {
     }
     if (in_tool_) {
       // unterminated tool call: surface as text
-      emit(d, (tt_.tc_open.empty() ? std::string("<tool_call>") : tt_.tc_open) + tool_buf_ + s);
+      emit(d, (tt_.tc_open.empty() ? "<tool_call" + sfx_ + ">" : tt_.tc_open) + tool_buf_ + s);
       in_tool_ = false;
     } else {
       emit(d, s);
