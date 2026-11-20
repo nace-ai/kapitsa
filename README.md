@@ -179,7 +179,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 <sub>Each cell: prefill / decode, tokens/s (a lone number is decode: no prefill run) · 🟩 fastest decode · ≈ a decode tie with Kapitsa · small type: the decoding method (none: no speculative decoding) · × can't run on that Mac · — not measured</sub>
 
 <details>
-<summary><b>MacBook Pro (16-inch, 2026) · M5 Max · 128 GB</b> · 9 models</summary>
+<summary><b>MacBook Pro (16-inch, 2026) · M5 Max · 128 GB</b> · 10 models</summary>
 
 **Qwen and Nemotron**
 
@@ -205,7 +205,13 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | --- | ---: |
 | **Clover-35B-A3B-Preview** · `clover`<br><sub>block-diffusion MoE, 3B active · 4-bit pack converted by tools/convert_clover.py, 19.5 GB (measured; the catalog's `clover` serves the same files)</sub> | 🟩 5981 / **304**<br><sub>KFlash</sub> |
 
-<sub>Kapitsa's cells are the 2026-11-01 runs (main 7f4e709, [results](bench/results/2026-11-01-m5-max-kapitsa/README.md)), each the median of three runs (Super-VL five) on AC power in High Power mode, Clover's in [its own folder](bench/results/2026-11-01-m5-max-clover/README.md), Flash-Next's a 2026-11-04 re-run on main af7d795 after #921, #922 and #923, three runs the same way, greedy 113.9 against 107.3 on 2026-11-01 ([results](bench/results/2026-11-04-m5-max-flash-next/README.md)), and the 27B's a 2026-11-05 re-run on 7afb51d (the tree of main 87d7dd5: 0.2.29 with #964, #969 and #970), three runs the same way ([results](bench/results/2026-11-05-m5-max-qwen-cells-87d7dd5/README.md)), and the 35B-A3B's a re-run on main 39f20c8 after #975 (its GPU prefill wavefront), three runs the same way ([results](bench/results/2026-11-05-m5-max-35b-cell-39f20c8/README.md)). The other engines' 27B, 35B-A3B and Bolt cells are the 2026-10-25 session (each engine's latest release, macOS 26.4); llama.cpp's 35B-A3B cell and the other engines' Flash-Next, Lightning, Super-VL and Dory cells are the 2026-10-18 runs, not yet re-measured; rec's and llama.cpp's Flint cells are one block on 2026-10-26 ([results](bench/results/2026-10-26-m5-max/README.md)). The build each cell ran is under its number; details in [bench/results/2026-10-25-m5-max](bench/results/2026-10-25-m5-max/README.md) and [its re-runs](bench/results/2026-10-25-m5-max/2026-10-26-reruns.md).</sub>
+**Tencent Hy4-flash**
+
+| Model | <mark>**Kapitsa**</mark> |
+| --- | ---: |
+| **Hy4-flash**<br><sub>MoE, 512 experts, top-16 · 8-bit trunk, 4-bit experts, 133.8 GB with its Engram tables (`nace-ai/Hy4-flash-MLX-4bit`, a model folder: not in the catalog)</sub> | 🟩 596 / **36**<br><sub>plain decoding</sub> |
+
+<sub>Kapitsa's cells are the 2026-11-01 runs (main 7f4e709, [results](bench/results/2026-11-01-m5-max-kapitsa/README.md)), each the median of three runs (Super-VL five) on AC power in High Power mode, Clover's in [its own folder](bench/results/2026-11-01-m5-max-clover/README.md), Flash-Next's a 2026-11-04 re-run on main af7d795 after #921, #922 and #923, three runs the same way, greedy 113.9 against 107.3 on 2026-11-01 ([results](bench/results/2026-11-04-m5-max-flash-next/README.md)), and the 27B's a 2026-11-05 re-run on 7afb51d (the tree of main 87d7dd5: 0.2.29 with #964, #969 and #970), three runs the same way ([results](bench/results/2026-11-05-m5-max-qwen-cells-87d7dd5/README.md)), and the 35B-A3B's a re-run on main 39f20c8 after #975 (its GPU prefill wavefront), three runs the same way ([results](bench/results/2026-11-05-m5-max-35b-cell-39f20c8/README.md)). The other engines' 27B, 35B-A3B and Bolt cells are the 2026-10-25 session (each engine's latest release, macOS 26.4); llama.cpp's 35B-A3B cell and the other engines' Flash-Next, Lightning, Super-VL and Dory cells are the 2026-10-18 runs, not yet re-measured; rec's and llama.cpp's Flint cells are one block on 2026-10-26 ([results](bench/results/2026-10-26-m5-max/README.md)). The build each cell ran is under its number; details in [bench/results/2026-10-25-m5-max](bench/results/2026-10-25-m5-max/README.md) and [its re-runs](bench/results/2026-10-25-m5-max/2026-10-26-reruns.md). Hy4-flash's cell is one `kapitsa bench` run on 2026-11-20 at 21c5d9ce, the tree of main 4012c0e6 after #1359 and #1360 ([results](bench/results/2026-11-20-m5-max-hy4/README.md)).</sub>
 
 </details>
 

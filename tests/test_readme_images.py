@@ -29,9 +29,10 @@ for r in rows:
         c = r["cells"]["Kapitsa"]
         want = (c.get("label") if isinstance(c, dict) else None) or "KFlash"
         assert label == want, (r["model"], label)
-assert n == 40, n   # every Kapitsa number in readme_images.json; update when cells are added or removed
+assert n == 41, n   # every Kapitsa number in readme_images.json; update when cells are added or removed
 labelled = [r for r in rows if isinstance(r["cells"]["Kapitsa"], dict) and r["cells"]["Kapitsa"].get("label")]
-assert labelled == [], labelled   # every Kapitsa cell in the data reads KFlash
+# every Kapitsa cell reads KFlash but Hy4-flash's, which decodes plainly (its DFly2 drafter is not wired)
+assert [r["model"] for r in labelled] == ["Hy4-flash"], labelled
 assert all(h["method"] == "KFlash" for h in ri.header_rows(data) if h["kap"] and h["value"] is not None)
 hr = ri.header_rows(data)   # the header SVGs' <desc> names Kapitsa's method as KFlash
 assert "Kapitsa with KFlash " in ri.header_desc(data, hr), ri.header_desc(data, hr)
