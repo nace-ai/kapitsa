@@ -1,5 +1,7 @@
 #include "model/moe_a4.h"
 
+#include "engine/device_profile.h"
+
 #include "model/expert_store.h"
 #include "model/hy4_kernels.h"
 #include "model/kparams.h"
@@ -18,6 +20,10 @@
 #include <fstream>
 #include <map>
 #include <set>
+
+namespace ni {
+extern const char* const kTensorKernelSource;
+}
 
 namespace ni::a4 {
 
@@ -71,6 +77,24 @@ Pipeline pipe(const std::string& base, const Fmt& f, const Experts& x) {
 }
 bool fmt_ok(const Fmt& f) { return (f.bits == 3 || f.bits == 4) && (f.gs == 32 || f.gs == 64 || f.gs == 128); }
 
+// The prefill GEMMs on the M5's matrix units (src/kernels/tensor/qmt_moe_a4.metal: the qmt tile, 64-row tiles of
+// moe_bucket3) instead of a4_gu_mm / a4_dn_mm: 4-bit experts, a Mac with matrix units (macOS 26), chunks of at least
+// kQtmRows rows. The weights are the same halfs; the fp32 MMA sums run in the matrix units' order. NI_A4_QTM=0: off.
+constexpr int kQtmRows = 256;
+bool qtm_on(const Experts& x, const Shape& sh, int R) {
+  static const bool on = [] {
+    const char* v = getenv("NI_A4_QTM");
+    if (v && *v && atoi(v) == 0) return false;
+    if (__builtin_available(macOS 26.0, *)) return matrix_units();
+    return false;
+  }();
+  return on && R >= kQtmRows && x.gu.bits == 4 && x.dn.bits == 4 && sh.D % 64 == 0 && sh.I % 64 == 0;
+}
+Pipeline qtm_pipe(const std::string& base, const Fmt& f, const Experts& x) {
+  Gpu::get().compile_extra("tensor", kTensorKernelSource, true);  // the Metal 4 tensor library (keyed: compiled once)
+  return Gpu::get().pipeline(base + "_b4g" + std::to_string(f.gs) + (x.arena ? "_slot" : ""));
+}
+
 SlotParams slot_params(const Experts& x) {
   SlotParams L{};
   for (int i = 0; i < 9; ++i) L.o[i] = x.off[i];
@@ -123,12 +147,13 @@ void enc_tiles_path(Encoder& e, const Experts& x, const Shape& sh, int R, const 
   e.buf(0, xin); e.buf(1, xh);
   e.val(2, n4);
   e.dispatch((n4 + 255) / 256, 1, 1, 256);
-  const kp::Bucket2 bp{P, sh.k, sh.E, kBM, 0u};
+  const bool qtm = qtm_on(x, sh, R);  // 64-row tiles for the matrix units' tile (fewer than s.max_tiles of kBM rows)
+  const kp::Bucket2 bp{P, sh.k, sh.E, qtm ? 64u : kBM, 0u};
   e.use(hy4::pipeline("moe_bucket3"));
   e.buf(0, idx); e.buf(1, yrows); e.buf(2, xrows); e.buf(3, tiles); e.buf(4, ntiles);
   e.val(5, bp);
   e.dispatch(1, 1, 1, 1024);
-  e.use(pipe("a4_gu_mm", x.gu, x));
+  e.use(qtm ? qtm_pipe("qmtm_gu_a4", x.gu, x) : pipe("a4_gu_mm", x.gu, x));
   e.buf(0, xh);
   bind_mat(e, x, 0, 1);
   bind_mat(e, x, 1, 4);
@@ -136,15 +161,15 @@ void enc_tiles_path(Encoder& e, const Experts& x, const Shape& sh, int R, const 
   e.val(8, p);
   e.val(9, L);
   e.buf(10, tiles); e.buf(11, ntiles); e.buf(12, xrows);
-  e.dispatch(sh.I / kGuBN, s.max_tiles, 1, 128);
-  e.use(pipe("a4_dn_mm", x.dn, x));
+  e.dispatch(qtm ? sh.I / 32 : sh.I / kGuBN, s.max_tiles, 1, 128);  // qtm: 32 gate + 32 up columns a tile
+  e.use(qtm ? qtm_pipe("qmtm_dn_a4", x.dn, x) : pipe("a4_dn_mm", x.dn, x));
   e.buf(0, H);
   bind_mat(e, x, 2, 1);
   e.buf(4, Y);
   e.val(5, p);
   e.val(6, L);
   e.buf(7, tiles); e.buf(8, ntiles); e.buf(9, yrows);
-  e.dispatch(sh.D / kDnBN, s.max_tiles, 1, 128);
+  e.dispatch(qtm ? sh.D / 64 : sh.D / kDnBN, s.max_tiles, 1, 128);
   e.use(hy4::pipeline("a4_combine"));
   e.buf(0, Y); e.buf(1, wts); e.buf(2, y);
   e.val(3, p);

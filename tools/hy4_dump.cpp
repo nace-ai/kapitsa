@@ -104,7 +104,9 @@ int main(int argc, char** argv) {
       const int w = std::min(T, rows - pos0);
       fwrite(lg.ptr(), 4, size_t(w) * V, fo);
     }
-    fprintf(stderr, "prefill rows %d-%d: %.1f s\n", pos0, pos0 + T - 1, (now_ms() - tp) / 1000);
+    fprintf(stderr, "prefill rows %d-%d: %.1f s (GPU %.1f ms)\n", pos0, pos0 + T - 1, (now_ms() - tp) / 1000,
+            e->gpu_end_host_ms() - e->gpu_start_host_ms());
+    if (Encoder::profiling()) Encoder::profile_report(1);  // NI_PROFILE=1: this chunk's kernels
   }
   if (fo) fclose(fo);
   const double pf = now_ms() - tp;
@@ -112,14 +114,18 @@ int main(int argc, char** argv) {
   if (gen > 0) {
     std::vector<int> outs = {s->tokens()[n]};
     const double td = now_ms();
+    double gpu = 0;  // the steps' GPU time (start to end of each command buffer), against their wall time
     for (int k = 1; k < gen; ++k) {
       const int pos = n + k - 1;
       auto e = g.begin();
       m.encode_step(*e, *s, pos, sp, uint32_t(k));
       e->commit_and_wait();
+      gpu += e->gpu_end_host_ms() - e->gpu_start_host_ms();
       outs.push_back(s->tokens()[pos + 1]);
     }
     const double dt = now_ms() - td;
+    if (gen > 1) fprintf(stderr, "decode: GPU %.2f of %.2f ms a step\n", gpu / (gen - 1), dt / (gen - 1));
+    if (Encoder::profiling() && gen > 1) Encoder::profile_report(gen - 1);  // NI_PROFILE=1: kernels per step
     printf("gen:");
     for (int t : outs) printf(" %d", t);
     printf("\n");
