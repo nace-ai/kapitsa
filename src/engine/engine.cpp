@@ -277,6 +277,43 @@ static bool newline_before_think_close(const minja::chat_template& tmpl) {
   }
 }
 
+std::string validate_token_suppression(const std::string& model_dir, const std::string& suppress_tokens) {
+  std::string path = suppress_tokens;
+  if (path.empty()) {
+    const char* env_path = getenv("NI_SUPPRESS_TOKENS");
+    if (env_path && *env_path) path = env_path;
+  }
+  if (path.empty()) return "";
+  try {
+    if (Hy4Flash::is_model(model_dir) || Qwen4Exp::is_model(model_dir) || Dory::is_model(model_dir) ||
+        NemotronH::is_model(model_dir) || Flint::is_model(model_dir) || Clover::is_model(model_dir))
+      return "token suppression: --suppress-tokens currently supports the Qwen35 backend only";
+    const std::string content = read_token_suppression_file(path);
+    const Qwen35Config cfg = Qwen35::read_config(model_dir);
+    Tokenizer tok;
+    tok.load(model_dir + "/tokenizer.json");
+    std::vector<int> protected_ids = cfg.eos;
+    {
+      auto tc = nlohmann::json::parse(read_file(model_dir + "/tokenizer_config.json"), nullptr, false);
+      std::string end = "<|im_end|>";
+      if (!tc.is_discarded() && tc.contains("eos_token")) {
+        const auto& e = tc["eos_token"];
+        if (e.is_string()) end = e.get<std::string>();
+        else if (e.is_object()) end = e.value("content", end);
+      }
+      const int id = tok.find(end);
+      if (id >= 0 && std::find(protected_ids.begin(), protected_ids.end(), id) == protected_ids.end())
+        protected_ids.push_back(id);
+    }
+    for (int t = 0; t < tok.vocab_size(); ++t)
+      if (tok.is_special(t)) protected_ids.push_back(t);
+    (void)token_suppression_mask(content, cfg.vocab, protected_ids);
+    return "";
+  } catch (const std::exception& e) {
+    return e.what();
+  }
+}
+
 Engine::Engine(const EngineOptions& o) : opts_(o) {
   std::string suppression_path = opts_.suppress_tokens;
   if (suppression_path.empty()) {
@@ -590,7 +627,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     std::vector<int> protected_ids = stop_ids_;
     for (int t = 0; t < tok_.vocab_size(); ++t)
       if (tok_.is_special(t)) protected_ids.push_back(t);
-    const TokenSuppressionMask parsed = token_suppression_mask(read_file(suppression_path), model_->vocab(), protected_ids);
+    const TokenSuppressionMask parsed =
+        token_suppression_mask(read_token_suppression_file(suppression_path), model_->vocab(), protected_ids);
     auto m = std::make_shared<TokenSuppression>();
     m->words = int(parsed.words.size());
     const size_t bytes = parsed.words.size() * sizeof(uint32_t);

@@ -74,6 +74,14 @@ int main(int argc, char** argv) {
   }
   check(rejected_all, "reject suppressing the entire vocabulary");
 
+  bool rejected_missing = false;
+  try {
+    ni::read_token_suppression_file("/nonexistent/kapitsa_missing_mask.json");
+  } catch (const std::runtime_error& e) {
+    rejected_missing = std::string(e.what()).find("cannot open") != std::string::npos;
+  }
+  check(rejected_missing, "missing mask file reports cannot open rather than empty");
+
   if (argc == 2) {
     std::ifstream f(argv[1]);
     std::stringstream ss;

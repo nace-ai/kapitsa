@@ -6,6 +6,7 @@
 #include <cctype>
 #include <charconv>
 #include <cstdint>
+#include <fstream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -59,6 +60,15 @@ inline TokenSuppressionMask token_suppression_mask(const nlohmann::json& j, int 
     ids.push_back(id.get<int64_t>());
   }
   return token_suppression_from_ids(ids, vocab, protected_ids);
+}
+
+inline std::string read_token_suppression_file(const std::string& path) {
+  std::ifstream f(path, std::ios::binary);
+  if (!f) throw std::runtime_error("token suppression: cannot open " + path);
+  std::ostringstream ss;
+  ss << f.rdbuf();
+  if (f.bad()) throw std::runtime_error("token suppression: failed reading " + path);
+  return ss.str();
 }
 
 inline TokenSuppressionMask token_suppression_mask(const std::string& content, int vocab,

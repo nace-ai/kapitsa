@@ -1506,6 +1506,8 @@ int ni::server::run_service(Options o) {
   }
   // the context: the one asked for, within what the model was trained for, else the default for this Mac
   if (!engine_splash) {
+    if (const std::string why = validate_token_suppression(opt.model_dir, opt.suppress_tokens); !why.empty())
+      return fail(why, 2);
     const int limit = model_context_limit(opt.model_dir);
     std::string say;
     if (context_req == kContextMax) {

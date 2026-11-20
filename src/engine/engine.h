@@ -102,6 +102,7 @@ MemPlan model_plan(const std::string& model_dir, int prefill_chunk);
 // another architecture is refused with this message before any plan or load reads the Qwen3.5 family's fields from it.
 // model_plan throws it (std::runtime_error) and the engine's load stops with it.
 std::string unsupported_model(const std::string& model_dir);
+std::string validate_token_suppression(const std::string& model_dir, const std::string& suppress_tokens);
 
 // Slots when none are asked for (EngineOptions::slots 0): kAutoSlots, so that an agent's conversation and its parallel
 // subagents or side requests each run on a warm slot of their own, or as many (down to 2, the old default) as the
