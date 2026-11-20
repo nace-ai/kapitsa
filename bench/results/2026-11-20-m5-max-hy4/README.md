@@ -8,8 +8,10 @@ Mac: MacBook Pro (16-inch, 2026), M5 Max, 40-core GPU, 128 GB, macOS 26.4 (25E24
 ## The README cell
 
 `kapitsa-bench-21c5d9ce.json`: `kapitsa bench --model <the pack's folder>` (full protocol), Kapitsa 0.2.37 at
-21c5d9ce, the head merged as #1360, whose tree is main's 4012c0e6. Every expert is in memory (#1360), and thinking
-off renders the template's `no_think` (#1359).
+21c5d9ce: #1360's head before its review commit 3be693bd, on top of #1359. Every expert is in memory and thinking off
+renders the template's `no_think`. 3be693bd only changed how the expert store is sized (`a4::default_arena`: the
+engine's budget must also leave 2 GB beyond the experts). On this Mac the merged code (main 4012c0e6) still takes every
+expert, as the server's log at 3be693bd shows, but `kapitsa bench` was not re-run on it.
 
 | decode T 0.6 | greedy | prefill 4K | prefill 16K | follow-up TTFT | tool calls | peak memory |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -26,8 +28,8 @@ The same Mac and pack on the same day:
 | build | decode T 0.6 | prefill 4K | what changed |
 | --- | --- | --- | --- |
 | 1e2dac03 (main before) | 25.0-27.3 (reasoning text: invalid) | 585 | thinking off ignored; tool calls HTTP 400 |
-| 5d13ce79 (#1359) | 24.12, 5 of 5 valid | 624 | thinking off and tool calls fixed |
-| 21c5d9ce (#1360) | 36.35 | 596 | every expert in memory (69% before) |
+| 5d13ce79 (#1359's head before its squash) | 24.12, 5 of 5 valid | 624 | thinking off and tool calls fixed |
+| 21c5d9ce (#1360's head before its review commit) | 36.35 | 596 | every expert in memory (69% before) |
 
 Each row is one run of `kapitsa bench`; the rows are not an interleaved comparison. #1360's interleaved A B A B is in
 its pull request: decode 25.35 / 25.53 -> 36.69 / 36.73 tok/s, with the logits bitwise the same.
