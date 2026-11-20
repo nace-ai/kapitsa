@@ -48,7 +48,7 @@
 #include <utility>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.2.38"
+#define KAPITSA_VERSION "0.2.39"
 #endif
 
 namespace ni::gguf {
