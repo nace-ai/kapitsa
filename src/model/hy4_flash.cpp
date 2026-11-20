@@ -15,8 +15,11 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <dirent.h>
+
 #include <fstream>
 #include <map>
+#include <vector>
 
 namespace ni {
 
@@ -28,6 +31,33 @@ constexpr uint32_t kS = hy4::kStreams;
 constexpr int kHD = 256, kNope = 192, kRope = 64, kVD = 256, kKvb = kNope + kVD;
 
 const json& text_cfg(const json& root) { return root.contains("text_config") ? root["text_config"] : root; }
+
+// A safetensors file's size and tensor names from its header alone (8-byte length, JSON, then the data up to the
+// largest data_offsets end): the same size as the file on disk for a downloaded one, and what a plan folder
+// (hub::plan_dir: config.json and each file truncated to its header, no index) still tells
+struct StHead {
+  size_t bytes = 0;
+  std::vector<std::string> names;
+};
+StHead st_head(const std::string& path) {
+  StHead h;
+  std::ifstream in(path, std::ios::binary);
+  uint64_t n = 0;
+  if (!in.read(reinterpret_cast<char*>(&n), 8) || n < 2 || n > (uint64_t(256) << 20)) return h;
+  std::string s(size_t(n), '\0');
+  if (!in.read(s.data(), std::streamsize(n))) return h;
+  const json j = json::parse(s, nullptr, false);
+  if (!j.is_object()) return h;
+  size_t end = 0;
+  for (auto it = j.begin(); it != j.end(); ++it) {
+    if (it.key() == "__metadata__" || !it->is_object() || !it->contains("data_offsets")) continue;
+    const json& o = (*it)["data_offsets"];
+    if (o.is_array() && o.size() == 2 && o[1].is_number_unsigned()) end = std::max(end, o[1].get<size_t>());
+    h.names.push_back(it.key());
+  }
+  h.bytes = 8 + size_t(n) + end;
+  return h;
+}
 
 std::string fname(int i) { return "model.layers." + std::to_string(i) + "."; }
 
@@ -62,25 +92,28 @@ Hy4Flash::~Hy4Flash() {
 }
 
 MemPlan Hy4Flash::plan(const std::string& dir, int chunk) {
-  // the trunk's files as they are on disk, the routed experts and Engram tables left out (streamed / mapped)
+  // the trunk's files, the routed experts and Engram tables left out (streamed / mapped), each sized from its header:
+  // a downloaded pack's files, or a plan folder's header-only ones (no index there: the folder's *.safetensors)
   MemPlan m;
-  const auto rp = json_file(dir + "/model.safetensors.index.json");
-  if (rp && rp->contains("weight_map")) {
-    std::map<std::string, bool> files;
-    for (auto it = (*rp)["weight_map"].begin(); it != (*rp)["weight_map"].end(); ++it) {
-      const std::string f = it.value().get<std::string>();
-      files[f] = f.rfind("model-experts", 0) == 0 || f.rfind("model-engram", 0) == 0 || f == "model-vit.safetensors" ||
-                 f == "model-dfly.safetensors";
+  std::vector<std::string> files;
+  if (const auto rp = json_file(dir + "/model.safetensors.index.json"); rp && rp->contains("weight_map")) {
+    std::map<std::string, bool> seen;
+    for (auto it = (*rp)["weight_map"].begin(); it != (*rp)["weight_map"].end(); ++it) seen[it.value().get<std::string>()] = true;
+    for (const auto& [f, _] : seen) files.push_back(f);
+  } else if (DIR* d = opendir(dir.c_str())) {
+    while (const dirent* e = readdir(d)) {
+      const std::string f = e->d_name;
+      if (f.size() > 12 && f.compare(f.size() - 12, 12, ".safetensors") == 0) files.push_back(f);
     }
-    for (const auto& [f, skip] : files) {
-      std::ifstream in(dir + "/" + f, std::ios::binary | std::ios::ate);
-      const size_t n = in ? size_t(in.tellg()) : 0;
-      if (skip) {
-        if (f.rfind("model-experts", 0) == 0) m.streamed += n;
-      } else {
-        m.weights += n;
-      }
-    }
+    closedir(d);
+  }
+  std::vector<std::string> tensors;  // every tensor's name, for the experts' formats below
+  for (const std::string& f : files) {
+    const StHead h = st_head(dir + "/" + f);
+    tensors.insert(tensors.end(), h.names.begin(), h.names.end());
+    if (f.rfind("model-experts", 0) == 0) m.streamed += h.bytes;
+    else if (f.rfind("model-engram", 0) != 0 && f != "model-vit.safetensors" && f != "model-dfly.safetensors")
+      m.weights += h.bytes;
   }
   // the store's slots: every routed expert in the largest layer's format (config.json's entries for the switch_mlp
   // modules, else its default; a4::Store reads the same formats from the shapes and checks them against these)
@@ -92,14 +125,12 @@ MemPlan Hy4Flash::plan(const std::string& dir, int chunk) {
     const json& e = q.contains(module) && q[module].is_object() ? q[module] : q;
     return a4::Fmt{e.value("bits", 4u), e.value("group_size", 64u)};
   };
-  if (rp && rp->contains("weight_map"))
-    for (auto it = (*rp)["weight_map"].begin(); it != (*rp)["weight_map"].end(); ++it) {
-      const std::string& n = it.key();
-      const size_t at = n.find(".mlp.switch_mlp.gate_proj.weight");
-      if (n.rfind("model.layers.", 0) != 0 || at == std::string::npos) continue;
-      const std::string base = n.substr(0, at) + ".mlp.switch_mlp.";
-      fmts[std::atoi(n.c_str() + 13)] = {fmt_of(base + "gate_proj"), fmt_of(base + "down_proj")};
-    }
+  for (const std::string& n : tensors) {
+    const size_t at = n.find(".mlp.switch_mlp.gate_proj.weight");
+    if (n.rfind("model.layers.", 0) != 0 || at == std::string::npos) continue;
+    const std::string base = n.substr(0, at) + ".mlp.switch_mlp.";
+    fmts[std::atoi(n.c_str() + 13)] = {fmt_of(base + "gate_proj"), fmt_of(base + "down_proj")};
+  }
   const a4::Shape sh{};
   size_t slot = 0;
   std::map<std::string, int> names;

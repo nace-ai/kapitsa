@@ -164,7 +164,7 @@ The most precise variant of each catalog model that runs on a Mac of each size. 
 | **Nemotron 3.5 Super-VL 120B-A12B** · `super-vl` | — | — | — | — | — | — | NVFP4 |
 | **Recursive Flint 40B-A2.5B** · `flint` | 2-bit† | 2-bit | 2-bit | 4-bit | 4-bit | 4-bit | 4-bit |
 | **Clover-35B-A3B-Preview** · `clover` | — | — | 4-bit | 4-bit | 4-bit | 4-bit | 4-bit |
-| **Hy4-flash** · `hy4` | — | — | — | — | 4-bit + SSD | 4-bit + SSD | 4-bit |
+| **Hy4-flash** · `hy4` | — | 4-bit + SSD | 4-bit + SSD | 4-bit + SSD | 4-bit + SSD | 4-bit + SSD | 4-bit |
 | **Nemotron Dory1.0 4B** · `dory` | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 |
 | **Nemotron 3 Nano 4B** · `nano-4b` | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 |
 | **Nemotron Nano 9B v2** · `nano-9b` | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 |

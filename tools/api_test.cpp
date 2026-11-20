@@ -27,6 +27,7 @@
 #include "engine/reasoning_memory.h"
 #include "engine/tool_args.h"
 #include "model/kflash_wrap.h"
+#include "model/hy4_flash.h"
 #include "model/moe_a4.h"
 #include "tokenizer/tokenizer.h"
 
@@ -3255,7 +3256,69 @@ void a4_arena_unit() {
   check(!every && b == size_t(0.42 * double(ram48)), "a4 arena: 48 GB Mac, the 42% rule", std::to_string(b));
 }
 
+// Hy4Flash::plan from a plan folder (hub::plan_dir: config.json and every *.safetensors cut to its header, no index)
+// equals its plan from the downloaded folder (index and whole files): before download the trunk counted 0 bytes, so a
+// 16 GB Mac took the 134 GB pack as fitting (#1366's review)
+void hy4_plan_unit() {
+  char t1[] = "/tmp/api_test_hy4plan.XXXXXX", t2[] = "/tmp/api_test_hy4full.XXXXXX";
+  if (!mkdtemp(t1) || !mkdtemp(t2)) {
+    check(false, "hy4 plan: mkdtemp");
+    return;
+  }
+  const std::string plan = t1, full = t2;
+  const nlohmann::json cfg = {{"model_type", "hy_v4_flash"}, {"quantization", {{"bits", 4}, {"group_size", 64}}},
+                              {"text_config", {{"layer_types", {"full_attention", "sliding_attention"}}}}};
+  // file -> its tensors (name, bytes); the trunk's 4,096 B, one MoE layer's experts, an Engram table (mapped, not counted)
+  const std::vector<std::pair<std::string, std::vector<std::pair<std::string, size_t>>>> files = {
+      {"model-00001-of-00001.safetensors", {{"model.embed_tokens.weight", 4096}}},
+      {"model-experts-L01.safetensors", {{"model.layers.1.mlp.switch_mlp.gate_proj.weight", 1024},
+                                         {"model.layers.1.mlp.switch_mlp.up_proj.weight", 1024},
+                                         {"model.layers.1.mlp.switch_mlp.down_proj.weight", 1024}}},
+      {"model-engram-L01.safetensors", {{"model.layers.1.engram_layer.multi_head_embedding.embedding.weight", 8192}}}};
+  nlohmann::json index = {{"weight_map", nlohmann::json::object()}};
+  size_t trunk = 0, experts = 0;
+  for (const auto& [f, ts] : files) {
+    nlohmann::json h = nlohmann::json::object();
+    size_t off = 0;
+    for (const auto& [n, b] : ts) {
+      h[n] = {{"dtype", "U8"}, {"shape", {b}}, {"data_offsets", {off, off + b}}};
+      off += b;
+      index["weight_map"][n] = f;
+    }
+    const std::string hs = h.dump();
+    const uint64_t len = hs.size();
+    const size_t total = 8 + hs.size() + off;
+    (f.rfind("model-experts", 0) == 0 ? experts : f.rfind("model-engram", 0) == 0 ? off : trunk) += total;
+    for (const std::string& d : {plan, full}) {
+      FILE* o = fopen((d + "/" + f).c_str(), "wb");
+      if (!o) continue;
+      fwrite(&len, 8, 1, o);
+      fwrite(hs.data(), 1, hs.size(), o);
+      if (d == full) {  // the data, as a download has it; the plan folder stops at the header
+        const std::vector<char> zero(off, 0);
+        fwrite(zero.data(), 1, zero.size(), o);
+      }
+      fclose(o);
+    }
+  }
+  for (const std::string& d : {plan, full})
+    if (FILE* o = fopen((d + "/config.json").c_str(), "w")) fputs(cfg.dump().c_str(), o), fclose(o);
+  if (FILE* o = fopen((full + "/model.safetensors.index.json").c_str(), "w")) fputs(index.dump().c_str(), o), fclose(o);
+  const MemPlan a = Hy4Flash::plan(plan, 1024), b = Hy4Flash::plan(full, 1024);
+  check(a.streamed == experts && b.streamed == experts, "hy4 plan: the experts' files counted as streamed from headers",
+        std::to_string(a.streamed) + " " + std::to_string(b.streamed) + " want " + std::to_string(experts));
+  check(a.weights == b.weights && a.weights >= trunk && a.store_all == b.store_all && a.store_least == b.store_least,
+        "hy4 plan: a plan folder plans as the downloaded one", std::to_string(a.weights) + " vs " + std::to_string(b.weights));
+  for (const std::string& d : {plan, full}) {
+    for (const auto& [f, _] : files) unlink((d + "/" + f).c_str());
+    unlink((d + "/config.json").c_str());
+    unlink((d + "/model.safetensors.index.json").c_str());
+    rmdir(d.c_str());
+  }
+}
+
 int main(int argc, char** argv) {
+  hy4_plan_unit();
   a4_arena_unit();
   hy4_parser_unit();
   stop_filter_unit();
