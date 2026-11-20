@@ -275,18 +275,18 @@ drawn at it, top-k and top-p not applied). Structured output is refused in its o
 denoising pass's kernels against the reference implementation on random data, and `build/clover_bench MODEL_DIR` times
 the self-speculative cycles.
 
-Tencent's [Hy4-flash](https://huggingface.co/tencent/Hy4-flash) (`hy_v4_flash`) runs from a folder of its MLX pack,
-text only (`kapitsa serve --model DIR`): the trunk in the MLX formats Kapitsa reads for Qwen3.5 (the pack's is
-8-bit), the 512 routed experts of each layer in MLX affine 3- or 4-bit with groups of 32, 64 or 128 (a format per layer,
-read from the tensors' shapes; anything else is refused) in `model-experts-*.safetensors`, and the four Engram tables in
-their own files, with the Engram hash multipliers in `config.json`. The trunk stays in memory. Every expert stays in
-memory too when the GPU's working set has room for them all after the rest (the 4-bit pack's 83.6 GB on a 128 GB Mac:
-decode 25.3 to 36.7 tok/s on the M5 Max, the logits bitwise the same); otherwise they stream from the SSD through a
-cache of 42% of the RAM, or the memory left if less (src/model/moe_a4.h; `NI_EXPERT_STORE=<GB>` sets its size). The
-Engram rows are read from their mapped files on the CPU each pass. Under the fast profile, on a Mac with matrix units,
-the experts' prefill GEMMs run on them (`NI_A4_QTM`). Past 2048 tokens the 12 full-context layers attend to the 512
-groups of 4 keys their compressed indexer selects, as the reference does (`NI_HY4_DENSE=1` attends to every key instead,
-a debugging switch).
+Tencent's [Hy4-flash](https://huggingface.co/tencent/Hy4-flash) (`hy_v4_flash`) is the catalog's `hy4` (`kapitsa serve
+--model hy4`, which downloads `nace-ai/Hy4-flash-MLX-4bit`, 133.8 GB; a folder of an MLX pack works too), text only: the
+trunk in the MLX formats Kapitsa reads for Qwen3.5 (the pack's is 8-bit), the 512 routed experts of each layer in MLX
+affine 3- or 4-bit with groups of 32, 64 or 128 (a format per layer, read from the tensors' shapes; anything else is
+refused) in `model-experts-*.safetensors`, and the four Engram tables in their own files, with the Engram hash
+multipliers in `config.json`. The trunk stays in memory. Every expert stays in memory too when the GPU's working set has
+room for them all after the rest (the 4-bit pack's 83.6 GB on a 128 GB Mac: decode 25.3 to 36.7 tok/s on the M5 Max, the
+logits bitwise the same); otherwise they stream from the SSD through a cache of 42% of the RAM, or the memory left if
+less (src/model/moe_a4.h; `NI_EXPERT_STORE=<GB>` sets its size). The Engram rows are read from their mapped files on the
+CPU each pass. Under the fast profile, on a Mac with matrix units, the experts' prefill GEMMs run on them (`NI_A4_QTM`).
+Past 2048 tokens the 12 full-context layers attend to the 512 groups of 4 keys their compressed indexer selects, as the
+reference does (`NI_HY4_DENSE=1` attends to every key instead, a debugging switch).
 Its `<think:opensource>` tags are read as reasoning; thinking off (`reasoning_effort` `none`, or `enable_thinking`
 false) renders the template's `no_think`, and `low` or `medium` its `high`, the least thinking it has. Its tool calls
 (`<tool_call:opensource>`, GLM's argument markup) come back as tool calls; `tool_choice` `required` or a named tool, and

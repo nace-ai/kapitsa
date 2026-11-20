@@ -27,7 +27,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ## 🔥 What's new
 
-- [2026/11] 🐉 **Tencent's Hy4-flash runs on a 128 GB M5 Max at 36 tok/s, and still 35 tok/s at 32K context**: mlx-lm runs out of memory on the same 4-bit weights on that Mac, and on the 3.1-bit pack it decodes at 21 tok/s short and 4.4 at 32K; prefill 970 tok/s with `--profile fast` (`kapitsa serve --model <the Hy4-flash folder>`; [numbers](bench/results/2026-11-20-m5-max-hy4/README.md#against-mlx-lm), [how](docs/usage.md#other-models)).
+- [2026/11] 🐉 **Tencent's Hy4-flash runs on a 128 GB M5 Max at 36 tok/s, and still 35 tok/s at 32K context**: mlx-lm runs out of memory on the same 4-bit weights on that Mac, and on the 3.1-bit pack it decodes at 21 tok/s short and 4.4 at 32K; prefill 970 tok/s with `--profile fast` (`kapitsa serve --model hy4`, or `kapitsa opencode --model hy4`; [numbers](bench/results/2026-11-20-m5-max-hy4/README.md#against-mlx-lm), [how](docs/usage.md#other-models)).
 - [2026/11] 🎯 **Nace quants: the 4B, 9B, 27B and 35B-A3B downloads are closer to the original model than the packs they replace, at the same size** ([numbers](#nace-quants)).
 - [2026/11] ⚡ **Qwen3.8-Flash-Next 180B writes 6% faster on an M5 Max**, with the same tokens: greedy decode 107.3 → 113.9 tok/s after three verify-kernel changes ([numbers](bench/results/2026-11-04-m5-max-flash-next/README.md)).
 - [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 304 tok/s on an M5 Max**: `kapitsa serve --model clover` ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
@@ -164,6 +164,7 @@ The most precise variant of each catalog model that runs on a Mac of each size. 
 | **Nemotron 3.5 Super-VL 120B-A12B** · `super-vl` | — | — | — | — | — | — | NVFP4 |
 | **Recursive Flint 40B-A2.5B** · `flint` | 2-bit† | 2-bit | 2-bit | 4-bit | 4-bit | 4-bit | 4-bit |
 | **Clover-35B-A3B-Preview** · `clover` | — | — | 4-bit | 4-bit | 4-bit | 4-bit | 4-bit |
+| **Hy4-flash** · `hy4` | — | 4-bit + SSD | 4-bit + SSD | 4-bit + SSD | 4-bit + SSD | 4-bit + SSD | 4-bit |
 | **Nemotron Dory1.0 4B** · `dory` | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 |
 | **Nemotron 3 Nano 4B** · `nano-4b` | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 |
 | **Nemotron Nano 9B v2** · `nano-9b` | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 |
