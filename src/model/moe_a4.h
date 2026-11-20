@@ -6,6 +6,8 @@
 #pragma once
 #include "metal/gpu.h"
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -73,15 +75,31 @@ constexpr int kRowsMax = 64;
 void enc_rows(Encoder& e, const Experts& x, const Shape& sh, int R, const Buffer& xin, const Buffer& idx,
               const Buffer& wts, const Buffer& scratch, const Buffer& y, Path path);
 
+// The arena's default size (no NI_EXPERT_STORE pin): every expert when the engine's memory budget, after what is
+// allocated, still leaves kAllKeep for a conversation's KV and scratch, and the GPU's working set, after what is
+// allocated, leaves kWsKeep; else 42% of the RAM or what the working set leaves, whichever is less. rws: the
+// recommended working set; used: the GPU memory allocated so far; budget: the engine's (0: rws less max(512 MB, rws /
+// 25), its default). *every: whether it took every expert. Pure, for api_test.
+inline constexpr size_t kWsKeep = size_t(4) << 30, kAllKeep = size_t(2) << 30;
+inline size_t default_arena(size_t rws, size_t used, size_t ram, size_t all, size_t budget, bool* every) {
+  if (!budget) budget = rws - std::max<size_t>(size_t(512) << 20, rws / 25);
+  const size_t left = rws > used + kWsKeep ? rws - used - kWsKeep : 0;
+  const size_t room = budget > used ? budget - used : 0;
+  *every = left >= all && room >= all + kAllKeep;
+  return *every ? all : std::min(size_t(0.42 * double(ram)), left);
+}
+
 // The pack's streamed experts. dir: the model folder (MLX safetensors; the planes are
 // model.layers.{L}.mlp.switch_mlp.{gate,up,down}_proj.{weight,scales,biases}, [E, out, in * bits / 32] and
 // [E, out, in / gs]). layers: the trunk layer indices that have routed experts. Each layer's formats come from its
 // planes' shapes (checked against config.json's quantization entries when the folder has one); every slot is the
 // largest layer's (a layer in a smaller format leaves the rest of its slot unused). arena_bytes 0: decide from free
-// memory (NI_EXPERT_STORE=<GB>|all overrides).
+// memory (NI_EXPERT_STORE=<GB>|all overrides; else default_arena, against budget: the engine's memory budget, 0 its
+// default).
 class Store {
  public:
-  Store(const std::string& dir, const std::vector<int>& layers, const Shape& sh, size_t arena_bytes);
+  Store(const std::string& dir, const std::vector<int>& layers, const Shape& sh, size_t arena_bytes,
+        size_t budget = 0);
   ~Store();
   // After the dispatches that write layer's routing ids (n uint32 in GPU memory); work encoded between begin and end
   // overlaps the reads. pred: ids predicted for the next MoE layer (read ahead), or nullptr. scan: a prefill chunk's.

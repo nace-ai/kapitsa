@@ -59,7 +59,8 @@ class Hy4Flash : public Qwen35 {
   static bool is_model(const std::string& dir);
   // What a run of this folder takes (the engine's memory plan): weights resident, the expert arena, activations
   static MemPlan plan(const std::string& dir, int chunk);
-  Hy4Flash(const std::string& dir, int prefill_chunk);
+  // budget: the engine's memory budget, which sizes the expert store (a4::default_arena; 0: its default)
+  Hy4Flash(const std::string& dir, int prefill_chunk, size_t budget = 0);
   ~Hy4Flash() override;
 
   std::unique_ptr<Seq> new_seq(int limit, int initial = -1) override;
@@ -122,6 +123,7 @@ class Hy4Flash : public Qwen35 {
   hy4::Hc hc_head_;
   std::deque<Tensor> split_;  // row views of split matrices (kv_a)
   std::unique_ptr<a4::Store> store_;
+  size_t budget_ = 0;  // the engine's memory budget (0: default)
   std::vector<int> moe_layers_;
   // activations (rows: tmax_)
   Buffer X_, u_, xn_, y_, post_a_, post_m_, xh_;

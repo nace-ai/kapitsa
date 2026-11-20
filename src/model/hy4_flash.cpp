@@ -52,7 +52,10 @@ bool Hy4Flash::is_model(const std::string& dir) {
          r["text_config"].value("model_type", std::string()) == "hy_v4_flash";
 }
 
-Hy4Flash::Hy4Flash(const std::string& dir, int prefill_chunk) : Qwen35(dir, prefill_chunk, NoLoad{}) { load(dir); }
+Hy4Flash::Hy4Flash(const std::string& dir, int prefill_chunk, size_t budget)
+    : Qwen35(dir, prefill_chunk, NoLoad{}), budget_(budget) {
+  load(dir);
+}
 
 Hy4Flash::~Hy4Flash() {
   if (eng_ev_) CFRelease(eng_ev_);
@@ -323,7 +326,7 @@ void Hy4Flash::load(const std::string& dir) {
     sh.k = uint32_t(t.value("num_experts_per_tok", 16));
     sh.E = uint32_t(t.value("num_local_experts", t.value("n_routed_experts", 512)));
     sh.limit = t.value("swiglu_limit", 10.0f);
-    store_ = std::make_unique<a4::Store>(dir, moe_layers_, sh, 0);
+    store_ = std::make_unique<a4::Store>(dir, moe_layers_, sh, 0, budget_);
     Gpu::get().make_resident(store_->buffers());
   }
   eng_ev_ = Gpu::get().new_shared_event();
