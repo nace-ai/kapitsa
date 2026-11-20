@@ -84,7 +84,7 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 19);  // +1: 9B mixed-format catalog policy (#493); +1: kflash_block16; +1: ane_proj_fast
+  CHECK(ni::default_count() == 20);  // +1: 9B mixed-format catalog policy (#493); +1: kflash_block16; +1: ane_proj_fast; +1: a4_qtm_fast
   // ane_proj_fast: the 27B on the Apple M6 by name (slower on the M5 Pro; the 4B was over its bar; the fast profile reads it)
   const ni::DefaultRow* proj = row("ane_proj_fast");
   CHECK(proj && proj->scope == ni::DefaultScope::kName && proj->live && proj->exclusive && proj->win_pct >= 10 &&
@@ -164,6 +164,12 @@ int main() {
   CHECK(tattn && tattn->scope == ni::DefaultScope::kMatrix && !tattn->exclusive && tattn->win_pct == 8);
   CHECK(ni::default_matches(*tattn, m5pro) && ni::default_matches(*tattn, m5max));
   CHECK(!ni::default_matches(*tattn, ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48))));
+  // a4_qtm_fast: Hy4-flash's expert prefill GEMMs on the matrix units, fast profile only; the matrix class, as tattn_fast
+  const ni::DefaultRow* a4q = row("a4_qtm_fast");
+  CHECK(a4q && a4q->knob == ni::Knob::kA4QtmFast && a4q->scope == ni::DefaultScope::kMatrix && !a4q->exclusive &&
+        a4q->win_pct == 56 && a4q->live);
+  CHECK(ni::default_matches(*a4q, m5pro) && ni::default_matches(*a4q, m5max));
+  CHECK(!ni::default_matches(*a4q, ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48))));
   const ni::DefaultRow* slices = row("gemm_slices");
   const ni::DefaultRow* hc = row("hc_wide");
   const ni::DefaultRow* moe = row("moe4_dx");

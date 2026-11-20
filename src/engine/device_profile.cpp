@@ -155,6 +155,13 @@ const DefaultRow kDefaults[] = {
     // the M5, the M6 Pro and Max (their GPUs are faster than the M6's), and the Macs without matrix units.
     {"ane_proj_fast", Knob::kAneProjFast, ModelClass::kQwen27bDense, DefaultScope::kName, "Apple M6", "on", 20, 0, true,
      "Mac mini M6 (27B); slower on the M5 Pro (-21 to -25%); fast profile only", true},
+    // Fast profile only (docs/profiles.md): Hy4-flash's routed experts' prefill GEMMs on the matrix units
+    // (src/kernels/tensor/qmt_moe_a4.metal, NI_A4_QTM; a4::Store, Hy4's alone, is the model half). The matrix class,
+    // as tattn_fast: the tile needs matrix units, and the measured gain is the expert GEMMs' simdgroup-to-tensor-unit
+    // step every M5 takes. M5 Max, kapitsa bench: prefill 4K 596 -> 930 tok/s (+56%), 16K 625 -> 989 (+58%), decode
+    // unchanged; 1,024 rows against precise: 86 top-1 flips, mean KL 0.137, inside its bar (MLX on the same pack).
+    {"a4_qtm_fast", Knob::kA4QtmFast, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 56, 58, false,
+     "M5 Max; fast profile only", true},
 };
 
 bool guard_matches(const char* id, const DeviceProfile& dev) {
