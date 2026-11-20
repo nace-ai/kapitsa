@@ -43,12 +43,12 @@ struct StoreP {
   uint32_t T, t0, pos0, Hkv, rows, ring;
 };
 struct RouteP {
-  uint32_t R, k;
+  uint32_t R, k, E, softmax, shared;
 };
 struct RouterTopkP {
   uint32_t R, D, E, k;
   float eps;
-  uint32_t write_xn, split;
+  uint32_t write_xn, split, softmax, shared;
 };
 struct AcceptP {
   uint32_t P, K;
@@ -143,8 +143,14 @@ size_t FlintMat::row_bytes() const {
 // ---- config ----
 bool Flint::is_model(const std::string& dir) {
   const auto jp = json_file(dir + "/config.json");
-  const nlohmann::json& j = *jp;
-  return j.is_object() && j.value("model_type", std::string()) == "flint";
+  const auto& j = *jp;
+  return j.is_object() && j.contains("model_type") && (j["model_type"] == "flint" || j["model_type"] == "mellum");
+}
+
+bool Flint::is_mellum(const std::string& dir) {
+  const auto jp = json_file(dir + "/config.json");
+  const auto& j = *jp;
+  return j.is_object() && j.contains("model_type") && j["model_type"] == "mellum";
 }
 
 FlintConfig Flint::read_config(const std::string& dir) {
@@ -156,6 +162,8 @@ FlintConfig Flint::read_config(const std::string& dir) {
     return it != j.end() && it->is_number() ? it->get<double>() : d;
   };
   FlintConfig c;
+  c.mellum = j.value("model_type", "") == "mellum";
+  c.router_softmax = c.mellum;
   c.hidden = int(num("hidden_size", 0));
   c.vocab = int(num("vocab_size", 0));
   c.layers = int(num("num_hidden_layers", 0));
@@ -164,28 +172,77 @@ FlintConfig Flint::read_config(const std::string& dir) {
   c.hd = int(num("head_dim", c.hq ? c.hidden / c.hq : 0));
   c.ffn = int(num("intermediate_size", 0));
   c.moe_I = int(num("moe_intermediate_size", 0));
-  c.shared_I = int(num("shared_expert_intermediate_size", 0));
+  c.shared_I = j.value("num_shared_experts", c.mellum ? 0 : 1) * c.moe_I;
+  if (j.contains("shared_expert_intermediate_size"))
+    c.shared_I = int(num("shared_expert_intermediate_size", c.shared_I));
   c.experts = int(num("num_experts", num("num_local_experts", 0)));
   c.top_k = int(num("num_experts_per_tok", 0));
   c.window = int(num("sliding_window", 0));
   c.eps = float(num("rms_norm_eps", 1e-6));
-  c.theta = num("rope_theta", 1e4);
+  c.rope_theta = num("rope_theta", 1e4);
+  c.theta = c.rope_theta;
+  if (j.contains("mlp_layer_types") && j["mlp_layer_types"].is_array()) {
+    c.dense_layers = 0;
+    for (const auto& t : j["mlp_layer_types"]) {
+      const std::string s = t.get<std::string>();
+      if (s != "dense" && s != "sparse") fatal("Flint: unknown mlp_layer_type %s", s.c_str());
+      c.mlp_kind.push_back(s == "dense" ? 'D' : 'M');
+    }
+  } else {
+    if (j.contains("mlp_only_layers") && j["mlp_only_layers"].is_array())
+      c.dense_layers = int(j["mlp_only_layers"].size());
+    for (int l = 0; l < c.layers; ++l) c.mlp_kind.push_back(l < c.dense_layers ? 'D' : 'M');
+  }
   if (j.contains("rope_parameters") && j["rope_parameters"].is_object()) {
     const auto& rp = j["rope_parameters"];
-    if (rp.value("rope_type", std::string("default")) != "default")
-      fatal("%s: Flint RoPE other than the default is not supported", dir.c_str());
-    c.theta = rp.value("rope_theta", c.theta);
+    if (rp.contains("sliding_attention") || rp.contains("full_attention")) {
+      if (rp.contains("sliding_attention") && rp["sliding_attention"].is_object()) {
+        const auto& sr = rp["sliding_attention"];
+        c.rope_theta = sr.value("rope_theta", c.rope_theta);
+        const std::string st = sr.value("rope_type", "default");
+        if (st != "default") fatal("Flint: unsupported sliding_attention rope_type %s", st.c_str());
+      }
+      if (rp.contains("full_attention") && rp["full_attention"].is_object()) {
+        const auto& fr = rp["full_attention"];
+        c.full_rope = true;
+        c.full_rope_theta = fr.value("rope_theta", c.rope_theta);
+        const std::string ft = fr.value("rope_type", "default");
+        if (ft == "yarn") {
+          c.yarn_factor = fr.value("factor", 1.0);
+          c.yarn_orig_max_pos = fr.value("original_max_position_embeddings", 8192);
+          c.yarn_beta_fast = fr.value("beta_fast", 32.0);
+          c.yarn_beta_slow = fr.value("beta_slow", 1.0);
+          if (fr.contains("attention_factor") && fr["attention_factor"].is_number()) {
+            c.full_rope_mscale = fr["attention_factor"].get<float>();
+          } else {
+            const double mscale = fr.value("mscale", 1.0);
+            c.full_rope_mscale = c.yarn_factor <= 1.0 ? 1.0f : float(0.1 * mscale * std::log(c.yarn_factor) + 1.0);
+          }
+        } else if (ft != "default") {
+          fatal("Flint: unsupported full_attention rope_type %s", ft.c_str());
+        }
+      }
+    } else {
+      c.rope_theta = rp.value("rope_theta", c.rope_theta);
+      const std::string rt = rp.value("rope_type", "default");
+      if (rt != "default") fatal("Flint: unsupported rope_type %s", rt.c_str());
+    }
   }
-  const std::string score = j.value("router_score_function", j.value("scoring_func", std::string("sigmoid")));
-  if (score != "sigmoid") fatal("%s: Flint routing by %s is not supported (sigmoid)", dir.c_str(), score.c_str());
+  c.theta = c.rope_theta;
+  if (c.mellum && (!j.value("norm_topk_prob", true) || j.value("attention_bias", false) || j.value("mlp_bias", false) ||
+                   !j.value("use_qk_norm", true) || j.value("sliding_window_only", false)))
+    fatal("Flint: unsupported Mellum config flags");
+  const std::string score =
+      j.value("router_score_function", j.value("scoring_func", std::string(c.mellum ? "softmax" : "sigmoid")));
+  if (!c.mellum && score != "sigmoid") fatal("%s: Flint routing by %s is not supported (sigmoid)", dir.c_str(), score.c_str());
+  if (c.mellum && score != "softmax") fatal("%s: Mellum routing by %s is not supported (softmax)", dir.c_str(), score.c_str());
   if (!j.value("norm_topk_prob", true)) fatal("%s: Flint without norm_topk_prob is not supported", dir.c_str());
   if (j.value("router_expert_bias", false)) fatal("%s: Flint with a router expert bias is not supported", dir.c_str());
-  if (j.value("softmax_type", std::string("learnable")) != "learnable")
+  if (!c.mellum && j.value("softmax_type", std::string("learnable")) != "learnable")
     fatal("%s: Flint attention without learned sinks is not supported", dir.c_str());
   if (j.value("tie_word_embeddings", false)) fatal("%s: Flint with tied embeddings is not supported", dir.c_str());
-  std::vector<int> norope, dense;
+  std::vector<int> norope;
   if (j.contains("no_rope_layer_indices")) norope = j["no_rope_layer_indices"].get<std::vector<int>>();
-  if (j.contains("mlp_only_layers")) dense = j["mlp_only_layers"].get<std::vector<int>>();
   const nlohmann::json lt = j.value("layer_types", nlohmann::json::array());
   for (int l = 0; l < c.layers; ++l) {
     const std::string k = l < int(lt.size()) ? lt[size_t(l)].get<std::string>() : std::string("full_attention");
@@ -193,7 +250,7 @@ FlintConfig Flint::read_config(const std::string& dir) {
       fatal("%s: layer %d is %s (Flint: sliding_attention or full_attention)", dir.c_str(), l, k.c_str());
     c.kind.push_back(k == "sliding_attention" ? 'S' : 'F');
     c.rope.push_back(std::find(norope.begin(), norope.end(), l) == norope.end());
-    c.dense.push_back(std::find(dense.begin(), dense.end(), l) != dense.end());
+    c.dense.push_back(c.is_dense(l));
   }
   if (j.contains("eos_token_id")) {
     const auto& e = j["eos_token_id"];
@@ -207,21 +264,26 @@ FlintConfig Flint::read_config(const std::string& dir) {
     c.gs = q.value("group_size", 64);
     const nlohmann::json x = j.value("mlx_export", nlohmann::json::object());
     c.embed_bits = x.is_object() ? x.value("embedding_bits", c.bits) : c.bits;
-    if (x.is_object() && x.value("routed_expert_bits", 4) != 4 && x.value("routed_expert_bits", 4) != 8)
-      fatal("%s: routed experts in %d bits (Flint: 4 or 8)", dir.c_str(), x.value("routed_expert_bits", 0));
+    if (x.is_object() && x.value("routed_expert_bits", 4) != 4 && x.value("routed_expert_bits", 4) != 6 &&
+        x.value("routed_expert_bits", 4) != 8)
+      fatal("%s: routed experts in %d bits (Flint: 4, 6 or 8)", dir.c_str(), x.value("routed_expert_bits", 0));
     for (const auto& [k, v] : q.items())  // modules kept in llama.cpp's IQ blocks (a GGUF import's routed experts)
       if (v.is_object())
         if (const uint32_t t = gguf::iq_mode_type(v.value("mode", std::string()))) c.iq[k] = t;
   } else {
     fatal("%s: an unquantized Flint checkpoint; Kapitsa runs Flint's MLX export (RecursiveSI/flint-int4)", dir.c_str());
   }
-  if ((c.bits != 4 && c.bits != 8) || c.gs != 64 || (c.embed_bits != 4 && c.embed_bits != 8))
-    fatal("%s: Flint in %d-bit group %d is not supported (MLX 4- or 8-bit group 64, as RecursiveSI/flint-int4)",
+  if ((c.bits != 4 && c.bits != 6 && c.bits != 8) || c.gs != 64 ||
+      (c.embed_bits != 4 && c.embed_bits != 6 && c.embed_bits != 8))
+    fatal("%s: Flint in %d-bit group %d is not supported (MLX 4-, 6- or 8-bit group 64, as RecursiveSI/flint-int4)",
           dir.c_str(), c.bits, c.gs);
-  if (c.hidden <= 0 || c.hidden % 256 || c.hidden > 4096 || c.vocab <= 0 || c.layers <= 0 || c.hq <= 0 || c.hkv <= 0 ||
-      c.hq % c.hkv || c.hq / c.hkv > 8 || c.hd != 128 || c.experts != 256 || c.top_k < 1 || c.top_k > 8 ||
-      c.window <= 0 || c.moe_I % 64 || c.shared_I % 64 || c.ffn % 64 ||
-      size_t(c.top_k + 1) * size_t(std::max(c.moe_I, c.shared_I)) > 7168)
+  if (int(c.kind.size()) != c.layers || int(c.mlp_kind.size()) != c.layers ||
+      c.hidden <= 0 || c.hidden % 256 || c.hidden > 4096 || c.vocab <= 0 || c.layers <= 0 || c.hq <= 0 || c.hkv <= 0 ||
+      c.hq % c.hkv || c.hq / c.hkv > 8 || c.hd != 128 || (c.experts != 256 && (!c.mellum || c.experts != 64)) ||
+      c.top_k < 1 || c.top_k > 8 || c.window <= 0 || c.moe_I % 64 ||
+      ((!c.mellum && c.shared_I <= 0) || c.shared_I < 0 || c.shared_I % 128 != 0) ||
+      (std::find(c.mlp_kind.begin(), c.mlp_kind.end(), 'D') != c.mlp_kind.end() && (c.ffn <= 0 || c.ffn % 64 != 0)) ||
+      size_t(c.top_k + (c.shared_I > 0 ? 1 : 0)) * size_t(std::max(c.moe_I, c.shared_I)) > 7168)
     fatal("%s: a Flint shape Kapitsa does not run (hidden %d, heads %d / %d of %d, %d experts top-%d, window %d)",
           dir.c_str(), c.hidden, c.hq, c.hkv, c.hd, c.experts, c.top_k, c.window);
   return c;
@@ -248,11 +310,12 @@ MemPlan Flint::plan(const std::string& path, int prefill_chunk) {
   for (const auto& [name, t] : idx.all()) m.weights += t.len;
   const size_t D = size_t(c.hidden), T = size_t(std::max(kMaxRows, prefill_chunk)), k = size_t(c.top_k);
   const size_t QKV = size_t(c.hq + 2 * c.hkv) * size_t(c.hd), QD = size_t(c.hq) * c.hd, I = size_t(c.moe_I);
+  const size_t SI = size_t(c.shared_I);
   const size_t P = T * k;
   m.activations = T * D * 4 + T * D * 2 + T * QKV * 4 + T * QD * 4 + 2 * T * size_t(c.hkv) * c.hd * 2 + T * QD * 2 +
                   2 * T * size_t(c.ffn) * 4 + T * size_t(c.ffn) * 2 + T * size_t(c.experts) * 4 + P * 4 +
-                  T * (k + 1) * 4 + 2 * P * 4 + (P + size_t(c.experts) + 1) * 12 + P * I * 2 + P * D * 4 +
-                  2 * T * size_t(c.shared_I) * 4 + T * size_t(c.shared_I) * 2 + T * D * 4 +
+                  T * (k + 1) * 4 + 2 * P * 4 + (P + size_t(c.experts) + 1) * 12 + P * I * 2 + P * D * 4 + T * D * 4 +
+                  (SI > 0 ? T * SI * 12 : 0) +
                   size_t(kMaxRows) * size_t(c.vocab) * 4;
   m.slot_state = 3 * ring_bytes(c);  // the rings and their copies in the slot's two checkpoints
   m.kv_per_pos = kv_per_pos(c);
@@ -261,7 +324,7 @@ MemPlan Flint::plan(const std::string& path, int prefill_chunk) {
   size_t params = 0;
   for (int l = 0; l < c.layers; ++l) {
     params += D * (QKV + QD);
-    if (c.dense[size_t(l)]) params += 3 * D * size_t(c.ffn);
+    if (c.is_dense(l)) params += 3 * D * size_t(c.ffn);
     else params += 3 * D * (k * I + size_t(c.shared_I));
   }
   params += D * size_t(c.vocab);
@@ -269,7 +332,7 @@ MemPlan Flint::plan(const std::string& path, int prefill_chunk) {
   // bytes: the routed experts' share of their tensors as stored (IQ blocks or 4-bit), the rest at the projections' rate
   size_t router = 0, routed = 0;
   for (int l = 0; l < c.layers; ++l) {
-    if (c.dense[size_t(l)]) continue;
+    if (c.is_dense(l)) continue;
     router += D * size_t(c.experts) * 2;
     const std::string sw = "model.layers." + std::to_string(l) + ".mlp.switch_mlp.";
     size_t b = 0;
@@ -301,7 +364,7 @@ MemPlan Flint::plan(const std::string& path, int prefill_chunk) {
   // a quantized router (an MLX pack's) also takes a bf16 copy (router_to_bf16)
   int rb = 16;
   for (int l = 0; l < c.layers; ++l)
-    if (!c.dense[size_t(l)]) {
+    if (!c.is_dense(l)) {
       if ((rb = bits_of("model.layers." + std::to_string(l) + ".mlp.gate", 16)) != 16) m.weights += router;
       break;
     }
@@ -383,8 +446,9 @@ void Flint::load(int prefill_chunk) {
     const size_t code_bits = size_t(w->shape[nd - 1]) * (w->dtype == DType::U8 ? 8 : 32);
     if (code_bits % m.K) fatal("%s: %s's codes do not match its scales", path_.c_str(), base.c_str());
     m.bits = int(code_bits / m.K);
-    if (m.bits < 3 || m.bits > 8 || m.bits == 7)
-      fatal("%s: %s is %d-bit (Flint: 4 or 8, the LM head also 6, the embedding 3)", path_.c_str(), base.c_str(), m.bits);
+    if ((m.bits != 3 && m.bits != 4 && m.bits != 6 && m.bits != 8) || m.gs != 64)
+      fatal("%s: %s is %d-bit group %d (Flint: 4, 6 or 8 group 64, the embedding also 3)", path_.c_str(), base.c_str(),
+            m.bits, m.gs);
     return m;
   };
   auto vec = [&](const std::string& name) {
@@ -397,7 +461,7 @@ void Flint::load(int prefill_chunk) {
   head_ = mat("lm_head");
   final_norm_ = vec("model.norm.weight");
   if (embed_.N != uint32_t(c.vocab) || embed_.K != uint32_t(c.hidden) || head_.N != uint32_t(c.vocab) ||
-      head_.K != uint32_t(c.hidden) || (embed_.bits != 3 && embed_.bits != 4 && embed_.bits != 8) ||
+      head_.K != uint32_t(c.hidden) || (embed_.bits != 3 && embed_.bits != 4 && embed_.bits != 6 && embed_.bits != 8) ||
       (head_.bits != 4 && head_.bits != 6 && head_.bits != 8))
     fatal("%s: embedding or LM head shape differs from the config", path_.c_str());
   layers_.resize(size_t(c.layers));
@@ -406,30 +470,45 @@ void Flint::load(int prefill_chunk) {
     const std::string p = "model.layers." + std::to_string(l) + ".";
     L.kind = c.kind[size_t(l)];
     L.rope = c.rope[size_t(l)];
-    L.dense = c.dense[size_t(l)];
+    L.dense = c.is_dense(l);
     L.in_norm = vec(p + "input_layernorm.weight");
     L.post_norm = vec(p + "post_attention_layernorm.weight");
     L.qn = vec(p + "self_attn.q_norm.weight");
     L.kn = vec(p + "self_attn.k_norm.weight");
-    L.sinks = vec(p + "self_attn.softmax_offset");
+    const Tensor* st = ws_.find(p + "self_attn.softmax_offset");
+    if (st) {
+      if (st->dtype != DType::BF16) fatal("%s: bf16 tensor %s missing", path_.c_str(), (p + "self_attn.softmax_offset").c_str());
+      L.sinks = st;
+    } else {
+      if (!zero_sink_) {
+        zero_sink_ = Gpu::get().alloc(size_t(c.hq) * 2, "flint_zero_sink", false);
+        auto* zp = static_cast<uint16_t*>(zero_sink_.ptr());
+        for (int h = 0; h < c.hq; ++h) zp[h] = 0xF189u;  // -1e30f in bf16
+        zero_sink_tensor_.buf = zero_sink_;
+        zero_sink_tensor_.dtype = DType::BF16;
+        zero_sink_tensor_.shape = {int64_t(c.hq)};
+      }
+      L.sinks = &zero_sink_tensor_;
+    }
     L.q = mat(p + "self_attn.q_proj");
     L.k = mat(p + "self_attn.k_proj");
     L.v = mat(p + "self_attn.v_proj");
     L.o = mat(p + "self_attn.o_proj");
-    // 6 bits only in the LM head: its matvec (qmvf_b6) is the one 6-bit kernel Flint runs (no 6-bit prefill GEMM)
     for (const FlintMat* m : {&L.q, &L.k, &L.v, &L.o})
-      if (m->bits == 6) fatal("%s: layer %d's attention is 6-bit (Flint: 4 or 8)", path_.c_str(), l);
+      if (m->bits != 4 && m->bits != 6 && m->bits != 8)
+        fatal("%s: layer %d's attention is %d-bit (Flint: 4, 6 or 8)", path_.c_str(), l, m->bits);
     if (L.q.N != uint32_t(c.hq * c.hd) || L.k.N != uint32_t(c.hkv * c.hd) || L.v.N != L.k.N ||
         L.o.K != uint32_t(c.hq * c.hd) || L.o.N != uint32_t(c.hidden) || L.sinks->numel() != c.hq)
       fatal("%s: layer %d's attention shapes differ from the config", path_.c_str(), l);
-    if (L.dense) {
+    if (c.is_dense(l)) {
       L.mg = mat(p + "mlp.gate_proj");
       L.mu = mat(p + "mlp.up_proj");
       L.md = mat(p + "mlp.down_proj");
       if (L.mg.N != uint32_t(c.ffn) || L.mu.N != L.mg.N || L.md.K != L.mg.N)
         fatal("%s: layer %d's MLP shapes differ from the config", path_.c_str(), l);
       for (const FlintMat* m : {&L.mg, &L.mu, &L.md})
-        if (m->bits == 6) fatal("%s: layer %d's MLP is 6-bit (Flint: 4 or 8)", path_.c_str(), l);
+        if (m->bits != 4 && m->bits != 6 && m->bits != 8)
+          fatal("%s: layer %d's MLP is %d-bit (Flint: 4, 6 or 8)", path_.c_str(), l, m->bits);
     } else {
       const uint32_t E = uint32_t(c.experts);
       L.router = mat(p + "mlp.gate");
@@ -439,16 +518,18 @@ void Flint::load(int prefill_chunk) {
       L.eg = mat(p + "mlp.switch_mlp.gate_proj", E);
       L.eu = mat(p + "mlp.switch_mlp.up_proj", E);
       L.ed = mat(p + "mlp.switch_mlp.down_proj", E);
-      L.sg = mat(p + "mlp.shared_expert.gate_proj");
-      L.su = mat(p + "mlp.shared_expert.up_proj");
-      L.sd = mat(p + "mlp.shared_expert.down_proj");
-      if (L.eg.N != uint32_t(c.moe_I) || L.ed.N != uint32_t(c.hidden) || L.sg.N != uint32_t(c.shared_I) ||
-          L.sd.K != uint32_t(c.shared_I))
+      if ((L.eg.bits != 4 && L.eg.bits != 6 && L.eg.bits != 8) || L.eg.gs != 64)
+        fatal("%s: layer %d's routed experts are in an unsupported format", path_.c_str(), l);
+      if (c.shared_I > 0) {
+        L.sg = mat(p + "mlp.shared_expert.gate_proj");
+        L.su = mat(p + "mlp.shared_expert.up_proj");
+        L.sd = mat(p + "mlp.shared_expert.down_proj");
+        if (L.sg.bits != L.su.bits || L.sg.bits != L.sd.bits || (!L.eg.iq && L.sg.bits != L.eg.bits))
+          fatal("%s: layer %d's shared expert format differs from routed experts", path_.c_str(), l);
+      }
+      if (L.eg.N != uint32_t(c.moe_I) || L.ed.N != uint32_t(c.hidden) ||
+          (c.shared_I > 0 && (L.sg.N != uint32_t(c.shared_I) || L.sd.K != uint32_t(c.shared_I))))
         fatal("%s: layer %d's MoE shapes differ from the config", path_.c_str(), l);
-      // 4-bit group-64 experts (the specialized kernels); IQ routed experts (gate and up of one type) beside a 4-bit
-      // shared expert, the shapes wfmt_iq.metal's kernels take; or a pair wfmt.metal's generic kernels have for Flint:
-      // 8-bit routed experts, or 4-bit ones, beside an 8-bit shared expert (the config's shape check holds their
-      // staged rows)
       auto all = [](std::initializer_list<const FlintMat*> ms, int bits) {
         for (const FlintMat* m : ms)
           if (m->bits != bits || m->gs != 64 || m->iq) return false;
@@ -456,9 +537,11 @@ void Flint::load(int prefill_chunk) {
       };
       const bool iq = L.eg.iq && L.eu.iq == L.eg.iq && L.ed.iq && c.hidden % 512 == 0 && c.moe_I % 256 == 0 &&
                       c.top_k + 1 <= 17;
-      const bool shared4 = all({&L.sg, &L.su, &L.sd}, 4), shared8 = all({&L.sg, &L.su, &L.sd}, 8);
-      L.moe4 = all({&L.eg, &L.eu, &L.ed}, 4) && shared4;
-      const bool gen = (all({&L.eg, &L.eu, &L.ed}, 8) || all({&L.eg, &L.eu, &L.ed}, 4)) && shared8;
+      const bool shared4 = c.shared_I == 0 || all({&L.sg, &L.su, &L.sd}, 4);
+      const bool shared8 = c.shared_I == 0 || all({&L.sg, &L.su, &L.sd}, 8);
+      L.moe4 = all({&L.eg, &L.eu, &L.ed}, 4) && (c.shared_I == 0 || shared4);
+      const bool gen = (all({&L.eg, &L.eu, &L.ed}, 8) || all({&L.eg, &L.eu, &L.ed}, 6) || all({&L.eg, &L.eu, &L.ed}, 4)) &&
+                       (c.shared_I == 0 || shared8 || shared4);
       if (!L.moe4 && !(iq && shared4) && !gen)
         fatal("%s: layer %d's experts are in formats Flint's MoE kernels do not take (4-bit group 64; IQ routed "
               "experts beside a 4-bit shared expert; 8- or 4-bit routed experts beside an 8-bit shared expert)",
@@ -467,9 +550,33 @@ void Flint::load(int prefill_chunk) {
   }
   // RoPE's inverse frequencies, 1 / theta^(2i / D) (MLX's nn.RoPE, traditional=False)
   Gpu& g = Gpu::get();
-  inv_freq_ = g.alloc(size_t(c.hd / 2) * 4, "flint_rope", false);
+  inv_freq_ = g.alloc((size_t(c.hd / 2) + 1) * 4, "flint_rope", false);
+  float* inv = static_cast<float*>(inv_freq_.ptr());
   for (int i = 0; i < c.hd / 2; ++i)
-    inv_freq_.as<float>()[i] = float(1.0 / std::pow(c.theta, double(2 * i) / double(c.hd)));
+    inv[i] = float(1.0 / std::pow(c.rope_theta, double(2 * i) / double(c.hd)));
+  inv[c.hd / 2] = 1.0f;
+  if (c.full_rope) {
+    inv_freq_full_ = g.alloc((size_t(c.hd / 2) + 1) * 4, "flint_rope_full", false);
+    float* invf = static_cast<float*>(inv_freq_full_.ptr());
+    auto corr = [&](double rot) {
+      return (double(c.hd) * std::log(double(c.yarn_orig_max_pos) / (rot * 2.0 * M_PI))) /
+             (2.0 * std::log(c.full_rope_theta));
+    };
+    const double low = std::max(std::floor(corr(c.yarn_beta_fast)), 0.0);
+    const double high = std::min(std::ceil(corr(c.yarn_beta_slow)), double(c.hd - 1));
+    const double span = std::max(high - low, 0.001);
+    for (int i = 0; i < c.hd / 2; ++i) {
+      const double pf = std::pow(c.full_rope_theta, 2.0 * i / c.hd);
+      if (c.yarn_factor > 0.0) {
+        const double ramp = std::clamp((double(i) - low) / span, 0.0, 1.0);
+        const double extrap = 1.0 - ramp;
+        invf[i] = float((1.0 - extrap) / (c.yarn_factor * pf) + extrap / pf);
+      } else {
+        invf[i] = float(1.0 / pf);
+      }
+    }
+    invf[c.hd / 2] = c.full_rope_mscale;
+  }
   alloc_buffers();
   load_iq_experts();
   g.make_resident(ws_.buffers());
@@ -621,10 +728,12 @@ void Flint::alloc_prefill() {
   ntiles_ = g.alloc(16, "flint_ntiles");
   ehh_ = g.alloc(P * size_t(c.moe_I) * 2, "flint_ehh");
   yd_ = g.alloc(P * D * 4, "flint_yd");
-  sgb_ = g.alloc(T * SI * 4, "flint_sgb");
-  sub_ = g.alloc(T * SI * 4, "flint_sub");
-  shh_ = g.alloc(T * SI * 2, "flint_shh");
   ys_ = g.alloc(T * D * 4, "flint_ys");
+  if (SI > 0) {
+    sgb_ = g.alloc(T * SI * 4, "flint_sgb");
+    sub_ = g.alloc(T * SI * 4, "flint_sub");
+    shh_ = g.alloc(T * SI * 2, "flint_shh");
+  }
   pscale_ = g.alloc(T * 4, "flint_pscale");
   prefill_alloc_ = true;
 }
@@ -779,7 +888,8 @@ std::string Flint::disk_format() const {
   char b[256];
   // As with Qwen35's: the rows' precision is part of the format, so the two layouts (and an f16-KV build's cache) get
   // separate SSD prefix-cache namespaces
-  snprintf(b, sizeof b, "flint %s; K, V %s [%d][cap][%d]%s; rings of %d; %s",
+  snprintf(b, sizeof b, "%s %s; K, V %s [%d][cap][%d]%s; rings of %d; %s",
+           cfg_.mellum ? "mellum:" : "flint:",
            std::string(cfg_.kind.begin(), cfg_.kind.end()).c_str(), kv_i8() ? "i8" : "f16", cfg_.hkv,
            int(kv_row_bytes(cfg_.hd)), kv_i8() ? " (int8 codes, an f32 scale a row)" : "", ring_rows_,
            formats_summary().c_str());
@@ -805,7 +915,7 @@ void Flint::disk_state(const Seq& s, const Checkpoint* ck, std::vector<Buffer>& 
 void Flint::enc_embed(Encoder& e, const Buffer& tokens, int tok_off, int R, const Buffer& out) {
   const uint32_t D = uint32_t(cfg_.hidden);
   const kp::Embed ep{D, uint32_t(embed_.gs), uint32_t(tok_off)};
-  e.use(pipe(embed_.bits == 4 ? std::string("embed_q4") : "embed_f" + std::to_string(embed_.bits) + "g64"));
+  e.use(pipe(embed_.bits == 4 ? std::string("embed_q4") : embed_.bits == 6 ? "embed_f6g64" : "embed_f" + std::to_string(embed_.bits) + "g64"));
   e.buf(0, embed_.w->buf);
   e.buf(1, embed_.s->buf);
   e.buf(2, embed_.b->buf);
@@ -820,9 +930,8 @@ void Flint::enc_mv(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, in
   if (segs.empty() || segs.size() > 4 || R < 1 || R > kMaxRows || (gu && segs.size() != 2)) fatal("Flint: bad matvec");
   const int bits = segs[0].M->bits;
   const uint32_t K = segs[0].M->K;
-  for (const Seg& s : segs)  // 4/8-bit group 64, or one 6-bit matrix (a GGUF import's LM head, qmvf_b6)
-    if (s.M->bits != bits || s.M->K != K || (bits != 4 && bits != 8 && !(bits == 6 && segs.size() == 1 && !gu)) ||
-        s.M->gs != 64)
+  for (const Seg& s : segs)  // 4/8-bit group 64, or 6-bit
+    if (s.M->bits != bits || s.M->K != K || (bits != 4 && bits != 6 && bits != 8) || s.M->gs != 64)
       fatal("Flint: matvec segments in another format than 4/8-bit group 64 (bf16 checkpoints are not wired yet)");
   // one threadgroup per token row and 8 weight rows (2 simdgroups x 4 rows), the rows of a weight block adjacent
   constexpr int rows = 4, nsg = 2;
@@ -879,6 +988,10 @@ void Flint::enc_gemm(Encoder& e, const FlintMat& W, const Buffer& xh, const Buff
     if (M <= 8) n = "qrf_f16_m8_n64", bm = 8, bn = 64, th = 64;
     else if (M < 64 || W.N <= 64) n = "qrf_f16_m16_n64", bm = 16, bn = 64;
     else n = "qrf_f16_m32_n128";
+  } else if (W.bits == 6) {
+    if (M <= 8) n = "qrf_f6g64_m8_n64", bm = 8, bn = 64, th = 64;
+    else if (M <= 16) n = "qrf_f6g64_m16_n64", bm = 16, bn = 64;
+    else n = "qrf_f6g64_m32_n128";
   } else if (W.bits == 4 && qmt_ && M >= 64) {
     n = "qmt_m64_n64", bm = 64, bn = 64;
   } else if (W.bits == 4) {
@@ -900,19 +1013,19 @@ void Flint::enc_gemm(Encoder& e, const FlintMat& W, const Buffer& xh, const Buff
   e.dispatch((W.N + bn - 1) / bn, (uint32_t(M) + bm - 1) / bm, 1, th);
 }
 
-const float* Flint::rope_cs(int pos) {
-  if (pos != rope_pos_) {
-    const int n = cfg_.hd / 2;
-    rope_cs_.resize(size_t(2 * n));
-    const float* inv = inv_freq_.as<float>();
-    for (int i = 0; i < n; ++i) {
-      const float ang = float(pos) * inv[i];  // as flint_prep's
-      rope_cs_[size_t(2 * i)] = float(std::cos(double(ang)));
-      rope_cs_[size_t(2 * i + 1)] = float(std::sin(double(ang)));
+const float* Flint::rope_cs(int pos, bool full) {
+  const int idx = full && cfg_.full_rope ? 1 : 0;
+  if (pos != rope_cs_pos_[idx]) {
+    const float* inv = static_cast<const float*>((idx ? inv_freq_full_ : inv_freq_).ptr());
+    const float msc = idx ? cfg_.full_rope_mscale : 1.0f;
+    for (int i = 0; i < cfg_.hd / 2; ++i) {
+      const float ang = float(pos) * inv[i];
+      rope_cs_[idx][size_t(2 * i)] = std::cos(ang) * msc;
+      rope_cs_[idx][size_t(2 * i + 1)] = std::sin(ang) * msc;
     }
-    rope_pos_ = pos;
+    rope_cs_pos_[idx] = pos;
   }
-  return rope_cs_.data();
+  return rope_cs_[idx].data();
 }
 
 // One layer of R <= kMaxRows rows (decode, verify, short prompts): x_ in place
@@ -920,6 +1033,10 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
   const FlintConfig& c = cfg_;
   const FlintLayer& L = layers_[size_t(li)];
   const uint32_t QD = uint32_t(c.hq * c.hd), KD = uint32_t(c.hkv * c.hd), QKV = QD + 2 * KD;
+  const bool full = L.kind == 'F';
+  const uint32_t d2_rope = L.rope || (full && c.full_rope) ? 1u : 0u;
+  const uint32_t prep_rope = !full ? 1u : (c.full_rope ? (c.full_rope_mscale != 1.0f ? 2u : 1u) : 0u);
+  const Buffer& inv_buf = full && c.full_rope ? inv_freq_full_ : inv_freq_;
   const bool ring = L.kind == 'S';
   const uint32_t rows = uint32_t(cache_rows(s, li));
   if (!s.kc[size_t(li)]) fatal("Flint: layer %d's cache is not allocated", li);
@@ -947,13 +1064,13 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
       uint32_t pos, Hq, Hkv, rows, ring, rope, k0, tps, S;
       float eps, scale;
       uint32_t split;
-    } ap{uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring ? 1u : 0u, L.rope ? 1u : 0u, k0, tps, S, c.eps,
+    } ap{uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring ? 1u : 0u, d2_rope, k0, tps, S, c.eps,
          1.0f / std::sqrt(float(c.hd)), split_ ? 1u : 0u};
     e.use(pipe(small_tiles() ? "flint_attn_d2_t16" : "flint_attn_d2"));
     e.buf(0, qkv_);
     e.buf(1, L.qn->buf);
     e.buf(2, L.kn->buf);
-    e.bytes(3, rope_cs(pos0), size_t(c.hd) * 4);
+    e.bytes(3, rope_cs(pos0, full), size_t(c.hd) * 4);
     e.buf(4, s.kc[size_t(li)]);
     e.buf(5, s.vc[size_t(li)]);
     e.buf(6, L.sinks->buf);
@@ -974,17 +1091,17 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
     }
   } else {
     const PrepP pp{uint32_t(R), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring ? 1u : 0u,
-                   L.rope ? 1u : 0u, 0, QKV, c.eps, 0};
+                   prep_rope, 0, QKV, c.eps, 0};
     e.use(pipe("flint_prep"));
     e.buf(0, qkv_);
     e.buf(1, q_);
     e.buf(2, L.qn->buf);
     e.buf(3, L.kn->buf);
-    e.buf(4, inv_freq_);
+    e.buf(4, inv_buf);
     e.buf(5, s.kc[size_t(li)]);
     e.buf(6, s.vc[size_t(li)]);
     e.val(7, pp);
-    e.buf(8, inv_freq_);  // (no tree)
+    e.buf(8, inv_buf);  // (no tree)
     e.dispatch(uint32_t(c.hq + 2 * c.hkv), uint32_t(R), 1, 128);
     // keys [k0, pos0 + R) in chunks: one per GPU core and kv head, at least 64 keys, at most 64 chunks
     const uint32_t Lk = uint32_t(pos0 + R) - k0;
@@ -1025,7 +1142,7 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
   }
   enc_mv(e, {{&L.o, x_, true}}, ao_, R, nullptr);
   // MLP
-  if (L.dense) {
+  if (c.is_dense(li)) {
     enc_mv(e, {{&L.mg, mh_}, {&L.mu, mh_}}, x_, R, L.post_norm, 0, true);
     enc_mv(e, {{&L.md, x_, true}}, mh_, R, nullptr);
   } else {
@@ -1040,7 +1157,8 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
   const uint32_t D = uint32_t(c.hidden), E = uint32_t(c.experts), k = uint32_t(c.top_k);
   const uint32_t I = uint32_t(std::max(c.moe_I, c.shared_I));
   const kp::Moe mp{D, uint32_t(c.moe_I), uint32_t(c.shared_I), k, c.eps};
-  if (R == 1 && !small_tiles() && D == 2048 && L.moe4) {
+  const bool fused_shared = c.shared_I > 0 && R == 1 && L.moe4 && c.hidden == 2048;
+  if (fused_shared && !small_tiles()) {
     // one decode row: the router with the shared expert's gate / up (its last threadgroup routes; the router's
     // latency overlaps the shared expert's weights; its router rows are 2048 wide, so another hidden size takes the
     // rows' path below), the routed experts' gate / up, then the down products of every slot into the residual
@@ -1082,7 +1200,8 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
   }
   // logits, top-k and the normalized rows in one dispatch (the last threadgroup to finish routes)
   constexpr uint32_t rnsg = 4;
-  const RouterTopkP rp{uint32_t(R), D, E, k, c.eps, 1, split_ ? 1u : 0u};
+  const RouterTopkP rp{uint32_t(R), D, E, k, c.eps, (!L.eg.iq && L.moe4 && small_tiles()) ? 0u : 1u,
+                       split_ ? 1u : 0u, c.router_softmax ? 1u : 0u, c.shared_I > 0 ? 1u : 0u};
   e.use(pipe("flint_router_topk"));
   e.buf(0, x_);
   e.buf(1, L.post_norm->buf);
@@ -1109,6 +1228,10 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
     enc_moe_g_rows(e, L, R);
     return;
   }
+  const FlintMat& sg = c.shared_I > 0 ? L.sg : L.eg;
+  const FlintMat& su = c.shared_I > 0 ? L.su : L.eu;
+  const FlintMat& sd = c.shared_I > 0 ? L.sd : L.ed;
+  const uint32_t nslots = c.shared_I > 0 ? uint32_t(c.top_k + 1) : uint32_t(c.top_k);
   if (small_tiles()) {
     // under GPU shader validation, which doubles a kernel's threadgroup memory (moe_gate_up3's 16 KB of staged input,
     // moe_down2_w's and moe4_down's 28 KB of staged hidden rows): the first decode kernels, which stage nothing (the
@@ -1119,21 +1242,21 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
       e.use(pipe("moe_gate_up"));
       e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
       e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
-      e.buf(6, L.sg.w->buf); e.buf(7, L.sg.s->buf); e.buf(8, L.sg.b->buf);
-      e.buf(9, L.su.w->buf); e.buf(10, L.su.s->buf); e.buf(11, L.su.b->buf);
+      e.buf(6, sg.w->buf); e.buf(7, sg.s->buf); e.buf(8, sg.b->buf);
+      e.buf(9, su.w->buf); e.buf(10, su.s->buf); e.buf(11, su.b->buf);
       e.buf(12, x_, xo); e.buf(13, L.post_norm->buf); e.buf(14, eidx_, size_t(r) * k * 4); e.buf(15, eh_);
       e.val(16, mp);
-      e.dispatch((I + 4 * nsg - 1) / (4 * nsg), k + 1, 1, 32 * nsg);
+      e.dispatch((I + 4 * nsg - 1) / (4 * nsg), nslots, 1, 32 * nsg);
       e.use(pipe("moe_down"));
       e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
-      e.buf(3, L.sd.w->buf); e.buf(4, L.sd.s->buf); e.buf(5, L.sd.b->buf);
+      e.buf(3, sd.w->buf); e.buf(4, sd.s->buf); e.buf(5, sd.b->buf);
       e.buf(6, eh_); e.buf(7, eidx_, size_t(r) * k * 4); e.buf(8, ewts_, size_t(r) * (k + 1) * 4); e.buf(9, x_, xo);
       e.val(10, mp);
       e.dispatch((D + 4 * nsg - 1) / (4 * nsg), 1, 1, 32 * nsg);
     }
     return;
   }
-  if (R <= verify_rows() && (k + 1) * I <= 7168) {
+  if (R <= verify_rows() && nslots * I <= 7168) {
     // 2-8 rows (a prompt-lookup or draft verify): the distinct experts of the rows' top-k,
     // each one's gate / up for the rows that chose it (their threadgroups adjacent: the weights shared through the
     // cache), then every row's down products (moe4_*, the decode kernels' arithmetic: moe_gate_up3's and
@@ -1150,16 +1273,16 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
     e.use(pipe("moe4_gate_up"));
     e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
     e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
-    e.buf(6, L.sg.w->buf); e.buf(7, L.sg.s->buf); e.buf(8, L.sg.b->buf);
-    e.buf(9, L.su.w->buf); e.buf(10, L.su.s->buf); e.buf(11, L.su.b->buf);
+    e.buf(6, sg.w->buf); e.buf(7, sg.s->buf); e.buf(8, sg.b->buf);
+    e.buf(9, su.w->buf); e.buf(10, su.s->buf); e.buf(11, su.b->buf);
     e.buf(12, xn_); e.buf(13, eh_);
     e.val(14, mp);
     e.buf(15, ue); e.buf(16, umask); e.buf(17, uslot); e.buf(18, un);
     e.val(19, uint32_t(R));
-    e.dispatch(uint32_t(R), (I + 15) / 16, uint32_t(R) * k + 1, 256);
+    e.dispatch(uint32_t(R), (I + 15) / 16, uint32_t(R) * k + (c.shared_I > 0 ? 1u : 0u), 256);
     e.use(pipe("moe4_down"));
     e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
-    e.buf(3, L.sd.w->buf); e.buf(4, L.sd.s->buf); e.buf(5, L.sd.b->buf);
+    e.buf(3, sd.w->buf); e.buf(4, sd.s->buf); e.buf(5, sd.b->buf);
     e.buf(6, eh_); e.buf(7, eidx_); e.buf(8, ewts_); e.buf(9, x_);
     e.val(10, mp);
     e.dispatch(uint32_t(R), (D + 15) / 16, 1, 256);
@@ -1173,15 +1296,15 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
     e.use(pipe("moe_gate_up3_r2"));
     e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
     e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
-    e.buf(6, L.sg.w->buf); e.buf(7, L.sg.s->buf); e.buf(8, L.sg.b->buf);
-    e.buf(9, L.su.w->buf); e.buf(10, L.su.s->buf); e.buf(11, L.su.b->buf);
+    e.buf(6, sg.w->buf); e.buf(7, sg.s->buf); e.buf(8, sg.b->buf);
+    e.buf(9, su.w->buf); e.buf(10, su.s->buf); e.buf(11, su.b->buf);
     e.buf(12, xn_, xo); e.buf(13, rlog_); e.buf(14, rlog_); e.buf(15, eh_);
     e.val(16, mp);
     e.buf(17, eidx_, size_t(r) * k * 4); e.buf(18, ewts_, size_t(r) * (k + 1) * 4); e.val(19, E);
-    e.dispatch((I + rows * nsg - 1) / (rows * nsg), k + 1, 1, 32 * nsg);
+    e.dispatch((I + rows * nsg - 1) / (rows * nsg), nslots, 1, 32 * nsg);
     e.use(pipe("moe_down2_w"));
     e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
-    e.buf(3, L.sd.w->buf); e.buf(4, L.sd.s->buf); e.buf(5, L.sd.b->buf);
+    e.buf(3, sd.w->buf); e.buf(4, sd.s->buf); e.buf(5, sd.b->buf);
     e.buf(6, eh_); e.buf(7, eidx_, size_t(r) * k * 4); e.buf(8, ewts_, size_t(r) * (k + 1) * 4); e.buf(9, x_, xo);
     e.val(10, mp);
     e.dispatch((D + rows * nsg - 1) / (rows * nsg), 1, 1, 32 * nsg);
@@ -1200,6 +1323,9 @@ void Flint::enc_layer_prefill(Encoder& e, Seq& s, int li, int pos0, int T) {
   const FlintConfig& c = cfg_;
   const FlintLayer& L = layers_[size_t(li)];
   const uint32_t QD = uint32_t(c.hq * c.hd), KD = uint32_t(c.hkv * c.hd), QKV = QD + 2 * KD;
+  const bool full = L.kind == 'F';
+  const uint32_t prep_rope = !full ? 1u : (c.full_rope ? (c.full_rope_mscale != 1.0f ? 2u : 1u) : 0u);
+  const Buffer& inv_buf = full && c.full_rope ? inv_freq_full_ : inv_freq_;
   const bool ring = L.kind == 'S';
   const uint32_t rows = uint32_t(cache_rows(s, li));
   if (!s.kc[size_t(li)]) fatal("Flint: layer %d's cache is not allocated", li);
@@ -1208,18 +1334,18 @@ void Flint::enc_layer_prefill(Encoder& e, Seq& s, int li, int pos0, int T) {
   enc_gemm(e, L.q, pxh_, pqkv_, T, false, QKV);
   enc_gemm(e, L.k, pxh_, pqkv_.view(size_t(QD) * 4, pqkv_.size - size_t(QD) * 4), T, false, QKV);
   enc_gemm(e, L.v, pxh_, pqkv_.view(size_t(QD + KD) * 4, pqkv_.size - size_t(QD + KD) * 4), T, false, QKV);
-  const PrepP pp{uint32_t(T), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), uint32_t(T), 0, L.rope ? 1u : 0u, 1,
+  const PrepP pp{uint32_t(T), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), uint32_t(T), 0, prep_rope, 1,
                  QKV, c.eps, 0};
   e.use(pipe("flint_prep"));
   e.buf(0, pqkv_);
   e.buf(1, pq_);
   e.buf(2, L.qn->buf);
   e.buf(3, L.kn->buf);
-  e.buf(4, inv_freq_);
+  e.buf(4, inv_buf);
   e.buf(5, pck_);
   e.buf(6, pcv_);
   e.val(7, pp);
-  e.buf(8, inv_freq_);  // (no tree)
+  e.buf(8, inv_buf);  // (no tree)
   e.dispatch(uint32_t(c.hq + 2 * c.hkv), uint32_t(T), 1, 128);
   const AttnPfP ap{uint32_t(T), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring ? 1u : 0u,
                    ring ? uint32_t(c.window) : 0u, 1.0f / std::sqrt(float(c.hd))};
@@ -1251,7 +1377,7 @@ void Flint::enc_layer_prefill(Encoder& e, Seq& s, int li, int pos0, int T) {
   e.dispatch(uint32_t(T) - t0, 2 * uint32_t(c.hkv), 1, 32);
   enc_gemm(e, L.o, pao_, px_, T, true);
   enc_rows_half(e, px_, L.post_norm, pxh_, T);
-  if (L.dense) {
+  if (c.is_dense(li)) {
     enc_gemm(e, L.mg, pxh_, phg_, T, false);
     enc_gemm(e, L.mu, pxh_, phu_, T, false);
     enc_swiglu(e, phg_, phu_, phh_, T, L.mg.N, 2);
@@ -1282,7 +1408,7 @@ void Flint::enc_moe_prefill(Encoder& e, const FlintLayer& L, int T) {
   const bool qtm = qtm_env && qmt_ && qtm_fits(L.eg) && qtm_fits(L.eu) && qtm_fits(L.ed);
   const uint32_t bm = qtm ? 64 : 16;
   enc_gemm(e, L.router, pxh_, prlog_, T, false);
-  const RouteP tp{uint32_t(T), k};
+  const RouteP tp{uint32_t(T), k, E, c.router_softmax ? 1u : 0u, c.shared_I > 0 ? 1u : 0u};
   e.use(pipe("flint_route"));
   e.buf(0, prlog_);
   e.buf(1, pidx_);
@@ -1291,7 +1417,7 @@ void Flint::enc_moe_prefill(Encoder& e, const FlintLayer& L, int T) {
   e.dispatch((uint32_t(T) + 7) / 8, 1, 1, 256);
   if (L.eg.iq) {
     enc_moe_iq_prefill(e, L, T);
-  } else if (L.eg.bits != 4) {
+  } else if (L.eg.bits == 6 || L.eg.bits == 8) {
     enc_moe_g_prefill(e, L, T);
   } else {
     const kp::Bucket bp{P, k, E, bm};
@@ -1335,14 +1461,16 @@ void Flint::enc_moe_prefill(Encoder& e, const FlintLayer& L, int T) {
     moe_gemm(L.ed, ehh_, yd_, spair_);
   }
   // the shared expert on every row
-  enc_gemm(e, L.sg, pxh_, sgb_, T, false);
-  enc_gemm(e, L.su, pxh_, sub_, T, false);
-  enc_swiglu(e, sgb_, sub_, shh_, T, L.sg.N, 1);
-  enc_gemm(e, L.sd, shh_, ys_, T, false);
+  if (c.shared_I > 0) {
+    enc_gemm(e, L.sg, pxh_, sgb_, T, false);
+    enc_gemm(e, L.su, pxh_, sub_, T, false);
+    enc_swiglu(e, sgb_, sub_, shh_, T, L.sg.N, 1);
+    enc_gemm(e, L.sd, shh_, ys_, T, false);
+  }
   const kp::Combine cp{D, k};
   e.use(pipe("moe_combine"));
   e.buf(0, yd_);
-  e.buf(1, ys_);
+  e.buf(1, c.shared_I > 0 ? ys_ : yd_);
   e.buf(2, pwts_);
   e.buf(3, px_);
   e.val(4, cp);
@@ -1418,38 +1546,42 @@ void Flint::enc_moe_iq_prefill(Encoder& e, const FlintLayer& L, int T) {
   e.dispatch(D / 64, max_tiles, 1, 128);
 }
 
-// Experts in another MLX format (8-bit routed experts, or 4-bit ones, beside an 8-bit shared expert) of R <= kMaxRows
+// Experts in another MLX format (8- or 6-bit routed experts, or 4-bit ones beside an 8-bit shared expert) of R <= kMaxRows
 // rows after flint_router_topk (xn_, eidx_, ewts_; the ungated shared expert's weight 1): wfmt.metal's per-row kernels
 // with the shared expert as slot k (the pairs of Qwen3.5's moe_rows_kernel), the down products of every slot into the
-// residual (the _w form: (k + 1) x 1024 staged floats, Flint's 7 x 1024)
+// residual (the _w form: (k + 1) x 1024 staged floats, Flint's 7 x 1024, or k x 896 for Mellum)
 void Flint::enc_moe_g_rows(Encoder& e, const FlintLayer& L, int R) {
   const FlintConfig& c = cfg_;
   const uint32_t D = uint32_t(c.hidden), k = uint32_t(c.top_k), I = uint32_t(std::max(c.moe_I, c.shared_I));
-  const std::string pair = "f" + std::to_string(L.eg.bits) + "g64_f" + std::to_string(L.sg.bits) + "g64";
+  const FlintMat& sg = c.shared_I > 0 ? L.sg : L.eg;
+  const FlintMat& su = c.shared_I > 0 ? L.su : L.eu;
+  const FlintMat& sd = c.shared_I > 0 ? L.sd : L.ed;
+  const uint32_t nslots = c.shared_I > 0 ? uint32_t(c.top_k + 1) : uint32_t(c.top_k);
+  const std::string pair = "f" + std::to_string(L.eg.bits) + "g64_f" + std::to_string(sg.bits) + "g64";
   const kp::Moe mp{D, uint32_t(c.moe_I), uint32_t(c.shared_I), k, c.eps};
   constexpr uint32_t rows = 2, nsg = 8;
   e.use(pipe("moeg_gu_rows_" + pair));
   e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
   e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
-  e.buf(6, L.sg.w->buf); e.buf(7, L.sg.s->buf); e.buf(8, L.sg.b->buf);
-  e.buf(9, L.su.w->buf); e.buf(10, L.su.s->buf); e.buf(11, L.su.b->buf);
+  e.buf(6, sg.w->buf); e.buf(7, sg.s->buf); e.buf(8, sg.b->buf);
+  e.buf(9, su.w->buf); e.buf(10, su.s->buf); e.buf(11, su.b->buf);
   e.buf(12, xn_); e.buf(13, eh_);
   e.val(14, mp);
   e.buf(15, eidx_);
-  e.dispatch((I + rows * nsg - 1) / (rows * nsg), k + 1, uint32_t(R), 32 * nsg);
-  const kp::MoeRowsDown dp{D, uint32_t(c.moe_I), uint32_t(c.shared_I), k, uint32_t(L.sd.bits)};
+  e.dispatch((I + rows * nsg - 1) / (rows * nsg), nslots, uint32_t(R), 32 * nsg);
+  const kp::MoeRowsDown dp{D, uint32_t(c.moe_I), uint32_t(c.shared_I), k, uint32_t(sd.bits)};
   e.use(pipe("moeg_down_rows_" + pair + "_w"));
   e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
-  e.buf(3, L.sd.w->buf); e.buf(4, L.sd.s->buf); e.buf(5, L.sd.b->buf);
+  e.buf(3, sd.w->buf); e.buf(4, sd.s->buf); e.buf(5, sd.b->buf);
   e.buf(6, eh_); e.buf(7, eidx_); e.buf(8, ewts_); e.buf(9, x_);
   e.val(10, dp);
   e.dispatch((D + rows * nsg - 1) / (rows * nsg), uint32_t(R), 1, 32 * nsg);
 }
 
-// 8-bit routed experts' prefill after flint_route: the IQ experts' pipeline on wfmt.metal's generic kernels. The (row,
-// expert) pairs bucketed by expert into tiles of 32 rows (moe_bucket3), gate / up as fp32 products
-// (qrmf_gu_f8g64_m32_n64_f32), stored as half rows scaled where they would overflow (flint_swiglu_scaled mode 3: the
-// scale goes into the pair's routing weight), and the down products into yd_ by pair id (qrmf_dn_f8g64_m32_n128)
+// 8- or 6-bit routed experts' prefill after flint_route: the IQ experts' pipeline on wfmt.metal's generic kernels. The
+// (row, expert) pairs bucketed by expert into tiles of 32 rows (moe_bucket3), gate / up as fp32 products
+  // (qrmf_gu_f{6,8}g64_m32_n64_f32), stored as half rows scaled where they would overflow (flint_swiglu_scaled mode 3: the
+  // scale goes into the pair's routing weight), and the down products into yd_ by pair id (qrmf_dn_f{6,8}g64_m32_n128)
 void Flint::enc_moe_g_prefill(Encoder& e, const FlintLayer& L, int T) {
   const FlintConfig& c = cfg_;
   const uint32_t D = uint32_t(c.hidden), E = uint32_t(c.experts), k = uint32_t(c.top_k), I = uint32_t(c.moe_I);
@@ -1467,7 +1599,7 @@ void Flint::enc_moe_g_prefill(Encoder& e, const FlintLayer& L, int T) {
     return kp::Qmm2{W.N, W.K, W.K, W.N, uint32_t(W.gs), uint32_t(size_t(W.N) * W.row_bytes() / 4),
                     W.N * (W.K / uint32_t(W.gs)), E};
   };
-  e.use(pipe("qrmf_gu_f8g64_m32_n64_f32"));
+  e.use(pipe(L.eg.bits == 6 ? "qrmf_gu_f6g64_m32_n64_f32" : "qrmf_gu_f8g64_m32_n64_f32"));
   e.buf(0, pxh_);
   e.buf(1, L.eg.w->buf); e.buf(2, L.eg.s->buf); e.buf(3, L.eg.b->buf);
   e.buf(4, L.eu.w->buf); e.buf(5, L.eu.s->buf); e.buf(6, L.eu.b->buf);
@@ -1478,7 +1610,7 @@ void Flint::enc_moe_g_prefill(Encoder& e, const FlintLayer& L, int T) {
   e.buf(15, L.eu.w->buf); e.buf(16, L.eu.s->buf); e.buf(17, L.eu.b->buf);
   e.dispatch(I / 64, max_tiles, 1, 128);
   enc_swiglu(e, phg_, phg_, ehh_, int(P), I, 3, &spair_);
-  e.use(pipe("qrmf_dn_f8g64_m32_n128"));
+  e.use(pipe(L.eg.bits == 6 ? "qrmf_dn_f6g64_m32_n128" : "qrmf_dn_f8g64_m32_n128"));
   e.buf(0, ehh_);
   e.buf(1, L.ed.w->buf); e.buf(2, L.ed.s->buf); e.buf(3, L.ed.b->buf);
   e.buf(4, yd_);

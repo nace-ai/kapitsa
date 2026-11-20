@@ -28,6 +28,7 @@ inline std::string random_id(const char* prefix) {
 enum class CallFormat {
   QwenXml,  // <function=NAME>\n<parameter=KEY>\nVALUE\n</parameter>\n</function> (Qwen3.5+'s templates)
   Glm,      // NAME<arg_key>KEY</arg_key><arg_value>VALUE</arg_value>... (GLM-4.5's and 4.7's, Flint's)
+  Json,     // {"name": "NAME", "arguments": {...}} (Mellum 2.1's)
 };
 
 class OutputParser {
@@ -445,9 +446,15 @@ class OutputParser {
     return v.is_discarded() ? ojson(val) : v;
   }
 
-  // The body of a call (between its tags), in the parser's call format
   bool parse_tool(const std::string& body, ToolCall& tc) const {
-    return fmt_ == CallFormat::Glm ? parse_glm(body, tc) : parse_qwen(body, tc);
+    if (fmt_ == CallFormat::Glm) return parse_glm(body, tc);
+    if (fmt_ == CallFormat::Json) {
+      std::vector<ToolCall> calls;
+      if (!parse_json_calls(body, calls) || calls.size() != 1) return false;
+      tc = std::move(calls[0]);
+      return true;
+    }
+    return parse_qwen(body, tc);
   }
 
   bool parse_qwen(const std::string& body, ToolCall& tc) const {

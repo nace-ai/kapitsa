@@ -2554,7 +2554,7 @@ void unsupported_model_unit() {
       "quantization": {"group_size": 32, "bits": 4, "mode": "affine"}})"));
   check(gemma.find("is a gemma4 model") != std::string::npos && gemma.find("qwen3_5") != std::string::npos &&
             gemma.find("nemotron_h") != std::string::npos && gemma.find("flint") != std::string::npos &&
-            gemma.find("clover_moe") != std::string::npos,
+            gemma.find("mellum") != std::string::npos && gemma.find("clover_moe") != std::string::npos,
         "unsupported_model: another architecture is named by its model_type, with the ones Kapitsa runs");
   // a Flint folder is accepted, unless NI_KV_I8 asks for int8 KV rows (#1257): the refusal comes here, before an engine
   // is built or released, so a model switch leaves the old model up
@@ -2636,6 +2636,8 @@ void unsupported_model_unit() {
             .empty(),
         "unsupported_model: the vision tower's and the MTP head's formats are not the trunk's: not refused");
   check(refused(folder("bf16", "{" + text + "}")).empty(), "unsupported_model: a config with no quantization is not refused");
+  check(refused(folder("mellum", R"({"model_type": "mellum"})")).empty(),
+        "unsupported_model: a mellum config (JetBrains's Mellum 2.1) is not refused");
   // a drafter's config is another architecture here: it is refused, with its type named
   check(refused(folder("drafter", R"({"model_type": "qwen3"})")).find("is a qwen3 model") != std::string::npos,
         "unsupported_model: a qwen3 drafter config is refused by its model_type");
@@ -2666,6 +2668,155 @@ void clover_unit() {
   setenv("NI_CLOVER_DECODE", "diffusion", 1);
   check(Clover::decode_mode() == "diffusion", "clover: NI_CLOVER_DECODE=diffusion is read");
   unsetenv("NI_CLOVER_DECODE");
+}
+
+void mellum_unit() {
+  char root[] = "/tmp/kapitsa-mellum-XXXXXX";
+  check(mkdtemp(root) != nullptr, "mellum_unit: mkdtemp");
+  const std::string cfg_json = R"({
+    "architectures": ["MellumForCausalLM"],
+    "model_type": "mellum",
+    "vocab_size": 98304,
+    "hidden_size": 2304,
+    "intermediate_size": 7168,
+    "moe_intermediate_size": 896,
+    "num_hidden_layers": 6,
+    "num_attention_heads": 32,
+    "num_key_value_heads": 4,
+    "head_dim": 128,
+    "num_experts": 64,
+    "num_experts_per_tok": 8,
+    "norm_topk_prob": true,
+    "use_qk_norm": true,
+    "sliding_window": 1024,
+    "sliding_window_only": false,
+    "rms_norm_eps": 1e-6,
+    "layer_types": ["sliding_attention", "sliding_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention"],
+    "mlp_layer_types": ["sparse", "sparse", "sparse", "sparse", "sparse", "sparse"],
+    "rope_parameters": {
+      "sliding_attention": {"rope_theta": 500000.0, "rope_type": "default"},
+      "full_attention": {
+        "rope_theta": 500000.0,
+        "rope_type": "yarn",
+        "factor": 16.0,
+        "original_max_position_embeddings": 8192,
+        "beta_fast": 32.0,
+        "beta_slow": 1.0,
+        "attention_factor": 1.2772588722239782
+      }
+    },
+    "quantization": {"bits": 6, "group_size": 64}
+  })";
+  {
+    FILE* f = fopen((std::string(root) + "/config.json").c_str(), "wb");
+    fwrite(cfg_json.data(), 1, cfg_json.size(), f);
+    fclose(f);
+  }
+  check(Flint::is_model(root) && Flint::is_mellum(root), "mellum: Flint::is_model and Flint::is_mellum accept model_type mellum");
+  const FlintConfig c = Flint::read_config(root);
+  check(c.mellum && c.hidden == 2304 && c.router_softmax && c.shared_I == 0 && c.experts == 64 && c.top_k == 8,
+        "mellum: read_config sets mellum, hidden=2304, router_softmax, shared_I=0, experts=64, top_k=8");
+  check(!c.is_dense(0) && !c.is_dense(5), "mellum: mlp_layer_types sparse sets all layers to MoE");
+  check(c.full_rope && c.full_rope_theta == 500000.0 && c.yarn_factor == 16.0 && c.yarn_orig_max_pos == 8192 &&
+            std::abs(c.full_rope_mscale - float(0.1 * std::log(16.0) + 1.0)) < 1e-6f,
+        "mellum: full_attention YaRN rope_parameters parsed with mscale");
+
+  // OutputParser with CallFormat::Json (Mellum 2.1's JSON tool call format inside <tool_call>...</tool_call>)
+  const std::string tok_json = R"({
+    "model": {"type": "BPE", "vocab": {}, "merges": []},
+    "added_tokens": [
+      {"id": 0, "content": "<tool_call>", "special": true},
+      {"id": 1, "content": "{\"name\": \"read_file\", \"arguments\": {\"path\": \"src/main.cpp\", \"start_line\": 42}}", "special": false},
+      {"id": 2, "content": "</tool_call>", "special": true}
+    ]
+  })";
+  {
+    FILE* f = fopen((std::string(root) + "/tokenizer.json").c_str(), "wb");
+    fwrite(tok_json.data(), 1, tok_json.size(), f);
+    fclose(f);
+  }
+  Tokenizer tok;
+  tok.load(std::string(root) + "/tokenizer.json");
+  const ojson tools = ojson::parse(R"([{"type": "function", "function": {"name": "read_file", "parameters": {
+    "type": "object", "properties": {"path": {"type": "string"}, "start_line": {"type": "integer"}}}}}])");
+  OutputParser p(tok, -1, -1, 0, 2, false, true, tools, false, false, {}, CallFormat::Json);
+  p.push(0);
+  p.push(1);
+  ChatDelta d = p.push(2);
+  p.finish(true);
+  check(d.tool_calls.size() == 1 && d.tool_calls[0].name == "read_file" &&
+            d.tool_calls[0].arguments == R"({"path":"src/main.cpp","start_line":42})",
+        "mellum: CallFormat::Json parses Mellum 2.1 JSON tool call");
+}
+
+void flint_unit() {
+  // 1. flint_template rewrites Jinja filters for minja
+  const std::string raw_tmpl = "Hello {{ x | tojson(ensure_ascii=False) }} and {{ y | replace(\"\\x00\", \"\") }}";
+  const std::string fixed_tmpl = flint_template(raw_tmpl);
+  check(fixed_tmpl == "Hello {{ x | tojson }} and {{ y }}",
+        "flint: flint_template rewrites tojson and drops replace filter for minja");
+
+  // 2. Flint config check: model_type "flint", is_mellum is false, shared_I > 0, sigmoid routing
+  char root[] = "/tmp/kapitsa-flint-XXXXXX";
+  check(mkdtemp(root) != nullptr, "flint_unit: mkdtemp");
+  const std::string cfg_json = R"({
+    "architectures": ["FlintForCausalLM"],
+    "model_type": "flint",
+    "vocab_size": 151936,
+    "hidden_size": 2048,
+    "intermediate_size": 5632,
+    "moe_intermediate_size": 512,
+    "num_hidden_layers": 4,
+    "num_attention_heads": 16,
+    "num_key_value_heads": 2,
+    "head_dim": 128,
+    "num_experts": 256,
+    "num_experts_per_tok": 6,
+    "num_shared_experts": 1,
+    "norm_topk_prob": true,
+    "scoring_func": "sigmoid",
+    "sliding_window": 1024,
+    "softmax_type": "learnable",
+    "layer_types": ["sliding_attention", "sliding_attention", "sliding_attention", "full_attention"],
+    "quantization": {"bits": 4, "group_size": 64}
+  })";
+  {
+    FILE* f = fopen((std::string(root) + "/config.json").c_str(), "wb");
+    fwrite(cfg_json.data(), 1, cfg_json.size(), f);
+    fclose(f);
+  }
+  check(Flint::is_model(root) && !Flint::is_mellum(root),
+        "flint: Flint::is_model true and Flint::is_mellum false for model_type flint");
+  const FlintConfig c = Flint::read_config(root);
+  check(!c.mellum && !c.router_softmax && c.shared_I == 512 && c.experts == 256 && c.top_k == 6,
+        "flint: read_config keeps !mellum, !router_softmax, shared_I=512, experts=256, top_k=6");
+
+  // 3. Tool call parsing: CallFormat::Glm (Flint's GLM markup tool call format)
+  const std::string tok_json = R"({
+    "model": {"type": "BPE", "vocab": {}, "merges": []},
+    "added_tokens": [
+      {"id": 0, "content": "<tool_call>", "special": true},
+      {"id": 1, "content": "read_file<arg_key>path</arg_key><arg_value>src/main.cpp</arg_value><arg_key>start_line</arg_key><arg_value>42</arg_value>", "special": false},
+      {"id": 2, "content": "</tool_call>", "special": true}
+    ]
+  })";
+  {
+    FILE* f = fopen((std::string(root) + "/tokenizer.json").c_str(), "wb");
+    fwrite(tok_json.data(), 1, tok_json.size(), f);
+    fclose(f);
+  }
+  Tokenizer tok;
+  tok.load(std::string(root) + "/tokenizer.json");
+  const ojson tools = ojson::parse(R"([{"type": "function", "function": {"name": "read_file", "parameters": {
+    "type": "object", "properties": {"path": {"type": "string"}, "start_line": {"type": "integer"}}}}}])");
+  OutputParser p(tok, -1, -1, 0, 2, false, true, tools, false, false, {}, CallFormat::Glm);
+  p.push(0);
+  p.push(1);
+  ChatDelta d = p.push(2);
+  p.finish(true);
+  check(d.tool_calls.size() == 1 && d.tool_calls[0].name == "read_file" &&
+            d.tool_calls[0].arguments == R"({"path":"src/main.cpp","start_line":42})",
+        "flint: CallFormat::Glm parses Flint GLM markup tool call");
 }
 
 bool exists(const std::string& p) {
@@ -3163,6 +3314,8 @@ int main(int argc, char** argv) {
   kflash_lookup_unit();
   unsupported_model_unit();
   clover_unit();
+  mellum_unit();
+  flint_unit();
   norm_layout_unit();
   ollama_unit();
   drafter_report_unit();

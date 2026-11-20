@@ -1126,11 +1126,15 @@ void check_supported(HttpClient& c, const Listing& L) {
   // a Qwen 4 model the Qwen3.8-Flash-Next path does not run is refused here, before its weights (model/qwen4_config.h)
   if (qwen4_family(j))
     if (const std::string why = qwen4_refusal(j, L.repo); !why.empty()) throw Error(why);
-  if (j.value("model_type", std::string()) == "flint") {
+  if (j.value("model_type", std::string()) == "flint" || j.value("model_type", std::string()) == "mellum") {
     const json q = j.value("quantization", json::object());
-    if (!q.is_object() || (q.value("bits", 0) != 4 && q.value("bits", 0) != 8) || q.value("group_size", 0) != 64)
-      throw Error(L.repo + " is a Flint checkpoint Kapitsa does not run: it runs Flint in MLX 4- or 8-bit group 64, "
-                           "as Recursive's 4-bit export, RecursiveSI/flint-int4 (`kapitsa pull flint`).");
+    const int b = q.is_object() ? q.value("bits", 0) : 0;
+    const bool m = j.value("model_type", std::string()) == "mellum";
+    if (!q.is_object() || (b != 4 && b != 8 && (!m || b != 6)) || q.value("group_size", 0) != 64)
+      throw Error(L.repo + (m ? " is a Mellum checkpoint Kapitsa does not run: it runs Mellum in MLX 4-, 6- or 8-bit "
+                                "group 64 (`kapitsa pull mellum-2.1`)."
+                              : " is a Flint checkpoint Kapitsa does not run: it runs Flint in MLX 4- or 8-bit group 64, "
+                                "as Recursive's 4-bit export, RecursiveSI/flint-int4 (`kapitsa pull flint`)."));
     return;
   }
   if (!t.contains("linear_num_value_heads") || !t.contains("num_hidden_layers"))

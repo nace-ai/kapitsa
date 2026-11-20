@@ -126,6 +126,13 @@ json flint_pre_tokenizer() {
           {"pretokenizers", json::array({split(R"(\p{N}{1,3})"), split(cjk), split(words), bytes})}};
 }
 
+json mellum_pre_tokenizer() {
+  const json digits = {{"type", "Digits"}, {"individual_digits", true}};
+  const json bytes = {
+      {"type", "ByteLevel"}, {"add_prefix_space", false}, {"trim_offsets", true}, {"use_regex", true}};
+  return {{"type", "Sequence"}, {"pretokenizers", json::array({digits, bytes})}};
+}
+
 // `j` loaded as a tokenizer.json (from a temporary file)
 void load(ni::Tokenizer& tok, const json& j) {
   const char* tmp = getenv("TMPDIR");
@@ -325,6 +332,42 @@ int main() {
   load(other, j);
   const Case& digits = kCases[3];  // digits in threes
   check(other.encode(digits.text) != want(digits), "a Sequence other than Flint's keeps the default split");
+  check(tok.split() == ni::Tokenizer::Split::Flint, "Flint split recognized");
+  check(other.split() == ni::Tokenizer::Split::Qwen, "default split is Qwen");
+
+  // Mellum 2.1 pre-tokenizer
+  const Case kMellumCases[] = {
+      {"code and numbers",
+       "def foo(x: int = 123):\n    return x + 1\n",
+       {"def", " foo", "(", "x", ":", " int", " =", " ", "1", "2", "3", "):", "\n   ", " return", " x", " +", " ",
+        "1", "\n"}},
+      {"digits individual", "x = 123456", {"x", " =", " ", "1", "2", "3", "4", "5", "6"}},
+  };
+
+  json vocab_m = json::object();
+  auto add_m = [&](const std::string& s) {
+    const std::string t = byte_level(s);
+    if (!vocab_m.contains(t)) vocab_m[t] = int(vocab_m.size());
+  };
+  for (int b = 0; b < 256; ++b) add_m(std::string(1, char(b)));
+  for (const Case& c : kMellumCases)
+    for (size_t i = 0; i < c.pieces.size(); ++i) {
+      std::string run;
+      for (size_t k = i; k < c.pieces.size(); ++k) add_m(run += c.pieces[k]);
+    }
+  json j_m = {{"added_tokens", json::array()},
+              {"normalizer", nullptr},
+              {"pre_tokenizer", mellum_pre_tokenizer()},
+              {"model", {{"type", "BPE"}, {"vocab", vocab_m}, {"merges", json::array()}, {"ignore_merges", true}}}};
+  ni::Tokenizer mtok;
+  load(mtok, j_m);
+  check(mtok.split() == ni::Tokenizer::Split::Mellum, "tok.split() == Tokenizer::Split::Mellum");
+  for (const Case& c : kMellumCases) {
+    std::vector<int> want_ids;
+    for (const auto& p : c.pieces) want_ids.push_back(mtok.find(byte_level(p)));
+    const std::vector<int> got = mtok.encode(c.text);
+    check(got == want_ids, std::string("Mellum split: ") + c.what, "ids " + ids_str(got) + ", want " + ids_str(want_ids));
+  }
 
   check_bpe_merges();
   check_lmstudio_pretokenizer();

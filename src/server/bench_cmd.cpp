@@ -785,7 +785,7 @@ int run(const Options& o) {
   Settings s;
   s.model = ref.id.empty() ? mi.name : ref.id;
   if (o.quick) s.decode_runs = 3, s.greedy_runs = 3, s.sizes = {4000};
-  const bool flint = Flint::is_model(ref.dir);
+  const bool flint = Flint::is_model(ref.dir) && !Flint::is_mellum(ref.dir);
   s.ref_prompt_tokens = reference_prompt_tokens(flint ? "flint"
                                                 : NemotronH::is_model(ref.dir) || Dory::is_model(ref.dir) ? "nemotron-h"
                                                                                                           : "qwen3.5");

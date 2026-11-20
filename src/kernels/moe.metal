@@ -138,7 +138,8 @@ struct MoeParams {
     acc[r] = 0.0f;
     rows[r] = min(row0 + r, p.D - 1);
   }
-  for (uint slot = 0; slot <= p.k; ++slot) {
+  const uint nslots = p.SI ? p.k + 1 : p.k;
+  for (uint slot = 0; slot < nslots; ++slot) {
     const bool shared = slot == p.k;
     const uint K = shared ? p.SI : p.I;
     const uint wpr = K / 8, gpr = K / GS;
@@ -324,7 +325,8 @@ struct CombineParams {
   if (d4 >= p.D / 4) return;
   float4 acc = 0.0f;
   for (uint s = 0; s < p.k; ++s) acc += wts[t * (p.k + 1) + s] * ((const device float4*)(y + (t * p.k + s) * p.D))[d4];
-  acc += wts[t * (p.k + 1) + p.k] * ((const device float4*)(ys + t * p.D))[d4];
+  const float ws = wts[t * (p.k + 1) + p.k];
+  if (ws != 0.0f) acc += ws * ((const device float4*)(ys + t * p.D))[d4];
   ((device float4*)(x + t * p.D))[d4] += acc;
 }
 
@@ -495,12 +497,14 @@ NI_INLINE void moe_down2_impl(const device uint32_t* dw, const device bfloat* ds
                               threadgroup float* hs) {
   constexpr int ROWS = 2;
   const uint hstride = max(p.I, p.SI);
-  for (uint i = tid; i < (p.k + 1) * hstride / 4; i += ntg) ((threadgroup float4*)hs)[i] = ((const device float4*)h)[i];
+  const uint nslots = p.SI ? p.k + 1 : p.k;
+  for (uint i = tid; i < nslots * hstride / 4; i += ntg)
+    ((threadgroup float4*)hs)[i] = ((const device float4*)h)[i];
   threadgroup_barrier(mem_flags::mem_threadgroup);
   const uint row0 = (tgp * nsg + sg) * ROWS;
   if (row0 >= p.D) return;
   float tot[ROWS] = {0.0f, 0.0f};
-  for (uint slot = 0; slot <= p.k; ++slot) {
+  for (uint slot = 0; slot < nslots; ++slot) {
     const bool shared = slot == p.k;
     const uint K = shared ? p.SI : p.I;
     const uint wpr = K / 8, gpr = K / 64;

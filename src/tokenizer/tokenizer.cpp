@@ -383,6 +383,84 @@ void pretokenize_flint(const std::string& s, std::vector<std::string>& out) {
   }
 }
 
+// GPT-2 / ByteLevel(use_regex=true) pre-tokenizer:
+// 's|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+
+void pretokenize_gpt2(const std::string& s, std::vector<std::string>& out) {
+  std::vector<CP> cps = to_cps(s);
+  const size_t n = cps.size();
+  auto cp = [&](size_t i) -> uint32_t { return i < n ? cps[i].c : 0xFFFFFFFF; };
+  size_t i = 0;
+  while (i < n) {
+    size_t j = i;
+    uint32_t c = cps[i].c;
+    // 1. 's|'t|'re|'ve|'m|'ll|'d
+    if (c == '\'' && i + 1 < n) {
+      uint32_t a = cp(i + 1), b = i + 2 < n ? cp(i + 2) : 0;
+      if (a == 's' || a == 't' || a == 'm' || a == 'd') j = i + 2;
+      else if ((a == 'r' && b == 'e') || (a == 'v' && b == 'e') || (a == 'l' && b == 'l')) j = i + 3;
+    }
+    // 2.  ?\p{L}+
+    if (j == i) {
+      size_t k = (c == ' ' && i + 1 < n && is_L(cp(i + 1))) ? i + 1 : i;
+      if (is_L(cp(k))) {
+        while (k < n && is_L(cp(k))) ++k;
+        j = k;
+      }
+    }
+    // 3.  ?\p{N}+
+    if (j == i) {
+      size_t k = (c == ' ' && i + 1 < n && is_N(cp(i + 1))) ? i + 1 : i;
+      if (is_N(cp(k))) {
+        while (k < n && is_N(cp(k))) ++k;
+        j = k;
+      }
+    }
+    // 4.  ?[^\s\p{L}\p{N}]+
+    if (j == i) {
+      auto punct = [&](size_t q) {
+        if (q >= n) return false;
+        uint32_t x = cp(q);
+        return !is_space(x) && !is_L(x) && !is_N(x);
+      };
+      size_t k = (c == ' ' && punct(i + 1)) ? i + 1 : i;
+      if (punct(k)) {
+        while (punct(k)) ++k;
+        j = k;
+      }
+    }
+    // 5. \s+(?!\S)|\s+
+    if (j == i && is_space(c)) {
+      size_t k = i;
+      while (k < n && is_space(cp(k))) ++k;
+      if (k < n && k - i > 1) j = k - 1;
+      else j = k;
+    }
+    if (j == i) j = i + 1;
+    const uint32_t b0 = cps[i].off, b1 = j < n ? cps[j].off : uint32_t(s.size());
+    out.emplace_back(s.substr(b0, b1 - b0));
+    i = j;
+  }
+}
+
+// Mellum 2.1's Sequence pre-tokenizer: Digits(individual_digits=true) followed by ByteLevel(use_regex=true).
+void pretokenize_mellum(const std::string& s, std::vector<std::string>& out) {
+  std::vector<CP> cps = to_cps(s);
+  const size_t n = cps.size();
+  size_t i = 0;
+  while (i < n) {
+    if (is_N(cps[i].c)) {
+      const uint32_t b0 = cps[i].off, b1 = i + 1 < n ? cps[i + 1].off : uint32_t(s.size());
+      out.emplace_back(s.substr(b0, b1 - b0));
+      ++i;
+      continue;
+    }
+    const size_t start = i;
+    while (i < n && !is_N(cps[i].c)) ++i;
+    const uint32_t b0 = cps[start].off, b1 = i < n ? cps[i].off : uint32_t(s.size());
+    pretokenize_gpt2(s.substr(b0, b1 - b0), out);
+  }
+}
+
 std::string nfc(const std::string& s) {
   bool ascii = std::all_of(s.begin(), s.end(), [](char c) { return (unsigned char)c < 0x80; });
   if (ascii) return s;
@@ -447,9 +525,12 @@ void Tokenizer::load(const std::string& path) {
   if (pt.is_object() && pt.value("type", "") == "Sequence" && pt.contains("pretokenizers") &&
       pt["pretokenizers"].is_array()) {
     const auto& seq = pt["pretokenizers"];
-    if (seq.size() == 4 && isolated(seq[0], kFlintSplit[0]) && isolated(seq[1], kFlintSplit[1]) &&
-        isolated(seq[2], kFlintSplit[2]) && seq[3].is_object() && seq[3].value("type", "") == "ByteLevel" &&
-        !seq[3].value("add_prefix_space", true) && !seq[3].value("use_regex", true))
+    if (seq.size() == 2 && seq[0].value("type", "") == "Digits" && seq[0].value("individual_digits", false) &&
+        seq[1].value("type", "") == "ByteLevel" && seq[1].value("use_regex", true))
+      split_ = Split::Mellum;
+    else if (seq.size() == 4 && isolated(seq[0], kFlintSplit[0]) && isolated(seq[1], kFlintSplit[1]) &&
+             isolated(seq[2], kFlintSplit[2]) && seq[3].is_object() && seq[3].value("type", "") == "ByteLevel" &&
+             !seq[3].value("add_prefix_space", true) && !seq[3].value("use_regex", true))
       split_ = Split::Flint;
     else
       for (auto& p : seq)
@@ -657,7 +738,9 @@ void Tokenizer::encode_plain(const std::string& text, std::vector<int>& out) con
   if (text.empty()) return;
   std::vector<std::string> words;
   if (split_ == Split::Flint) pretokenize_flint(nfc_ ? nfc(text) : text, words);
+  else if (split_ == Split::Mellum) pretokenize_mellum(nfc_ ? nfc(text) : text, words);
   else if (split_ == Split::Tekken) pretokenize_tekken(nfc_ ? nfc(text) : text, words);
+  else if (split_ == Split::Gpt2) pretokenize_gpt2(nfc_ ? nfc(text) : text, words);
   else pretokenize(nfc_ ? nfc(text) : text, words);
   for (auto& w : words) bpe(w, out);
 }
