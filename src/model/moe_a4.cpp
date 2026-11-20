@@ -453,9 +453,11 @@ Store::Store(const std::string& dir, const std::vector<int>& layers, const Shape
     mix_s += (mix_s.empty() ? "" : ", ") + std::to_string(n) + " x " + fmt_name(a) +
              (a == b ? std::string() : " (down " + fmt_name(b) + ")");
   }
-  // the arena: the caller's bytes, NI_EXPERT_STORE=<GB>|all, else 42% of the RAM (~20 GB on a 48 GB Mac: room for
-  // the resident weights, ~8 GB for Hy4, the KV caches and the rest) or what the GPU's working set leaves after what
-  // is allocated so far and 4 GB, whichever is less; never below the cache's 3 E slots
+  // the arena: the caller's bytes, NI_EXPERT_STORE=<GB>|all, else every expert when what the GPU's working set leaves
+  // after what is allocated so far and 4 GB holds them all (Hy4-flash's 83.6 GB of 4-bit experts on a 128 GB Mac:
+  // decode 25.3 -> 36.7 tok/s, the logits bitwise the same), else 42% of the RAM (~20 GB on a 48 GB Mac: room for the
+  // resident weights, ~8 GB for Hy4, the KV caches, the Engram tables' pages and the rest) or what the working set
+  // leaves, whichever is less; never below the cache's 3 E slots. NI_EXPERT_STORE=<GB> pins the old size.
   const size_t all = layers.size() * sh.E * size_t(slot_bytes), least = size_t(3) * sh.E * size_t(slot_bytes);
   size_t bytes = arena_bytes;
   const char* why_size = "the caller's";
@@ -469,8 +471,13 @@ Store::Store(const std::string& dir, const std::vector<int>& layers, const Shape
       const size_t rws = g.recommended_working_set(), used = g.allocated_bytes(), keep = size_t(4) << 30;
       const size_t share = size_t(0.42 * double(ram_bytes()));
       const size_t left = rws > used + keep ? rws - used - keep : 0;
-      bytes = std::min(share, left);
-      why_size = "default (42% of the RAM, at most the working set less what is allocated and 4 GB)";
+      if (left >= all) {
+        bytes = all;
+        why_size = "default (every expert: the working set less what is allocated and 4 GB holds them)";
+      } else {
+        bytes = std::min(share, left);
+        why_size = "default (42% of the RAM, at most the working set less what is allocated and 4 GB)";
+      }
     }
   }
   bytes = std::min(all, std::max(bytes, least));
