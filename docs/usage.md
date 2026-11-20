@@ -294,10 +294,10 @@ strict tools, are refused, as for Flint. It decodes plainly: the checkpoint's DF
 and the SSD prefix cache does not save its conversations. One run on an M5 Pro with 48 GB (macOS 26.5.2, 19 Nov 2026),
 with the pack's 8-bit trunk and 4-bit group-64 experts on an external SSD (26% of the experts in memory), took five
 512-token prompts and generated 64 tokens greedily after each: prefill ran at 27.9-28.2 tok/s, and decode at 3.14-4.06
-tok/s over the 63 timed tokens. These are that run's timings, not a comparison between builds. On an M5 Max with 128 GB
-(macOS 26.4, every expert in memory), `kapitsa bench` at 21c5d9ce (#1360 before its review commit) measured decode at
-36.35 tok/s at T 0.6 and 32.99 greedy, and prefill at 596 tok/s at 4K and 625 at 16K
-([results](../bench/results/2026-11-20-m5-max-hy4/README.md)). The other expert formats are checked against a CPU
+tok/s over the 63 timed tokens. These are that run's timings, not a comparison between builds. On fearampgreed's
+M5 Max with 128 GB (macOS 26.4, every expert in memory, default profile), `kapitsa bench` at 21c5d9ce (#1360 before
+its review commit) measured decode at 36.35 tok/s at T 0.6 and 32.99 greedy, and prefill at 596 tok/s at 4K and 625
+at 16K ([results](../bench/results/2026-11-20-m5-max-hy4/README.md)). The other expert formats are checked against a CPU
 reference at Hy4's shape (`tools/a4moe_check.cpp`) but have not run the whole model.
 
 Refused, with a message: other architectures, other quantizations (MLX's `mxfp4`, `nvfp4` and `mxfp8` modes among
