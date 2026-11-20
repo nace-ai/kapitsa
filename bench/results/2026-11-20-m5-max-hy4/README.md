@@ -33,3 +33,29 @@ The same Mac and pack on the same day:
 
 Each row is one run of `kapitsa bench`; the rows are not an interleaved comparison. #1360's interleaved A B A B is in
 its pull request: decode 25.35 / 25.53 -> 36.69 / 36.73 tok/s, with the logits bitwise the same.
+
+## Against mlx-lm
+
+`head-to-head-mlx.json`, 2026-11-20, the same Mac. Both engines got the same prompts: a short coding question (512
+tokens out), then the first 4K, 16K and 32K tokens of `bench/corpus.txt` with a request to summarize (256 tokens out).
+Thinking was off (`reasoning_effort` `no_think`), temperature 0.6, top-p 0.95. Every prompt was cold, and each engine
+ran alone under the GPU lock.
+
+- **Kapitsa:** at b5536ba8 (#1361's head, merged as 179c099f) on the 4-bit pack, timed by its server log (every
+  prefill pass, then the decode rate).
+- **mlx-lm 0.32.2** (MLX 0.32.4), timed by `stream_generate`'s own rates. On the 4-bit pack it does not run on this
+  Mac: it warns the model "requires 126731 MB which is close to the maximum recommended size of 110100 MB", then
+  fails with Metal's "Insufficient Memory". So mlx-lm ran the 3.1-bit pack (`nace-ai/Hy4-flash-MLX-3.1bit`, 85.5 GB,
+  3.12 effective bits a weight) through that pack's own `run_mlx.load()`.
+
+| prompt | Kapitsa 4-bit, precise: prefill / decode | Kapitsa 4-bit, fast profile | mlx-lm, 3.1-bit pack |
+| --- | --- | --- | --- |
+| short (~50 tokens) | 209 / 36.4 tok/s | 225 / 35.9 | 125 / 20.8 |
+| 4K | 657 / 35.2 | 968 / 34.9 | 228 / 13.2 |
+| 16K | 699 / 35.1 | 971 / 34.1 | 300 / 7.0 |
+| 32K | 677 / 34.6 | 971 / 34.8 | 304 / 4.4 |
+
+Peak memory: Kapitsa 88 GB with every 4-bit expert in memory (the `kapitsa bench` run at 21c5d9ce above; the
+head-to-head did not record Kapitsa's peak), the Engram tables read from their mapped files on the CPU; mlx-lm 64 GB at the short prompt and 100 GB at 32K on the 3.1-bit pack.
+
+These are one run of each, not interleaved. mlx-lm's timers and Kapitsa's server log measure the same two phases.
