@@ -55,7 +55,7 @@ ran alone under the GPU lock.
 | 16K | 699 / 35.1 | 971 / 34.1 | 300 / 7.0 |
 | 32K | 677 / 34.6 | 971 / 34.8 | 304 / 4.4 |
 
-Peak memory: Kapitsa 88 GB with every 4-bit expert in memory (the Engram tables are read from their mapped files on
-the CPU); mlx-lm 64 GB at the short prompt and 100 GB at 32K on the 3.1-bit pack.
+Peak memory: Kapitsa 88 GB with every 4-bit expert in memory (the `kapitsa bench` run at 21c5d9ce above; the
+head-to-head did not record Kapitsa's peak), the Engram tables read from their mapped files on the CPU; mlx-lm 64 GB at the short prompt and 100 GB at 32K on the 3.1-bit pack.
 
 These are one run of each, not interleaved. mlx-lm's timers and Kapitsa's server log measure the same two phases.
