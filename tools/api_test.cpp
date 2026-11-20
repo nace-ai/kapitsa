@@ -27,6 +27,7 @@
 #include "engine/reasoning_memory.h"
 #include "engine/tool_args.h"
 #include "model/kflash_wrap.h"
+#include "model/moe_a4.h"
 #include "tokenizer/tokenizer.h"
 
 #include <minja/chat-template.hpp>
@@ -3236,7 +3237,26 @@ void hy4_parser_unit() {
         o.content);
 }
 
+// a4::default_arena (Hy4-flash's expert store): every expert only with room left for a conversation in the budget and
+// the working set, the 42% rule otherwise; the 128 GB M5 Max's measured numbers, the review's 108 GB working set, a
+// lowered --mem-budget, and a 48 GB Mac
+void a4_arena_unit() {
+  const double G = 1e9;
+  const size_t all = size_t(83.58 * G), ram128 = size_t(137.44 * G), ram48 = size_t(51.54 * G);
+  bool every = false;
+  size_t b = a4::default_arena(size_t(115.45 * G), size_t(11.01 * G), ram128, all, size_t(110.83 * G), &every);
+  check(every && b == all, "a4 arena: 128 GB M5 Max, every expert", std::to_string(b));
+  b = a4::default_arena(size_t(108 * G), size_t(20 * G), ram128, all, 0, &every);
+  check(!every && b == size_t(0.42 * double(ram128)), "a4 arena: a working set without room for KV, the 42% rule",
+        std::to_string(b));
+  b = a4::default_arena(size_t(115.45 * G), size_t(11.01 * G), ram128, all, size_t(80 * G), &every);
+  check(!every && b == size_t(0.42 * double(ram128)), "a4 arena: --mem-budget 80, the 42% rule", std::to_string(b));
+  b = a4::default_arena(size_t(38.65 * G), size_t(9 * G), ram48, all, 0, &every);
+  check(!every && b == size_t(0.42 * double(ram48)), "a4 arena: 48 GB Mac, the 42% rule", std::to_string(b));
+}
+
 int main(int argc, char** argv) {
+  a4_arena_unit();
   hy4_parser_unit();
   stop_filter_unit();
   anthropic_mapping();

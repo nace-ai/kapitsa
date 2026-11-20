@@ -403,7 +403,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     }
   };
   if (Hy4Flash::is_model(opts_.model_dir)) {
-    auto m = std::make_unique<Hy4Flash>(opts_.model_dir, opts_.prefill_chunk);
+    auto m = std::make_unique<Hy4Flash>(opts_.model_dir, opts_.prefill_chunk, budget_);
     q35_ = m.get();
     hy4_ = m.get();
     model_ = std::move(m);
