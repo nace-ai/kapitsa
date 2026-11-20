@@ -595,6 +595,29 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
             .companions = {dflash35()},
             .download_gb = 20.58},
        }},
+      // Tencent's Hy4-flash (hy_v4_flash, text only): Hy4Flash runs the pack as it is. The trunk stays in memory; the
+      // 512 routed experts per layer stay in memory where the budget holds them (every one on a 128 GB Mac, #1360)
+      // and stream from the SSD otherwise (a 48 GB M5 Pro: ~3.5 tok/s); the four Engram tables are read from their
+      // mapped files on the CPU. No drafter (its DFly2 head is not wired). download_gb: every file of the revision but
+      // .gitattributes, 133,832,178,022 B (the DFly2 and vision files ride along unread). Pinned at 93a1b782, whose
+      // weights, config, tokenizer and template are 696b3d0f's, the revision the M5 Max numbers ran on (only the model
+      // card and its images changed).
+      {.name = "hy4-flash",
+       .aliases = {"hy4", "hy4flash"},
+       .title = "Hy4-flash",
+       .about = "Tencent's 512-expert MoE with Engram memories, text only: every expert in memory on 128 GB, streamed "
+                "from the SSD on smaller Macs",
+       .brief = "Tencent MoE, 512 experts, Engram",
+       .default_variant = "4bit",
+       .fallbacks = {},
+       .variants = {
+           {.name = "4bit",
+            .quant = "MLX affine: 8-bit trunk, 4-bit group-64 experts, 4-bit group-32 Engram tables",
+            .repo = "nace-ai/Hy4-flash-MLX-4bit",
+            .revision = "93a1b782fc871e8f2633f9c61bcc124f11d097c6",
+            .companions = {},
+            .download_gb = 133.83},
+       }},
   };
   static const std::vector<CatalogModel> legacy = [] {
     auto models = c;
