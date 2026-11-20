@@ -26,10 +26,11 @@ inline std::string random_id(const char* prefix) {
 
 // The markup of a call between its <tool_call> and </tool_call>
 enum class CallFormat {
-  QwenXml,  // <function=NAME>\n<parameter=KEY>\nVALUE\n</parameter>\n</function> (Qwen3.5+'s templates)
-  Glm,      // NAME<arg_key>KEY</arg_key><arg_value>VALUE</arg_value>... (GLM-4.5's and 4.7's, Flint's)
-  Hy4,      // Glm's markup with Hy4-flash's ":opensource" tags (<arg_key:opensource>...), every call of the turn inside
-            // <tool_calls:opensource>...</tool_calls:opensource>, whose two tokens the parser drops
+  QwenXml,   // <function=NAME>\n<parameter=KEY>\nVALUE\n</parameter>\n</function> (Qwen3.5+'s templates)
+  Glm,       // NAME<arg_key>KEY</arg_key><arg_value>VALUE</arg_value>... (GLM-4.5's and 4.7's, Flint's)
+  Hy4,       // Glm's markup with Hy4-flash's ":opensource" tags (<arg_key:opensource>...), every call of the turn inside
+             // <tool_calls:opensource>...</tool_calls:opensource>, whose two tokens the parser drops
+  Inkling2,  // <|message_model|>[name]<|content_thinking|>/<|content_text|>/<|content_invoke_tool_json|>...<|end_message|>
 };
 
 class OutputParser {
@@ -52,6 +53,13 @@ class OutputParser {
         tc_close_(tc_close), in_think_(start_in_think), parse_tools_(parse_tools),
         think_tools_(think_tools && parse_tools && !text_tags.any()), think_ws_(think_ws), fmt_(call_format),
         tools_(tools) {
+    if (fmt_ == CallFormat::Inkling2) {
+      ink2_model_ = t.find("<|message_model|>");
+      ink2_text_ = t.find("<|content_text|>");
+      ink2_tool_text_ = t.find("<|content_invoke_tool_text|>");
+      ink2_tool_err_ = t.find("<|content_tool_error|>");
+      return;
+    }
     // only Qwen's markup in tokens: a call there starts with <function=, which no other turn starts with
     if (parse_tools_ && fmt_ == CallFormat::QwenXml && !tt_.any() && tools_.is_array() && !tools_.empty())
       lead_ = Lead::kArmed;
@@ -105,6 +113,18 @@ class OutputParser {
       s = pend_;
       pend_.clear();
     }
+    if (fmt_ == CallFormat::Inkling2) {
+      if (in_tool_) {
+        d.content += tool_buf_ + s;
+        in_tool_ = false;
+      } else if (!ink2_hdr_) {
+        (in_think_ ? d.reasoning : d.content) += s;
+      }
+      ink2_hdr_ = false;
+      ink2_hdr_buf_.clear();
+      held_.clear();
+      return d;
+    }
     if (in_tool_) {
       // unterminated tool call: surface as text
       emit(d, (tt_.tc_open.empty() ? "<tool_call" + sfx_ + ">" : tt_.tc_open) + tool_buf_ + s);
@@ -121,6 +141,10 @@ class OutputParser {
 
  private:
   void push_plain(ChatDelta& d, int id) {
+    if (fmt_ == CallFormat::Inkling2) {
+      push_ink2(d, id);
+      return;
+    }
     if ((lead_ == Lead::kHolding || lead_ == Lead::kClosed) && lead_token(d, id)) return;
     if (id == think_open_) {
       flush_text(d);
@@ -527,11 +551,108 @@ class OutputParser {
     return true;
   }
 
+  void push_ink2(ChatDelta& d, int id) {
+    if (id == ink2_model_) {
+      const std::string tail = dec_.flush();
+      if (in_tool_) tool_buf_ += tail;
+      else if (!ink2_hdr_) (in_think_ ? d.reasoning : d.content) += tail;
+      in_think_ = false;
+      in_tool_ = false;
+      ink2_hdr_ = true;
+      ink2_hdr_buf_.clear();
+      return;
+    }
+    if (id == think_open_) {
+      const std::string tail = dec_.flush();
+      if (!ink2_hdr_) (in_think_ ? d.reasoning : d.content) += tail;
+      ink2_hdr_ = false;
+      ink2_hdr_buf_.clear();
+      in_think_ = true;
+      in_tool_ = false;
+      return;
+    }
+    if (id == ink2_text_ || id == ink2_tool_text_ || id == ink2_tool_err_) {
+      const std::string tail = dec_.flush();
+      if (!ink2_hdr_) (in_think_ ? d.reasoning : d.content) += tail;
+      ink2_hdr_ = false;
+      ink2_hdr_buf_.clear();
+      in_think_ = false;
+      in_tool_ = false;
+      return;
+    }
+    if (id == tc_open_) {
+      const std::string tail = dec_.flush();
+      if (!ink2_hdr_) (in_think_ ? d.reasoning : d.content) += tail;
+      ink2_hdr_ = false;
+      in_think_ = false;
+      if (parse_tools_) {
+        in_tool_ = true;
+        tool_buf_.clear();
+      } else {
+        ink2_hdr_buf_.clear();
+        in_tool_ = false;
+      }
+      return;
+    }
+    if (id == tc_close_) {
+      const std::string tail = dec_.flush();
+      if (in_tool_) {
+        tool_buf_ += tail;
+        in_tool_ = false;
+        ToolCall tc;
+        if (parse_ink2(tool_buf_, tc)) d.tool_calls.push_back(std::move(tc));
+        else d.content += tool_buf_;
+        tool_buf_.clear();
+        ink2_hdr_buf_.clear();
+      } else if (ink2_hdr_) {
+        ink2_hdr_ = false;
+        ink2_hdr_buf_.clear();
+      } else {
+        (in_think_ ? d.reasoning : d.content) += tail;
+        in_think_ = false;
+      }
+      return;
+    }
+    const std::string s = dec_.push(id);
+    if (in_tool_) tool_buf_ += s;
+    else if (ink2_hdr_) ink2_hdr_buf_ += s;
+    else (in_think_ ? d.reasoning : d.content) += s;
+  }
+
+  bool parse_ink2(const std::string& body, ToolCall& tc) const {
+    const ojson j = ojson::parse(trim_ws(body), nullptr, false);
+    if (!j.is_object()) return false;
+    std::string name;
+    if (j.contains("name") && j["name"].is_string()) name = j["name"].get<std::string>();
+    else name = trim_ws(ink2_hdr_buf_);
+    if (trim_ws(name).empty()) return false;
+    ojson args = ojson::object();
+    const char* key = j.contains("args") ? "args" : (j.contains("arguments") ? "arguments" : nullptr);
+    if (key) {
+      if (j[key].is_object()) args = j[key];
+      else if (j[key].is_null()) args = ojson::object();
+      else if (j[key].is_string()) {
+        const ojson parsed = ojson::parse(j[key].get<std::string>(), nullptr, false);
+        if (!parsed.is_object()) return false;
+        args = parsed;
+      } else {
+        return false;
+      }
+    }
+    tc.name = std::move(name);
+    tc.arguments = args.dump();
+    tc.id = random_id("call_");
+    return true;
+  }
+
   StreamDecoder dec_;
   StreamDecoder hdec_;  // text of held tokens (think_tools)
   TextTags tt_;
   std::string pend_;    // TextTags: decoded text that may begin a tag
   int think_open_, think_close_, tc_open_, tc_close_;
+  int ink2_model_ = -1, ink2_text_ = -1, ink2_tool_text_ = -1, ink2_tool_err_ = -1;
+  bool ink2_hdr_ = false;
+  std::string ink2_hdr_buf_;
   bool in_think_;
   bool parse_tools_, think_tools_, think_ws_;
   CallFormat fmt_;

@@ -9,6 +9,7 @@
 #include "engine/tool_args.h"
 #include "model/flint_kv.h"
 #include "model/hy4_flash.h"
+#include "model/inkling2.h"
 #include "model/kv_grow.h"
 #include "model/qwen4_config.h"
 #include "model/token_suppression.h"
@@ -287,15 +288,26 @@ std::string validate_token_suppression(const std::string& model_dir, const std::
   try {
     if (Hy4Flash::is_model(model_dir) || Qwen4Exp::is_model(model_dir) || Dory::is_model(model_dir) ||
         NemotronH::is_model(model_dir) || Flint::is_model(model_dir) || Clover::is_model(model_dir))
-      return "token suppression: --suppress-tokens currently supports the Qwen35 backend only";
+      return "token suppression: --suppress-tokens currently supports the Qwen35 and Inkling2 backends only";
     const std::string content = read_token_suppression_file(path);
-    const Qwen35Config cfg = Qwen35::read_config(model_dir);
+    int vocab_size = 0;
+    std::vector<int> protected_ids;
+    std::string default_end = "<|im_end|>";
+    if (Inkling2::is_model(model_dir)) {
+      const Ink2Config cfg = Inkling2::read_config(model_dir);
+      vocab_size = cfg.vocab;
+      protected_ids = cfg.eos;
+      default_end = "<|content_model_end_sampling|>";
+    } else {
+      const Qwen35Config cfg = Qwen35::read_config(model_dir);
+      vocab_size = cfg.vocab;
+      protected_ids = cfg.eos;
+    }
     Tokenizer tok;
     tok.load(model_dir + "/tokenizer.json");
-    std::vector<int> protected_ids = cfg.eos;
     {
       auto tc = nlohmann::json::parse(read_file(model_dir + "/tokenizer_config.json"), nullptr, false);
-      std::string end = "<|im_end|>";
+      std::string end = default_end;
       if (!tc.is_discarded() && tc.contains("eos_token")) {
         const auto& e = tc["eos_token"];
         if (e.is_string()) end = e.get<std::string>();
@@ -307,7 +319,7 @@ std::string validate_token_suppression(const std::string& model_dir, const std::
     }
     for (int t = 0; t < tok.vocab_size(); ++t)
       if (tok.is_special(t)) protected_ids.push_back(t);
-    (void)token_suppression_mask(content, cfg.vocab, protected_ids);
+    (void)token_suppression_mask(content, vocab_size, protected_ids);
     return "";
   } catch (const std::exception& e) {
     return e.what();
@@ -445,6 +457,11 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     const bool sample = !gc.is_discarded() && gc.is_object() && gc.value("do_sample", false);
     if (sample) publisher_sampling();
     else defaults_.temperature = 0.0f, defaults_.top_p = 1.0f, defaults_.top_k = kTopkOmitted;  // (a client's temperature alone: 32, as before #1286)
+  } else if (Inkling2::is_model(opts_.model_dir)) {
+    auto m = std::make_unique<Inkling2>(opts_.model_dir, opts_.prefill_chunk);
+    ink2_ = m.get();
+    model_ = std::move(m);
+    publisher_sampling();
   } else {
     trimmed_turn_cache_ = true;
     auto m = std::make_unique<Qwen35>(opts_.model_dir, opts_.prefill_chunk);
@@ -453,24 +470,35 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   }
   tok_.load(opts_.model_dir + "/tokenizer.json");
   model_->set_mem_budget(budget_);
-  std::string src = chat_template_source(opts_.model_dir);
-  if (src.empty()) fatal("no chat template in %s", opts_.model_dir.c_str());
-  if (flint_) src = flint_template(src);
-  tmpl_ = std::make_unique<minja::chat_template>(src, flint_ ? "<|begin_of_text|>" : "",
-                                                 flint_ ? "<|end_of_text|>" : "<|im_end|>");
-  preserve_thinking_default_ = !flint_ && !nh_ && !dory_ && preserve_thinking_template(src);
-  reasoning_effort_template_ = !flint_ && !nh_ && !dory_ && src.find("reasoning_effort") != std::string::npos;
-  think_open_ = tok_.find("<think>");
-  think_close_ = tok_.find("</think>");
-  if (think_open_ < 0 && think_close_ < 0) {  // Hy4-flash: its tags carry the template's HYTK suffix
-    think_open_ = tok_.find("<think:opensource>");
-    think_close_ = tok_.find("</think:opensource>");
-  }
-  tc_open_ = tok_.find("<tool_call>");
-  tc_close_ = tok_.find("</tool_call>");
-  if (tc_open_ < 0 && tc_close_ < 0) {  // Hy4-flash's, as its think tags (CallFormat::Hy4)
-    tc_open_ = tok_.find("<tool_call:opensource>");
-    tc_close_ = tok_.find("</tool_call:opensource>");
+  std::string src;
+  if (ink2_) {
+    preserve_thinking_default_ = true;
+    reasoning_effort_template_ = true;
+    think_open_ = tok_.find("<|content_thinking|>");
+    think_close_ = tok_.find("<|end_message|>");
+    tc_open_ = tok_.find("<|content_invoke_tool_json|>");
+    tc_close_ = tok_.find("<|end_message|>");
+    think_ws_ = true;
+  } else {
+    src = chat_template_source(opts_.model_dir);
+    if (src.empty()) fatal("no chat template in %s", opts_.model_dir.c_str());
+    if (flint_) src = flint_template(src);
+    tmpl_ = std::make_unique<minja::chat_template>(src, flint_ ? "<|begin_of_text|>" : "",
+                                                   flint_ ? "<|end_of_text|>" : "<|im_end|>");
+    preserve_thinking_default_ = !flint_ && !nh_ && !dory_ && preserve_thinking_template(src);
+    reasoning_effort_template_ = !flint_ && !nh_ && !dory_ && src.find("reasoning_effort") != std::string::npos;
+    think_open_ = tok_.find("<think>");
+    think_close_ = tok_.find("</think>");
+    if (think_open_ < 0 && think_close_ < 0) {  // Hy4-flash: its tags carry the template's HYTK suffix
+      think_open_ = tok_.find("<think:opensource>");
+      think_close_ = tok_.find("</think:opensource>");
+    }
+    tc_open_ = tok_.find("<tool_call>");
+    tc_close_ = tok_.find("</tool_call>");
+    if (tc_open_ < 0 && tc_close_ < 0) {  // Hy4-flash's, as its think tags (CallFormat::Hy4)
+      tc_open_ = tok_.find("<tool_call:opensource>");
+      tc_close_ = tok_.find("</tool_call:opensource>");
+    }
   }
   think_space_.assign(size_t(tok_.vocab_size()), 0);
   for (int id = 0; id < tok_.vocab_size(); ++id) {
@@ -627,8 +655,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   std::shared_ptr<const TokenSuppression> suppression;
   if (suppress) {
     const Model* backend = model_.get();
-    if (typeid(*backend) != typeid(Qwen35))
-      throw std::runtime_error("token suppression: --suppress-tokens currently supports the Qwen35 backend only");
+    if (typeid(*backend) != typeid(Qwen35) && typeid(*backend) != typeid(Inkling2))
+      throw std::runtime_error("token suppression: --suppress-tokens currently supports the Qwen35 and Inkling2 backends only");
     std::vector<int> protected_ids = stop_ids_;
     for (int t = 0; t < tok_.vocab_size(); ++t)
       if (tok_.is_special(t)) protected_ids.push_back(t);
@@ -678,8 +706,9 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
        "KV room %.2f GB = %zu tokens (%.0f KB per token), one conversation up to %d of %d tokens",
        used / 1e9, std::max(1, opts_.slots), opts_.slots > 1 ? "slots'" : "slot's", budget_ / 1e9,
        g.recommended_working_set() / 1e9, room / 1e9, room / per, per / 1024.0, context_fit_, opts_.context);
-  // images: the model's vision tower, loaded on the first image that needs encoding
-  if (auto enc = vision::open_encoder(opts_.model_dir, opts_.image_max_pixels)) {
+  // images: the model's vision tower, loaded on the first image that needs encoding (skipped on Inkling-2 Stage 1)
+  if (!ink2_)
+    if (auto enc = vision::open_encoder(opts_.model_dir, opts_.image_max_pixels)) {
     const std::string m0 = enc->image_start(), m1 = enc->image_end();
     const int i0 = m0.empty() ? -2 : tok_.find(m0), i1 = m1.empty() ? -2 : tok_.find(m1);
     if (i0 >= 0) img_pre_ = {i0};
@@ -880,7 +909,7 @@ std::string unsupported_model(const std::string& model_dir) {
     return why ? why : "";
   }
   if (Qwen4Exp::is_model(model_dir) || Dory::is_model(model_dir) || NemotronH::is_model(model_dir) ||
-      Clover::is_model(model_dir) || Hy4Flash::is_model(model_dir))
+      Clover::is_model(model_dir) || Hy4Flash::is_model(model_dir) || Inkling2::is_model(model_dir))
     return "";
   // the Qwen3.5 family by its model_type (Hugging Face's, and what the GGUF import writes); a config that names none,
   // by the hybrid's shape, as the Hub check reads it (src/hub/fetch.cpp, check_supported)
@@ -903,7 +932,8 @@ std::string unsupported_model(const std::string& model_dir) {
     return family();
   const std::string runs = " Kapitsa runs the Qwen3.5 family (Qwen3.5, 3.6 and 3.8: qwen3_5, qwen3_5_moe), "
                            "Qwen3.8-Flash-Next (qwen4_exp), NVIDIA's Nemotron-H (nemotron_h: Nemotron Nano, Nemotron 3.5), "
-                           "Nemotron Labs Dory (dory), Recursive's Flint (flint) and DiffuSpace's Clover (clover_moe).";
+                           "Nemotron Labs Dory (dory), Recursive's Flint (flint), DiffuSpace's Clover (clover_moe) and "
+                           "Thinking Machines' Inkling-2 (inkling2_loop).";
   const std::string what = !mt.empty() ? mt : tt;
   if (what.empty()) return model_dir + " is not a model Kapitsa runs: its config.json names no model_type." + runs;
   return model_dir + " is a " + what + " model (its config.json's model_type), an architecture Kapitsa does not run." +
@@ -925,8 +955,9 @@ MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
     if (const auto it = plans.find(key); it != plans.end()) return it->second;
   }
   if (const std::string why = unsupported_model(model_dir); !why.empty()) throw std::runtime_error(why);
-  const MemPlan p = Hy4Flash::is_model(model_dir)   ? Hy4Flash::plan(model_dir, prefill_chunk)
-                    : Dory::is_model(model_dir)       ? Dory::plan(model_dir, prefill_chunk)
+  const MemPlan p = Inkling2::is_model(model_dir) ? Inkling2::plan(model_dir, prefill_chunk)
+                    : Hy4Flash::is_model(model_dir) ? Hy4Flash::plan(model_dir, prefill_chunk)
+                    : Dory::is_model(model_dir)     ? Dory::plan(model_dir, prefill_chunk)
                     : Flint::is_model(model_dir)    ? Flint::plan(model_dir, prefill_chunk)
                     : Qwen4Exp::is_model(model_dir) ? Qwen4Exp::plan(model_dir, prefill_chunk)
                     : NemotronH::is_model(model_dir) ? NemotronH::plan(model_dir, prefill_chunk)
@@ -936,7 +967,9 @@ MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
   return p;
 }
 static size_t model_ane_bytes(const std::string& model_dir, const MemPlan& p) {
-  if (Dory::is_model(model_dir) || Flint::is_model(model_dir) || Hy4Flash::is_model(model_dir)) return 0;
+  if (Dory::is_model(model_dir) || Flint::is_model(model_dir) || Hy4Flash::is_model(model_dir) ||
+      Inkling2::is_model(model_dir))
+    return 0;
   return NemotronH::is_model(model_dir) ? p.ane : Qwen35::ane_plan(model_dir, p).bytes;
 }
 
@@ -1079,8 +1112,9 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   // its own decoding (self-speculative or block diffusion)
   const bool clover = Clover::is_model(model_dir);
   if (clover && Clover::decode_mode() != "auto" && Clover::decode_mode() != "dflash") lp.dflash_off = true;
-  if (Dory::is_model(model_dir) || Flint::is_model(model_dir) || Hy4Flash::is_model(model_dir)) {
-    lp.dflash_off = true;  // no block drafter for Dory, Flint or Hy4-flash (its DFly2 drafter: not wired yet)
+  if (Dory::is_model(model_dir) || Flint::is_model(model_dir) || Hy4Flash::is_model(model_dir) ||
+      Inkling2::is_model(model_dir)) {
+    lp.dflash_off = true;  // no block drafter for Dory, Flint, Hy4-flash or Inkling-2
   } else if (NemotronH::is_model(model_dir)) {
     // the block drafter (LiLiCorr, DSpark) in the model's dflash/ folder (auto), or the one named
     if (!lp.dflash_off) {
@@ -2317,8 +2351,188 @@ TextTags text_tags_for(const Tokenizer& tok, const std::string& src) {
   return t;
 }
 
+std::string render_inkling2_chat(const ChatRequest& r, bool images) {
+  static const std::unordered_map<std::string, std::string> effort_map = {
+      {"none", "0"},     {"minimal", "0.1"}, {"low", "0.2"},  {"medium", "0.7"},
+      {"high", "0.9"},   {"xhigh", "0.99"},  {"max", "0.99"},
+  };
+  static const std::unordered_map<std::string, std::string> role_tok = {
+      {"user", "<|message_user|>"},
+      {"assistant", "<|message_model|>"},
+      {"system", "<|message_system|>"},
+      {"tool", "<|message_tool|>"},
+  };
+  auto trim_ws = [](std::string s) {
+    const size_t a = s.find_first_not_of(" \n\r\t");
+    if (a == std::string::npos) return std::string();
+    return s.substr(a, s.find_last_not_of(" \n\r\t") - a + 1);
+  };
+  auto emit_effort = [&]() -> std::string {
+    std::string val = "0.9";
+    auto apply_num = [&](double num) {
+      if (num < 0.0 || num > 0.99) throw std::runtime_error("reasoning_effort must be in [0.0, 0.99]");
+      val = (num == 0.0) ? "0" : nlohmann::json(num).dump();
+    };
+    auto apply_str = [&](const std::string& raw) {
+      const std::string key = trim_ws(raw);
+      auto it = effort_map.find(key);
+      if (it == effort_map.end()) throw std::runtime_error("Unknown reasoning_effort: " + raw);
+      val = it->second;
+    };
+    if (r.template_kwargs.contains("reasoning_effort") && !r.template_kwargs["reasoning_effort"].is_null()) {
+      const ojson& re = r.template_kwargs["reasoning_effort"];
+      if (re.is_string()) apply_str(re.get<std::string>());
+      else if (re.is_number()) apply_num(re.get<double>());
+      else throw std::runtime_error("reasoning_effort must be a string or number");
+    } else if (!r.effort.empty()) {
+      apply_str(r.effort);
+    } else if (r.thinking_budget == 0 || r.think_cap == 0) {
+      val = "0";
+    } else if (r.template_kwargs.contains("enable_thinking") && r.template_kwargs["enable_thinking"].is_boolean() &&
+               !r.template_kwargs["enable_thinking"].get<bool>()) {
+      val = "0";
+    }
+    return "<|message_system|><|content_text|>Thinking effort level: " + val + "<|end_message|>";
+  };
+
+  std::string out;
+  if (r.tools.is_array() && !r.tools.empty()) {
+    nlohmann::json specs = nlohmann::json::array();
+    for (const ojson& tool : r.tools) {
+      const ojson& fn = tool.contains("function") && tool["function"].is_object() ? tool["function"] : tool;
+      nlohmann::json spec = nlohmann::json::object();
+      spec["description"] = (fn.contains("description") && fn["description"].is_string())
+                                ? fn["description"].get<std::string>()
+                                : "";
+      if (!fn.contains("name") || !fn["name"].is_string())
+        throw std::runtime_error("tool function name must be a string");
+      spec["name"] = fn["name"].get<std::string>();
+      spec["parameters"] = (fn.contains("parameters") && !fn["parameters"].is_null())
+                               ? nlohmann::json::parse(fn["parameters"].dump())
+                               : nlohmann::json::object();
+      spec["type"] = (tool.contains("type") && tool["type"].is_string() && !tool["type"].get<std::string>().empty())
+                         ? tool["type"].get<std::string>()
+                         : "function";
+      specs.push_back(std::move(spec));
+    }
+    out += "<|message_system|>tool_declare<|content_xml|>";
+    out += specs.dump();
+    out += "<|end_message|>";
+  }
+
+  int dropped = 0;
+  const ojson msgs = images ? vision::without_image_data(r.messages) : without_images(r.messages, &dropped);
+  if (dropped) logi("chat: %d image(s) left out: this model can't read images", dropped);
+  bool effort_emitted = false;
+  for (const ojson& msg : msgs) {
+    const std::string role = role_of(msg);
+    auto rit = role_tok.find(role);
+    if (rit == role_tok.end()) throw std::runtime_error("Unknown message role: " + role);
+    if (!effort_emitted && role != "system") {
+      out += emit_effort();
+      effort_emitted = true;
+    }
+    std::string rtok = rit->second;
+    const std::string mname =
+        (msg.contains("name") && msg["name"].is_string()) ? msg["name"].get<std::string>() : std::string();
+    if (role == "tool") {
+      if (!mname.empty()) {
+        rtok += mname;
+      } else if (msg.contains("tool_call_id") && msg["tool_call_id"].is_string() &&
+                 !msg["tool_call_id"].get<std::string>().empty()) {
+        const std::string tcid = msg["tool_call_id"].get<std::string>();
+        for (const ojson& prev : msgs) {
+          if (role_of(prev) != "assistant" || !prev.contains("tool_calls") || !prev["tool_calls"].is_array()) continue;
+          for (const ojson& tc : prev["tool_calls"]) {
+            if (tc.contains("id") && tc["id"].is_string() && tc["id"].get<std::string>() == tcid &&
+                tc.contains("function") && tc["function"].contains("name") && tc["function"]["name"].is_string()) {
+              rtok += tc["function"]["name"].get<std::string>();
+            }
+          }
+        }
+      }
+    } else if (role == "assistant" && !mname.empty()) {
+      rtok += mname;
+    }
+
+    const std::string rc = (role == "assistant" && msg.contains("reasoning_content") && msg["reasoning_content"].is_string())
+                               ? msg["reasoning_content"].get<std::string>()
+                               : std::string();
+    const bool has_tc = role == "assistant" && msg.contains("tool_calls") && msg["tool_calls"].is_array() &&
+                        !msg["tool_calls"].empty();
+    if (!rc.empty()) {
+      out += rtok + "<|content_thinking|>" + rc + "<|end_message|>";
+    }
+    if (msg.contains("content") && msg["content"].is_string()) {
+      const std::string c = msg["content"].get<std::string>();
+      if (!c.empty() || !(role == "assistant" && (has_tc || !rc.empty())))
+        out += rtok + "<|content_text|>" + c + "<|end_message|>";
+    } else if (msg.contains("content") && msg["content"].is_array() && !msg["content"].empty()) {
+      for (const ojson& part : msg["content"]) {
+        if (part.is_string()) {
+          out += rtok + "<|content_text|>" + part.get<std::string>() + "<|end_message|>";
+        } else if (!part.contains("type") || part["type"] == "text" || part["type"] == "input_text") {
+          const std::string tp =
+              (part.contains("text") && part["text"].is_string()) ? part["text"].get<std::string>() : std::string();
+          out += rtok + "<|content_text|>" + tp + "<|end_message|>";
+        } else if (part["type"] == "image" || part["type"] == "input_image" || part["type"] == "image_url") {
+          if (role != "user" && role != "tool")
+            throw std::runtime_error("Image content is only supported for user and tool messages");
+          out += rtok + "<|content_image|><|unused_200054|><|end_message|>";
+        } else {
+          throw std::runtime_error("Unsupported content part type: " + part["type"].dump());
+        }
+      }
+    }
+    if (has_tc) {
+      for (const ojson& tc : msg["tool_calls"]) {
+        const ojson& fn = tc.at("function");
+        if (!fn.contains("name") || !fn["name"].is_string())
+          throw std::runtime_error("tool call function name must be a string");
+        const std::string fname = fn["name"].get<std::string>();
+        if (!mname.empty() && mname != fname)
+          throw std::runtime_error("assistant name " + mname + " does not match its tool call " + fname);
+        ojson args = ojson::object();
+        if (fn.contains("arguments") && !fn["arguments"].is_null()) {
+          if (fn["arguments"].is_string()) {
+            const std::string raw_s = fn["arguments"].get<std::string>();
+            if (!raw_s.empty()) {
+              args = ojson::parse(raw_s, nullptr, false);
+              if (args.is_discarded() || !args.is_object())
+                throw std::runtime_error("tool call arguments string is not a JSON object");
+            }
+          } else if (fn["arguments"].is_object()) {
+            args = fn["arguments"];
+          } else {
+            throw std::runtime_error("tool call arguments must be an object");
+          }
+        }
+        std::vector<std::pair<std::string, const ojson*>> sorted_args;
+        sorted_args.reserve(args.size());
+        for (auto it = args.begin(); it != args.end(); ++it) sorted_args.emplace_back(it.key(), &it.value());
+        std::sort(sorted_args.begin(), sorted_args.end(),
+                  [](const auto& a, const auto& b) { return a.first < b.first; });
+        out += "<|message_model|>" + fname + "<|content_invoke_tool_json|>{\"name\":";
+        out += ojson(fname).dump();
+        out += ",\"args\":{";
+        for (size_t i = 0; i < sorted_args.size(); ++i) {
+          if (i) out += ',';
+          out += ojson(sorted_args[i].first).dump();
+          out += ':';
+          out += sorted_args[i].second->dump();
+        }
+        out += "}}<|end_message|>";
+      }
+    }
+    if (role == "assistant") out += "<|content_model_end_sampling|>";
+  }
+  if (!effort_emitted) out += emit_effort();
+  return out;
+}
+
 std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) const {
   const bool images = vision_ != nullptr;  // image parts render as the model's placeholder, else as a note
+  if (ink2_) return render_inkling2_chat(r, images);
   // Nemotron Nano 9B v2's template: the request's enable_thinking (every API's switch) as its "/think" / "/no_think"
   if (think_flags_ && r.template_kwargs.contains("enable_thinking"))
     return render_chat(*tmpl_, think_flag_request(r), add_generation_prompt, images);
@@ -2754,7 +2968,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // task, an agent's next conversation) then reuses the block however early it diverges.
   int pbound = -1;
   if (prefix_ckpt_ && images.empty()) {
-    const size_t off = text.find(flint_ ? "<|user|>" : "<|im_start|>user");
+    const size_t off = text.find(ink2_ ? "<|message_user|>" : flint_ ? "<|user|>" : "<|im_start|>user");
     if (off != std::string::npos && off > 0) {
       const std::vector<int> pt = tok_.encode(text.substr(0, off));
       if (pt.size() >= 64 && int(pt.size()) < n && (boundary < 0 || int(pt.size()) < boundary) &&
@@ -2783,7 +2997,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   std::unique_ptr<GrammarMatcher> gm;
   if (r.grammar) {
     std::string why;
-    if (grammar_calls(*r.grammar) && (tc_open_ < 0 || tc_close_ < 0))
+    if (ink2_)
+      why = "structured output grammar is not supported with Inkling-2 yet";
+    else if (grammar_calls(*r.grammar) && (tc_open_ < 0 || tc_close_ < 0))
       why = "this model has no <tool_call> / </tool_call> tokens: its replies cannot be held to tool calls";
     else if (grammar_calls(*r.grammar) && (flint_ || hy4_))
       why = std::string(flint_ ? "Flint" : "Hy4-flash") +
@@ -3616,8 +3832,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // returned turns, unless the template writes a newline of its own there: think_ws_; the Nano 9B v2's tags as text;
   // Flint's calls in GLM's markup)
   OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
-                      think_tools, (nh_ != nullptr || dory_ != nullptr || flint_ != nullptr) && think_ws_, text_tags_,
-                      flint_ ? CallFormat::Glm : hy4_ ? CallFormat::Hy4 : CallFormat::QwenXml);
+                      ink2_ ? false : think_tools,
+                      ((nh_ != nullptr || dory_ != nullptr || flint_ != nullptr) && think_ws_) || ink2_ != nullptr,
+                      text_tags_,
+                      ink2_ ? CallFormat::Inkling2 : flint_ ? CallFormat::Glm : hy4_ ? CallFormat::Hy4 : CallFormat::QwenXml);
   const auto& eos = stop_ids_;
   double t1 = now_ms();
   int gen = 0;
@@ -4807,6 +5025,18 @@ std::string Engine::thinking_level(const ChatRequest& r, bool think, bool reason
 }
 
 std::string Engine::request_thinking_level(const ChatRequest& r, bool think) const {
+  if (ink2_) {
+    if (!r.effort.empty()) return r.effort;
+    if (r.template_kwargs.contains("reasoning_effort")) {
+      const auto& v = r.template_kwargs["reasoning_effort"];
+      if (v.is_string() && !v.get<std::string>().empty()) return v.get<std::string>();
+      if (v.is_number()) return v.dump();
+    }
+    if (r.template_kwargs.contains("enable_thinking") && r.template_kwargs["enable_thinking"].is_boolean() &&
+        !r.template_kwargs["enable_thinking"].get<bool>())
+      return "none";
+    return "high";
+  }
   return thinking_level(r, think, reasoning_effort_template_, think_open_ >= 0 || text_tags_.think);
 }
 
@@ -4922,7 +5152,9 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res, const 
     return;
   }
   const size_t mpos = text.rfind(marker);
-  const size_t cut = mpos == std::string::npos ? std::string::npos : text.rfind(flint_ ? "<|user|>" : "<|im_start|>", mpos);
+  const size_t cut = mpos == std::string::npos
+                         ? std::string::npos
+                         : text.rfind(ink2_ ? "<|message_user|>" : flint_ ? "<|user|>" : "<|im_start|>", mpos);
   if (cut == std::string::npos) return logd("history: nothing, no marker in the rendered text");
   text.resize(cut);
   std::vector<int> t2 = tok_.encode(text);
@@ -5144,8 +5376,8 @@ DraftResult Engine::draft(const std::string& key, const std::string& after, cons
     return out;
   };
   // The Qwen3.5 family (its checkpoints hold the drafter's ring; the MTP head's KV rows need none). Not Nemotron-H (its
-  // drafters' contexts), Dory (loop counts), Flint.
-  if (!q35_ || nh_ || dory_ || flint_ || lili_) return done("unsupported");
+  // drafters' contexts), Dory (loop counts), Flint or Inkling-2.
+  if (!q35_ || nh_ || dory_ || flint_ || lili_ || ink2_) return done("unsupported");
 
   // ---- the conversation: the newest remembered reply whose text is `after` ----
   std::shared_ptr<const Answered> a;

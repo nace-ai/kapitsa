@@ -35,6 +35,7 @@
 
 namespace ni {
 class Hy4Flash;
+class Inkling2;
 }
 
 namespace ni::splash {
@@ -268,6 +269,8 @@ std::string chat_template_source(const std::string& model_dir);
 // no minja polyfills and system messages after the first stay where they are.
 std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt,
                         bool images = false, bool native = false);
+// Inkling-2-Mini (chat_template.jinja): direct C++ renderer (minja lacks tojson/dictsort kwargs and float filter)
+std::string render_inkling2_chat(const ChatRequest& r, bool images = false);
 // Flint's chat template rewritten for minja (engine.cpp)
 std::string flint_template(std::string src);
 // A request followed by its answer as the client sends it back (content, and the reasoning when the client sends
@@ -700,6 +703,7 @@ class Engine {
   Flint* flint_ = nullptr;   // model_ when it is a Flint model
   Hy4Flash* hy4_ = nullptr;  // model_ when it is Hy4-flash
   Clover* clover_ = nullptr;  // model_ when it is Clover (block diffusion; q35_ too)
+  Inkling2* ink2_ = nullptr;  // model_ when it is Inkling-2-Mini (inkling2_loop)
   int flint_ngram_ = 0;      // Flint: prompt-lookup drafts per cycle (0: plain decoding)
   // Flint: self-drafts per cycle at long contexts (Flint::encode_draft; 0: none), their full-attention layers' window,
   // and the shortest prompt that takes them

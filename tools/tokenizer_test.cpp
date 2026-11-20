@@ -287,6 +287,84 @@ void check_lmstudio_pretokenizer() {
   }
 }
 
+void check_o200k_pretokenizer() {
+  const std::vector<Case> cases = {
+      {"contractions mixed case and U+017F fold",
+       "it's IT'S It'S they'RE we've YOU'LL I'm she'd don't x'\u017F it'\u017F",
+       {"it's", " IT'S", " It'S", " they'RE", " we've", " YOU'LL", " I'm", " she'd", " don't", " x'\u017F",
+        " it'\u017F"}},
+      {"digits in threes and Unicode digits",
+       "1 12 123 1234 1234567 a\u0661\u0662\u0663\u0664",
+       {"1", " ", "12", " ", "123", " ", "123", "4", " ", "123", "456", "7", " a", "\u0661\u0662\u0663", "\u0664"}},
+      {"non-contractions and punctuation slashes",
+       "IT\u2019S 123's 'tis a/b foo///\n",
+       {"IT", "\u2019S", " ", "123", "'s", " '", "tis", " a", "/b", " foo", "///\n"}},
+  };
+  json vocab = json::object();
+  auto add = [&](const std::string& s) {
+    const std::string t = byte_level(s);
+    if (!vocab.contains(t)) vocab[t] = int(vocab.size());
+  };
+  for (int b = 0; b < 256; ++b) add(std::string(1, char(b)));
+  add("it");
+  for (const Case& c : cases)
+    for (size_t i = 0; i < c.pieces.size(); ++i) {
+      std::string run;
+      for (size_t k = i; k < c.pieces.size(); ++k) add(run += c.pieces[k]);
+    }
+  auto make_pt = [](const std::string& re) {
+    return json{
+        {"type", "Sequence"},
+        {"pretokenizers",
+         json::array({{{"type", "Split"}, {"pattern", {{"Regex", re}}}, {"behavior", "Isolated"}, {"invert", false}},
+                      {{"type", "ByteLevel"},
+                       {"add_prefix_space", false},
+                       {"trim_offsets", true},
+                       {"use_regex", false}}})}};
+  };
+  const std::string kO200kExact =
+      "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+"
+      "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+      "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*"
+      "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+      "\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+  // Whitespace-varied version (extra space after top-level alternative pipe) must still select O200k, not Qwen.
+  const std::string kO200kSpaced = kO200kExact + " ";
+  const std::string kTekkenExact =
+      "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+|"
+      "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*|"
+      "\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+
+  for (const auto& [label, re] : std::vector<std::pair<std::string, std::string>>{
+           {"exact O200k", kO200kExact}, {"whitespace-varied O200k", kO200kSpaced}}) {
+    json j = {{"added_tokens", json::array()},
+              {"normalizer", nullptr},
+              {"pre_tokenizer", make_pt(re)},
+              {"model", {{"type", "BPE"}, {"vocab", vocab}, {"merges", json::array()}, {"ignore_merges", true}}}};
+    ni::Tokenizer tok;
+    load(tok, j);
+    for (const Case& c : cases) {
+      std::vector<int> want;
+      for (const std::string& p : c.pieces) want.push_back(tok.find(byte_level(p)));
+      const std::vector<int> got = tok.encode(c.text);
+      check(got == want, label + " split: " + c.what, "ids " + ids_str(got) + ", want " + ids_str(want));
+    }
+  }
+
+  // Tekken split remains distinct (no contractions, digits 1-by-1)
+  json tj = {{"added_tokens", json::array()},
+             {"normalizer", nullptr},
+             {"pre_tokenizer", make_pt(kTekkenExact)},
+             {"model", {{"type", "BPE"}, {"vocab", vocab}, {"merges", json::array()}, {"ignore_merges", true}}}};
+  ni::Tokenizer ttok;
+  load(ttok, tj);
+  const std::vector<int> tgot = ttok.encode("it's 1234");
+  const std::vector<int> twant = {ttok.find(byte_level("it")), ttok.find(byte_level("'s")), ttok.find(byte_level(" ")),
+                                  ttok.find(byte_level("1")),  ttok.find(byte_level("2")),  ttok.find(byte_level("3")),
+                                  ttok.find(byte_level("4"))};
+  check(tgot == twant, "Tekken split keeps single digits and separates contractions", "ids " + ids_str(tgot));
+}
+
 }  // namespace
 
 int main() {
@@ -328,6 +406,7 @@ int main() {
 
   check_bpe_merges();
   check_lmstudio_pretokenizer();
+  check_o200k_pretokenizer();
 
   // Duplicate merge line (later rank wins, matching HF tokenizers), string-form merges ("a b"),
   // and non-byte codepoints in vocab (mapped to '?' in id_to_bytes_).

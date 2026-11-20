@@ -44,7 +44,7 @@ class Tokenizer {
   std::vector<bool> special_;
   std::vector<bool> added_id_;
   int byte_id_[256];
-  enum class Split { Qwen, Tekken, Flint };  // the pre-tokenizer split, from tokenizer.json's pre_tokenizer
+  enum class Split { Qwen, Tekken, Flint, O200k };  // the pre-tokenizer split, from tokenizer.json's pre_tokenizer
   Split split_ = Split::Qwen;
   bool nfc_ = true;             // NFC-normalize the text first (Qwen; Tekken and Flint have no normalizer)
   bool ignore_merges_ = false;  // a word found whole in the vocabulary is one token (HF BPE ignore_merges)
