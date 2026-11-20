@@ -468,6 +468,10 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   }
   tc_open_ = tok_.find("<tool_call>");
   tc_close_ = tok_.find("</tool_call>");
+  if (tc_open_ < 0 && tc_close_ < 0) {  // Hy4-flash's, as its think tags (CallFormat::Hy4)
+    tc_open_ = tok_.find("<tool_call:opensource>");
+    tc_close_ = tok_.find("</tool_call:opensource>");
+  }
   think_space_.assign(size_t(tok_.vocab_size()), 0);
   for (int id = 0; id < tok_.vocab_size(); ++id) {
     const std::string& b = tok_.token_bytes(id);
@@ -2268,6 +2272,10 @@ std::string chat_template_source(const std::string& model_dir) {
     static const std::regex fmt(R"('([^'{}\n]*)\{\}([^'{}\n]*)'\.format\(([A-Za-z_][A-Za-z_0-9]*)\))");
     src = std::regex_replace(src, fmt, "('$1' ~ $3 ~ '$2')");
   }
+  // minja's tojson takes no ensure_ascii keyword and keeps non-ASCII text as ensure_ascii=False does (Hy4-flash's
+  // template renders its tools so; flint_template drops it too)
+  static const std::string ea = "tojson(ensure_ascii=False)";
+  for (size_t at = 0; (at = src.find(ea, at)) != std::string::npos; at += 6) src.replace(at, ea.size(), "tojson");
   return src;
 }
 
@@ -2327,6 +2335,22 @@ std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) con
       ChatRequest q = r;
       if (effort) q.template_kwargs["medium_effort"] = true;
       if (keep) q.template_kwargs["truncate_history_thinking"] = false;
+      return render_chat(*tmpl_, q, add_generation_prompt, images);
+    }
+  }
+  if (hy4_) {
+    // Hy4-flash's template reads only reasoning_effort, one of no_think, high (its default) and max, and raises on
+    // anything else: enable_thinking = false (every API's off switch) becomes no_think, which closes the think tag in
+    // the prompt, and low or medium (apply_effort's rungs) become high, its least thinking
+    const auto& k = r.template_kwargs;
+    const auto et = k.find("enable_thinking");
+    const auto re = k.find("reasoning_effort");
+    std::string want;
+    if (et != k.end() && et->is_boolean() && !et->get<bool>()) want = "no_think";
+    else if (re != k.end() && re->is_string() && (*re == "low" || *re == "medium")) want = "high";
+    if (!want.empty() && !(re != k.end() && re->is_string() && *re == want)) {
+      ChatRequest q = r;
+      q.template_kwargs["reasoning_effort"] = want;
       return render_chat(*tmpl_, q, add_generation_prompt, images);
     }
   }
@@ -2761,8 +2785,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     std::string why;
     if (grammar_calls(*r.grammar) && (tc_open_ < 0 || tc_close_ < 0))
       why = "this model has no <tool_call> / </tool_call> tokens: its replies cannot be held to tool calls";
-    else if (grammar_calls(*r.grammar) && flint_)
-      why = "Flint writes its tool calls in GLM's markup, which the tool-call grammar does not hold yet: send "
+    else if (grammar_calls(*r.grammar) && (flint_ || hy4_))
+      why = std::string(flint_ ? "Flint" : "Hy4-flash") +
+            " writes its tool calls in GLM's markup, which the tool-call grammar does not hold yet: send "
             "tool_choice \"auto\" and non-strict tools";
     else if (think && think_close_ < 0)
       why = "this model writes its reasoning's end as text: structured output needs reasoning off with it";
@@ -3592,7 +3617,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // Flint's calls in GLM's markup)
   OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
                       think_tools, (nh_ != nullptr || dory_ != nullptr || flint_ != nullptr) && think_ws_, text_tags_,
-                      flint_ ? CallFormat::Glm : CallFormat::QwenXml);
+                      flint_ ? CallFormat::Glm : hy4_ ? CallFormat::Hy4 : CallFormat::QwenXml);
   const auto& eos = stop_ids_;
   double t1 = now_ms();
   int gen = 0;

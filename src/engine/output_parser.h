@@ -28,6 +28,8 @@ inline std::string random_id(const char* prefix) {
 enum class CallFormat {
   QwenXml,  // <function=NAME>\n<parameter=KEY>\nVALUE\n</parameter>\n</function> (Qwen3.5+'s templates)
   Glm,      // NAME<arg_key>KEY</arg_key><arg_value>VALUE</arg_value>... (GLM-4.5's and 4.7's, Flint's)
+  Hy4,      // Glm's markup with Hy4-flash's ":opensource" tags (<arg_key:opensource>...), every call of the turn inside
+            // <tool_calls:opensource>...</tool_calls:opensource>, whose two tokens the parser drops
 };
 
 class OutputParser {
@@ -53,6 +55,11 @@ class OutputParser {
     // only Qwen's markup in tokens: a call there starts with <function=, which no other turn starts with
     if (parse_tools_ && fmt_ == CallFormat::QwenXml && !tt_.any() && tools_.is_array() && !tools_.empty())
       lead_ = Lead::kArmed;
+    if (fmt_ == CallFormat::Hy4) {
+      sfx_ = ":opensource";
+      wrap_open_ = t.find("<tool_calls:opensource>");
+      wrap_close_ = t.find("</tool_calls:opensource>");
+    }
   }
 
   // Returns the delta produced by this token.
@@ -100,7 +107,7 @@ class OutputParser {
     }
     if (in_tool_) {
       // unterminated tool call: surface as text
-      emit(d, (tt_.tc_open.empty() ? std::string("<tool_call>") : tt_.tc_open) + tool_buf_ + s);
+      emit(d, (tt_.tc_open.empty() ? "<tool_call" + sfx_ + ">" : tt_.tc_open) + tool_buf_ + s);
       in_tool_ = false;
     } else {
       emit(d, s);
@@ -128,6 +135,12 @@ class OutputParser {
       skip_leading_ws_ = true;
       return;
     }
+    if (parse_tools_ && !in_think_ && !in_tool_ && (id == wrap_open_ || id == wrap_close_)) {  // Hy4's list of calls
+      flush_text(d);
+      held_.clear();
+      if (id == wrap_close_) skip_leading_ws_ = true;
+      return;
+    }
     if (parse_tools_ && id == tc_open_ && !in_think_) {
       lead_ = Lead::kOff;  // the model writes its openers
       flush_text(d);
@@ -141,7 +154,7 @@ class OutputParser {
       in_tool_ = false;
       ToolCall tc;
       if (parse_tool(tool_buf_, tc)) d.tool_calls.push_back(tc);
-      else emit(d, "<tool_call>" + tool_buf_ + "</tool_call>");
+      else emit(d, "<tool_call" + sfx_ + ">" + tool_buf_ + "</tool_call" + sfx_ + ">");
       skip_leading_ws_ = true;
       return;
     }
@@ -447,7 +460,7 @@ class OutputParser {
 
   // The body of a call (between its tags), in the parser's call format
   bool parse_tool(const std::string& body, ToolCall& tc) const {
-    return fmt_ == CallFormat::Glm ? parse_glm(body, tc) : parse_qwen(body, tc);
+    return fmt_ == CallFormat::QwenXml ? parse_qwen(body, tc) : parse_glm(body, tc);
   }
 
   bool parse_qwen(const std::string& body, ToolCall& tc) const {
@@ -483,9 +496,11 @@ class OutputParser {
   // GLM-4.5's call (Flint's template renders it): NAME<arg_key>KEY</arg_key><arg_value>VALUE</arg_value>..., a value
   // the text of a string or the JSON of anything else; no arguments, NAME alone. Whitespace may surround the name and a
   // key and separate the elements; a value is everything up to the first </arg_value>. Anything else (no name, a name
-  // with whitespace or a tag in it, a tag in a key, text between the elements, a tag left open) is no call.
+  // with whitespace or a tag in it, a tag in a key, text between the elements, a tag left open) is no call. Hy4's tags
+  // carry sfx_.
   bool parse_glm(const std::string& body, ToolCall& tc) const {
-    static const std::string ko = "<arg_key>", kc = "</arg_key>", vo = "<arg_value>", vc = "</arg_value>";
+    const std::string ko = "<arg_key" + sfx_ + ">", kc = "</arg_key" + sfx_ + ">", vo = "<arg_value" + sfx_ + ">",
+                      vc = "</arg_value" + sfx_ + ">";
     static const char* ws = " \n\r\t";
     constexpr size_t npos = std::string::npos;
     size_t p = body.find(ko);
@@ -520,6 +535,8 @@ class OutputParser {
   bool in_think_;
   bool parse_tools_, think_tools_, think_ws_;
   CallFormat fmt_;
+  std::string sfx_;                       // Hy4: its tags' ":opensource"
+  int wrap_open_ = -1, wrap_close_ = -1;  // Hy4: <tool_calls:opensource>, </tool_calls:opensource>
   const ojson& tools_;
   bool in_tool_ = false, skip_leading_ws_ = false;
   std::string tool_buf_, held_;
