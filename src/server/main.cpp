@@ -1571,8 +1571,10 @@ int ni::server::run_service(Options o) {
   try {
     model_mgr->init(opt, ref, context_req, budget, tui, started, started_at);
   } catch (const std::exception& e) {
-    if (!engine_splash) throw;
-    return fail(std::string("the engine did not start: ") + e.what());  // (its own reason is in its output above)
+    set_load_stop_action(nullptr);
+    if (tui) term::status("");
+    if (engine_splash) return fail(std::string("the engine did not start: ") + e.what());  // (its own reason is in its output above)
+    return fail(e.what());
   }
   set_load_stop_action(nullptr);  // (a later load, a switch, is the stop thread's: it saves first)
   if (!engine_splash && idle_unload_min != 0)
