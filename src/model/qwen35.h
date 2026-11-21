@@ -72,6 +72,14 @@ std::string unsupported_quantization(const std::string& model_dir);
 // The per-row MoE kernel (gate/up or down) for routed experts e and shared expert s, "" if none exists.
 // wide: the experts' staged h exceeds 4608 floats (Qwen35::moe_wide), so the down kernel's _w form ("" if none).
 std::string moe_rows_kernel(bool gate_up, const QLinear& e, const QLinear& s, bool wide = false);
+// Routed experts with gate, up and down each at its own width: 2/3-bit group 128 (f2g128 / f3g128, OptiQ packs), whose MoE
+// kernels read each projection in its own format. Every other format needs the three alike (expert_formats_ok).
+bool expert_g128(const QLinear& q);
+bool expert_formats_ok(const QLinear& gate, const QLinear& up, const QLinear& down);
+// The gate/up kernels' format part of the name: "f3g128", or "f2g128_f3g128" when gate and up differ.
+std::string moe_gu_fmt(const QLinear& gate, const QLinear& up);
+// moe_rows_kernel(true, ...) for a gate/up pair that may differ in width ("" if none exists).
+std::string moe_gu_rows_kernel(const QLinear& gate, const QLinear& up, const QLinear& s);
 // The NI_QMT6 gate (defined in qwen35.cpp): the 6-bit group-64 dense prefill GEMMs on tensor ops. Exported for
 // Qwen4Exp's NI_HC_FUSE mix fold (qmt6_mix_m64_n64), which is that tile's derivative and must share its kill
 // switch rather than carry a second reading of the env.
@@ -821,6 +829,7 @@ class Qwen35 : public Model {
   // built once: the passes of a request share them and the plan kernel copies them into its own region, so they are
   // never rewritten while a pass may still read them
   Buffer chain_tree_[kMaxTreeRows / 8 + 1];
+  void promote_expert_bits(Layer& L);
   std::deque<Tensor> owned_;
   std::vector<Buffer> owned_bufs_;
   // Explicit immutable target objects; never dynamic drafter/selector weights.

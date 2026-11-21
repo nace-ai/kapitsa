@@ -379,8 +379,8 @@ void Qwen35::load_mtp(const std::string& dir) {
   if (off.empty() && !in_shards && cfg_.moe && !(q48(L.router) && q48(L.shared_gate) && q48(L.sg) && q48(L.su) && q48(L.sd)))
     off = "its router / shared expert are not 4- or 8-bit";
   if (off.empty() &&
-      (cfg_.moe ? in_shards && (!L.eg.same_format(L.eu) || !L.eg.same_format(L.ed) || !L.sg.same_format(L.su) ||
-                                moe_rows_kernel(true, L.eg, L.sg).empty() ||
+      (cfg_.moe ? in_shards && (!expert_formats_ok(L.eg, L.eu, L.ed) || !L.sg.same_format(L.su) ||
+                                moe_gu_rows_kernel(L.eg, L.eu, L.sg).empty() ||
                                 moe_rows_kernel(false, L.ed, L.sd, moe_wide()).empty())
                 : !L.mg.same_format(L.mu)))
     off = "its MLP's formats (" + (cfg_.moe ? L.eg : L.mg).name() + ") have no kernels here";
@@ -957,7 +957,7 @@ void Qwen35::enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bo
     e.dispatch((D + rows * nsg - 1) / (rows * nsg), 1, 1, 32 * nsg);
     return;
   }
-  const std::string gu_k = moe_rows_kernel(true, L.eg, L.sg), dn_k = moe_rows_kernel(false, L.ed, L.sd, moe_wide());
+  const std::string gu_k = moe_gu_rows_kernel(L.eg, L.eu, L.sg), dn_k = moe_rows_kernel(false, L.ed, L.sd, moe_wide());
   if (gu_k.empty() || dn_k.empty())
     fatal("MoE rows: no kernels for %s experts with a %s shared expert%s", format_name(L.eg.bits, L.eg.gs).c_str(),
           format_name(L.sg.bits, L.sg.gs).c_str(), mtp_layer ? " (MTP head)" : "");

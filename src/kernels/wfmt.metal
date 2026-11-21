@@ -386,7 +386,7 @@ NI_INLINE void dfl_embed_normg_impl(const device uint32_t* W, const device bfloa
 
 // ---- per-row MoE (the verify.metal moe_*_rows layout) with any expert / shared-expert formats ----
 // gate/up grid: (row tiles over max(I, SI), k + 1 slots, R rows); xn [R, D]; h [R, k+1, Imax]; idx [R, k].
-template <int FE, int GE, int FS, int GSS>
+template <int FE, int GE, int FS, int GSS, int FU = FE, int GU = GE>  // up in FU / GU (gate and up of a layer may differ in width)
 NI_INLINE void moeg_gu_rows_impl(const device uint32_t* gw, const device bfloat* gsc, const device bfloat* gbi,
                                  const device uint32_t* uw, const device bfloat* usc, const device bfloat* ubi,
                                  const device uint32_t* sgw, const device bfloat* sgs, const device bfloat* sgb,
@@ -411,8 +411,9 @@ NI_INLINE void moeg_gu_rows_impl(const device uint32_t* gw, const device bfloat*
   } else {
     const uint e = idx[r * p.k + slot];
     const uint wo = e * N * wf_wpr(FE, K), so = FE == 16 ? 0u : e * N * (K / uint(GE));
+    const uint wou = e * N * wf_wpr(FU, K), sou = FU == 16 ? 0u : e * N * (K / uint(GU));
     wf_rows_acc<FE, GE, ROWS>(gw + wo, gsc + so, gbi + so, xs, K, 0, K, rows, lane, ag);
-    wf_rows_acc<FE, GE, ROWS>(uw + wo, usc + so, ubi + so, xs, K, 0, K, rows, lane, au);
+    wf_rows_acc<FU, GU, ROWS>(uw + wou, usc + sou, ubi + sou, xs, K, 0, K, rows, lane, au);
   }
   const uint Imax = max(p.I, p.SI);
   for (int q = 0; q < ROWS; ++q) {
@@ -421,7 +422,7 @@ NI_INLINE void moeg_gu_rows_impl(const device uint32_t* gw, const device bfloat*
   }
 }
 
-#define NI_MOEG_GU_ROWS(NAME, FE, GE, FS, GSS)                                                                \
+#define NI_MOEG_GU_ROWS2(NAME, FE, GE, FU, GU, FS, GSS)                                                               \
   [[kernel]] void NAME(const device uint32_t* gw [[buffer(0)]], const device bfloat* gsc [[buffer(1)]],       \
                        const device bfloat* gbi [[buffer(2)]], const device uint32_t* uw [[buffer(3)]],       \
                        const device bfloat* usc [[buffer(4)]], const device bfloat* ubi [[buffer(5)]],        \
@@ -434,9 +435,11 @@ NI_INLINE void moeg_gu_rows_impl(const device uint32_t* gw, const device bfloat*
                        uint3 ntg3 [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],    \
                        uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {     \
     threadgroup float xs[4096];                                                                              \
-    moeg_gu_rows_impl<FE, GE, FS, GSS>(gw, gsc, gbi, uw, usc, ubi, sgw, sgs, sgb, suw, sus, sub, xn, h, p, idx, \
+    moeg_gu_rows_impl<FE, GE, FS, GSS, FU, GU>(gw, gsc, gbi, uw, usc, ubi, sgw, sgs, sgb, suw, sus, sub, xn, h, p, idx, \
                                        tgp, tid, ntg3.x, sg, nsg, lane, xs);                                  \
   }
+
+#define NI_MOEG_GU_ROWS(NAME, FE, GE, FS, GSS) NI_MOEG_GU_ROWS2(NAME, FE, GE, FE, GE, FS, GSS)
 
 // down grid: (row tiles over D, R): x[r, row] += sum_slot wts[r, slot] * (down_slot[row] . h[r, slot]).
 template <int FE, int GE, int FD, int GD>
@@ -628,7 +631,7 @@ NI_INLINE void qmm8g_impl(const device uint32_t* const thread* Wv, const device 
 // moe8g_gu: gate/up + SwiGLU of every touched expert's tile (moe8_plan's tiles; the shared expert is tile
 // 0xffffffff) into its h table, as qmm8_gu1k2 (8 column slices x KS k-slices); routed experts in FE/GE, the shared
 // expert in FS/GSS. Qmm8GuParams: w_stride / s_stride in words / groups of the routed format.
-template <int FE, int GE, int FS, int GSS, int KS>
+template <int FE, int GE, int FS, int GSS, int KS, int FU = FE, int GU = GE>  // up in FU / GU
 NI_INLINE void moe8g_gu_impl(const device uint32_t* Wg, const device ushort* Sg, const device ushort* Bg,
                              const device uint32_t* Wu, const device ushort* Su, const device ushort* Bu,
                              const device uint32_t* SWg, const device ushort* SSg, const device ushort* SBg,
@@ -656,10 +659,19 @@ NI_INLINE void moe8g_gu_impl(const device uint32_t* Wg, const device ushort* Sg,
   } else {
     const uint wpr = wf_wpr(FE, p.K), spr = FE == 16 ? 1u : p.K / uint(GE);
     const uint wo = e * p.w_stride, so = e * p.s_stride;
-    const device uint32_t* wr[2] = {Wg + wo + row * wpr, Wu + wo + row * wpr};
-    const device ushort* sr[2] = {Sg + so + row * spr, Su + so + row * spr};
-    const device ushort* br[2] = {Bg + so + row * spr, Bu + so + row * spr};
-    v8g_run<FE, GE, 2>(wr, sr, br, table, sums, g0, g1, lane, fn, q, acc);
+    // up at its own width: its strides from N and K (w_stride / s_stride are the gate's)
+    constexpr bool mixed = FU != FE || GU != GE;
+    const uint wpru = mixed ? wf_wpr(FU, p.K) : wpr, spru = mixed ? (FU == 16 ? 1u : p.K / uint(GU)) : spr;
+    const uint wou = mixed ? e * p.N * wpru : wo, sou = mixed ? e * p.N * spru : so;
+    const device uint32_t* wr[2] = {Wg + wo + row * wpr, Wu + wou + row * wpru};
+    const device ushort* sr[2] = {Sg + so + row * spr, Su + sou + row * spru};
+    const device ushort* br[2] = {Bg + so + row * spr, Bu + sou + row * spru};
+    if (mixed) {
+      v8g_run<FE, GE, 1>(wr, sr, br, table, sums, g0, g1, lane, fn, q, acc);
+      v8g_run<FU, GU, 1>(wr + 1, sr + 1, br + 1, table, sums, g0, g1, lane, fn, q, acc + 1);
+    } else {
+      v8g_run<FE, GE, 2>(wr, sr, br, table, sums, g0, g1, lane, fn, q, acc);
+    }
   }
   if (KS > 1) v8_reduce<2>(acc, kred, KS, sg, lane);
   const bool lead = kslice == 0;
@@ -689,7 +701,7 @@ NI_INLINE void moe8g_gu_impl(const device uint32_t* Wg, const device ushort* Sg,
   }
 }
 
-#define NI_MOE8G_GU(NAME, FE, GE, FS, GSS)                                                                     \
+#define NI_MOE8G_GU2(NAME, FE, GE, FU, GU, FS, GSS)                                                                    \
   [[kernel]] void NAME(const device uint32_t* Wg [[buffer(0)]], const device ushort* Sg [[buffer(1)]],          \
                        const device ushort* Bg [[buffer(2)]], const device uint32_t* Wu [[buffer(3)]],          \
                        const device ushort* Su [[buffer(4)]], const device ushort* Bu [[buffer(5)]],            \
@@ -703,9 +715,11 @@ NI_INLINE void moe8g_gu_impl(const device uint32_t* Wg, const device ushort* Sg,
                        uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {   \
     threadgroup float red[8 * kV8];                                                                            \
     threadgroup float2 kred[8 * 2 * 2 * 32];                                                                   \
-    moe8g_gu_impl<FE, GE, FS, GSS, 2>(Wg, Sg, Bg, Wu, Su, Bu, SWg, SSg, SBg, SWu, SSu, SBu, table, sums, hT, hS, p, \
+    moe8g_gu_impl<FE, GE, FS, GSS, 2, FU, GU>(Wg, Sg, Bg, Wu, Su, Bu, SWg, SSg, SBg, SWu, SSu, SBu, table, sums, hT, hS, p, \
                                       tiles, ntiles, tg, sg, lane, red, kred);                                 \
   }
+
+#define NI_MOE8G_GU(NAME, FE, GE, FS, GSS) NI_MOE8G_GU2(NAME, FE, GE, FE, GE, FS, GSS)
 
 // moe8g_down: each tile's down projection to per (row, slot) outputs (as moe8_down_nf2), any formats.
 template <int FE, int GE, int FD, int GD, int NF>
@@ -789,17 +803,18 @@ NI_INLINE void moe8g_down_impl(const device uint32_t* W, const device ushort* S,
 NI_INLINE float bf_lo(uint w) { return as_type<float>(w << 16); }
 NI_INLINE float bf_hi(uint w) { return as_type<float>(w & 0xFFFF0000u); }
 
-template <int F, int GS, int FA, int NP, bool PACKED_HALF = false>
+template <int F, int GS, int FA, int NP, bool PACKED_HALF = false, int FU = F, int GSU = GS>  // matrix 1 (up) in FU / GSU, its row strides wpr1 / spr1 (0: the same)
 NI_INLINE void qrf_load_w(const device uint32_t* const thread* W, const device bfloat* const thread* S,
                           const device bfloat* const thread* B, thread const uint* wrow, uint wpr, uint spr, uint k0,
-                          uint c, thread uint* wr, thread half2* sb) {
+                          uint c, thread uint* wr, thread half2* sb, uint wpr1 = 0, uint spr1 = 0) {
   const uint kk = k0 + 8 * c;
   _Pragma("clang loop unroll(full)")
   for (int p = 0; p < NP; ++p)
     _Pragma("clang loop unroll(full)")
     for (int a = 0; a < FA; ++a) {
       const int i = p * FA + a;
-      const device uint32_t* row = W[p] + wrow[a] * wpr;
+      const bool up = NP > 1 && p == 1;
+      const device uint32_t* row = W[p] + wrow[a] * (up && wpr1 ? wpr1 : wpr);
       if (F == 16) {
         const uint4 u = *(const device uint4*)(row + kk / 2);
         if (PACKED_HALF) {
@@ -813,11 +828,13 @@ NI_INLINE void qrf_load_w(const device uint32_t* const thread* W, const device b
         }
       } else {
         uint qv[8];
-        wf_codes8<F>(row, kk, qv);
+        if (up) wf_codes8<FU>(row, kk, qv);
+        else wf_codes8<F>(row, kk, qv);
         _Pragma("clang loop unroll(full)")
         for (int f = 0; f < 4; ++f) wr[i * 4 + f] = qv[f] | (qv[f + 4] << 16) | 0x34003400u;
-        if (GS <= 32 || (k0 % uint(GS)) == 0) {
-          const uint gi = wrow[a] * spr + kk / uint(GS);
+        const uint gsq = up ? uint(GSU) : uint(GS), sprq = up && spr1 ? spr1 : spr;
+        if (gsq <= 32 || (k0 % gsq) == 0) {
+          const uint gi = wrow[a] * sprq + kk / gsq;
           sb[i] = half2(half(float(S[p][gi]) * 4096.0f), half(float(B[p][gi])));
         }
       }
@@ -1003,7 +1020,7 @@ NI_QRF_IMPL(vit_gemm_packed_m8_n64, 16, 64, 8, 64, 1, 2, false, true)
 
 // MoE experts on moe_bucket2 tiles (as qrm_*): any expert format; the shared expert (riding along as
 // expert shared_e) must have the experts' format.
-template <int F, int GS, int FL, int BN, int WN, int NP>
+template <int F, int GS, int FL, int BN, int WN, int NP, int FU = F, int GSU = GS>
 NI_INLINE void qrmf_acc(const device half* X, const device uint* xrows, bool gather, uint x_ld, uint m0, uint rows,
                         const device uint32_t* const thread* W, const device bfloat* const thread* S,
                         const device bfloat* const thread* B, uint N, uint K, uint n0, threadgroup half* xs,
@@ -1016,6 +1033,7 @@ NI_INLINE void qrmf_acc(const device half* X, const device uint* xrows, bool gat
     _Pragma("clang loop unroll(full)")
     for (int b = 0; b < FL; ++b) acc[a][b] = simdgroup_float8x8(0);
   const uint wpr = wf_wpr(F, K), spr = F == 16 ? 1u : K / uint(GS);
+  const uint wpr1 = NP > 1 ? wf_wpr(FU, K) : wpr, spr1 = NP > 1 ? (FU == 16 ? 1u : K / uint(GSU)) : spr;
   uint wrow[FA];
   _Pragma("clang loop unroll(full)")
   for (int a = 0; a < FA; ++a) wrow[a] = min(n0 + sgn * TN + a * 8 + rc.x, N - 1);
@@ -1027,7 +1045,7 @@ NI_INLINE void qrmf_acc(const device half* X, const device uint* xrows, bool gat
   half2 sb[NP * FA];
   for (uint k0 = 0; k0 < K; k0 += BK) {
     qrm_load_x<BMl, BK, NT>(X4, xo, k0, xr);
-    qrf_load_w<F, GS, FA, NP>(W, S, B, wrow, wpr, spr, k0, c, wr, sb);
+    qrf_load_w<F, GS, FA, NP, false, FU, GSU>(W, S, B, wrow, wpr, spr, k0, c, wr, sb, wpr1, spr1);
     qr_store_x<BMl, BK, NT>(xs, tid, xr);
     threadgroup_barrier(mem_flags::mem_threadgroup);
     qrf_mma<F, NP * FA, FL, BMl>(acc, xs, 0, wr, sb);
@@ -1037,14 +1055,14 @@ NI_INLINE void qrmf_acc(const device half* X, const device uint* xrows, bool gat
 
 // H: the products silu(gate) * up as half, or as fp32 (HT float: Flint's, whose products can pass half's range and are
 // stored scaled by flint_swiglu_scaled)
-template <int F, int GS, int FL, int BN, int WN, typename HT = half>
+template <int F, int GS, int FL, int BN, int WN, typename HT = half, int FU = F, int GSU = GS>
 NI_INLINE void qrmf_gu_body(const device half* X, const device uint* xrows, uint x_ld, uint m0, uint rows,
                             const device uint32_t* const thread* W, const device bfloat* const thread* S,
                             const device bfloat* const thread* B, device HT* H, uint y_ld, uint N, uint K, uint n0,
                             threadgroup half* xs, uint tid, uint sgn, uint2 rc) {
   constexpr int TN = BN / WN, FA = TN / 8;
   simdgroup_float8x8 acc[2 * FA][FL];
-  qrmf_acc<F, GS, FL, BN, WN, 2>(X, xrows, true, x_ld, m0, rows, W, S, B, N, K, n0, xs, tid, sgn, rc, acc);
+  qrmf_acc<F, GS, FL, BN, WN, 2, FU, GSU>(X, xrows, true, x_ld, m0, rows, W, S, B, N, K, n0, xs, tid, sgn, rc, acc);
   _Pragma("clang loop unroll(full)")
   for (int a = 0; a < FA; ++a) {
     const uint n = n0 + sgn * TN + a * 8 + rc.x;
@@ -1082,7 +1100,9 @@ NI_INLINE void qrmf_dn_body(const device half* X, uint x_ld, uint m0, uint rows,
 
 // grid (N / BN, max tiles), 32 * WN threads; Qmm2Params (w_expert_stride in words, s_expert_stride in groups).
 #define NI_QRMF_GU(NAME, F, GS, FB, BN, WN) NI_QRMF_GU_T(NAME, F, GS, FB, BN, WN, half)
-#define NI_QRMF_GU_T(NAME, F, GS, FB, BN, WN, HT)                                                            \
+#define NI_QRMF_GU_T(NAME, F, GS, FB, BN, WN, HT) NI_QRMF_GU2_T(NAME, F, GS, F, GS, FB, BN, WN, HT)
+// gate in F / GS, up in FU / GSU (the shared expert, when it rides along as an expert, has the matching formats)
+#define NI_QRMF_GU2_T(NAME, F, GS, FU, GSU, FB, BN, WN, HT)                                                            \
   [[kernel, max_total_threads_per_threadgroup(WN * 32)]] void NAME(                                          \
       const device half* X [[buffer(0)]], const device uint32_t* Wg [[buffer(1)]],                          \
       const device bfloat* Sg [[buffer(2)]], const device bfloat* Bg [[buffer(3)]],                         \
@@ -1100,24 +1120,26 @@ NI_INLINE void qrmf_dn_body(const device half* X, uint x_ld, uint m0, uint rows,
     const uint e = tiles[tg.y * 3 + 0], m0 = tiles[tg.y * 3 + 1], rows = tiles[tg.y * 3 + 2] - m0;          \
     const bool sh = e == p.shared_e;                                                                        \
     const uint wo = sh ? 0 : e * p.w_expert_stride, so = sh ? 0 : e * p.s_expert_stride;                    \
-    const device uint32_t* W[2] = {(sh ? SWg : Wg) + wo, (sh ? SWu : Wu) + wo};                             \
-    const device bfloat* S[2] = {(sh ? SSg : Sg) + so, (sh ? SSu : Su) + so};                               \
-    const device bfloat* B[2] = {(sh ? SBg : Bg) + so, (sh ? SBu : Bu) + so};                               \
+    const uint wou = sh ? 0 : (FU == F && GSU == GS) ? wo : e * p.N * wf_wpr(FU, p.K),                      \
+        sou = sh ? 0 : (FU == F && GSU == GS) ? so : (FU == 16 ? 0u : e * p.N * (p.K / uint(GSU)));         \
+    const device uint32_t* W[2] = {(sh ? SWg : Wg) + wo, (sh ? SWu : Wu) + wou};                             \
+    const device bfloat* S[2] = {(sh ? SSg : Sg) + so, (sh ? SSu : Su) + sou};                               \
+    const device bfloat* B[2] = {(sh ? SBg : Bg) + so, (sh ? SBu : Bu) + sou};                               \
     const uint n0 = tg.x * BN;                                                                              \
     const uint2 rc = qr_rc(lane);                                                                           \
     threadgroup half* xs = (threadgroup half*)xs4;                                                          \
     const uint live = (rows + 7) / 8;                                                                       \
     if (FB >= 4 && live >= 4)                                                                               \
-      qrmf_gu_body<F, GS, (FB >= 4 ? 4 : 1), BN, WN, HT>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, \
+      qrmf_gu_body<F, GS, (FB >= 4 ? 4 : 1), BN, WN, HT, FU, GSU>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, \
                                                      n0, xs, tid, sg, rc);                                  \
     else if (FB >= 3 && live == 3)                                                                          \
-      qrmf_gu_body<F, GS, (FB >= 3 ? 3 : 1), BN, WN, HT>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, \
+      qrmf_gu_body<F, GS, (FB >= 3 ? 3 : 1), BN, WN, HT, FU, GSU>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, \
                                                      n0, xs, tid, sg, rc);                                  \
     else if (FB >= 2 && live == 2)                                                                          \
-      qrmf_gu_body<F, GS, (FB >= 2 ? 2 : 1), BN, WN, HT>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, \
+      qrmf_gu_body<F, GS, (FB >= 2 ? 2 : 1), BN, WN, HT, FU, GSU>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, \
                                                      n0, xs, tid, sg, rc);                                  \
     else                                                                                                    \
-      qrmf_gu_body<F, GS, 1, BN, WN, HT>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, n0, xs, tid, sg, \
+      qrmf_gu_body<F, GS, 1, BN, WN, HT, FU, GSU>(X, xrows, p.x_ld, m0, rows, W, S, B, H, p.y_ld, p.N, p.K, n0, xs, tid, sg, \
                                      rc);                                                                   \
   }
 
@@ -1334,7 +1356,7 @@ NI_INLINE void qmmsf_gu_impl(const device uint32_t* Wg, const device bfloat* Sg,
   }
 
 // MoE experts at small T (qmms_moe_* layout: <= 8-row tiles of one expert, Qmm2Params) for any expert format.
-template <int F, int GS>
+template <int F, int GS, int FU = F, int GSU = GS>  // up in FU / GSU
 NI_INLINE void qmmsf_moe_gu(const device half* X, const device uint32_t* Wg, const device bfloat* Sg,
                             const device bfloat* Bg, const device uint32_t* Wu, const device bfloat* Su,
                             const device bfloat* Bu, device half* H, constant Qmm2Params& p, const device uint* tiles,
@@ -1347,12 +1369,15 @@ NI_INLINE void qmmsf_moe_gu(const device half* X, const device uint32_t* Wg, con
   qs_tile(p, tiles, tg.y, e, m0, rows);
   const bool sh = e == p.shared_e;
   const uint wo = sh ? 0 : e * p.w_expert_stride, so = sh ? 0 : e * p.s_expert_stride;
-  const device uint32_t* W[2] = {(sh ? SWg : Wg) + wo, (sh ? SWu : Wu) + wo};
-  const device bfloat* S[2] = {(sh ? SSg : Sg) + so, (sh ? SSu : Su) + so};
-  const device bfloat* B[2] = {(sh ? SBg : Bg) + so, (sh ? SBu : Bu) + so};
+  const bool mixed = FU != F || GSU != GS;
+  const uint wou = sh ? 0 : mixed ? e * p.N * wf_wpr(FU, p.K) : wo, sou = sh ? 0 : mixed ? (FU == 16 ? 0u : e * p.N * (p.K / uint(GSU))) : so;
+  const device uint32_t* W[2] = {(sh ? SWg : Wg) + wo, (sh ? SWu : Wu) + wou};
+  const device bfloat* S[2] = {(sh ? SSg : Sg) + so, (sh ? SSu : Su) + sou};
+  const device bfloat* B[2] = {(sh ? SBg : Bg) + so, (sh ? SBu : Bu) + sou};
   const uint2 rc = qs_lane_rc(lane);
   const uint n = (tg.x * nsg + sg) * 8 + rc.x;
   const uint gpr = p.K / 64, wpr = wf_wpr(F, p.K), spr = F == 16 ? 1u : p.K / uint(GS);
+  const uint wpru = wf_wpr(FU, p.K), spru = FU == 16 ? 1u : p.K / uint(GSU);
   const device half* x0 = rc.y < rows ? X + xrows[m0 + rc.y] * p.x_ld : nullptr;
   const device half* x1 = rc.y + 1 < rows ? X + xrows[m0 + rc.y + 1] * p.x_ld : nullptr;
   simdgroup_float8x8 ag = simdgroup_float8x8(0), au = simdgroup_float8x8(0);
@@ -1360,7 +1385,7 @@ NI_INLINE void qmmsf_moe_gu(const device half* X, const device uint32_t* Wg, con
   for (uint g = 0; g < gpr; ++g) {
     half2 a0[8], a1[8], b[8];
     qsf_dequant<F, GS>(W[0] + n * wpr, S[0] + n * spr, B[0] + n * spr, g, q, a0);
-    qsf_dequant<F, GS>(W[1] + n * wpr, S[1] + n * spr, B[1] + n * spr, g, q, a1);
+    qsf_dequant<FU, GSU>(W[1] + n * wpru, S[1] + n * spru, B[1] + n * spru, g, q, a1);
     qs_gather(x0, x1, g, fm, b);
     qs_mma8(ag, a0, b);
     qs_mma8(au, a1, b);
@@ -1405,7 +1430,7 @@ NI_INLINE void qmmsf_moe_dn(const device half* X, const device uint32_t* Wd, con
   }
 }
 
-#define NI_QMMSF_MOE(SFX, F, GS)                                                                               \
+#define NI_QMMSF_MOE_GU(SFX, F, GS, FU, GSU)                                                                               \
   [[kernel]] void qmmsf_moe_gu_##SFX(                                                                          \
       const device half* X [[buffer(0)]], const device uint32_t* Wg [[buffer(1)]],                             \
       const device bfloat* Sg [[buffer(2)]], const device bfloat* Bg [[buffer(3)]],                            \
@@ -1418,9 +1443,10 @@ NI_INLINE void qmmsf_moe_dn(const device half* X, const device uint32_t* Wd, con
       const device bfloat* SBu [[buffer(17)]], uint2 tg [[threadgroup_position_in_grid]],                      \
       uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],                     \
       uint lane [[thread_index_in_simdgroup]]) {                                                               \
-    qmmsf_moe_gu<F, GS>(X, Wg, Sg, Bg, Wu, Su, Bu, H, p, tiles, ntiles, xrows, SWg, SSg, SBg, SWu, SSu, SBu, tg, sg, \
+    qmmsf_moe_gu<F, GS, FU, GSU>(X, Wg, Sg, Bg, Wu, Su, Bu, H, p, tiles, ntiles, xrows, SWg, SSg, SBg, SWu, SSu, SBu, tg, sg, \
                         nsg, lane);                                                                            \
-  }                                                                                                            \
+  }
+#define NI_QMMSF_MOE_DN(SFX, F, GS)                                                                            \
   [[kernel]] void qmmsf_moe_dn_##SFX(                                                                          \
       const device half* X [[buffer(0)]], const device uint32_t* Wd [[buffer(1)]],                             \
       const device bfloat* Sd [[buffer(2)]], const device bfloat* Bd [[buffer(3)]],                            \
@@ -1432,6 +1458,7 @@ NI_INLINE void qmmsf_moe_dn(const device half* X, const device uint32_t* Wd, con
       uint lane [[thread_index_in_simdgroup]]) {                                                               \
     qmmsf_moe_dn<F, GS>(X, Wd, Sd, Bd, Y, p, tiles, ntiles, yrows, SWd, SSd, SBd, tg, sg, nsg, lane);           \
   }
+#define NI_QMMSF_MOE(SFX, F, GS) NI_QMMSF_MOE_GU(SFX, F, GS, F, GS) NI_QMMSF_MOE_DN(SFX, F, GS)
 
 // ---- load-time conversions (tests and tools) ----
 // Dequantizes an affine F-bit matrix [N, K] (group GS) to bf16 (round to nearest even), one thread per 16 values.
@@ -1469,7 +1496,7 @@ NI_QRF(qrf_f16_m8_n64, 16, 64, 8, 64, 1, 2, false)
 #define NI_WF_LOW(X) X(f6g64, 6, 64) X(f5g64, 5, 64) X(f3g64, 3, 64) X(f4g32, 4, 32)
 #define NI_WF_NO8(X) X(f16, 16, 64) NI_WF_LOW(X)
 #define NI_WF_ALL(X) NI_WF_NO8(X) X(f8g64, 8, 64)
-#define NI_WF_MOE(X) X(f16, 16, 64) X(f8g64, 8, 64) X(f6g64, 6, 64) X(f5g64, 5, 64) X(f3g64, 3, 64)
+#define NI_WF_MOE(X) X(f16, 16, 64) X(f8g64, 8, 64) X(f6g64, 6, 64) X(f5g64, 5, 64) X(f3g64, 3, 64) X(f3g128, 3, 128) X(f2g128, 2, 128)
 
 #define NI_WF_DECODE(SFX, F, GS)                                     \
   NI_QMVG(qmvg_##SFX##_r2, F, GS, 2, false, false)                   \
@@ -1504,6 +1531,12 @@ NI_WF_LOW(NI_WF_PREFILL_SMALL)  // bf16's are in the base library (above)
   NI_QRMF_DN(qrmf_dn_##SFX##_m32_n128, F, GS, 4, 128, 4)             \
   NI_QMMSF_MOE(SFX, F, GS)
 NI_WF_MOE(NI_WF_MOE_PREFILL)
+// gate and up at different widths (OptiQ packs: 2-bit gate or up next to 3-bit): the fused gate/up kernels per (gate, up) pair;
+// the down kernels above already take their own format
+NI_QRMF_GU2_T(qrmf_gu_f2g128_f3g128_m32_n64, 2, 128, 3, 128, 4, 64, 4, half)
+NI_QRMF_GU2_T(qrmf_gu_f3g128_f2g128_m32_n64, 3, 128, 2, 128, 4, 64, 4, half)
+NI_QMMSF_MOE_GU(f2g128_f3g128, 2, 128, 3, 128)
+NI_QMMSF_MOE_GU(f3g128_f2g128, 3, 128, 2, 128)
 // Flint's 8-bit routed experts: the gate / up products in fp32 (model/flint.cpp, enc_moe_g_prefill)
 NI_QRMF_GU_T(qrmf_gu_f8g64_m32_n64_f32, 8, 64, 4, 64, 4, float)
 
@@ -1535,6 +1568,10 @@ NI_MOE8G(f5g64_f5g64, 5, 64, 5, 64)
 NI_MOE8G(f5g64_f8g64, 5, 64, 8, 64)
 NI_MOE8G(f4g64_f8g64, 4, 64, 8, 64)
 NI_MOE8G(f3g64_f8g64, 3, 64, 8, 64)
+NI_MOE8G(f3g128_f8g64, 3, 128, 8, 64)  // MLX group-128 routed experts read natively (scales and biases per 128)
+NI_MOE8G(f2g128_f8g64, 2, 128, 8, 64)
+NI_MOE8G_GU2(moe8g_gu_f2g128_f3g128_f8g64, 2, 128, 3, 128, 8, 64)  // gate 2-bit, up 3-bit
+NI_MOE8G_GU2(moe8g_gu_f3g128_f2g128_f8g64, 3, 128, 2, 128, 8, 64)
 
 // MoE rows: routed experts x shared expert formats seen in MLX packs
 NI_MOEG_GU_ROWS(moeg_gu_rows_f16_f16, 16, 64, 16, 64)
@@ -1553,11 +1590,19 @@ NI_MOEG_GU_ROWS(moeg_gu_rows_f5g64_f8g64, 5, 64, 8, 64)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f5g64_f8g64, 5, 64, 8, 64, 9 * 512)
 NI_MOEG_GU_ROWS(moeg_gu_rows_f3g64_f8g64, 3, 64, 8, 64)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f3g64_f8g64, 3, 64, 8, 64, 9 * 512)
+NI_MOEG_GU_ROWS(moeg_gu_rows_f3g128_f8g64, 3, 128, 8, 64)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f3g128_f8g64, 3, 128, 8, 64, 9 * 512)
+NI_MOEG_GU_ROWS(moeg_gu_rows_f2g128_f8g64, 2, 128, 8, 64)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f2g128_f8g64, 2, 128, 8, 64, 9 * 512)
+NI_MOEG_GU_ROWS2(moeg_gu_rows_f2g128_f3g128_f8g64, 2, 128, 3, 128, 8, 64)
+NI_MOEG_GU_ROWS2(moeg_gu_rows_f3g128_f2g128_f8g64, 3, 128, 2, 128, 8, 64)
 NI_MOEG_GU_ROWS(moeg_gu_rows_f4g64_f4g64, 4, 64, 4, 64)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f4g64_f4g64, 4, 64, 4, 64, 9 * 512)
 // wide experts ((k + 1) * max(I, SI) <= 7168 staged floats: Qwen3.8-Flash-Next's 11 x 640)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f4g64_f8g64_w, 4, 64, 8, 64, 7168)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f3g64_f8g64_w, 3, 64, 8, 64, 7168)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f3g128_f8g64_w, 3, 128, 8, 64, 7168)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f2g128_f8g64_w, 2, 128, 8, 64, 7168)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f8g64_f8g64_w, 8, 64, 8, 64, 7168)  // (Flint's 7 x 1024)
 
 // Neural Engine split (ane_ffn.metal): weight staging from each format, and the GPU's share of the down projection

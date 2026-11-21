@@ -179,7 +179,7 @@ void Qwen4Exp::enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer) 
     enc_moe4_down(e, L, R, ridx_, rwts_);
     return;
   }
-  const std::string gu_k = moe_rows_kernel(true, L.eg, L.sg), dn_k = moe_rows_kernel(false, L.ed, L.sd, moe_wide());
+  const std::string gu_k = moe_gu_rows_kernel(L.eg, L.eu, L.sg), dn_k = moe_rows_kernel(false, L.ed, L.sd, moe_wide());
   if (gu_k.empty() || dn_k.empty()) fatal("MoE rows: no kernels for these expert formats");
   e.use(pipe4(gu_k));
   e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
