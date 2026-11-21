@@ -54,13 +54,20 @@ struct Ink2Ctrl {
   const Tensor* gain = nullptr;    // [2304, 64]
 };
 
+struct Ink2Mat {
+  const Tensor* raw = nullptr;  // BF16 or F32 when not Q8-packed
+  Buffer q, s;                  // Q8_0: int8 [N, K], half [N, K/32]
+  uint32_t N = 0, K = 0;
+  bool is_q8() const { return bool(q); }
+};
+
 struct Ink2Layer {
   bool is_swa = true;
   bool has_ctrl = false;
   bool is_mxfp8 = false;
   // attention projections
-  const Tensor *wq_du = nullptr, *wk_dv = nullptr, *wv_dv = nullptr, *wr_du = nullptr;
-  const Tensor *attn_sink_proj = nullptr, *gate_attn = nullptr, *wo_ud = nullptr;
+  Ink2Mat wq_du, wk_dv, wv_dv, wr_du, gate_attn, wo_ud;
+  const Tensor *attn_sink_proj = nullptr;
   const Tensor *q_scale = nullptr, *rel_scale = nullptr, *rel_proj = nullptr;
   // norms
   const Tensor *attn_norm = nullptr;  // SWA only
@@ -128,6 +135,8 @@ class Inkling2 : public Model {
                    const Buffer* diag_rows = nullptr);
   void enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer& y, int M, uint32_t N_limit = 0, bool add = false,
               bool exact_f32 = false);
+  void enc_mm(Encoder& e, const Ink2Mat& w, const Buffer& x, const Buffer& y, int M, uint32_t N_limit = 0, bool add = false,
+              bool exact_f32 = false);
   void enc_norm(Encoder& e, const Buffer& x, const Tensor* w, const Buffer& out, int T, uint32_t dim);
   void enc_attn_res(Encoder& e, const Buffer* const* states, int M, const void* query_ptr, bool q_f32, uint32_t Q,
                     const Buffer& out, int T);
@@ -141,7 +150,8 @@ class Inkling2 : public Model {
   Ink2Config cfg_;
   WeightStore ws_;
   std::vector<Ink2Layer> layers_;
-  const Tensor *embed_ = nullptr, *embed_norm_ = nullptr, *final_norm_ = nullptr, *unembed_ = nullptr;
+  const Tensor *embed_ = nullptr, *embed_norm_ = nullptr, *final_norm_ = nullptr;
+  Ink2Mat unembed_;
   std::vector<const Tensor*> attn_queries_;  // [23] (layers 1..23 -> idx 0..22)
   std::vector<const Tensor*> mlp_queries_;   // [24] (layers 0..23)
   const Tensor* output_query_ = nullptr;
@@ -152,6 +162,7 @@ class Inkling2 : public Model {
   int ring_rows_ = 0;
   size_t mem_budget_ = 0;
   bool tensor_pf_ = false;
+  bool q8_dense_ = false;
 
   // Reusable activations sized for `tmax_` rows
   Buffer x_, x_pre_, inp_sa_, ffn_inp_, h_norm_;
