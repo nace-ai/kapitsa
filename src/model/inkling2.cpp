@@ -4,7 +4,7 @@
 #include "engine/profile.h"
 #include "model/inkling2_kernels.h"
 #include "model/kparams.h"
-#include "model/nemotron_h.h"
+#include "model/quant_q8.h"
 #include "model/sampler.h"
 #include "util/bf16.h"
 #include "util/json_file.h"
