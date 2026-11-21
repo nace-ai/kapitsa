@@ -162,6 +162,12 @@ const DefaultRow kDefaults[] = {
     // unchanged; 1,024 rows against precise: 86 top-1 flips, mean KL 0.137, inside its bar (MLX on the same pack).
     {"a4_qtm_fast", Knob::kA4QtmFast, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 56, 58, false,
      "M5 Max; fast profile only", true},
+    // Fast profile only (docs/profiles.md): Inkling-2-Mini prefill GEMMs (BF16 dense + grouped NVFP4/MXFP8 MoE) on
+    // Apple10+ matrix units (src/kernels/tensor/ink2_t.metal, NI_INK2_TENSOR). Mac mini M6, chunk 512, interleaved:
+    // 512 tok 70.4 -> 493.7/495.3 tok/s (+603%), 2048 tok 67.4 -> 382.6 tok/s (+468%); 8-window logit_dump against
+    // precise: step passes --reorder (2 near-tie flips / 192, mean KL 1.03e-3), prefill 0 flips / 8 (mean KL 3.60e-3).
+    {"ink2_tensor_pf", Knob::kInk2TensorPf, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 468, 603, false,
+     "Mac mini M6; fast profile only", true},
 };
 
 bool guard_matches(const char* id, const DeviceProfile& dev) {

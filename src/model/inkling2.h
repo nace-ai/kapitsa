@@ -151,6 +151,7 @@ class Inkling2 : public Model {
   int tmax_ = 512;
   int ring_rows_ = 0;
   size_t mem_budget_ = 0;
+  bool tensor_pf_ = false;
 
   // Reusable activations sized for `tmax_` rows
   Buffer x_, x_pre_, inp_sa_, ffn_inp_, h_norm_;
@@ -163,6 +164,7 @@ class Inkling2 : public Model {
   Buffer q_, k_, v_, r_, sinks_, gate_attn_, att_out_, a_out_;
   Buffer dyn_, rb_, part_m_, part_l_, part_o_;
   Buffer h_mlp_, x_mlp_, rlog_, eid_, ew_, moe_act_, moe_out_;
+  Buffer moe_sorted_, moe_rank_, moe_tiles_, moe_ntiles_, moe_tmp_, moe_act_h_;
   Buffer logits_, cand_v_, cand_i_, sprob_, samp_;
 };
 

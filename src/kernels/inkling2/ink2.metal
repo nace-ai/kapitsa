@@ -381,10 +381,12 @@ struct Ink2MmP {
 
 [[kernel]] void ink2_bf16_mv(const device float* x [[buffer(0)]], const device void* w [[buffer(1)]],
                              device float* y [[buffer(2)]], constant Ink2MmP& p [[buffer(3)]],
-                             uint tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+                             uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
                              uint lane [[thread_index_in_simdgroup]]) {
-  const uint n = tg * 4 + sg;
+  const uint n = tg.x * 4 + sg;
   if (n >= p.N) return;
+  const uint m0 = tg.y * 8;
+  const uint mc = min(8u, p.M - m0);
   float acc[8] = {0, 0, 0, 0, 0, 0, 0, 0};
   const size_t woff = size_t(n) * p.K;
   for (uint k = lane * 4; k < p.K; k += 128) {
@@ -395,15 +397,15 @@ struct Ink2MmP {
       const device bfloat* wb = (const device bfloat*)w + woff + k;
       wv = float4(wb[0], wb[1], wb[2], wb[3]);
     }
-    for (uint m = 0; m < p.M; ++m) {
-      const float4 xv = *(const device float4*)(x + size_t(m) * p.x_ld + k);
+    for (uint m = 0; m < mc; ++m) {
+      const float4 xv = *(const device float4*)(x + size_t(m0 + m) * p.x_ld + k);
       acc[m] += dot(xv, wv);
     }
   }
-  for (uint m = 0; m < p.M; ++m) {
+  for (uint m = 0; m < mc; ++m) {
     const float s = simd_sum(acc[m]);
     if (lane == 0) {
-      device float* dst = y + size_t(m) * p.y_ld + n;
+      device float* dst = y + size_t(m0 + m) * p.y_ld + n;
       *dst = p.add ? (*dst + s) : s;
     }
   }
@@ -1263,4 +1265,72 @@ struct Ink2SoftcapP {
 [[kernel]] void ink2_softcap(device float* x [[buffer(0)]], constant Ink2SoftcapP& p [[buffer(1)]],
                              uint i [[thread_position_in_grid]]) {
   if (i < p.n) x[i] = p.cap * metal::precise::tanh(x[i] * p.inv_cap);
+}
+
+// ---- 14. Grouped MoE Prefill Helpers (bucket, SiTU -> half, weighted combine) ----
+struct Ink2BucketP {
+  uint P, E, BM;
+};
+
+[[kernel]] void ink2_moe_bucket(const device uint* eid [[buffer(0)]], device uint* sorted [[buffer(1)]],
+                                device uint4* tiles [[buffer(2)]], device uint* ntiles [[buffer(3)]],
+                                device uint* rank [[buffer(4)]], constant Ink2BucketP& p [[buffer(5)]],
+                                uint tid [[thread_index_in_threadgroup]], uint ntg [[threads_per_threadgroup]]) {
+  threadgroup atomic_uint cnt[128];
+  threadgroup uint off[128], toff[128];
+  for (uint e = tid; e < p.E; e += ntg) atomic_store_explicit(&cnt[e], 0u, memory_order_relaxed);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint i = tid; i < p.P; i += ntg) rank[i] = atomic_fetch_add_explicit(&cnt[eid[i]], 1u, memory_order_relaxed);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid == 0) {
+    uint o = 0, t = 0;
+    for (uint e = 0; e < p.E; ++e) {
+      const uint c = atomic_load_explicit(&cnt[e], memory_order_relaxed);
+      off[e] = o;
+      toff[e] = t;
+      o += c;
+      t += (c + p.BM - 1) / p.BM;
+    }
+    ntiles[0] = t;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint e = tid; e < p.E; e += ntg) {
+    const uint c = atomic_load_explicit(&cnt[e], memory_order_relaxed);
+    for (uint j = 0; j * p.BM < c; ++j) tiles[toff[e] + j] = uint4(e, off[e] + j * p.BM, min(p.BM, c - j * p.BM), 0);
+  }
+  for (uint i = tid; i < p.P; i += ntg) sorted[off[eid[i]] + rank[i]] = i;
+}
+
+struct Ink2SituP {
+  uint n;
+};
+
+[[kernel]] void ink2_moe_situ_half(const device float2* w13_out [[buffer(0)]], device half* act_h [[buffer(1)]],
+                                   constant Ink2SituP& p [[buffer(2)]], uint i [[thread_position_in_grid]]) {
+  if (i >= p.n) return;
+  const float2 gu = w13_out[i];
+  const float g = gu.x, u = gu.y;
+  const float v =
+      (4.0f * metal::precise::tanh(g * 0.25f)) * (1.0f / (1.0f + metal::precise::exp(-g))) *
+      (25.0f * metal::precise::tanh(u * 0.04f));
+  act_h[i] = half(v);
+}
+
+struct Ink2CombineP {
+  uint T, H, K_top;
+};
+
+[[kernel]] void ink2_moe_combine(const device float* pair_out [[buffer(0)]], const device float* ew [[buffer(1)]],
+                                 device float* out [[buffer(2)]], constant Ink2CombineP& p [[buffer(3)]],
+                                 uint t [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                                 uint ntg [[threads_per_threadgroup]]) {
+  const uint h4 = p.H / 4;
+  for (uint c = tid; c < h4; c += ntg) {
+    float4 acc = float4(0.0f);
+    for (uint s = 0; s < p.K_top; ++s) {
+      const float w = ew[size_t(t) * p.K_top + s];
+      acc += w * *(const device float4*)(pair_out + (size_t(t) * p.K_top + s) * p.H + c * 4);
+    }
+    *(device float4*)(out + size_t(t) * p.H + c * 4) = acc;
+  }
 }

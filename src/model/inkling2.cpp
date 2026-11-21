@@ -1,5 +1,7 @@
 #include "model/inkling2.h"
 
+#include "engine/device_profile.h"
+#include "engine/profile.h"
 #include "model/inkling2_kernels.h"
 #include "model/kparams.h"
 #include "model/sampler.h"
@@ -22,6 +24,8 @@
 #include <unordered_map>
 
 namespace ni {
+
+extern const char* const kTensorKernelSource;
 
 using json = nlohmann::json;
 
@@ -71,7 +75,7 @@ struct Ink2Grouped {
   }
 };
 
-void prewarm_pipelines() {
+void prewarm_pipelines(bool tensor_pf) {
   if (const char* v = getenv("NI_PREWARM"); v && !strcmp(v, "0")) return;
   static const char* const kInk2Names[] = {
       "ink2_copy_bytes",       "ink2_bf16_mv",           "ink2_bf16_mv4",         "ink2_bf16_mv4_multi6",
@@ -80,9 +84,19 @@ void prewarm_pipelines() {
       "ink2_embed_norm",       "ink2_sconv_static",      "ink2_sconv_static_pf",  "ink2_sconv_dynamic",    "ink2_qkvr_prep",         "ink2_rel_bias",         "ink2_rel_bias_pf",
       "ink2_attn_decode",      "ink2_attn_decode_reduce","ink2_attn_prefill",     "ink2_moe_route",
       "ink2_moe_nvfp4_w13_situ","ink2_moe_nvfp4_w2_acc", "ink2_moe_mxfp8_w13_situ","ink2_moe_mxfp8_w2_acc",
-      "ink2_softcap",
+      "ink2_softcap",          "ink2_moe_bucket",        "ink2_moe_situ_half",    "ink2_moe_combine",
   };
   for (const char* n : kInk2Names) (void)ink2_pipe(n);
+  if (tensor_pf) {
+    static const char* const kTensorNames[] = {
+        "ink2_t_bf16_m64",
+        "ink2_t_nvfp4_moe_w13_m16", "ink2_t_nvfp4_moe_w13_m32", "ink2_t_nvfp4_moe_w13_m64",
+        "ink2_t_nvfp4_moe_w2_m16",  "ink2_t_nvfp4_moe_w2_m32",  "ink2_t_nvfp4_moe_w2_m64",
+        "ink2_t_mxfp8_moe_w13_m16", "ink2_t_mxfp8_moe_w13_m32", "ink2_t_mxfp8_moe_w13_m64",
+        "ink2_t_mxfp8_moe_w2_m16",  "ink2_t_mxfp8_moe_w2_m32",  "ink2_t_mxfp8_moe_w2_m64",
+    };
+    for (const char* n : kTensorNames) (void)base_pipe(n);
+  }
   (void)base_pipe("topk_stage1");
   (void)base_pipe("sample_stage2");
 }
@@ -142,6 +156,22 @@ struct Ink2MoeP {
 struct Ink2SoftcapP {
   uint32_t n;
   float cap, inv_cap;
+};
+struct Ink2BucketP {
+  uint32_t P, E, BM;
+};
+struct Ink2SituP {
+  uint32_t n;
+};
+struct Ink2CombineP {
+  uint32_t T, H, K_top;
+};
+struct Ink2tGemmP {
+  uint32_t M, N, K;
+  uint32_t x_ld, y_ld;
+  uint32_t add;
+  uint32_t q_estride, s_estride;
+  uint32_t k;
 };
 
 const json& text_cfg(const json& root) { return root.contains("text_config") ? root["text_config"] : root; }
@@ -379,11 +409,14 @@ MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
                        size_t(c.num_layers) * 2 * size_t(c.n_experts) * 4 +
                        size_t(c.hq) * kMaxAttnChunks * (2 + size_t(c.head_dim)) * 4 + V * 4 +
                        2 * (V / 2048 + 2) * 64 * 4 + 2 * 64 * 4;
+  const size_t P = T * size_t(c.top_k);
+  const size_t moe_tmp_bytes = P * std::max(H, size_t(2) * size_t(c.moe_I)) * 4 + P * size_t(c.moe_I) * 2 +
+                               2 * P * 4 + (P / 16 + size_t(c.n_experts) + 2) * 16 + 16;
   MemPlan m;
   m.weights = safetensors_llm_bytes(dir);
   m.kv_per_pos = kv_per_pos(c);
   m.slot_state = 3 * (ring_bytes_per_seq(c, chunk) + conv_bytes_per_seq(c));
-  m.activations = T * per_row + fixed + (16u << 20);
+  m.activations = T * per_row + fixed + moe_tmp_bytes + (16u << 20);
   m.hidden = c.hidden;
   m.layers = int(c.schedule.size());
   m.formats = "NVFP4 (L0-19) + MXFP8 (L20-23) + BF16 dense (text-only)";
@@ -398,7 +431,19 @@ Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
   tmax_ = std::max(8, prefill_chunk > 0 ? prefill_chunk : 512);
   ring_rows_ = (cfg_.swa + tmax_ + 15) / 16 * 16;
   ink2::compile_kernels();
-  prewarm_pipelines();
+  {
+    bool here = false;
+    if (__builtin_available(macOS 26.0, *)) here = default_on(Knob::kInk2TensorPf, ModelFacts{});
+    const bool want =
+        profile_switch("NI_INK2_TENSOR", here, "Inkling-2-Mini prefill GEMMs on the matrix units (NI_INK2_TENSOR)");
+    if (want) {
+      if (__builtin_available(macOS 26.0, *)) {
+        Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
+        tensor_pf_ = Gpu::get().pipeline("ink2_t_bf16_m64", false).pso != nullptr;
+      }
+    }
+  }
+  prewarm_pipelines(tensor_pf_);
   load();
 }
 
@@ -647,6 +692,16 @@ void Inkling2::alloc_buffers() {
   ew_ = alloc(T * size_t(cfg_.top_k) * 4, "ink2_ew");
   moe_act_ = alloc(T * size_t(cfg_.top_k) * size_t(cfg_.moe_I) * 4, "ink2_moe_act");
   moe_out_ = alloc(T * H * 4, "ink2_moe_out");
+  if (tensor_pf_) {
+    const size_t P = T * size_t(cfg_.top_k);
+    const size_t max_tiles = P / 16 + size_t(cfg_.n_experts) + 2;
+    moe_sorted_ = alloc(P * 4, "ink2_moe_sorted");
+    moe_rank_ = alloc(P * 4, "ink2_moe_rank");
+    moe_tiles_ = alloc(max_tiles * 16, "ink2_moe_tiles");
+    moe_ntiles_ = alloc(16, "ink2_moe_ntiles");
+    moe_tmp_ = alloc(P * std::max(H, size_t(2) * size_t(cfg_.moe_I)) * 4, "ink2_moe_tmp");
+    moe_act_h_ = alloc(P * size_t(cfg_.moe_I) * 2, "ink2_moe_act_h");
+  }
   logits_ = alloc(V * 4, "ink2_logits");
   cand_v_ = alloc((V / 2048 + 2) * 64 * 4, "ink2_cand_v");
   cand_i_ = alloc((V / 2048 + 2) * 64 * 4, "ink2_cand_i");
@@ -866,6 +921,19 @@ void Inkling2::enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer
         e.dispatch((N + 3) / 4, 1, 1, 128);
       }
     }
+  } else if (tensor_pf_ && w.dtype == DType::BF16 && K % 32 == 0) {
+    const Ink2tGemmP p{uint32_t(M), N, K, K, N, add ? 1u : 0u, 0u, 0u, 0u};
+    e.use(base_pipe("ink2_t_bf16_m64"));
+    e.buf(0, x);
+    e.buf(1, w.buf);
+    e.buf(2, w.buf);
+    e.buf(3, y);
+    e.val(4, p);
+    e.buf(5, moe_tiles_);
+    e.buf(6, moe_ntiles_);
+    e.buf(7, moe_sorted_);
+    e.buf(8, x);
+    e.dispatch((N + 63) / 64, (uint32_t(M) + 63) / 64, 1, 128);
   } else {
     const Ink2MmP p{uint32_t(M), N, K, K, N, w.dtype == DType::F32 ? 1u : 0u, add ? 1u : 0u};
     e.use(ink2_pipe("ink2_bf16_mm"));
@@ -1364,47 +1432,117 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       e.dispatch(uint32_t(T), 1, 1, 32);
     }
     {
-      const Ink2MoeP mp{uint32_t(T), H, uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k)};
-      if (!L.is_mxfp8) {
-        e.use(ink2_pipe("ink2_moe_nvfp4_w13_situ"));
-        e.buf(0, x_mlp_);
-        e.buf(1, eid_);
-        e.buf(2, L.w13->buf);
-        e.buf(3, L.w13_sc->buf);
-        e.buf(4, L.w13_outer);
-        e.buf(5, moe_act_);
-        e.val(6, mp);
-        e.dispatch((uint32_t(cfg_.moe_I) + 15) / 16, uint32_t(cfg_.top_k), uint32_t(T), 128);
-
-        e.use(ink2_pipe("ink2_moe_nvfp4_w2_acc"));
-        e.buf(0, moe_act_);
-        e.buf(1, eid_);
-        e.buf(2, ew_);
-        e.buf(3, L.w2->buf);
-        e.buf(4, L.w2_sc->buf);
-        e.buf(5, L.w2_outer);
-        e.buf(6, moe_out_);
-        e.val(7, mp);
-        e.dispatch((H + 15) / 16, uint32_t(T), 1, 128);
+      if (tensor_pf_ && T > 32) {
+        const uint32_t P = uint32_t(T) * uint32_t(cfg_.top_k);
+        const uint32_t E = uint32_t(cfg_.n_experts);
+        const uint32_t I = uint32_t(cfg_.moe_I);
+        const uint32_t per = P / E;
+        const uint32_t bm = per >= 40 ? 64u : per >= 12 ? 32u : 16u;
+        const std::string ms = "_m" + std::to_string(bm);
+        const uint32_t max_tiles = P / bm + E + 1;
+        {
+          const Ink2BucketP bp{P, E, bm};
+          e.use(ink2_pipe("ink2_moe_bucket"));
+          e.buf(0, eid_);
+          e.buf(1, moe_sorted_);
+          e.buf(2, moe_tiles_);
+          e.buf(3, moe_ntiles_);
+          e.buf(4, moe_rank_);
+          e.val(5, bp);
+          e.dispatch(1, 1, 1, 256);
+        }
+        const uint32_t w13_q_stride = L.is_mxfp8 ? (2 * I * H) : (2 * I * (H / 2));
+        const uint32_t w13_s_stride = L.is_mxfp8 ? (2 * I * (H / 32)) : (2 * I * (H / 16));
+        {
+          const Ink2tGemmP gp{P, 2 * I, H, H, 2 * I, 0u, w13_q_stride, w13_s_stride, uint32_t(cfg_.top_k)};
+          e.use(base_pipe((L.is_mxfp8 ? "ink2_t_mxfp8_moe_w13" : "ink2_t_nvfp4_moe_w13") + ms));
+          e.buf(0, x_mlp_);
+          e.buf(1, L.w13->buf);
+          e.buf(2, L.w13_sc->buf);
+          e.buf(3, moe_tmp_);
+          e.val(4, gp);
+          e.buf(5, moe_tiles_);
+          e.buf(6, moe_ntiles_);
+          e.buf(7, moe_sorted_);
+          e.buf(8, L.is_mxfp8 ? x_mlp_ : L.w13_outer);
+          e.dispatch((2 * I + 63) / 64, max_tiles, 1, 128);
+        }
+        {
+          const Ink2SituP sp{P * I};
+          e.use(ink2_pipe("ink2_moe_situ_half"));
+          e.buf(0, moe_tmp_);
+          e.buf(1, moe_act_h_);
+          e.val(2, sp);
+          e.dispatch((sp.n + 255) / 256, 1, 1, 256);
+        }
+        const uint32_t w2_q_stride = L.is_mxfp8 ? (H * I) : (H * (I / 2));
+        const uint32_t w2_s_stride = L.is_mxfp8 ? (H * (I / 32)) : (H * (I / 16));
+        {
+          const Ink2tGemmP gp{P, H, I, I, H, 0u, w2_q_stride, w2_s_stride, uint32_t(cfg_.top_k)};
+          e.use(base_pipe((L.is_mxfp8 ? "ink2_t_mxfp8_moe_w2" : "ink2_t_nvfp4_moe_w2") + ms));
+          e.buf(0, moe_act_h_);
+          e.buf(1, L.w2->buf);
+          e.buf(2, L.w2_sc->buf);
+          e.buf(3, moe_tmp_);
+          e.val(4, gp);
+          e.buf(5, moe_tiles_);
+          e.buf(6, moe_ntiles_);
+          e.buf(7, moe_sorted_);
+          e.buf(8, L.is_mxfp8 ? x_mlp_ : L.w2_outer);
+          e.dispatch((H + 63) / 64, max_tiles, 1, 128);
+        }
+        {
+          const Ink2CombineP cp{uint32_t(T), H, uint32_t(cfg_.top_k)};
+          e.use(ink2_pipe("ink2_moe_combine"));
+          e.buf(0, moe_tmp_);
+          e.buf(1, ew_);
+          e.buf(2, moe_out_);
+          e.val(3, cp);
+          e.dispatch(uint32_t(T), 1, 1, 256);
+        }
       } else {
-        e.use(ink2_pipe("ink2_moe_mxfp8_w13_situ"));
-        e.buf(0, x_mlp_);
-        e.buf(1, eid_);
-        e.buf(2, L.w13->buf);
-        e.buf(3, L.w13_sc->buf);
-        e.buf(4, moe_act_);
-        e.val(5, mp);
-        e.dispatch((uint32_t(cfg_.moe_I) + 3) / 4, uint32_t(cfg_.top_k), uint32_t(T), 128);
+        const Ink2MoeP mp{uint32_t(T), H, uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k)};
+        if (!L.is_mxfp8) {
+          e.use(ink2_pipe("ink2_moe_nvfp4_w13_situ"));
+          e.buf(0, x_mlp_);
+          e.buf(1, eid_);
+          e.buf(2, L.w13->buf);
+          e.buf(3, L.w13_sc->buf);
+          e.buf(4, L.w13_outer);
+          e.buf(5, moe_act_);
+          e.val(6, mp);
+          e.dispatch((uint32_t(cfg_.moe_I) + 15) / 16, uint32_t(cfg_.top_k), uint32_t(T), 128);
 
-        e.use(ink2_pipe("ink2_moe_mxfp8_w2_acc"));
-        e.buf(0, moe_act_);
-        e.buf(1, eid_);
-        e.buf(2, ew_);
-        e.buf(3, L.w2->buf);
-        e.buf(4, L.w2_sc->buf);
-        e.buf(5, moe_out_);
-        e.val(6, mp);
-        e.dispatch((H + 3) / 4, uint32_t(T), 1, 128);
+          e.use(ink2_pipe("ink2_moe_nvfp4_w2_acc"));
+          e.buf(0, moe_act_);
+          e.buf(1, eid_);
+          e.buf(2, ew_);
+          e.buf(3, L.w2->buf);
+          e.buf(4, L.w2_sc->buf);
+          e.buf(5, L.w2_outer);
+          e.buf(6, moe_out_);
+          e.val(7, mp);
+          e.dispatch((H + 15) / 16, uint32_t(T), 1, 128);
+        } else {
+          e.use(ink2_pipe("ink2_moe_mxfp8_w13_situ"));
+          e.buf(0, x_mlp_);
+          e.buf(1, eid_);
+          e.buf(2, L.w13->buf);
+          e.buf(3, L.w13_sc->buf);
+          e.buf(4, moe_act_);
+          e.val(5, mp);
+          e.dispatch((uint32_t(cfg_.moe_I) + 3) / 4, uint32_t(cfg_.top_k), uint32_t(T), 128);
+
+          e.use(ink2_pipe("ink2_moe_mxfp8_w2_acc"));
+          e.buf(0, moe_act_);
+          e.buf(1, eid_);
+          e.buf(2, ew_);
+          e.buf(3, L.w2->buf);
+          e.buf(4, L.w2_sc->buf);
+          e.buf(5, moe_out_);
+          e.val(6, mp);
+          e.dispatch((H + 3) / 4, uint32_t(T), 1, 128);
+        }
       }
     }
 
