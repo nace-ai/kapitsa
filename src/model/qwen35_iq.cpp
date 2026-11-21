@@ -134,9 +134,8 @@ void Qwen35::enc_moe_iq_rows(Encoder& e, const Layer& L, int R, const Buffer& x)
   e.dispatch((D + dnr - 1) / dnr, uint32_t(R), 1, 32 * (k + 1));
 }
 
-// The 8-row verify's MoE block (enc_moe8's passes): x_ += sum_j w_j expert_j(n) + w_s shared(n), n = norm(x_), with
-// moe8_plan's tiles (every touched expert once for all its rows, the shared expert one more tile) on moe8i_gu /
-// moe8i_down, then moe8_combine. Row-independent (no scalar passes for lightly used experts).
+// The 8-row verify's IQ expert passes use one tile per touched expert for all its rows,
+// plus one for the shared expert. enc_moe8_combine consumes their outputs.
 void Qwen35::enc_moe8_iq(Encoder& e, const Layer& L, int R, int li) {
   const int D = cfg_.hidden, k = cfg_.top_k, E = cfg_.experts;
   const uint32_t I = uint32_t(cfg_.moe_I);
@@ -183,11 +182,6 @@ void Qwen35::enc_moe8_iq(Encoder& e, const Layer& L, int R, int li) {
   e.val(8, dp);
   e.buf(9, v8tiles_); e.buf(10, v8nt_); e.buf(11, v8slot_);
   e.dispatch_indirect(v8args_, 12, 32 * cs);
-  kp::Moe8Combine cp{uint32_t(D), uint32_t(k)};
-  e.use(pipe_iq("moe8_combine"));
-  e.buf(0, v8out_); e.buf(1, v8sh_); e.buf(2, rwts_); e.buf(3, x_);
-  e.val(4, cp);
-  e.dispatch((D / 4 + 63) / 64, R, 1, 64);
 }
 
 // Prefill of T rows: router and top-k on the prefill GEMMs, the (row, expert) pairs bucketed by expert into tiles of

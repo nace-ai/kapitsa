@@ -760,6 +760,7 @@ class Qwen35 : public Model {
   // next_norm: the norm of what follows (the next layer's input norm, or the final norm); when given, the combine may
   // also write that norm's X8 table (V8Knobs::fuse & 1; with v8_tw() also the T table). Returns whether it did.
   bool enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* next_norm = nullptr);
+  bool enc_moe8_combine(Encoder& e, int R, const Tensor* next_norm);
   // ---- routed experts in llama.cpp's IQ blocks (GGUF imports; qwen35_iq.cpp) ----
   void load_iq_experts();
   std::string iq_layer_check(const Layer& L) const;  // "" when the IQ MoE kernels take the layer

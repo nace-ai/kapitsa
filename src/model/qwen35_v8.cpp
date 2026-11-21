@@ -1010,7 +1010,7 @@ static int moe_emu_mode() {
 bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* next_norm) {
   if (L.eg.iq) {  // llama.cpp's IQ blocks (qwen35_iq.cpp)
     enc_moe8_iq(e, L, R, li);
-    return false;
+    return enc_moe8_combine(e, R, next_norm);
   }
   const int D = cfg_.hidden, k = cfg_.top_k, E = cfg_.experts;
   const uint32_t I = uint32_t(cfg_.moe_I);
@@ -1157,6 +1157,11 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
     e.dispatch_indirect(v8args_, 36, 32 * s_nsg);
   }
   if (sep) moe8e(v8sm2_, v8hsc2_, v8hse2_, 4, 48);  // list B (its count in ntiles[2])
+  return enc_moe8_combine(e, R, next_norm);
+}
+
+bool Qwen35::enc_moe8_combine(Encoder& e, int R, const Tensor* next_norm) {
+  const int D = cfg_.hidden, k = cfg_.top_k;
   // with the next norm: the combine also writes that norm's X8 table as x8_prep2 would (moe8_combine_x8: one
   // threadgroup per row, N / 4 threads; bitwise moe8_combine + x8_prep2)
   static const bool prep1 = env_int("NI_V8_PREP", 2) == 1;
