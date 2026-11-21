@@ -471,15 +471,6 @@ void Tokenizer::load(const std::string& path) {
            p["pattern"].contains("Regex") && p["pattern"]["Regex"].is_string() && p["pattern"]["Regex"] == re &&
            p.value("behavior", "") == "Isolated" && !p.value("invert", false);
   };
-  auto is_o200k_regex = [](const std::string& re) {
-    if (re == kO200k) return true;
-    // Accept formatting/whitespace variations of the O200k regex containing all four distinguishing pieces
-    // so minor serializer differences do not silently fall back to Qwen's split.
-    return re.find("[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]") != std::string::npos &&
-           re.find("[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]") != std::string::npos &&
-           re.find("(?i:'s|'t|'re|'ve|'m|'ll|'d)") != std::string::npos &&
-           re.find("\\p{N}{1,3}") != std::string::npos;
-  };
   const auto& pt = j["pre_tokenizer"];
   if (pt.is_object() && pt.value("type", "") == "Sequence" && pt.contains("pretokenizers") &&
       pt["pretokenizers"].is_array()) {
@@ -495,7 +486,7 @@ void Tokenizer::load(const std::string& path) {
             p.value("behavior", "") == "Isolated" && !p.value("invert", false)) {
           const std::string& re = p["pattern"]["Regex"].get_ref<const std::string&>();
           if (re == kTekken) split_ = Split::Tekken;
-          else if (is_o200k_regex(re)) split_ = Split::O200k;
+          else if (re == kO200k) split_ = Split::O200k;
         }
   }
   if (split_ != Split::Qwen) {
