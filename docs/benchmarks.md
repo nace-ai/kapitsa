@@ -600,8 +600,7 @@ Nemotron Dory1.0 4B's NVFP4 checkpoint is a KL of 0.020 from its BF16 checkpoint
 
 ### Nace quants against the packs they replace (M5 Pro 48 GB, 2026-11)
 
-Nace quants are our quantization framework for MLX packs. These are the measurements behind the README's Nace quants section: the
-Nace releases against the packs Kapitsa served before (lmstudio-community's for the 4B and 9B, MTPLX's for the
+These earlier MLX measurements compare Nace quants with the packs Kapitsa served before (lmstudio-community's for the 4B and 9B, MTPLX's for the
 35B-A3B, the plain 4-bit pack for the 27B, which `27b` served before and `27b:4bit` keeps). They sit closer to bf16 at the same weight size and score at least as high
 on GSM8K.
 

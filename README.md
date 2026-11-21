@@ -28,7 +28,7 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 ## 🔥 What's new
 
 - [2026/11] 🐉 **Tencent's Hy4-flash runs on a 128 GB M5 Max at 36 tok/s, and still 35 tok/s at 32K context**: mlx-lm runs out of memory on the same 4-bit weights on that Mac, and on the 3.1-bit pack it decodes at 21 tok/s short and 4.4 at 32K; prefill 970 tok/s with `--profile fast` (`kapitsa serve --model hy4`, or `kapitsa opencode --model hy4`; [numbers](bench/results/2026-11-20-m5-max-hy4/README.md#against-mlx-lm), [how](docs/usage.md#other-models)).
-- [2026/11] 🎯 **Nace quants: the 4B, 9B, 27B and 35B-A3B downloads are closer to the original model than the packs they replace, at the same size** ([numbers](#nace-quants)).
+- [2026/11] 🎯 **Nace quants now cover Qwen, Hy4, Inkling and DeepSeek, led by Hy4-flash's lowest measured KL at 122.58 GB or smaller** ([downloads and results](#nace-quants)).
 - [2026/11] ⚡ **Qwen3.8-Flash-Next 180B writes 6% faster on an M5 Max**, with the same tokens: greedy decode 107.3 → 113.9 tok/s after three verify-kernel changes ([numbers](bench/results/2026-11-04-m5-max-flash-next/README.md)).
 - [2026/10] 🍀 **DiffuSpace's Clover-35B-A3B, a block-diffusion MoE, writes at 304 tok/s on an M5 Max**: `kapitsa serve --model clover` ([numbers](docs/benchmarks.md#diffuspace-clover-35b-a3b-m5-max-2026-10-28), [how](docs/usage.md#other-models)).
 - [2026/10] 🗄️ **A 180B model runs on a 48 GB Mac**: Qwen3.8-Flash-Next's Q2_0 experts stream from the SSD ([numbers](bench/results/2026-10-28-m5-pro-flash-next-engines/README.md)).
@@ -40,33 +40,73 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 - 🤖 **Runs your coding agent**: `kapitsa claude`, `codex`, `opencode`, `pi`, `hermes`, `aider`, `goose`, `copilot`
 - 🗄️ **Big models on small Macs**: 180B at 61 tok/s on a 48 GB M5 Pro
 - 💾 **No waiting after a restart**: a 16K follow-up starts in 0.16 s, not 17 s, on an M4 Pro ([numbers](docs/usage.md#ssd-prefix-cache))
-- 🎯 **Closer to the original**: Nace quants for the Qwen 4B, 9B, 27B and 35B-A3B, closer than the 4-bit packs they are compared with at the same size ([numbers](#nace-quants))
+- 🎯 **Nace quants**: MLX and GGUF downloads for Qwen, Hy4, Inkling and DeepSeek ([quality and downloads](#nace-quants))
 - 🔌 **OpenAI and Anthropic APIs**: plus a chat page, on `127.0.0.1:8000`
 - 🧠 **GPU and Neural Engine together**: prefill hands part of its work to the Neural Engine
 - 🖥️ **Several Macs, one model**: a Mac that can't hold a model uses one that can ([how](docs/usage.md#several-macs))
 
 ### Nace quants
 
-**Downloads closer to the original model, at the same size.** Nace quants are our quantization for MLX packs and GGUF files. The `4b`, `9b`, `27b` and `35b` [aliases](docs/models.md) download them.
+Nace quants bring Qwen, Hy4, Inkling and DeepSeek to smaller downloads in MLX and GGUF. Each link below includes the model's results and runtime instructions.
 
-| 4-bit | Compared with | KL from bf16 (lower is closer) | [GSM8K](https://huggingface.co/datasets/openai/gsm8k), 1,319 questions |
-| --- | --- | --- | --- |
-| [4B](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX) | [lmstudio-community](https://huggingface.co/lmstudio-community) | 0.070 → **0.048** | 0.914 → 0.923 |
-| [9B](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit) | [lmstudio-community](https://huggingface.co/lmstudio-community) | 0.081 → **0.037** | 0.927 → **0.944** |
-| [27B](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX) | the plain 4-bit pack ([`27b:4bit`](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-4bit)) | 0.054 → **0.035** | 0.950 → 0.953 |
-| [35B-A3B](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX) | [MTPLX](https://huggingface.co/Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed) | 0.096 → **0.059** | 0.948 → 0.952 |
+#### Hy4
 
-The 9B row is the legacy pack (`9b` on M3 and M4); on M5 and newer `9b` is Nace Q4, which these numbers do not cover. [How it was measured](docs/benchmarks.md#nace-quants-against-the-packs-they-replace) · [every run](bench/results/2026-11-10-m5-pro-kquant/README.md)
+**Hy4-flash at 122.58 GB has lower KL than every measured file at its size or smaller.** Our [IQ4_XS-4.48bpw GGUF](https://huggingface.co/nace-ai/Hy4-flash-GGUF) scores **0.0946 KL** against native Hy4-flash on 5,621 token positions. KL measures how far the next-token probabilities move from the reference model. Lower is closer.
 
-**Download.** The MLX builds for Kapitsa and the GGUF files for [llama.cpp](https://github.com/ggml-org/llama.cpp), [LM Studio](https://lmstudio.ai) and [Ollama](https://github.com/ollama/ollama) that [Nace.AI](https://huggingface.co/nace-ai) publishes:
+| Model | Download | Weight size |
+| --- | --- | ---: |
+| Hy4-flash | [GGUF](https://huggingface.co/nace-ai/Hy4-flash-GGUF): IQ3_XXS · Q3_K_M · IQ4_XS-4.48bpw · Q4_K_M | 87.8 to 127.22 GB |
+| Hy4-flash | [MLX 3.1bit](https://huggingface.co/nace-ai/Hy4-flash-MLX-3.1bit) | 85.5 GB |
+| Hy4-flash | [MLX 3.8bit](https://huggingface.co/nace-ai/Hy4-flash-MLX-3.8bit) | 103.65 GB |
+| Hy4-flash | [MLX 4.6bit](https://huggingface.co/nace-ai/Hy4-flash-MLX-4.6bit) | 125.20 GB |
+| Hy4-flash | [MLX 4bit](https://huggingface.co/nace-ai/Hy4-flash-MLX-4bit) | 131.20 GB |
+| Hy4 | [MLX 4.6bit](https://huggingface.co/nace-ai/Hy4-MLX-4.6bit) | 456.3 GB |
+
+Sizes include required Engram tables. Full Hy4 includes nontext weights and keeps every routed expert. Its card includes a Linux CUDA runner. Kapitsa's `hy4` alias runs Hy4-flash; see [supported models](docs/models.md).
+
+#### Qwen
+
+**Closer to BF16 across all five model sizes.** Published MLX comparisons below use each model card's evaluation. Sizes count language-model weights, excluding vision and MTP. The KL column reads other pack → Nace.
+
+| Model | Nace, GB | Compared with, GB | KL, lower is closer |
+| --- | ---: | --- | --- |
+| [4B](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX) | 2.37 | lmstudio-community, 2.37 | 0.070 → **0.048** |
+| [9B Q4](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX) | 5.29 | mlx-community, 5.04 | 0.081 → **0.030** |
+| [27B](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX) | 15.13 | mlx-community, 15.13 | 0.054 → **0.035** |
+| [35B-A3B](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX) | 19.51 | mlx-community, 19.51 | 0.096 → **0.059** |
+| [Flash-Next 180B-A7B](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX) | 105.20 | mlx-community, 110.62 | 0.249 → **0.067** |
+
+The [9B Q5](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-Q5) reaches **0.0097 KL at 6.213 GB**, closer to BF16 than the larger OptiQ and Brooooooklyn packs. The [Flash-Next IQ4_XS GGUF](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-GGUF) has lower KL than all 13 measured GGUF rivals in its size band at 512 tokens, and all eight measured at 128K.
+
+<details>
+<summary>Qwen downloads</summary>
 
 | Model | MLX | GGUF |
 | --- | --- | --- |
-| [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B) · `4b` | [MLX](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX) | not published |
-| [Qwen3.5-9B](https://huggingface.co/Qwen/Qwen3.5-9B) · `9b` | [MLX](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX) · [MLX-4bit](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit) · [MLX-Q5](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-Q5) | [GGUF](https://huggingface.co/nace-ai/Qwen3.5-9B-GGUF) |
-| [Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) · `27b` | [MLX](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX) · [MLX-3bit](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-3bit) · [MLX-4bit](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-4bit) · [MLX-Q5](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-Q5) · [MLX-8bit](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-8bit) | [GGUF](https://huggingface.co/nace-ai/Qwen3.8-27B-GGUF) |
-| [Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) · `35b` | [MLX](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX) · [MLX-Q5](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX-Q5) | [GGUF](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-GGUF) |
-| [Qwen3.8-Flash-Next 180B-A7B](https://huggingface.co/Qwen/Qwen3.8-Flash-Next) · `flash-next` | [MLX](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX) · [MLX-4bit](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX-4bit) | [GGUF](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-GGUF) |
+| Qwen3.5-4B | [MLX](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX) | |
+| Qwen3.5-9B | [MLX](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX) · [4bit](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit) · [Q5](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-Q5) | [GGUF](https://huggingface.co/nace-ai/Qwen3.5-9B-GGUF) |
+| Qwen3.8-27B | [MLX](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX) · [3bit](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-3bit) · [4bit](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-4bit) · [Q5](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-Q5) · [8bit](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX-8bit) | [GGUF](https://huggingface.co/nace-ai/Qwen3.8-27B-GGUF) |
+| Qwen3.6-35B-A3B | [MLX](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX) · [Q5](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX-Q5) | [GGUF](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-GGUF) |
+| Qwen3.8-Flash-Next 180B-A7B | [MLX](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX) · [4bit](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX-4bit) | [GGUF](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-GGUF) |
+
+Also available: [Qwen3.8-27B NVFP4](https://huggingface.co/nace-ai/Qwen3.8-27B-NVFP4) for NVIDIA Blackwell GPUs. For Kapitsa downloads, use the [model aliases](docs/models.md). [Earlier MLX task scores and measurement details](docs/benchmarks.md#nace-quants-against-the-packs-they-replace).
+
+</details>
+
+#### Inkling 2 Mini
+
+Both releases score **0.004 mean KL** against the original checkpoint with BF16 activations on the held-out 2,040-position split. Each card links the exact scores and pinned runtime.
+
+| Download | Weight size |
+| --- | ---: |
+| [NVFP4 GGUF](https://huggingface.co/nace-ai/Inkling-2-Mini-GGUF) | 19.103 GB text backbone |
+| [MLX 5.8bit](https://huggingface.co/nace-ai/Inkling-2-Mini-MLX-5.8bit) | 18.932 GB text tensors; 20.234 GB full runtime download |
+
+#### DeepSeek V4.1 Flash Coding
+
+**37 of 38 LiveCodeBench v6 problems solved**, level with ISTA Coder on the same two seeds. Our [coding-specialized pruned GGUF](https://huggingface.co/nace-ai/DeepSeek-V4.1-Flash-Coding-GGUF) scores **0.140 KL** against a near-lossless Q8 reference on real code, versus 0.161 for EXL3 at 124 GB of main weights.
+
+The download is **71.8 GB of main weights plus a required 110.6 GB Engram table**. The model card has the llama.cpp command and download instructions.
 
 ### Drex decision models
 
