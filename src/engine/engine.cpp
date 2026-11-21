@@ -2351,48 +2351,62 @@ TextTags text_tags_for(const Tokenizer& tok, const std::string& src) {
   return t;
 }
 
-std::string render_inkling2_chat(const ChatRequest& r, bool images) {
+namespace {
+
+struct Ink2Effort {
+  std::string level;
+  std::string value;
+};
+
+Ink2Effort resolve_inkling2_effort(const ChatRequest& r) {
   static const std::unordered_map<std::string, std::string> effort_map = {
       {"none", "0"},     {"minimal", "0.1"}, {"low", "0.2"},  {"medium", "0.7"},
       {"high", "0.9"},   {"xhigh", "0.99"},  {"max", "0.99"},
-  };
-  static const std::unordered_map<std::string, std::string> role_tok = {
-      {"user", "<|message_user|>"},
-      {"assistant", "<|message_model|>"},
-      {"system", "<|message_system|>"},
-      {"tool", "<|message_tool|>"},
   };
   auto trim_ws = [](std::string s) {
     const size_t a = s.find_first_not_of(" \n\r\t");
     if (a == std::string::npos) return std::string();
     return s.substr(a, s.find_last_not_of(" \n\r\t") - a + 1);
   };
+  auto apply_num = [&](double num) -> Ink2Effort {
+    if (num < 0.0 || num > 0.99) throw std::runtime_error("reasoning_effort must be in [0.0, 0.99]");
+    const std::string val = (num == 0.0) ? "0" : nlohmann::json(num).dump();
+    return {val, val};
+  };
+  auto apply_str = [&](const std::string& raw) -> Ink2Effort {
+    const std::string key = trim_ws(raw);
+    auto it = effort_map.find(key);
+    if (it == effort_map.end()) throw std::runtime_error("Unknown reasoning_effort: " + raw);
+    return {key, it->second};
+  };
+  if (r.template_kwargs.contains("reasoning_effort") && !r.template_kwargs["reasoning_effort"].is_null()) {
+    const ojson& re = r.template_kwargs["reasoning_effort"];
+    if (re.is_string()) return apply_str(re.get<std::string>());
+    if (re.is_number()) return apply_num(re.get<double>());
+    throw std::runtime_error("reasoning_effort must be a string or number");
+  }
+  if (!r.effort.empty()) return apply_str(r.effort);
+  if (r.thinking_budget == 0 || r.think_cap == 0) return {"none", "0"};
+  if (r.template_kwargs.contains("enable_thinking") && r.template_kwargs["enable_thinking"].is_boolean() &&
+      !r.template_kwargs["enable_thinking"].get<bool>())
+    return {"none", "0"};
+  return {"high", "0.9"};
+}
+
+}  // namespace
+
+std::string inkling2_thinking_level(const ChatRequest& r) { return resolve_inkling2_effort(r).level; }
+
+std::string render_inkling2_chat(const ChatRequest& r, bool images) {
+  static const std::unordered_map<std::string, std::string> role_tok = {
+      {"user", "<|message_user|>"},
+      {"assistant", "<|message_model|>"},
+      {"system", "<|message_system|>"},
+      {"tool", "<|message_tool|>"},
+  };
   auto emit_effort = [&]() -> std::string {
-    std::string val = "0.9";
-    auto apply_num = [&](double num) {
-      if (num < 0.0 || num > 0.99) throw std::runtime_error("reasoning_effort must be in [0.0, 0.99]");
-      val = (num == 0.0) ? "0" : nlohmann::json(num).dump();
-    };
-    auto apply_str = [&](const std::string& raw) {
-      const std::string key = trim_ws(raw);
-      auto it = effort_map.find(key);
-      if (it == effort_map.end()) throw std::runtime_error("Unknown reasoning_effort: " + raw);
-      val = it->second;
-    };
-    if (r.template_kwargs.contains("reasoning_effort") && !r.template_kwargs["reasoning_effort"].is_null()) {
-      const ojson& re = r.template_kwargs["reasoning_effort"];
-      if (re.is_string()) apply_str(re.get<std::string>());
-      else if (re.is_number()) apply_num(re.get<double>());
-      else throw std::runtime_error("reasoning_effort must be a string or number");
-    } else if (!r.effort.empty()) {
-      apply_str(r.effort);
-    } else if (r.thinking_budget == 0 || r.think_cap == 0) {
-      val = "0";
-    } else if (r.template_kwargs.contains("enable_thinking") && r.template_kwargs["enable_thinking"].is_boolean() &&
-               !r.template_kwargs["enable_thinking"].get<bool>()) {
-      val = "0";
-    }
-    return "<|message_system|><|content_text|>Thinking effort level: " + val + "<|end_message|>";
+    return "<|message_system|><|content_text|>Thinking effort level: " + resolve_inkling2_effort(r).value +
+           "<|end_message|>";
   };
 
   std::string out;
@@ -5025,18 +5039,7 @@ std::string Engine::thinking_level(const ChatRequest& r, bool think, bool reason
 }
 
 std::string Engine::request_thinking_level(const ChatRequest& r, bool think) const {
-  if (ink2_) {
-    if (!r.effort.empty()) return r.effort;
-    if (r.template_kwargs.contains("reasoning_effort")) {
-      const auto& v = r.template_kwargs["reasoning_effort"];
-      if (v.is_string() && !v.get<std::string>().empty()) return v.get<std::string>();
-      if (v.is_number()) return v.dump();
-    }
-    if (r.template_kwargs.contains("enable_thinking") && r.template_kwargs["enable_thinking"].is_boolean() &&
-        !r.template_kwargs["enable_thinking"].get<bool>())
-      return "none";
-    return "high";
-  }
+  if (ink2_) return inkling2_thinking_level(r);
   return thinking_level(r, think, reasoning_effort_template_, think_open_ >= 0 || text_tags_.think);
 }
 

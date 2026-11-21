@@ -270,7 +270,9 @@ std::string chat_template_source(const std::string& model_dir);
 std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt,
                         bool images = false, bool native = false);
 // Inkling-2-Mini (chat_template.jinja): direct C++ renderer (minja lacks tojson/dictsort kwargs and float filter)
+// and matching effort resolver shared with Engine::request_thinking_level.
 std::string render_inkling2_chat(const ChatRequest& r, bool images = false);
+std::string inkling2_thinking_level(const ChatRequest& r);
 // Flint's chat template rewritten for minja (engine.cpp)
 std::string flint_template(std::string src);
 // A request followed by its answer as the client sends it back (content, and the reasoning when the client sends
