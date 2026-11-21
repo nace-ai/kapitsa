@@ -506,6 +506,12 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     think_space_[size_t(id)] =
         !b.empty() && !tok_.is_special(id) && b.find_first_not_of(" \t\r\n") == std::string::npos;
   }
+  if (ink2_) {
+    // Inkling-2 replies open with <|message_model|> before <|content_thinking|> (or <|content_text|>);
+    // keep ThinkControl waiting in kPre across that role token so thinking_control / budget_tokens applies.
+    const int model_tok = tok_.find("<|message_model|>");
+    if (model_tok >= 0 && size_t(model_tok) < think_space_.size()) think_space_[size_t(model_tok)] = 1;
+  }
   if (nh_) {
     // Nemotron Nano 9B v2: its tokenizer has no <think> or tool-call tokens (the tags are text; its calls
     // <TOOLCALL>[{"name": ..., "arguments": ...}]</TOOLCALL>), and its template switches thinking with "/think" /
@@ -2379,6 +2385,8 @@ Ink2Effort resolve_inkling2_effort(const ChatRequest& r) {
     if (it == effort_map.end()) throw std::runtime_error("Unknown reasoning_effort: " + raw);
     return {key, it->second};
   };
+  // Explicit thinking_control.hard_cap == 0 outranks an explicit reasoning_effort, while thinking_budget == 0 still ranks below it.
+  if (r.think_cap == 0) return {"none", "0"};
   if (r.template_kwargs.contains("reasoning_effort") && !r.template_kwargs["reasoning_effort"].is_null()) {
     const ojson& re = r.template_kwargs["reasoning_effort"];
     if (re.is_string()) return apply_str(re.get<std::string>());
@@ -2386,7 +2394,7 @@ Ink2Effort resolve_inkling2_effort(const ChatRequest& r) {
     throw std::runtime_error("reasoning_effort must be a string or number");
   }
   if (!r.effort.empty()) return apply_str(r.effort);
-  if (r.thinking_budget == 0 || r.think_cap == 0) return {"none", "0"};
+  if (r.thinking_budget == 0) return {"none", "0"};
   if (r.template_kwargs.contains("enable_thinking") && r.template_kwargs["enable_thinking"].is_boolean() &&
       !r.template_kwargs["enable_thinking"].get<bool>())
     return {"none", "0"};
@@ -3377,7 +3385,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     const ojson& kw = r.template_kwargs;
     const bool think_off =
         kw.contains("enable_thinking") && kw["enable_thinking"].is_boolean() && !kw["enable_thinking"].get<bool>();
-    if (cap >= 0 && think_close_ >= 0 && !clover_own && (!think_off || think)) {
+    // Inkling-2's "Thinking effort level: 0" is a prompt hint rather than a closed think tag, so a requested cap
+    // still arms in kPre there (disarming at <|content_text|> if the model skips thinking, or enforcing the cap if
+    // it still opens <|content_thinking|>).
+    if (cap >= 0 && think_close_ >= 0 && !clover_own && (!think_off || think || ink2_)) {
       std::vector<int> forced = r.think_close_text.empty() ? std::vector<int>() : tok_.encode(r.think_close_text);
       forced.push_back(think_close_);  // (ThinkControl::start shortens it to fit the cap, think_close_for)
       const bool on_call = r.think_end_on_tool_call >= 0 ? r.think_end_on_tool_call > 0 : !r.tools.empty();
@@ -3386,8 +3397,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         s.mask_words = (std::max(model_->vocab(), tok_.vocab_size()) + 31) / 32;
         s.mask = g.alloc(size_t(kf::kMaxRows) * size_t(s.mask_words) * 4, "grammar_mask");
       }
-      if (think && tc.near(1)) {  // a cap of 0: the prompt's last chunk samples the first token, </think> (or the text)
-        tc.fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), 0, 1, nullptr, 1);
+      // a cap of 0: on any model whose template leaves `<think>` to the model, the prompt's last chunk masks token 0
+      // (`</think>` when already in_think, or forbidding `open` in kPre so the model cannot open reasoning on token 0),
+      // unless a row-0 structured-output grammar already owns `s.mask` (`gm && g_on`)
+      if (!(gm && g_on) && tc.near(1) &&
+          tc.fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), 0, 1, nullptr, 1) > 0) {
         s.mask_rows = 1;
         s.mask_event = nullptr;
       }
