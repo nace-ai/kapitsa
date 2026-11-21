@@ -47,11 +47,11 @@ kapitsa opencode --model 35b    # also: claude, codex, pi
 
 ### Nace quants
 
-Nace quants bring Qwen, Hy4, Inkling and DeepSeek to smaller downloads in MLX and GGUF. Each link below includes the model's results and runtime instructions.
+Download Nace quants for Qwen, Hy4, Inkling and DeepSeek in MLX and GGUF. Each model card has quality results and runtime instructions.
 
 #### Hy4
 
-**Hy4-flash at 122.58 GB has lower KL than every measured file at its size or smaller.** Our [IQ4_XS-4.48bpw GGUF](https://huggingface.co/nace-ai/Hy4-flash-GGUF) scores **0.0946 KL** against native Hy4-flash on 5,621 token positions. KL measures how far the next-token probabilities move from the reference model. Lower is closer.
+**Hy4-flash at 122.58 GB has lower KL than [every measured file](https://huggingface.co/nace-ai/Hy4-flash-GGUF) at its size or smaller.** Our [IQ4_XS-4.48bpw GGUF](https://huggingface.co/nace-ai/Hy4-flash-GGUF) scores **0.0946 KL** against native Hy4-flash on 5,621 token positions across 11 texts. KL measures how far the next-token probabilities move from the reference model. Lower is closer. References and corpora differ by model, so compare KL only within a row or matched evaluation.
 
 | Model | Download | Weight size |
 | --- | --- | ---: |
@@ -62,7 +62,7 @@ Nace quants bring Qwen, Hy4, Inkling and DeepSeek to smaller downloads in MLX an
 | Hy4-flash | [MLX 4bit](https://huggingface.co/nace-ai/Hy4-flash-MLX-4bit) | 131.20 GB |
 | Hy4 | [MLX 4.6bit](https://huggingface.co/nace-ai/Hy4-MLX-4.6bit) | 456.3 GB |
 
-Sizes include required Engram tables. Full Hy4 includes nontext weights and keeps every routed expert. Its card includes a Linux CUDA runner. Kapitsa's `hy4` alias runs Hy4-flash; see [supported models](docs/models.md).
+Sizes include required Engram tables. The Hy4-flash MLX 4bit row counts complete text-model weight files. Its [catalog download](docs/models.md) is 133.83 GB. Full Hy4 includes nontext weights and keeps every routed expert. Its card includes a Linux CUDA runner. Kapitsa's `hy4` alias runs Hy4-flash; see [supported models](docs/models.md).
 
 #### Qwen
 
@@ -71,10 +71,14 @@ Sizes include required Engram tables. Full Hy4 includes nontext weights and keep
 | Model | Nace, GB | Compared with, GB | KL, lower is closer |
 | --- | ---: | --- | --- |
 | [4B](https://huggingface.co/nace-ai/Qwen3.5-4B-MLX) | 2.37 | lmstudio-community, 2.37 | 0.070 → **0.048** |
-| [9B Q4](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX) | 5.29 | mlx-community, 5.04 | 0.081 → **0.030** |
+| [9B Q4](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX) | 5.29 | mlx-community, 5.04 | 0.0814 → **0.0301** |
 | [27B](https://huggingface.co/nace-ai/Qwen3.8-27B-MLX) | 15.13 | mlx-community, 15.13 | 0.054 → **0.035** |
 | [35B-A3B](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX) | 19.51 | mlx-community, 19.51 | 0.096 → **0.059** |
-| [Flash-Next 180B-A7B](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX) | 105.20 | mlx-community, 110.62 | 0.249 → **0.067** |
+| [Flash-Next 180B-A7B Q4](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX) | 105.20 | mlx-community, 110.62 | 0.249 → **0.067** |
+
+9B Q4 is closer to BF16 with 5% more language-model weight, 5.29 vs 5.04 GB.
+
+For Flash-Next Q4, use the runtime in its model card. Kapitsa's `flash-next` alias downloads the [plain 4bit pack](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX-4bit).
 
 The [9B Q5](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-Q5) reaches **0.0097 KL at 6.213 GB**, closer to BF16 than the larger OptiQ and Brooooooklyn packs. The [Flash-Next IQ4_XS GGUF](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-GGUF) has lower KL than all 13 measured GGUF rivals in its size band at 512 tokens, and all eight measured at 128K.
 
@@ -89,24 +93,26 @@ The [9B Q5](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-Q5) reaches **0.0097 K
 | Qwen3.6-35B-A3B | [MLX](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX) · [Q5](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-MLX-Q5) | [GGUF](https://huggingface.co/nace-ai/Qwen3.6-35B-A3B-GGUF) |
 | Qwen3.8-Flash-Next 180B-A7B | [MLX](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX) · [4bit](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX-4bit) | [GGUF](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-GGUF) |
 
-Also available: [Qwen3.8-27B NVFP4](https://huggingface.co/nace-ai/Qwen3.8-27B-NVFP4) for NVIDIA Blackwell GPUs. For Kapitsa downloads, use the [model aliases](docs/models.md). [Earlier MLX task scores and measurement details](docs/benchmarks.md#nace-quants-against-the-packs-they-replace).
+Also available: [Qwen3.8-27B NVFP4](https://huggingface.co/nace-ai/Qwen3.8-27B-NVFP4) for NVIDIA Blackwell GPUs. For Kapitsa downloads, use the [model aliases](docs/models.md). [Earlier Kapitsa MLX task scores](docs/benchmarks.md#nace-quants-against-the-packs-they-replace).
 
 </details>
 
 #### Inkling 2 Mini
 
-Both releases score **0.004 mean KL** against the original checkpoint with BF16 activations on the held-out 2,040-position split. Each card links the exact scores and pinned runtime.
+Both releases score **0.004 mean KL** against the original checkpoint with BF16 activations on the held-out 2,040-position split.
 
 | Download | Weight size |
 | --- | ---: |
 | [NVFP4 GGUF](https://huggingface.co/nace-ai/Inkling-2-Mini-GGUF) | 19.103 GB text backbone |
 | [MLX 5.8bit](https://huggingface.co/nace-ai/Inkling-2-Mini-MLX-5.8bit) | 18.932 GB text tensors; 20.234 GB full runtime download |
 
+Use the pinned CUDA llama.cpp build for GGUF, or the pinned mlx-lm port for MLX, as linked in their cards.
+
 #### DeepSeek V4.1 Flash Coding
 
-**37 of 38 LiveCodeBench v6 problems solved**, level with ISTA Coder on the same two seeds. Our [coding-specialized pruned GGUF](https://huggingface.co/nace-ai/DeepSeek-V4.1-Flash-Coding-GGUF) scores **0.140 KL** against a near-lossless Q8 reference on real code, versus 0.161 for EXL3 at 124 GB of main weights.
+**37 of 38 LiveCodeBench v6 problems solved**, level with ISTA Coder on the same two seeds.
 
-The download is **71.8 GB of main weights plus a required 110.6 GB Engram table**. The model card has the llama.cpp command and download instructions.
+Our [coding-specialized pruned GGUF](https://huggingface.co/nace-ai/DeepSeek-V4.1-Flash-Coding-GGUF) is **71.8 GB of main weights plus a required 110.6 GB Engram table**. Use the model card's llama.cpp runtime and download instructions.
 
 ### Drex decision models
 

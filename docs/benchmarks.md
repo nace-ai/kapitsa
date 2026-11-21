@@ -604,6 +604,8 @@ These earlier MLX measurements compare Nace quants with the packs Kapitsa served
 35B-A3B, the plain 4-bit pack for the 27B, which `27b` served before and `27b:4bit` keeps). They sit closer to bf16 at the same weight size and score at least as high
 on GSM8K.
 
+The [README's current KL table](../README.md#nace-quants) uses current model-card comparisons, including mlx-community for [9B Q4](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX). This section records the earlier Kapitsa runs, including lmstudio-community for the legacy 9B release.
+
 The 9B results in this section use the [legacy pack at `867adaa`](https://huggingface.co/nace-ai/Qwen3.5-9B-MLX-4bit/tree/867adaa1c6d84d1fd9b4f37f43836019c877ba59). Macs with matrix units (M5 and newer) default to Nace Q4 at `ff7b61b8`; other Macs, including M3 and M4, keep the legacy pack. These GSM8K and decode results do not describe Nace Q4. The older 9B rows in the speed tables below also keep their measured pack and 9.0 GB download size.
 
 | 4-bit | KL from bf16, lower is closer | GSM8K, 1,319 questions | Decode on an M5 Pro, tok/s |
