@@ -12,6 +12,7 @@
 #include "model/dflash2.h"
 #include "model/dory.h"
 #include "model/flint.h"
+#include "model/ink2_dflare.h"
 #include "model/kflash_budget.h"
 #include "model/kflash_wrap.h"
 #include "model/lilicorr.h"
@@ -521,6 +522,8 @@ class Engine {
     std::unique_ptr<Seq> seq;
     std::unique_ptr<DFlashSeq> dseq;  // drafter context ring (DFlash2 only)
     std::unique_ptr<LiliSeq> lseq;    // drafter context (LiLiCorr only)
+    std::unique_ptr<Ink2DFlareSeq> ink2_dseq;  // Inkling-2 DFlare drafter context ring
+    int ink2_dseq_pos = 0;                     // sequence length committed into ink2_dseq
     std::vector<std::unique_ptr<LiliSeq>> lckpts;   // LiLiCorr: the drafter context as it was at ckpts[i]
     std::vector<int> tokens;             // tokens whose effect is in the live state (image rows: their keys)
     std::vector<vision::ImageSpan> img_spans;  // the images among them
@@ -706,6 +709,10 @@ class Engine {
   Hy4Flash* hy4_ = nullptr;  // model_ when it is Hy4-flash
   Clover* clover_ = nullptr;  // model_ when it is Clover (block diffusion; q35_ too)
   Inkling2* ink2_ = nullptr;  // model_ when it is Inkling-2-Mini (inkling2_loop)
+  std::unique_ptr<Ink2DFlare> ink2_dfl_;  // Inkling-2 bundled DFlare/DSpark drafter (mtp.safetensors)
+  int ink2_spec_ = 0;                     // max DFlare drafts per cycle (0 = off, 1..7)
+  bool ink2_spec_auto_ = false;           // adaptive depth when --spec is not explicitly set
+  Buffer ink2_pf_taps_, ink2_vf_taps_, ink2_vf_logits_;
   int flint_ngram_ = 0;      // Flint: prompt-lookup drafts per cycle (0: plain decoding)
   // Flint: self-drafts per cycle at long contexts (Flint::encode_draft; 0: none), their full-attention layers' window,
   // and the shortest prompt that takes them
