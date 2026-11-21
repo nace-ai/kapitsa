@@ -48,6 +48,7 @@
 #include "metal/gpu.h"
 #include "model/dory.h"
 #include "model/flint.h"
+#include "model/inkling2.h"
 #include "model/kflash_budget.h"
 #include "model/nemotron_h.h"
 #include "model/qwen35.h"
@@ -237,6 +238,7 @@ int main(int argc, char** argv) {
     LoopKv kv = LoopKv::last_loop;
     if (!loop_kv.empty() && !parse_loop_kv(loop_kv, &kv)) fatal("--loop-kv: last-loop or per-loop");
     const char* has = Qwen4Exp::is_model(dir) || Flint::is_model(dir) ? "step,verify"
+                      : Inkling2::is_model(dir)                       ? "step"
                       : Dory::is_model(dir) ? (kv == LoopKv::per_loop ? "step,verify" : "step")
                                             : "step,verify,batch";
     printf("%s\n", has);
@@ -287,6 +289,7 @@ int main(int argc, char** argv) {
   Qwen4Exp* fn = nullptr;  // Qwen3.8-Flash-Next (a Qwen35 too: q is set)
   NemotronH* nh = nullptr;
   Dory* dory = nullptr;
+  Inkling2* ink2 = nullptr;
   Flint* fl = nullptr;
   if (Qwen4Exp::is_model(dir)) {
     // the default memory budget, not the engine's (which sets its slots' state and KV apart): a Q2_0 pack's expert
@@ -306,6 +309,10 @@ int main(int argc, char** argv) {
     auto m = std::make_unique<Dory>(dir, chunk, loops, kv);
     dory = m.get();
     model = std::move(m);
+  } else if (Inkling2::is_model(dir)) {
+    auto m = std::make_unique<Inkling2>(dir, chunk);
+    ink2 = m.get();
+    model = std::move(m);
   } else if (NemotronH::is_model(dir)) {
     auto m = std::make_unique<NemotronH>(dir, chunk);
     nh = m.get();
@@ -318,7 +325,7 @@ int main(int argc, char** argv) {
   Model& m = *model;
   const int V = m.vocab();
   auto logits = [&]() -> const float* {
-    return q ? q->logits() : nh ? nh->logits() : fl ? fl->logits() : dory->logits();
+    return q ? q->logits() : nh ? nh->logits() : fl ? fl->logits() : ink2 ? ink2->logits() : dory->logits();
   };
   auto begin_pass = [&] { return m.grouped_passes() ? g.begin_grouped() : g.begin(); };
   const SamplingParams sp;  // greedy: no pass samples a token the next row reads
@@ -344,8 +351,11 @@ int main(int argc, char** argv) {
     if (p == "batch" && dory) fatal("Dory decodes one request at a time: no batch path");
     if (p == "batch" && fl) fatal("Flint decodes one request at a time: no batch path");
     if (p == "batch" && fn) fatal("Qwen3.8-Flash-Next decodes one request at a time: no batch path");
+    if (p == "batch" && ink2) fatal("Inkling2 decodes one request at a time: no batch path");
     if (p == "verify" && dory && dory->kv_mode() != LoopKv::per_loop)
       fatal("Dory verifies drafts only with per-loop KV (--loop-kv per-loop); with last-loop KV it decodes step by step");
+    if (p == "verify" && ink2)
+      fatal("Inkling2 verifies no drafts in this build; --paths step only");
   }
   // rows a window feeds on a path: its scored rows, up to whole passes
   // Flint: NI_FLINT_VERIFY_ROWS=R (2-8) verifies R rows a pass instead of 8 (which kernels a pass takes is
