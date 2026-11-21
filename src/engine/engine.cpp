@@ -2385,6 +2385,7 @@ Ink2Effort resolve_inkling2_effort(const ChatRequest& r) {
     if (it == effort_map.end()) throw std::runtime_error("Unknown reasoning_effort: " + raw);
     return {key, it->second};
   };
+  // Explicit thinking_control.hard_cap == 0 outranks an explicit reasoning_effort, while thinking_budget == 0 still ranks below it.
   if (r.think_cap == 0) return {"none", "0"};
   if (r.template_kwargs.contains("reasoning_effort") && !r.template_kwargs["reasoning_effort"].is_null()) {
     const ojson& re = r.template_kwargs["reasoning_effort"];
@@ -3396,9 +3397,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         s.mask_words = (std::max(model_->vocab(), tok_.vocab_size()) + 31) / 32;
         s.mask = g.alloc(size_t(kf::kMaxRows) * size_t(s.mask_words) * 4, "grammar_mask");
       }
-      // a cap of 0: the prompt's last chunk masks the first token (</think> when already in_think, or forbidding
-      // `open` in kPre so the model cannot open a reasoning block on token 0)
-      if (tc.near(1) && tc.fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), 0, 1, nullptr, 1) > 0) {
+      // a cap of 0: on any model whose template leaves `<think>` to the model, the prompt's last chunk masks token 0
+      // (`</think>` when already in_think, or forbidding `open` in kPre so the model cannot open reasoning on token 0),
+      // unless a row-0 structured-output grammar already owns `s.mask` (`gm && g_on`)
+      if (!(gm && g_on) && tc.near(1) &&
+          tc.fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), 0, 1, nullptr, 1) > 0) {
         s.mask_rows = 1;
         s.mask_event = nullptr;
       }
