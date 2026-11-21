@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-11-18T00:02:41Z",
+  "kapitsa": {
+    "version": "0.2.36",
+    "commit": "fe6a17a"
+  },
+  "mac": {
+    "identifier": "Mac17,2",
+    "name": "MacBook Pro (14-inch, M5)",
+    "year": 2025,
+    "chip": "Apple M5",
+    "cpu_cores": 10,
+    "gpu_cores": 10,
+    "memory_gb": 32,
+    "macos": "27.0",
+    "macos_build": "26A428"
+  },
+  "model": {
+    "name": "ornith-1.5-35b-a3b",
+    "title": "Ornith-1.5-35B-A3B",
+    "variant": "4bit",
+    "precision": "4-bit",
+    "catalog": true,
+    "revision": "19504d9",
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "jzinno/Ornith-1.5-35B-A3B-DFlash2@9b4852c",
+    "drafter_kind": "DFlash2",
+    "drafter_source": "dflash2",
+    "drafter_reason": "found in the model's folder"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 81.57,
+      "runs_tps": [
+        81.57,
+        73.58,
+        82.75,
+        83.57,
+        79.9
+      ],
+      "median_accepted_draft_tps": 47.8,
+      "median_accepted_draft_share": 0.5801
+    },
+    "decode_greedy": {
+      "median_tps": 80.02,
+      "runs_tps": [
+        79.5,
+        78.39,
+        83.08,
+        87.62,
+        80.02
+      ],
+      "median_accepted_draft_tps": 45.01,
+      "median_accepted_draft_share": 0.5625
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4133,
+        "ttft_s": 2.7495,
+        "tps": 1503.2,
+        "followup_s": [
+          0.1242,
+          0.1418,
+          0.116
+        ],
+        "followup_median_s": 0.1242,
+        "followup_suffix_tps": 185.2
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16287,
+        "ttft_s": 12.602,
+        "tps": 1292.4,
+        "followup_s": [
+          0.1405,
+          0.1631,
+          0.1417
+        ],
+        "followup_median_s": 0.1417,
+        "followup_suffix_tps": 163.7
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 22.87
+  },
+  "conditions": {
+    "power_source": "battery",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.0,
+    "gpu_other_max_pct": 0.0,
+    "gpu_ambient_mean_pct": 1.42,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [
+    "power: on battery (a Mac on battery may run slower)"
+  ],
+  "invalid": []
+}
