@@ -17,6 +17,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -34,17 +35,44 @@ size_t visit_conv_floats(const Ink2Config& c) {
 }
 
 Pipeline ink2_pipe(const std::string& name) {
+  static std::mutex mu;
   static std::unordered_map<std::string, Pipeline> cache;
-  auto it = cache.find(name);
-  if (it == cache.end()) it = cache.emplace(name, ink2::pipeline(name)).first;
-  return it->second;
+  {
+    std::lock_guard<std::mutex> lk(mu);
+    auto it = cache.find(name);
+    if (it != cache.end()) return it->second;
+  }
+  const Pipeline p = ink2::pipeline(name);
+  std::lock_guard<std::mutex> lk(mu);
+  return cache.emplace(name, p).first->second;
 }
 
 Pipeline base_pipe(const std::string& name) {
+  static std::mutex mu;
   static std::unordered_map<std::string, Pipeline> cache;
-  auto it = cache.find(name);
-  if (it == cache.end()) it = cache.emplace(name, Gpu::get().pipeline(name)).first;
-  return it->second;
+  {
+    std::lock_guard<std::mutex> lk(mu);
+    auto it = cache.find(name);
+    if (it != cache.end()) return it->second;
+  }
+  const Pipeline p = Gpu::get().pipeline(name);
+  std::lock_guard<std::mutex> lk(mu);
+  return cache.emplace(name, p).first->second;
+}
+
+void prewarm_pipelines() {
+  if (const char* v = getenv("NI_PREWARM"); v && !strcmp(v, "0")) return;
+  static const char* const kInk2Names[] = {
+      "ink2_copy_bytes",          "ink2_bf16_mv",           "ink2_bf16_mm",        "ink2_rmsnorm",
+      "ink2_attn_res",            "ink2_msg_gate",          "ink2_embed_norm",     "ink2_sconv_static",
+      "ink2_sconv_dynamic",       "ink2_qkvr_prep",         "ink2_rel_bias",       "ink2_attn_decode",
+      "ink2_attn_decode_reduce",  "ink2_attn_prefill",      "ink2_add",            "ink2_moe_route",
+      "ink2_moe_nvfp4_w13_situ",  "ink2_moe_nvfp4_w2_acc",  "ink2_moe_mxfp8_w13_situ", "ink2_moe_mxfp8_w2_acc",
+      "ink2_softcap",
+  };
+  for (const char* n : kInk2Names) (void)ink2_pipe(n);
+  (void)base_pipe("topk_stage1");
+  (void)base_pipe("sample_stage2");
 }
 
 struct Ink2EmbedP {
@@ -326,13 +354,23 @@ size_t Inkling2::ring_bytes_per_seq(const Ink2Config& c, int tmax) {
 MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
   const Ink2Config c = read_config(dir);
   const int chunk = prefill_chunk > 0 ? prefill_chunk : 512;
+  const size_t T = size_t(std::max(8, chunk));
+  const size_t H = size_t(c.hidden);
+  const size_t QD = size_t(c.hq) * size_t(c.head_dim);
+  const size_t KVD = size_t(c.hkv) * size_t(c.head_dim);
+  const size_t V = size_t(c.vocab);
+  const size_t per_row = 29 * H * 4 + 3 * QD * 4 + 2 * KVD * 4 + size_t(c.hq) * size_t(c.d_rel) * 4 +
+                         size_t(c.hq) * 4 + 4 * size_t(c.hkv) * 4 + size_t(c.hq) * size_t(c.rel_extent) * 4 +
+                         size_t(c.n_experts) * 4 + 2 * size_t(c.top_k) * 4 + size_t(c.top_k) * size_t(c.moe_I) * 4;
+  const size_t fixed = size_t(c.core_end - c.core_start) * 4 * H * 4 +
+                       size_t(c.num_layers) * 2 * size_t(c.n_experts) * 4 +
+                       size_t(c.hq) * kMaxAttnChunks * (2 + size_t(c.head_dim)) * 4 + V * 4 +
+                       2 * (V / 2048 + 2) * 64 * 4 + 2 * 64 * 4;
   MemPlan m;
   m.weights = safetensors_llm_bytes(dir);
   m.kv_per_pos = kv_per_pos(c);
   m.slot_state = 3 * (ring_bytes_per_seq(c, chunk) + conv_bytes_per_seq(c));
-  m.activations = size_t(chunk) * (24 * size_t(c.hidden) * 4 + size_t(c.hq) * size_t(c.rel_extent) * 4 +
-                                   size_t(c.top_k) * size_t(c.moe_I) * 4 + size_t(c.hq) * size_t(c.head_dim) * 12) +
-                  (32u << 20);
+  m.activations = T * per_row + fixed + (16u << 20);
   m.hidden = c.hidden;
   m.layers = int(c.schedule.size());
   m.formats = "NVFP4 (L0-19) + MXFP8 (L20-23) + BF16 dense (text-only)";
@@ -347,6 +385,7 @@ Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
   tmax_ = std::max(8, prefill_chunk > 0 ? prefill_chunk : 512);
   ring_rows_ = (cfg_.swa + tmax_ + 15) / 16 * 16;
   ink2::compile_kernels();
+  prewarm_pipelines();
   load();
 }
 
@@ -716,14 +755,29 @@ void Inkling2::save(Encoder& e, const Seq& s, Checkpoint& c, int pos) {
 }
 
 void Inkling2::restore(Encoder& e, Seq& s, const Checkpoint& c) {
-  if (!c.conv.empty() && !s.conv.empty() && s.conv[0]) enc_copy_buf(e, c.conv[0], s.conv[0]);
+  if (!c.conv.empty() && c.conv[0]) {
+    if (s.conv.empty() || !s.conv[0] || s.conv[0].size < c.conv[0].size)
+      fatal("inkling2: restore missing or undersized conv destination buffer");
+    enc_copy_buf(e, c.conv[0], s.conv[0], c.conv[0].size);
+  }
   const size_t nv = cfg_.schedule.size();
+  bool need_rings = false;
+  for (size_t v = 0; v < nv && 2 * v + 1 < c.rec.size(); ++v) {
+    if ((c.rec[2 * v] && (v >= s.kc.size() || !s.kc[v])) ||
+        (c.rec[2 * v + 1] && (v >= s.vc.size() || !s.vc[v]))) {
+      need_rings = true;
+      break;
+    }
+  }
+  if (need_rings && !ensure_rings(s)) fatal("inkling2: restore could not allocate missing ring buffers");
   for (size_t v = 0; v < nv && 2 * v + 1 < c.rec.size(); ++v) {
     for (int kv = 0; kv < 2; ++kv) {
       const Buffer& src = c.rec[2 * v + size_t(kv)];
-      const Buffer& dst = kv ? s.vc[v] : s.kc[v];
-      if (!src || !dst) continue;
-      enc_copy_buf(e, src, dst, std::min(src.size, dst.size));
+      if (!src) continue;
+      const auto& dsts = kv ? s.vc : s.kc;
+      if (v >= dsts.size() || !dsts[v] || dsts[v].size < src.size)
+        fatal("inkling2: restore missing or undersized ring destination buffer for visit %zu (%s)", v, kv ? "v" : "k");
+      enc_copy_buf(e, src, dsts[v], src.size);
     }
   }
 }

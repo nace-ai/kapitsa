@@ -3600,9 +3600,19 @@ void inkling2_unit() {
       write_cfg(make_base_cfg());
       const Ink2Config okc = Inkling2::read_config(dir);
       const MemPlan mp = Inkling2::plan(dir, 512);
+      const MemPlan mp2048 = Inkling2::plan(dir, 2048);
+      const size_t T2048 = 2048, H = size_t(okc.hidden), QD = size_t(okc.hq) * okc.head_dim;
+      const size_t KVD = size_t(okc.hkv) * okc.head_dim, V = size_t(okc.vocab);
+      const size_t expect_2048 =
+          T2048 * (29 * H * 4 + 3 * QD * 4 + 2 * KVD * 4 + size_t(okc.hq) * okc.d_rel * 4 + size_t(okc.hq) * 4 +
+                   4 * size_t(okc.hkv) * 4 + size_t(okc.hq) * okc.rel_extent * 4 + size_t(okc.n_experts) * 4 +
+                   2 * size_t(okc.top_k) * 4 + size_t(okc.top_k) * okc.moe_I * 4) +
+          size_t(okc.core_end - okc.core_start) * 4 * H * 4 + size_t(okc.num_layers) * 2 * okc.n_experts * 4 +
+          size_t(okc.hq) * 64 * (2 + size_t(okc.head_dim)) * 4 + V * 4 + 2 * (V / 2048 + 2) * 64 * 4 + 2 * 64 * 4;
       check(Inkling2::is_model(dir) && okc.schedule.size() == 48 &&
-                mp.slot_state == 3 * (Inkling2::ring_bytes_per_seq(okc, 512) + Inkling2::conv_bytes_per_seq(okc)),
-            "inkling2 read_config & plan (3x slot_state)");
+                mp.slot_state == 3 * (Inkling2::ring_bytes_per_seq(okc, 512) + Inkling2::conv_bytes_per_seq(okc)) &&
+                mp2048.activations >= expect_2048,
+            "inkling2 read_config & plan (3x slot_state and chunk-2048 activations)");
 
       auto must_refuse = [&](const char* label, auto mutator) {
         nlohmann::json bad = make_base_cfg();
