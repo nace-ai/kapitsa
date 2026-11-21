@@ -148,7 +148,7 @@ substitute only with evidence that its bytes are identical. A Qwen control is op
 matching tokenizer type do not establish identity. This CPU coverage does not waive the model output, GPU, or
 interleaved speed gates below, and does not establish an inference speedup.
 
-Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `tests/vision/check_cpu.py`, `logit_dump`,
+Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `ink2_check MODEL_DIR`, `tests/vision/check_cpu.py`, `logit_dump`,
 `batch_check`, `ni_v8check`, `tests/test_server.py URL`, `tests/test_disk_cache.py`, `tests/test_draft.py`,
 `tests/test_structured.py URL`, `tests/test_topk_full_tree.py`, `logit_mask_check`, `split_check`, `tests/test_split.py`, `tests/test_pair.py`,
 `tests/test_ane_split_abort.py`, `tests/test_systemone.py`, `tests/test_sampled_tokens.py`, `tests/test_topk_omitted.py`): run it only when allowed, and report it as run.
