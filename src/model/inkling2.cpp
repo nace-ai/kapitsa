@@ -11,10 +11,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdarg>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <stdexcept>
 #include <unordered_map>
 
 namespace ni {
@@ -148,6 +151,15 @@ size_t safetensors_llm_bytes(const std::string& dir) {
   return total;
 }
 
+[[noreturn]] __attribute__((format(printf, 1, 2))) void cfg_error(const char* fmt, ...) {
+  char buf[1024];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, ap);
+  va_end(ap);
+  throw std::runtime_error(buf);
+}
+
 }  // namespace
 
 bool Inkling2::is_model(const std::string& dir) {
@@ -160,29 +172,29 @@ bool Inkling2::is_model(const std::string& dir) {
 
 Ink2Config Inkling2::read_config(const std::string& dir) {
   const auto rp = json_file(dir + "/config.json");
-  if (!rp || !rp->is_object()) fatal("%s: cannot read config.json", dir.c_str());
+  if (!rp || !rp->is_object()) cfg_error("%s: cannot read config.json", dir.c_str());
   const json& root = *rp;
   const json& t = text_cfg(root);
-  if (!t.is_object()) fatal("%s: missing text_config object", dir.c_str());
+  if (!t.is_object()) cfg_error("%s: missing text_config object", dir.c_str());
 
   auto req_int = [&](const json& obj, const char* key) -> int {
     if (!obj.contains(key) || !obj[key].is_number_integer())
-      fatal("%s: missing or non-integer %s in config.json", dir.c_str(), key);
+      cfg_error("%s: missing or non-integer %s in config.json", dir.c_str(), key);
     return obj[key].get<int>();
   };
   auto opt_int = [&](const json& obj, const char* key, int def) -> int {
     if (!obj.contains(key)) return def;
-    if (!obj[key].is_number_integer()) fatal("%s: non-integer %s in config.json", dir.c_str(), key);
+    if (!obj[key].is_number_integer()) cfg_error("%s: non-integer %s in config.json", dir.c_str(), key);
     return obj[key].get<int>();
   };
   auto opt_float = [&](const json& obj, const char* key, float def) -> float {
     if (!obj.contains(key)) return def;
-    if (!obj[key].is_number()) fatal("%s: non-numeric %s in config.json", dir.c_str(), key);
+    if (!obj[key].is_number()) cfg_error("%s: non-numeric %s in config.json", dir.c_str(), key);
     return obj[key].get<float>();
   };
   auto opt_bool = [&](const json& obj, const char* key, bool def) -> bool {
     if (!obj.contains(key)) return def;
-    if (!obj[key].is_boolean()) fatal("%s: non-boolean %s in config.json", dir.c_str(), key);
+    if (!obj[key].is_boolean()) cfg_error("%s: non-boolean %s in config.json", dir.c_str(), key);
     return obj[key].get<bool>();
   };
 
@@ -210,7 +222,7 @@ Ink2Config Inkling2::read_config(const std::string& dir) {
   c.logit_softcap = opt_float(t, "final_logit_softcapping", 30.0f);
 
   if (!t.contains("loop_config") || !t["loop_config"].is_object())
-    fatal("%s: missing loop_config in config.json", dir.c_str());
+    cfg_error("%s: missing loop_config in config.json", dir.c_str());
   const json& loop = t["loop_config"];
   c.core_start = req_int(loop, "core_start");
   c.core_end = req_int(loop, "core_end");
@@ -218,21 +230,21 @@ Ink2Config Inkling2::read_config(const std::string& dir) {
   c.gate_rank = opt_int(loop, "gate_rank", 64);
 
   if (opt_bool(t, "q_bias", false) || opt_bool(t, "o_bias", false))
-    fatal("%s: Inkling-2 with attention q_bias/o_bias is not supported", dir.c_str());
+    cfg_error("%s: Inkling-2 with attention q_bias/o_bias is not supported", dir.c_str());
   if (!opt_bool(t, "use_value_norm_no_gamma", true) || !opt_bool(t, "attn_res_normalize_values", true) ||
       !opt_bool(t, "use_gate_bias", true))
-    fatal("%s: Inkling-2 requires use_value_norm_no_gamma, attn_res_normalize_values, and use_gate_bias", dir.c_str());
+    cfg_error("%s: Inkling-2 requires use_value_norm_no_gamma, attn_res_normalize_values, and use_gate_bias", dir.c_str());
   if (opt_bool(loop, "is_varloop", false))
-    fatal("%s: Inkling-2 varloop is not supported", dir.c_str());
+    cfg_error("%s: Inkling-2 varloop is not supported", dir.c_str());
   if (opt_int(t, "sconv_kernel_size", 4) != 4 || opt_int(t, "n_shared_experts", 0) != 0)
-    fatal("%s: Inkling-2 requires sconv_kernel_size 4 and n_shared_experts 0", dir.c_str());
+    cfg_error("%s: Inkling-2 requires sconv_kernel_size 4 and n_shared_experts 0", dir.c_str());
   if (opt_int(t, "swa_head_dim", c.head_dim) != c.head_dim ||
       opt_int(t, "swa_num_attention_heads", c.hq) != c.hq ||
       opt_int(t, "swa_num_key_value_heads", c.hkv) != c.hkv)
-    fatal("%s: Inkling-2 heterogeneous SWA head geometry is not supported", dir.c_str());
+    cfg_error("%s: Inkling-2 heterogeneous SWA head geometry is not supported", dir.c_str());
   if (std::fabs(opt_float(t, "mlp_gate_softcap", 4.0f) - 4.0f) > 1e-4f ||
       std::fabs(opt_float(t, "mlp_up_softcap", 25.0f) - 25.0f) > 1e-4f)
-    fatal("%s: Inkling-2 requires mlp_gate_softcap 4 and mlp_up_softcap 25", dir.c_str());
+    cfg_error("%s: Inkling-2 requires mlp_gate_softcap 4 and mlp_up_softcap 25", dir.c_str());
 
   if (c.hidden <= 0 || c.hidden > 2304 || c.hidden % 128 != 0 || c.num_layers < 2 || c.vocab <= 0 ||
       c.vocab > c.vocab_padded || c.head_dim != 128 || c.hq <= 0 || c.hkv <= 0 || c.hq % c.hkv != 0 ||
@@ -244,25 +256,25 @@ Ink2Config Inkling2::read_config(const std::string& dir) {
       c.core_end - c.core_start != 2 * c.block_sz || c.num_passes < 1 ||
       !(c.rms_eps > 0.0f && c.qk_clip > 0.0f && c.rel_clip > 0.0f && c.log_floor > 0.0f &&
         c.logit_softcap > 0.0f && std::isfinite(c.log_alpha) && std::isfinite(c.route_scale)))
-    fatal("%s: an Inkling-2 shape Kapitsa does not run (hidden %d, layers %d, heads %d/%d of %d, "
-          "%d experts top-%d I=%d, gate_rank=%d, block=%d core=%d..%d, vocab=%d/%d)",
-          dir.c_str(), c.hidden, c.num_layers, c.hq, c.hkv, c.head_dim, c.n_experts, c.top_k, c.moe_I,
-          c.gate_rank, c.block_sz, c.core_start, c.core_end, c.vocab, c.vocab_padded);
+    cfg_error("%s: an Inkling-2 shape Kapitsa does not run (hidden %d, layers %d, heads %d/%d of %d, "
+              "%d experts top-%d I=%d, gate_rank=%d, block=%d core=%d..%d, vocab=%d/%d)",
+              dir.c_str(), c.hidden, c.num_layers, c.hq, c.hkv, c.head_dim, c.n_experts, c.top_k, c.moe_I,
+              c.gate_rank, c.block_sz, c.core_start, c.core_end, c.vocab, c.vocab_padded);
 
   c.is_local.assign(size_t(c.num_layers), false);
   if (t.contains("local_layer_ids")) {
     if (!t["local_layer_ids"].is_array())
-      fatal("%s: local_layer_ids must be an array", dir.c_str());
+      cfg_error("%s: local_layer_ids must be an array", dir.c_str());
     for (const auto& lid : t["local_layer_ids"]) {
-      if (!lid.is_number_integer()) fatal("%s: local_layer_ids must contain integers", dir.c_str());
+      if (!lid.is_number_integer()) cfg_error("%s: local_layer_ids must contain integers", dir.c_str());
       const int idx = lid.get<int>();
       if (idx < 0 || idx >= c.num_layers)
-        fatal("%s: local_layer_ids contains out-of-range layer %d", dir.c_str(), idx);
+        cfg_error("%s: local_layer_ids contains out-of-range layer %d", dir.c_str(), idx);
       c.is_local[size_t(idx)] = true;
     }
   }
   if (!c.is_local[0])
-    fatal("%s: Inkling-2 layer 0 must be a local layer", dir.c_str());
+    cfg_error("%s: Inkling-2 layer 0 must be a local layer", dir.c_str());
 
   for (int i = 0; i < c.core_start; ++i) c.schedule.push_back(i);
   for (int pass = 0; pass < c.num_passes; ++pass)

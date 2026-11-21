@@ -3511,7 +3511,7 @@ void inkling2_unit() {
     }
   }
 
-  // 3. Inkling2::read_config & plan validation (valid plan uses 3x slot_state; bad shapes refuse with FatalError)
+  // 3. Inkling2::read_config & plan validation (valid plan uses 3x slot_state; bad shapes refuse with std::runtime_error)
   {
     char dir_tmpl[] = "/tmp/api_test_ink2cfg.XXXXXX";
     if (mkdtemp(dir_tmpl)) {
@@ -3559,18 +3559,22 @@ void inkling2_unit() {
                 mp.slot_state == 3 * (Inkling2::ring_bytes_per_seq(okc, 512) + Inkling2::conv_bytes_per_seq(okc)),
             "inkling2 read_config & plan (3x slot_state)");
 
-      FatalRecovery recover;
       auto must_refuse = [&](const char* label, auto mutator) {
         nlohmann::json bad = make_base_cfg();
         mutator(bad);
         write_cfg(bad);
-        bool refused = false;
+        bool refused_cfg = false, refused_plan = false;
         try {
           (void)Inkling2::read_config(dir);
-        } catch (const FatalError&) {
-          refused = true;
+        } catch (const std::runtime_error& e) {
+          refused_cfg = dynamic_cast<const FatalError*>(&e) == nullptr;
         }
-        check(refused, std::string("inkling2 refuses invalid config: ") + label);
+        try {
+          (void)Inkling2::plan(dir, 512);
+        } catch (const std::runtime_error& e) {
+          refused_plan = dynamic_cast<const FatalError*>(&e) == nullptr;
+        }
+        check(refused_cfg && refused_plan, std::string("inkling2 refuses invalid config with runtime_error: ") + label);
       };
       must_refuse("hidden > 2304", [](nlohmann::json& j) { j["text_config"]["hidden_size"] = 2560; });
       must_refuse("hidden not mult 128", [](nlohmann::json& j) { j["text_config"]["hidden_size"] = 200; });
@@ -3587,7 +3591,23 @@ void inkling2_unit() {
       must_refuse("layer 0 not local",
                   [](nlohmann::json& j) { j["text_config"]["local_layer_ids"] = nlohmann::json::array({1, 2}); });
 
+      if (FILE* f = fopen((dir + "/config.json").c_str(), "w")) fputs("{not valid json", f), fclose(f);
+      bool refused_corrupt = false;
+      try {
+        (void)Inkling2::plan(dir, 512);
+      } catch (const std::runtime_error& e) {
+        refused_corrupt = dynamic_cast<const FatalError*>(&e) == nullptr;
+      }
+      check(refused_corrupt, "inkling2 refuses corrupt config.json with runtime_error");
+
       unlink((dir + "/config.json").c_str());
+      bool refused_missing = false;
+      try {
+        (void)Inkling2::plan(dir, 512);
+      } catch (const std::runtime_error& e) {
+        refused_missing = dynamic_cast<const FatalError*>(&e) == nullptr;
+      }
+      check(refused_missing, "inkling2 refuses missing config.json with runtime_error");
       rmdir(dir.c_str());
     }
   }
