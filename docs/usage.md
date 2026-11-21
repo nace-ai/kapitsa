@@ -312,7 +312,7 @@ reasoning and `<|content_invoke_tool_json|>` as tool calls, and supports `--supp
 decodes plainly, and `build/ink2_check DIR` checks logits and 24-token greedy rollouts against `tests/fixtures/ink2_golden.json`.
 Prefill chunks above 32 rows run FP16-input tiled GEMMs (`ink2_bf16_mm`, FP32 accumulation) on `wq`, `wk`, `wv`, `wr`,
 `wo`, `gate_attn`, the attention sink projection, and the dynamic short-conv projections, while the MoE router and all
-decode / small-chunk (`<= 32` rows) GEMMs stay exact FP32 (`ink2_bf16_mv`).
+decode / small-chunk (`<= 32` rows) GEMMs stay exact FP32 (`ink2_bf16_mv4`, `ink2_bf16_mv8`, `ink2_bf16_mv`).
 
 Refused, with a message: other architectures, other quantizations (MLX's `mxfp4`, `nvfp4` and `mxfp8` modes among
 them; NVIDIA's own NVFP4 checkpoints of the catalog's Nemotron models are read as they are), mixture-of-experts
