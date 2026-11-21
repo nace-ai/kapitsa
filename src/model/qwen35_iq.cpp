@@ -210,13 +210,13 @@ void Qwen35::enc_moe_prefill_iq(Encoder& e, const Layer& L, int T, const Buffer&
   // Qwen3.6-35B-A3B UD-IQ2_XXS reads a 4096-token prompt in 919 instead of 940 ms on the M1 Pro (2048: 446 / 455;
   // 64: 31.2 / 30.7)
   const kp::QrmIq gp{I, uint32_t(D), uint32_t(D), I, sec(L.eg)};
-  e.use(pipe_iq("qrmi_gu_" + L.eg.fmt() + "_m32_n64_k32"));
+  e.use(pipe_iq("qrmi_gu_" + L.eg.fmt() + "_m32_n64_k32_direct"));
   e.buf(0, xh_); e.buf(1, L.eg.w->buf); e.buf(2, L.eu.w->buf); e.buf(3, hhalf_);
   e.val(4, gp);
   e.buf(5, tiles_); e.buf(6, ntiles_); e.buf(7, stok_);
   e.dispatch(I / 64, max_tiles, 1, 128);
   const kp::QrmIq dp{uint32_t(D), I, I, uint32_t(D), sec(L.ed)};
-  e.use(pipe_iq("qrmi_dn_" + L.ed.fmt() + "_m32_n64"));
+  e.use(pipe_iq("qrmi_dn_" + L.ed.fmt() + "_m32_n64_direct"));
   e.buf(0, hhalf_); e.buf(1, L.ed.w->buf); e.buf(2, yd_);
   e.val(3, dp);
   e.buf(4, tiles_); e.buf(5, ntiles_); e.buf(6, spair_);

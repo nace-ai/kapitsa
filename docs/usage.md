@@ -364,6 +364,9 @@ kapitsa serve 35b          # on a 16 GB Mac: 35b:16gb, downloaded and imported t
 kapitsa pull 35b:16gb      # the same, without starting it
 ```
 
+During Qwen IQ expert prefill, gate/up and down load their activation fragments directly from the input for expert tiles
+with up to 16 live rows. Larger tiles stage the activations in threadgroup memory for reuse across the row fragments.
+
 It downloads that one file, pinned to a revision and checked against its sha256 like every catalog file (resumed after
 Ctrl+C; taken from the Hugging Face cache or a `--from` folder when it is already on this Mac), then imports it into
 `qwen3.6-35b-a3b-16gb` in the store. The folder then holds the conversion, not the file: its experts file is an APFS
