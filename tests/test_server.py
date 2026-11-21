@@ -1078,6 +1078,24 @@ def cli_checks(kapitsa):
           "naming its YaRN as not applied",
           rc == 2 and "no indexer_* settings" in err and "Not applied either: rope_type yarn" in err and
           "hidden_size" not in err, err)
+    # Invalid Inkling-2 shapes throw std::runtime_error inside read_config()/plan(): serve and doctor must report
+    # the message cleanly instead of escaping as an uncaught exception abort (exit 134).
+    badink = os.path.join(home, "badink")
+    os.makedirs(badink)
+    with open(os.path.join(badink, "config.json"), "w") as f:
+        json.dump({"model_type": "inkling2_loop",
+                   "text_config": {"model_type": "inkling2_loop_text", "hidden_size": 2560,
+                                   "num_hidden_layers": 24, "vocab_size": 201024, "unpadded_vocab_size": 200058,
+                                   "num_attention_heads": 24, "num_key_value_heads": 8, "head_dim": 128,
+                                   "loop_config": {"core_start": 6, "core_end": 18, "num_passes": 3}}}, f)
+    rc, _, err = run("serve", "--model", badink, "--port", str(gemma_port))
+    check("cli: serve refuses an unsupported Inkling-2 shape cleanly without aborting",
+          rc == 1 and "kapitsa: " in err and "an Inkling-2 shape Kapitsa does not run" in err and
+          "terminating" not in err, f"rc={rc} err={err}")
+    rc, out, err = run("doctor", "--model", badink)
+    check("cli: doctor refuses an unsupported Inkling-2 shape cleanly without aborting",
+          rc == 0 and "an Inkling-2 shape Kapitsa does not run" in (out + err) and
+          "terminating" not in err, f"rc={rc} out={out} err={err}")
     rc, _, err = run("doctor", "--context", "max")
     check("cli: doctor --context max asks for a size", rc == 2 and "--context 256k" in err, err)
     s.close()
