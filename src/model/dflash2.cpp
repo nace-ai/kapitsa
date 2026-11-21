@@ -2254,7 +2254,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
         e.dispatch(1, 1, 1, 256);
       }
       KfParams kp{};
-      kf_budget_->write(kp);
+      kf_budget_->write(kp, tg_.config().moe && sp.temperature == 0.0f);
       // the verify's capacity this cycle: the budget's (8, or the widest count when the per-cycle choice among them
       // pays), as far as the context holds it (rows P .. P + R - 1 of a verify at P < s.cap - R - 1; the build's rows
       // too: their tokens go to tokens[P + r]); the verify encodes it (tree_cap_), the builder's rule picks the live rows

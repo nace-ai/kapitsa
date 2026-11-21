@@ -396,7 +396,7 @@ void KfBudget::calibration(float* alpha, float* beta, int n) const {
   }
 }
 
-void KfBudget::write(KfParams& p) {
+void KfBudget::write(KfParams& p, bool greedy_moe) {
   std::lock_guard<std::mutex> lk(mu_);
   for (int d = 0; d < kD; ++d) {
     p.alpha[d] = alpha_[d];
@@ -432,9 +432,9 @@ void KfBudget::write(KfParams& p) {
       // capacity 8 unless the per-cycle choice among the wider counts pays (eval_wide)
       if (!force && !narrow && !wide_pays_) narrow = true;
     } else {
-      // with a cached table and a choice of counts, this process's first cycles verify a count it holds (they set
-      // the base); then every allowed count kExplore times (KfCosts::force)
-      if (!force) force = c_.force(allowed_, max_rows_, kExplore);
+      // Keep row counts in their usual order; a greedy MoE tree can start choosing after one sample of each.
+      const bool all_moe_rows = greedy_moe && !wide_ && max_rows_ == 8 && allowed_ == 0xffu;
+      force = c_.force(allowed_, max_rows_, all_moe_rows ? 1 : kExplore);
     }
   }
   p.force_n = force;

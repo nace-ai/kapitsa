@@ -38,6 +38,24 @@ static void write_cache(const std::string& dir, const std::string& key, const ch
   std::ofstream(dir + "/kflash/" + key + ".json") << j.dump() << "\n";
 }
 
+static bool check_exploration(bool greedy_moe, uint32_t allowed, int samples) {
+  KfBudget budget;
+  budget.set_rows(allowed, 8);
+  ni::KfParams p{};
+  std::vector<int32_t> tree(ni::kf::kWords);
+  for (int n = 1; n <= 8; ++n) {
+    if (!(allowed & (1u << (n - 1)))) continue;
+    for (int i = 0; i < samples; ++i) {
+      budget.write(p, greedy_moe);
+      if (p.force_n != n) return false;
+      tree[ni::kf::kN] = n;
+      budget.observe(tree.data(), 30 + n);
+    }
+  }
+  budget.write(p, greedy_moe);
+  return p.force_n == 0;
+}
+
 int main() {
   char tmpl[] = "/tmp/kflash_cache_test.XXXXXX";
   const char* home = mkdtemp(tmpl);
@@ -50,9 +68,22 @@ int main() {
   mkdir((dir + "/kflash").c_str(), 0755);
   const std::string key = "model-Drafter-Chip";
 
+  unsetenv("NI_KFLASH_FORCE");
+  check(check_exploration(true, 0xffu, 1), "the greedy MoE budget measures every row count once in ascending order");
+  check(check_exploration(false, 0xffu, 3) && check_exploration(true, 0x88u, 3),
+        "other narrow trees retain three measurements per allowed count");
+
   write_cache(dir, key, KfBudget::build(), 2.5f);
   {
     KfBudget b(key);
+    ni::KfParams p{};
+    b.write(p, true);
+    check(p.force_n == 8, "the greedy full cache rebases on its largest measured row count");
+    std::vector<int32_t> tree(ni::kf::kWords);
+    tree[ni::kf::kN] = 8;
+    b.observe(tree.data(), 48);
+    b.write(p, true);
+    check(p.force_n == 0 && p.cost[4] == 44, "a rebased greedy cache immediately uses actual costs");
     check(b.alpha(1) == 2.5f && b.beta(1) == 1.5f, "a cache this build wrote is loaded");
   }
   {

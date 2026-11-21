@@ -166,7 +166,9 @@ but not locked, as the 35B's deep positions are, is left alone.
 
 **Cost.** Each cycle reports its GPU time, the drafting pass plus the verify, and the budget keeps a running table: a
 base that moves with the context's length (a 35B cycle costs about 7 ms more at 21K tokens than at 100), plus an offset
-for each row count. The first cycles try every allowed count three times, unless a cached table already exists.
+for each row count. A single greedy DFlash2 stream on a MoE target with all eight row counts available tries each
+count once, from 1 through 8. Other narrow trees try each allowed count three times. With cached costs, the first
+cycle requests an existing measured count to set the current base and then fills any missing counts.
 
 **The choice.** The budget picks the size with the most expected tokens per millisecond. In practice it takes the n
 with the largest E(n) − r · cost(n), where r is the tokens per millisecond of the recent cycles: a row goes in when its

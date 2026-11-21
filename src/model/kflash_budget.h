@@ -85,7 +85,7 @@ class KfBudget {
   // drafting half's command buffer and its verify's, Encoder::gpu_ms() of each
   void observe(const int32_t* tree, double ms);
   // before the next cycle's drafting pass (p.cap: the capacity the verify must be encoded with)
-  void write(KfParams& p);
+  void write(KfParams& p, bool greedy_moe = false);
   // the table and the calibration to the cache file, once 32 cycles were observed here and `fresh` of them since the
   // last save. From any thread (the server saves on its stop signal while a request may be in its cycles).
   void save(int fresh = 1);
@@ -95,7 +95,7 @@ class KfBudget {
   int cycles() const { return cycles_; }
   // n rows' cost now (ms; 0: not measured)
   double cost(int n) const { return n >= 1 && n <= kf::kMaxRows ? cur_cost(n) : 0.0; }
-  static constexpr int kExplore = 3;  // cycles per allowed count before the rule decides (wide verifies: 2)
+  static constexpr int kExplore = 3;  // ordinary narrow exploration and loaded cost credit
   // the build a cache file names (its "build"): a file another build wrote is not loaded (KfBatch's too)
   static const char* build();
   double cost_narrow() const { return cost8n_; }  // an 8-row cycle at capacity 8 (wide verifies)
