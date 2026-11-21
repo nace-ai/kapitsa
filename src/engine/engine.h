@@ -656,11 +656,9 @@ class Engine {
     GrammarState* gst = nullptr;
     const bool* g_on = nullptr;
     // thinking budget: the request's control (its chat()'s, advanced by its handle()); near the cap its rows sample
-    // under the masks it fills (null: no budget). kNear: a member's rows in one cycle (at most 8) and the plain passes
-    // queued before the host reads the tokens of the pass before them.
+    // under the masks it fills (null: no budget; ThinkControl::kBatchNear)
     const ThinkControl* tc = nullptr;
-    static constexpr int kNear = 9;
-    bool masked() const { return (gm && *g_on) || (tc && tc->near(kNear)); }
+    bool masked() const { return (gm && *g_on) || (tc && tc->near(ThinkControl::kBatchNear)); }
   };
   // Structured output: a verify's masks, Seq::mask rows 0 .. rows - 1, from the grammar's state after the anchor
   // tokens[P]: row r's is the state after row r's path (parent[r]: a tree's, null: a chain's, r - 1; rows from `live` on

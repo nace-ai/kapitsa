@@ -1643,10 +1643,9 @@ void Engine::verify_masks(const GrammarMatcher& gm, const GrammarState& at, Seq&
 
 void Engine::member_masks(const BatchJob& j, int P, int rows) {
   Seq& s = *j.slot->seq;
-  if (j.gm && *j.g_on) verify_masks(*j.gm, *j.gst, s, P, rows, nullptr, rows);
-  else if (j.tc && j.tc->armed())
-    j.tc->fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), P, rows, nullptr, rows);
-  else memset(s.mask.ptr(), 0xff, size_t(rows) * size_t(s.mask_words) * 4);
+  think_member_masks(
+      j.gm && *j.g_on, [&] { verify_masks(*j.gm, *j.gst, s, P, rows, nullptr, rows); }, j.tc, s.mask.as<uint32_t>(),
+      size_t(s.mask_words), s.tokens(), P, rows);
 }
 
 // ---- batched decode ----
@@ -4003,15 +4002,14 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   };
   // ... and its thinking budget's, the same rows: those past the cap force the close
   auto tc_masks = [&](int P, int rows, bool tree) {
-    const int* t = tree ? dfl_->tree_desc() : nullptr;
-    return tc.fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), P, rows, t ? t + kf::kPar : nullptr,
-                   t ? std::clamp(t[kf::kN], 1, rows) : rows);
+    return tc.fill_cycle(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), P, rows,
+                         tree ? dfl_->tree_desc() : nullptr);
   };
   // Thinking budget: DFlash2 cycles (KFlash trees and chains) and the constrained loop mask their rows near the cap.
   // The other loops (LiLiCorr, Dory, n-gram, MTP, plain steps) hand over to the constrained loop in time: the rest of
   // the reply is plain steps there, slower but exact.
   const bool dfl_loop = !clover_own && !g_direct && !lili_ && dfl_ && !full_steps;
-  if (tc.on() && !g_direct && !dfl_loop) tc_rows = spec_loop ? kf::kMaxRows + 1 : 2;
+  if (tc.on() && !g_direct && !dfl_loop) tc_rows = think_handover_rows(spec_loop);
   // (a cap that close: the constrained loop from the first token, as the hand-over could come too late)
   const bool tc_direct = tc_rows > 0 && tc.near(tc_rows);  // (near: from the first forced position, think_close_for)
   if (tc_direct) tc_rows = 0;
