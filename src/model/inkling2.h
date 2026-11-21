@@ -111,6 +111,20 @@ class Inkling2 : public Model {
   void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
                       Checkpoint* snap = nullptr, int snap_row = 0) override;
 
+  // Speculative decoding (MTP DFlare) hooks: tap capture [4, T, H], multi-row verify + conv rollback
+  static constexpr int kMaxVerify = 8;
+  void encode_prefill_taps(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
+                           const Buffer* taps_out);
+  void encode_step_taps(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample,
+                        const Buffer* taps_out);
+  void encode_verify(Encoder& e, Seq& s, int pos0, int T, const Buffer& out_logits, const Buffer* taps_out,
+                     bool save_conv_snap = true);
+  void encode_conv_rollback(Encoder& e, Seq& s, int keep_idx, int total_rows);
+  void enc_unembed(Encoder& e, const Buffer& h, const Buffer& out_logits, int rows);
+  const Tensor& embed_tensor() const { return *embed_; }
+  const Tensor& embed_norm_tensor() const { return *embed_norm_; }
+  const Tensor& unembed_tensor() const { return *unembed_; }
+
   // Diagnostic helpers (tools/ink2_check)
   float* logits() { return logits_.as<float>(); }
   Buffer logits_buf() const { return logits_; }
@@ -122,7 +136,7 @@ class Inkling2 : public Model {
   void alloc_buffers();
   bool ensure_rings(Seq& s);
   void enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits, const Buffer* out_logits, bool need_all_logits,
-                   const Buffer* diag_rows = nullptr);
+                   const Buffer* diag_rows = nullptr, const Buffer* taps_out = nullptr, bool save_conv_snap = false);
   void enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer& y, int M, uint32_t N_limit = 0, bool add = false,
               bool exact_f32 = false);
   void enc_norm(Encoder& e, const Buffer& x, const Tensor* w, const Buffer& out, int T, uint32_t dim);
@@ -158,6 +172,7 @@ class Inkling2 : public Model {
   Buffer dyn_, rb_, part_m_, part_l_, part_o_;
   Buffer h_mlp_, x_mlp_, rlog_, eid_, ew_, moe_act_, moe_out_;
   Buffer logits_, cand_v_, cand_i_, sprob_, samp_;
+  Buffer conv_snap_;  // lazy [kMaxVerify, conv_bytes_per_seq] for speculative verify conv rollback
 };
 
 }  // namespace ni
