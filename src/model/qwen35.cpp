@@ -55,6 +55,13 @@ bool format_supported(int bits, int gs) {
   if (gs == 64) return bits == 3 || bits == 4 || bits == 5 || bits == 6 || bits == 8;
   return gs == 32 && bits == 4;
 }
+// Routed experts only: 2/3-bit group 128 is read natively (f2g128 / f3g128 in wfmt.metal's MoE kernels, scales and biases
+// at group 128). 2-bit group 64 loads only when the layer's other expert tensors are wider, because the loader then
+// promotes it to that width (promote_expert_bits); no group-64 2-bit kernel exists.
+static bool expert_module(const std::string& m) { return m.find("switch_mlp") != std::string::npos; }
+static bool expert_format_supported(int bits, int gs) {
+  return format_supported(bits, gs) || (bits == 2 && gs == 64) || (gs == 128 && (bits == 2 || bits == 3));
+}
 std::string format_name(int bits, int gs) {
   return bits == 16 ? std::string("bf16") : std::to_string(bits) + "-bit group " + std::to_string(gs);
 }
@@ -82,7 +89,10 @@ std::string unsupported_quantization(const std::string& model_dir) {
   auto note = [&](const std::string& module, const std::string& m, int b, int g) {
     std::string what;  // "" = readable
     if (m == "affine") {
-      if (!format_supported(b, affine_kernel_group_size(b, g))) what = format_name(b, g);
+      const int kg = affine_kernel_group_size(b, g, expert_module(module) || module == "the default");
+      // the default entry covers only modules without their own (a 2-bit default is a routed-expert recipe)
+      if (!((expert_module(module) || module == "the default") ? expert_format_supported(b, kg) : format_supported(b, kg)))
+        what = format_name(b, g);
     } else if (m != "q2_0" && !gguf::iq_mode_type(m)) {
       what = "\"" + m + "\" mode";
     }
@@ -106,7 +116,8 @@ std::string unsupported_quantization(const std::string& model_dir) {
   return "its config.json quantizes " + std::to_string(modules) + (modules == 1 ? " module" : " modules") + " in " +
          formats + " (" + first + (modules > 1 ? ", ..." : "") +
          "), a format Kapitsa has no kernels for. It runs MLX affine weights in bf16, 3/4/5/6/8-bit group 64 and 4-bit "
-         "group 32 (and 5/8-bit group 128 with bf16 scales). Use a pack in one of those.";
+         "group 32 (and 2/3/5/8-bit group 128 with bf16 scales; 2-bit group 64 routed experts only next to wider ones in the same "
+         "layer). Use a pack in one of those.";
 }
 std::string QLinear::fmt() const {
   if (iq) return gguf::iq_suffix(iq);
@@ -883,7 +894,7 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok, const 
   L.K = uint32_t(words * 32 / bits);
   L.N = uint32_t(L.w->shape[L.w->shape.size() - 2]);
   if (int64_t(L.K / gs) != L.s->shape.back() || L.K % gs) fatal("%s: bits/group mismatch", full.c_str());
-  if (affine_kernel_group_size(bits, gs) != gs && L.s->dtype == DType::BF16 && L.b->dtype == DType::BF16) {
+  if (affine_kernel_group_size(bits, gs, expert_module(full)) != gs && L.s->dtype == DType::BF16 && L.b->dtype == DType::BF16) {
     // 5/8-bit group 128 as group 64, exactly: each group's scale and bias twice (any leading dims: a
     // matrix [N, K/128] or stacked experts [E, N, K/128])
     auto split = [&](const Tensor* t) {
@@ -903,10 +914,57 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok, const 
     gs = 64;
   }
   L.gs = gs;
-  if (!format_supported(bits, gs))
+  if (!(expert_module(full) ? expert_format_supported(bits, gs) : format_supported(bits, gs)))
     fatal("%s: %s weights are not supported (bf16, 3/4/5/6/8-bit group 64 and 4-bit group 32 are)", full.c_str(),
           format_name(bits, gs).c_str());
   return L;
+}
+
+// Mixed-width routed experts in one layer (OptiQ packs: 2-bit gate or up next to 3-bit others): the fused expert kernels
+// read gate, up and down in one format, so each narrower affine tensor is re-coded at the layer's widest width. A b-bit
+// code q with scale s and bias z is the same code at more bits (w = s q + z), so the weights are unchanged. Tensors
+// already at the widest width are not touched; a layer whose tensors share one width runs natively (f2g128 / f3g128); an all-2-bit group-64 layer is refused by check_formats.
+void Qwen35::promote_expert_bits(Layer& L) {
+  QLinear* ex[3] = {&L.eg, &L.eu, &L.ed};
+  int widest = 0;
+  for (QLinear* q : ex)
+    if (*q && !q->iq && !q->q20 && !q->exl3 && !q->dense()) widest = std::max(widest, q->bits);
+  for (QLinear* q : ex) {
+    if (!*q || q->iq || q->q20 || q->exl3 || q->dense() || q->bits >= widest) continue;
+    const int from = q->bits, to = widest;
+    const size_t K = q->K, wi = size_t(q->w->shape.back()), wo = K * size_t(to) / 32;
+    const size_t rows = size_t(q->w->numel()) / wi;
+    if (q->w->dtype != DType::U32 || K * size_t(from) / 32 != wi || K % 32)
+      fatal("%s: cannot re-code the experts' codes", q->name().c_str());
+    Buffer buf = Gpu::get().alloc(rows * wo * 4 + 16, "expert_promote", /*tracked=*/false);
+    const uint32_t* src = q->w->buf.as<uint32_t>();
+    uint32_t* dst = buf.as<uint32_t>();
+    const uint32_t mask = (1u << from) - 1;
+    const size_t nthr = std::max<size_t>(1, std::min<size_t>(8, std::thread::hardware_concurrency()));
+    LoadThreads jobs;
+    for (size_t t = 0; t < nthr; ++t)
+      jobs.emplace_back([=]() {
+        std::vector<uint8_t> codes(K);
+        for (size_t r = t; r < rows; r += nthr) {
+          const uint32_t* w = src + r * wi;
+          for (size_t j = 0; j < K; ++j) {
+            const size_t pos = j * size_t(from), word = pos >> 5, off = pos & 31;
+            uint32_t v = w[word] >> off;
+            if (off + size_t(from) > 32) v |= w[word + 1] << (32 - off);
+            codes[j] = uint8_t(v & mask);
+          }
+          gguf::pack_codes(codes.data(), K, to, dst + r * wo);
+        }
+      });
+    jobs.join();
+    owned_bufs_.push_back(buf);
+    std::vector<int64_t> shape = q->w->shape;
+    shape.back() = int64_t(wo);
+    owned_.push_back(Tensor{buf.view(0, rows * wo * 4), DType::U32, shape});
+    logi("%s: %d-bit experts re-coded as %d-bit (the layer's widest; exact)", q->name().c_str(), from, to);
+    q->w = &owned_.back();
+    q->bits = to;
+  }
 }
 
 q20::Experts Qwen35::q20_experts(const Layer& L) const {
@@ -1044,6 +1102,7 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
       L.eg = qlin(m + "switch_mlp.gate_proj");
       L.eu = qlin(m + "switch_mlp.up_proj");
       L.ed = qlin(m + "switch_mlp.down_proj");
+      promote_expert_bits(L);
       L.sg = qlin(m + "shared_expert.gate_proj");
       L.su = qlin(m + "shared_expert.up_proj");
       L.sd = qlin(m + "shared_expert.down_proj");
@@ -1808,12 +1867,12 @@ std::string moe_rows_kernel(bool gate_up, const QLinear& e, const QLinear& s, bo
   if (wide && !gate_up) {
     if (e.q4() && s.q4()) return "moe_down_rows_g64_w";
     const std::string pair = e.fmt() + "_" + s.fmt();
-    return pair == "f4g64_f8g64" || pair == "f3g64_f8g64" ? "moeg_down_rows_" + pair + "_w" : "";
+    return pair == "f4g64_f8g64" || pair == "f3g64_f8g64" || pair == "f3g128_f8g64" || pair == "f2g128_f8g64" ? "moeg_down_rows_" + pair + "_w" : "";
   }
   if (e.q4() && s.q4()) return gate_up ? "moe_gate_up_rows_g64" : "moe_down_rows_g64";
   if (e.bits == 4 && e.gs == 32 && s.q8()) return gate_up ? "moe_gate_up_rows_g32_s8" : "moe_down_rows_g32_s8";
   static const std::set<std::string> have = {"f16_f16",     "f8g64_f8g64", "f4g64_f8g64", "f6g64_f6g64", "f6g64_f8g64",
-                                             "f5g64_f5g64", "f5g64_f8g64", "f3g64_f8g64", "f4g64_f4g64"};
+                                             "f5g64_f5g64", "f5g64_f8g64", "f3g64_f8g64", "f4g64_f4g64", "f3g128_f8g64", "f2g128_f8g64"};
   const std::string pair = e.fmt() + "_" + s.fmt();
   if (!have.count(pair)) return "";
   return (gate_up ? "moeg_gu_rows_" : "moeg_down_rows_") + pair;
@@ -1821,7 +1880,8 @@ std::string moe_rows_kernel(bool gate_up, const QLinear& e, const QLinear& s, bo
 // The routed experts' prefill GEMMs: qrm (4-bit group 64) or the generic qrmf / qmmsf_moe forms.
 static bool moe_prefill_format(const QLinear& q) {
   if (q.bits == 4) return q.gs % 32 == 0;
-  return q.gs == 64 && (q.bits == 3 || q.bits == 5 || q.bits == 6 || q.bits == 8) || q.dense();
+  return q.gs == 64 && (q.bits == 3 || q.bits == 5 || q.bits == 6 || q.bits == 8) || (q.gs == 128 && (q.bits == 2 || q.bits == 3)) ||
+         q.dense();
 }
 
 // ---- test transforms (NI_DEQUANT, NI_REQUANT): other formats from a 4-bit model, same function ----
