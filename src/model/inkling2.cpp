@@ -97,9 +97,10 @@ struct Ink2MmP {
 struct Ink2SconvStaticP {
   uint32_t T, C, w_f32;
   float scale;
+  uint32_t snap_stride;
 };
 struct Ink2SconvDynP {
-  uint32_t T, C, n_heads, sw_f32;
+  uint32_t T, C, n_heads, sw_f32, snap_stride;
 };
 struct Ink2QkvrP {
   uint32_t T, Hq, Hkv, D, d_rel, pos0, kv_cap, is_swa, scale_f32;
@@ -852,13 +853,20 @@ void Inkling2::enc_msg_gate(Encoder& e, const Ink2Ctrl& c, const Buffer& h, cons
 }
 
 void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits, const Buffer* out_logits,
-                           bool need_all_logits, const Buffer* diag_rows) {
+                           bool need_all_logits, const Buffer* diag_rows, const Buffer* taps_out,
+                           bool save_conv_snap) {
   const uint32_t H = uint32_t(cfg_.hidden);
   const uint32_t QD = uint32_t(cfg_.hq) * uint32_t(cfg_.head_dim);
   const uint32_t KVD = uint32_t(cfg_.hkv) * uint32_t(cfg_.head_dim);
   const size_t row_bytes = size_t(T) * H * 4;
   const Buffer& conv = s.conv[0];
   const float sconv_static_scale = 1.0f / std::sqrt(5.0f);
+  const uint32_t snap_stride = (save_conv_snap && T <= kMaxVerify) ? uint32_t(conv_bytes_per_seq(cfg_) / 4) : 0u;
+  if (snap_stride && !conv_snap_) {
+    conv_snap_ = Gpu::get().alloc(size_t(kMaxVerify) * conv_bytes_per_seq(cfg_), "ink2_conv_snap");
+    owned_bufs_.push_back(conv_snap_);
+    Gpu::get().make_resident({conv_snap_});
+  }
 
   // Embed + norm -> x_
   {
@@ -907,6 +915,14 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         }
         have_prev = true;
       }
+    }
+
+    if (taps_out) {
+      int tslot = -1;
+      if (v_idx == 5) tslot = 0;
+      else if (v_idx == 23) tslot = 1;
+      else if (v_idx == 41) tslot = 2;
+      if (tslot >= 0) enc_copy_buf(e, x_, taps_out->view(size_t(tslot) * row_bytes, row_bytes), row_bytes);
     }
 
     const bool has_msgs = have_prev && ip < cfg_.core_end;
@@ -985,26 +1001,31 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
 
     // K / V short convolutions
     if (L.is_swa) {
-      const Ink2SconvStaticP sp{uint32_t(T), KVD, L.k_sconv->dtype == DType::F32 ? 1u : 0u, sconv_static_scale};
+      const Ink2SconvStaticP sp{uint32_t(T), KVD, L.k_sconv->dtype == DType::F32 ? 1u : 0u, sconv_static_scale,
+                                snap_stride};
       e.use(ink2_pipe("ink2_sconv_static"));
       e.buf(0, k_);
       e.buf(1, L.k_sconv->buf);
       e.buf(2, conv_k);
       e.buf(3, k_);
       e.val(4, sp);
+      e.buf(5, snap_stride ? conv_snap_.view(cbase + 0, conv_snap_.size - (cbase + 0)) : conv_k);
       e.dispatch((KVD + 255) / 256, 1, 1, 256);
 
-      const Ink2SconvStaticP svp{uint32_t(T), KVD, L.v_sconv->dtype == DType::F32 ? 1u : 0u, sconv_static_scale};
+      const Ink2SconvStaticP svp{uint32_t(T), KVD, L.v_sconv->dtype == DType::F32 ? 1u : 0u, sconv_static_scale,
+                                 snap_stride};
       e.use(ink2_pipe("ink2_sconv_static"));
       e.buf(0, v_);
       e.buf(1, L.v_sconv->buf);
       e.buf(2, conv_v);
       e.buf(3, v_);
       e.val(4, svp);
+      e.buf(5, snap_stride ? conv_snap_.view(cbase + 3 * KVD * 4, conv_snap_.size - (cbase + 3 * KVD * 4)) : conv_v);
       e.dispatch((KVD + 255) / 256, 1, 1, 256);
     } else {
       enc_mm(e, *L.k_proj, kn, dyn_, T);
-      const Ink2SconvDynP dp{uint32_t(T), KVD, uint32_t(cfg_.hkv), L.k_static->dtype == DType::F32 ? 1u : 0u};
+      const Ink2SconvDynP dp{uint32_t(T), KVD, uint32_t(cfg_.hkv), L.k_static->dtype == DType::F32 ? 1u : 0u,
+                             snap_stride};
       e.use(ink2_pipe("ink2_sconv_dynamic"));
       e.buf(0, k_);
       e.buf(1, dyn_);
@@ -1012,10 +1033,12 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       e.buf(3, conv_k);
       e.buf(4, k_);
       e.val(5, dp);
+      e.buf(6, snap_stride ? conv_snap_.view(cbase + 0, conv_snap_.size - (cbase + 0)) : conv_k);
       e.dispatch((KVD + 255) / 256, 1, 1, 256);
 
       enc_mm(e, *L.v_proj, vn, dyn_, T);
-      const Ink2SconvDynP dvp{uint32_t(T), KVD, uint32_t(cfg_.hkv), L.v_static->dtype == DType::F32 ? 1u : 0u};
+      const Ink2SconvDynP dvp{uint32_t(T), KVD, uint32_t(cfg_.hkv), L.v_static->dtype == DType::F32 ? 1u : 0u,
+                              snap_stride};
       e.use(ink2_pipe("ink2_sconv_dynamic"));
       e.buf(0, v_);
       e.buf(1, dyn_);
@@ -1023,6 +1046,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       e.buf(3, conv_v);
       e.buf(4, v_);
       e.val(5, dvp);
+      e.buf(6, snap_stride ? conv_snap_.view(cbase + 3 * KVD * 4, conv_snap_.size - (cbase + 3 * KVD * 4)) : conv_v);
       e.dispatch((KVD + 255) / 256, 1, 1, 256);
     }
 
@@ -1132,13 +1156,15 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     // wo_ud + attn_sconv -> a_out_
     enc_mm(e, *L.wo_ud, att_out_, a_out_, T);
     {
-      const Ink2SconvStaticP sp{uint32_t(T), H, L.attn_sconv->dtype == DType::F32 ? 1u : 0u, sconv_static_scale};
+      const Ink2SconvStaticP sp{uint32_t(T), H, L.attn_sconv->dtype == DType::F32 ? 1u : 0u, sconv_static_scale,
+                                snap_stride};
       e.use(ink2_pipe("ink2_sconv_static"));
       e.buf(0, a_out_);
       e.buf(1, L.attn_sconv->buf);
       e.buf(2, conv_a);
       e.buf(3, a_out_);
       e.val(4, sp);
+      e.buf(5, snap_stride ? conv_snap_.view(cbase + 6 * KVD * 4, conv_snap_.size - (cbase + 6 * KVD * 4)) : conv_a);
       e.dispatch((H + 255) / 256, 1, 1, 256);
     }
 
@@ -1231,13 +1257,17 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
 
     // mlp_sconv + residual add -> x_
     {
-      const Ink2SconvStaticP sp{uint32_t(T), H, L.mlp_sconv->dtype == DType::F32 ? 1u : 0u, sconv_static_scale};
+      const Ink2SconvStaticP sp{uint32_t(T), H, L.mlp_sconv->dtype == DType::F32 ? 1u : 0u, sconv_static_scale,
+                                snap_stride};
       e.use(ink2_pipe("ink2_sconv_static"));
       e.buf(0, moe_out_);
       e.buf(1, L.mlp_sconv->buf);
       e.buf(2, conv_m);
       e.buf(3, moe_out_);
       e.val(4, sp);
+      e.buf(5, snap_stride
+                   ? conv_snap_.view(cbase + 6 * KVD * 4 + 3 * H * 4, conv_snap_.size - (cbase + 6 * KVD * 4 + 3 * H * 4))
+                   : conv_m);
       e.dispatch((H + 255) / 256, 1, 1, 256);
     }
     enc_copy_buf(e, ffn_inp_, x_, row_bytes);
@@ -1264,7 +1294,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     if (T >= 256 && (v_idx & 7) == 7 && v_idx + 1 < cfg_.schedule.size()) e.split();
   }
 
-  if (!dump_logits && !need_all_logits) return;
+  if (!dump_logits && !need_all_logits && !taps_out) return;
 
   // Final AttnRes + RMSNorm
   {
@@ -1273,7 +1303,9 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     enc_attn_res(e, st.data(), int(st.size()), &output_query_->buf, output_query_->dtype == DType::F32, 1, ar_out_, T);
   }
   enc_norm(e, ar_out_, final_norm_, h_norm_, T, H);
+  if (taps_out) enc_copy_buf(e, h_norm_, taps_out->view(3 * row_bytes, row_bytes), row_bytes);
   if (diag_rows) enc_copy_buf(e, h_norm_.view(size_t(T - 1) * H * 4, H * 4), diag_rows->view(7 * H * 4, H * 4), H * 4);
+  if (!dump_logits && !need_all_logits) return;
 
   const uint32_t V = uint32_t(cfg_.vocab);
   const Buffer& dst = out_logits ? *out_logits : logits_;
@@ -1333,6 +1365,45 @@ void Inkling2::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const Samplin
   if (!sample) return;
   enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);
   enc_sample(e, s, logits_, s.tok, pos0 + T, sp, step);
+}
+
+void Inkling2::encode_step_taps(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample,
+                                const Buffer* taps_out) {
+  if (pos + 1 >= s.cap) fatal("context full (%d)", s.cap);
+  enc_forward(e, s, pos, 1, sample, nullptr, false, nullptr, taps_out, false);
+  if (!sample) return;
+  enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);
+  enc_sample(e, s, logits_, s.tok, pos + 1, sp, step);
+}
+
+void Inkling2::encode_prefill_taps(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step,
+                                   bool sample, const Buffer* taps_out) {
+  if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
+  if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
+  if (s.embeds) fatal("inkling2: image inputs are not supported in Stage 1");
+  enc_forward(e, s, pos0, T, sample, nullptr, false, nullptr, taps_out, false);
+  if (!sample) return;
+  enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);
+  enc_sample(e, s, logits_, s.tok, pos0 + T, sp, step);
+}
+
+void Inkling2::encode_verify(Encoder& e, Seq& s, int pos0, int T, const Buffer& out_logits, const Buffer* taps_out,
+                             bool save_conv_snap) {
+  if (T < 1 || T > kMaxVerify) fatal("inkling2: verify T=%d out of range", T);
+  if (pos0 + T > s.cap) fatal("context full (%d)", s.cap);
+  enc_forward(e, s, pos0, T, true, &out_logits, true, nullptr, taps_out, save_conv_snap);
+  enc_logit_mask(e, s, out_logits, T, cfg_.vocab, cfg_.vocab);
+}
+
+void Inkling2::encode_conv_rollback(Encoder& e, Seq& s, int keep_idx, int total_rows) {
+  if (keep_idx < 0 || keep_idx >= total_rows || !conv_snap_) return;
+  if (keep_idx == total_rows - 1) return;
+  const size_t cb = conv_bytes_per_seq(cfg_);
+  enc_copy_buf(e, conv_snap_.view(size_t(keep_idx) * cb, cb), s.conv[0], cb);
+}
+
+void Inkling2::enc_unembed(Encoder& e, const Buffer& h, const Buffer& out_logits, int rows) {
+  enc_mm(e, *unembed_, h, out_logits, rows, uint32_t(cfg_.vocab), false);
 }
 
 void Inkling2::encode_logits_rows(Encoder& e, Seq& s, int pos0, int T, const Buffer& out) {
