@@ -3396,6 +3396,51 @@ void inkling2_unit() {
     const std::string got = render_inkling2_chat(r);
     check(got == want, "inkling2 render: mixed-case tools and args dictsort", got);
   }
+  {
+    auto check_effort = [&](const char* label, ChatRequest req, const std::string& want_lvl,
+                            const std::string& want_val) {
+      req.messages = ojson::array({{{"role", "user"}, {"content", "Hi"}}});
+      const std::string lvl = inkling2_thinking_level(req);
+      const std::string rendered = render_inkling2_chat(req);
+      const std::string want_sys = "<|message_system|><|content_text|>Thinking effort level: " + want_val + "<|end_message|>";
+      check(lvl == want_lvl && rendered.rfind(want_sys, 0) == 0,
+            std::string("inkling2 effort parity: ") + label, lvl + " / " + rendered);
+    };
+    {
+      ChatRequest r;
+      r.effort = "high";
+      r.template_kwargs = {{"reasoning_effort", "low"}};
+      check_effort("template reasoning_effort overrides r.effort", r, "low", "0.2");
+    }
+    {
+      ChatRequest r;
+      r.effort = "high";
+      r.template_kwargs = {{"reasoning_effort", 0.5}};
+      check_effort("numeric reasoning_effort overrides r.effort", r, "0.5", "0.5");
+    }
+    {
+      ChatRequest r;
+      r.effort = "medium";
+      r.template_kwargs = {{"reasoning_effort", nullptr}};
+      check_effort("null template reasoning_effort falls back to r.effort", r, "medium", "0.7");
+    }
+    {
+      ChatRequest r;
+      r.thinking_budget = 0;
+      check_effort("thinking_budget 0 resolves to none/0", r, "none", "0");
+    }
+    {
+      ChatRequest r;
+      r.think_cap = 0;
+      check_effort("think_cap 0 resolves to none/0", r, "none", "0");
+    }
+    {
+      ChatRequest r;
+      r.template_kwargs = {{"enable_thinking", false}};
+      check_effort("enable_thinking false resolves to none/0", r, "none", "0");
+    }
+    check_effort("default resolves to high/0.9", ChatRequest{}, "high", "0.9");
+  }
 
   // 2. Inline minimal O200k byte-level Tokenizer + OutputParser (CallFormat::Inkling2) + LogitMask (CI-runnable)
   {
