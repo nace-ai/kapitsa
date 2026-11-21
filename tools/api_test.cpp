@@ -29,7 +29,10 @@
 #include "model/kflash_wrap.h"
 #include "model/hy4_flash.h"
 #include "model/moe_a4.h"
+#include "model/inkling2.h"
+#include "model/token_suppression.h"
 #include "tokenizer/tokenizer.h"
+#include "util/log.h"
 
 #include <minja/chat-template.hpp>
 #include <minja/minja.hpp>
@@ -2597,6 +2600,8 @@ void unsupported_model_unit() {
         "unsupported_model: an explicit causal=true is not refused");
   check(refused(folder("clover", R"({"model_type": "clover_moe"})")).empty(),
         "unsupported_model: a clover_moe config (DiffuSpace's Clover) is not refused");
+  check(refused(folder("inkling2", R"({"model_type": "inkling2_loop"})")).empty(),
+        "unsupported_model: an inkling2_loop config is not refused");
   // Unsupported quantization is refused from config.json alone, before any weight is read. 5-bit group 128 now
   // normalizes to group 64; keep 6-bit group 128 for the refusal. Header-only folders: no safetensors at all.
   const std::string text = R"("model_type": "qwen3_5_moe", "text_config": {"model_type": "qwen3_5_moe_text"})";
@@ -3317,6 +3322,277 @@ void hy4_plan_unit() {
   }
 }
 
+void inkling2_unit() {
+  // 1. render_inkling2_chat() exact parity against Jinja2 chat_template.jinja renderings
+  {
+    ChatRequest r;
+    r.messages = ojson::array({{{"role", "user"}, {"content", "Hello!"}}});
+    r.effort = "high";
+    check(render_inkling2_chat(r) ==
+              "<|message_system|><|content_text|>Thinking effort level: 0.9<|end_message|>"
+              "<|message_user|><|content_text|>Hello!<|end_message|>",
+          "inkling2 render: basic high");
+  }
+  {
+    ChatRequest r;
+    r.messages = ojson::array({{{"role", "system"}, {"content", "You are terse."}},
+                               {{"role", "user"}, {"content", "Reply with one word: 2+2="}}});
+    r.template_kwargs = {{"reasoning_effort", "none"}};
+    check(render_inkling2_chat(r) ==
+              "<|message_system|><|content_text|>You are terse.<|end_message|>"
+              "<|message_system|><|content_text|>Thinking effort level: 0<|end_message|>"
+              "<|message_user|><|content_text|>Reply with one word: 2+2=<|end_message|>",
+          "inkling2 render: basic none");
+  }
+  {
+    ChatRequest r;
+    r.tools = J(R"([{
+      "type": "function",
+      "function": {
+        "name": "GetWeather",
+        "description": "Fetch weather",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "City": {"type": "string"},
+            "units": {"type": "string"},
+            "Alt": {"type": "integer"}
+          },
+          "required": ["City"]
+        }
+      }
+    }])");
+    r.messages = J(R"([
+      {"role": "user", "content": "Weather in Taipei?"},
+      {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [{
+          "id": "call_1",
+          "type": "function",
+          "function": {
+            "name": "GetWeather",
+            "arguments": {"units": "c", "City": "Taipei", "Alt": {"z": 1, "A": 2}}
+          }
+        }]
+      },
+      {"role": "tool", "tool_call_id": "call_1", "content": "25C"}
+    ])");
+    // Real chat_template.jinja: line 36 uses tojson(sort_keys=true) (recursive alphabetical sort), while line 116 uses
+    // args | dictsort(case_sensitive=true) (byte-wise top-level sort) and line 117 keeps nested key order unchanged.
+    const std::string want =
+        "<|message_system|>tool_declare<|content_xml|>[{"
+        "\"description\":\"Fetch weather\",\"name\":\"GetWeather\","
+        "\"parameters\":{\"properties\":{\"Alt\":{\"type\":\"integer\"},\"City\":{\"type\":\"string\"},"
+        "\"units\":{\"type\":\"string\"}},\"required\":[\"City\"],\"type\":\"object\"},\"type\":\"function\"}]"
+        "<|end_message|>"
+        "<|message_system|><|content_text|>Thinking effort level: 0.9<|end_message|>"
+        "<|message_user|><|content_text|>Weather in Taipei?<|end_message|>"
+        "<|message_model|>GetWeather<|content_invoke_tool_json|>"
+        "{\"name\":\"GetWeather\",\"args\":{\"Alt\":{\"z\":1,\"A\":2},\"City\":\"Taipei\",\"units\":\"c\"}}"
+        "<|end_message|>"
+        "<|content_model_end_sampling|>"
+        "<|message_tool|>GetWeather<|content_text|>25C<|end_message|>";
+    const std::string got = render_inkling2_chat(r);
+    check(got == want, "inkling2 render: mixed-case tools and args dictsort", got);
+  }
+
+  // 2. Inline minimal O200k byte-level Tokenizer + OutputParser (CallFormat::Inkling2) + LogitMask (CI-runnable)
+  {
+    nlohmann::json vocab = nlohmann::json::object(), added = nlohmann::json::array();
+    for (int b = 0, n = 0; b < 256; ++b) {
+      const bool keep = (b >= '!' && b <= '~') || (b >= 0xA1 && b <= 0xAC) || (b >= 0xAE && b <= 0xFF);
+      const uint32_t c = keep ? uint32_t(b) : uint32_t(256 + n++);
+      vocab[c < 0x80 ? std::string(1, char(c)) : std::string{char(0xC0 | (c >> 6)), char(0x80 | (c & 0x3F))}] = b;
+    }
+    const std::vector<std::pair<int, const char*>> specials = {
+        {199999, "<|endoftext|>"},
+        {200000, "<|message_user|>"},
+        {200001, "<|message_model|>"},
+        {200002, "<|message_system|>"},
+        {200003, "<|message_tool|>"},
+        {200004, "<|content_text|>"},
+        {200005, "<|content_thinking|>"},
+        {200006, "<|end_message|>"},
+        {200007, "<|content_invoke_tool_json|>"},
+        {200008, "<|content_invoke_tool_text|>"},
+        {200009, "<|content_tool_error|>"},
+        {200010, "<|content_model_end_sampling|>"},
+    };
+    for (const auto& [sid, name] : specials)
+      added.push_back({{"id", sid}, {"content", name}, {"special", true}});
+    const std::string o200k_re =
+        "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+"
+        "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+        "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*"
+        "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+        "\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+    const nlohmann::json tj = {
+        {"added_tokens", added},
+        {"normalizer", nullptr},
+        {"pre_tokenizer",
+         {{"type", "Sequence"},
+          {"pretokenizers",
+           nlohmann::json::array({{{"type", "Split"},
+                                   {"pattern", {{"Regex", o200k_re}}},
+                                   {"behavior", "Isolated"},
+                                   {"invert", false}},
+                                  {{"type", "ByteLevel"},
+                                   {"add_prefix_space", false},
+                                   {"trim_offsets", true},
+                                   {"use_regex", false}}})}}},
+        {"model", {{"type", "BPE"}, {"vocab", vocab}, {"merges", nlohmann::json::array()}}},
+    };
+    char tpath[] = "/tmp/api_test_ink2tok.XXXXXX";
+    const int tfd = mkstemp(tpath);
+    if (tfd < 0) {
+      check(false, "inkling2: mkstemp tok");
+      return;
+    }
+    close(tfd);
+    if (FILE* f = fopen(tpath, "w")) fputs(tj.dump().c_str(), f), fclose(f);
+    Tokenizer tok;
+    tok.load(tpath);
+    unlink(tpath);
+
+    const ojson tools = J(R"([{"type":"function","function":{"name":"get_weather","parameters":{"type":"object"}}}])");
+    auto run_parse = [&](const std::string& gen) {
+      OutputParser p(tok, tok.find("<|content_thinking|>"), tok.find("<|end_message|>"),
+                     tok.find("<|content_invoke_tool_json|>"), tok.find("<|end_message|>"), false, true, tools, false,
+                     true, {}, CallFormat::Inkling2);
+      ChatResult out;
+      for (int id : tok.encode(gen)) {
+        const ChatDelta d = p.push(id);
+        out.reasoning += d.reasoning;
+        out.content += d.content;
+        out.tool_calls.insert(out.tool_calls.end(), d.tool_calls.begin(), d.tool_calls.end());
+      }
+      const ChatDelta f = p.finish(true);
+      out.reasoning += f.reasoning;
+      out.content += f.content;
+      out.tool_calls.insert(out.tool_calls.end(), f.tool_calls.begin(), f.tool_calls.end());
+      return out;
+    };
+    const ChatResult r1 = run_parse(
+        "<|message_model|><|content_thinking|>Step 1.<|end_message|><|message_model|><|content_text|> 4<|end_message|>");
+    check(r1.reasoning == "Step 1." && r1.content == " 4" && r1.tool_calls.empty(),
+          "inkling2 OutputParser: reasoning + content keeps leading space");
+    const ChatResult r2 = run_parse(
+        "<|content_thinking|>Need weather.<|end_message|>"
+        "<|message_model|>get_weather<|content_invoke_tool_json|>{\"name\":\"get_weather\",\"args\":{\"city\":\"Taipei\"}}<|end_message|>"
+        "<|message_model|>get_weather<|content_invoke_tool_json|>{\"name\":\"get_weather\",\"args\":{\"city\":\"Tokyo\"}}<|end_message|>");
+    check(r2.reasoning == "Need weather." && r2.content.empty() && r2.tool_calls.size() == 2 &&
+              r2.tool_calls[0].name == "get_weather" && r2.tool_calls[0].arguments == "{\"city\":\"Taipei\"}" &&
+              r2.tool_calls[1].arguments == "{\"city\":\"Tokyo\"}",
+          "inkling2 OutputParser: reasoning + 2 tool calls");
+
+    // Inline LogitMask suppression on Inkling-2 vocab & protected special/EOS IDs
+    char mpath[] = "/tmp/api_test_ink2mask.XXXXXX";
+    const int mfd = mkstemp(mpath);
+    if (mfd >= 0) {
+      close(mfd);
+      if (FILE* f = fopen(mpath, "w")) fputs(R"({"target_token_ids":[1,32,65,255]})", f), fclose(f);
+      std::vector<int> prot{199999, 200006};
+      for (const auto& [sid, _] : specials)
+        if (std::find(prot.begin(), prot.end(), sid) == prot.end()) prot.push_back(sid);
+      const TokenSuppressionMask mask = token_suppression_mask(read_token_suppression_file(mpath), 200058, prot);
+      check(mask.count == 4 && mask.words.size() == (200058 + 31) / 32 &&
+                (mask.words[0] & (1u << 1)) == 0 && (mask.words[1] & (1u << 0)) == 0 &&
+                (mask.words[2] & (1u << 1)) == 0 && (mask.words[7] & (1u << 31)) == 0,
+            "inkling2 inline token suppression mask clears exact bits");
+      bool refused_special = false;
+      try {
+        (void)token_suppression_mask(nlohmann::json{200006}, 200058, prot);
+      } catch (const std::runtime_error&) {
+        refused_special = true;
+      }
+      check(refused_special, "inkling2 inline token suppression refuses protected EOS token");
+      unlink(mpath);
+    }
+  }
+
+  // 3. Inkling2::read_config & plan validation (valid plan uses 3x slot_state; bad shapes refuse with FatalError)
+  {
+    char dir_tmpl[] = "/tmp/api_test_ink2cfg.XXXXXX";
+    if (mkdtemp(dir_tmpl)) {
+      const std::string dir = dir_tmpl;
+      auto make_base_cfg = []() {
+        return nlohmann::json{
+            {"model_type", "inkling2_loop"},
+            {"eos_token_id", 200006},
+            {"text_config",
+             {{"model_type", "inkling2_loop_text"},
+              {"hidden_size", 2304},
+              {"num_hidden_layers", 24},
+              {"vocab_size", 201024},
+              {"unpadded_vocab_size", 200058},
+              {"num_attention_heads", 24},
+              {"num_key_value_heads", 8},
+              {"head_dim", 128},
+              {"d_rel", 16},
+              {"rel_extent", 1024},
+              {"sliding_window_size", 1024},
+              {"n_layers_per_attn_res_block", 6},
+              {"n_routed_experts", 128},
+              {"num_experts_per_tok", 8},
+              {"intermediate_size", 1152},
+              {"sconv_kernel_size", 4},
+              {"n_shared_experts", 0},
+              {"q_bias", false},
+              {"o_bias", false},
+              {"use_value_norm_no_gamma", true},
+              {"attn_res_normalize_values", true},
+              {"use_gate_bias", true},
+              {"mlp_gate_softcap", 4.0},
+              {"mlp_up_softcap", 25.0},
+              {"local_layer_ids", {0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22}},
+              {"loop_config",
+               {{"core_start", 6}, {"core_end", 18}, {"num_passes", 3}, {"gate_rank", 64}, {"is_varloop", false}}}}}};
+      };
+      auto write_cfg = [&](const nlohmann::json& j) {
+        if (FILE* f = fopen((dir + "/config.json").c_str(), "w")) fputs(j.dump().c_str(), f), fclose(f);
+      };
+      write_cfg(make_base_cfg());
+      const Ink2Config okc = Inkling2::read_config(dir);
+      const MemPlan mp = Inkling2::plan(dir, 512);
+      check(Inkling2::is_model(dir) && okc.schedule.size() == 48 &&
+                mp.slot_state == 3 * (Inkling2::ring_bytes_per_seq(okc, 512) + Inkling2::conv_bytes_per_seq(okc)),
+            "inkling2 read_config & plan (3x slot_state)");
+
+      FatalRecovery recover;
+      auto must_refuse = [&](const char* label, auto mutator) {
+        nlohmann::json bad = make_base_cfg();
+        mutator(bad);
+        write_cfg(bad);
+        bool refused = false;
+        try {
+          (void)Inkling2::read_config(dir);
+        } catch (const FatalError&) {
+          refused = true;
+        }
+        check(refused, std::string("inkling2 refuses invalid config: ") + label);
+      };
+      must_refuse("hidden > 2304", [](nlohmann::json& j) { j["text_config"]["hidden_size"] = 2560; });
+      must_refuse("hidden not mult 128", [](nlohmann::json& j) { j["text_config"]["hidden_size"] = 200; });
+      must_refuse("head_dim != 128", [](nlohmann::json& j) { j["text_config"]["head_dim"] = 64; });
+      must_refuse("n_routed_experts != 128", [](nlohmann::json& j) { j["text_config"]["n_routed_experts"] = 64; });
+      must_refuse("top_k > 8", [](nlohmann::json& j) { j["text_config"]["num_experts_per_tok"] = 16; });
+      must_refuse("gate_rank != 64", [](nlohmann::json& j) { j["text_config"]["loop_config"]["gate_rank"] = 32; });
+      must_refuse("core_start unaligned to block",
+                  [](nlohmann::json& j) { j["text_config"]["loop_config"]["core_start"] = 3; });
+      must_refuse("unpadded_vocab_size > vocab_size",
+                  [](nlohmann::json& j) { j["text_config"]["unpadded_vocab_size"] = 202000; });
+      must_refuse("out-of-range local_layer_ids",
+                  [](nlohmann::json& j) { j["text_config"]["local_layer_ids"].push_back(24); });
+      must_refuse("layer 0 not local",
+                  [](nlohmann::json& j) { j["text_config"]["local_layer_ids"] = nlohmann::json::array({1, 2}); });
+
+      unlink((dir + "/config.json").c_str());
+      rmdir(dir.c_str());
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   hy4_plan_unit();
   a4_arena_unit();
@@ -3342,6 +3618,7 @@ int main(int argc, char** argv) {
   kflash_lookup_unit();
   unsupported_model_unit();
   clover_unit();
+  inkling2_unit();
   norm_layout_unit();
   ollama_unit();
   drafter_report_unit();

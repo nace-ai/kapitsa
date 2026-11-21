@@ -1,0 +1,1284 @@
+#include "model/inkling2.h"
+
+#include "model/inkling2_kernels.h"
+#include "model/kparams.h"
+#include "model/sampler.h"
+#include "util/bf16.h"
+#include "util/json_file.h"
+#include "util/log.h"
+
+#include <nlohmann/json.hpp>
+
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <unordered_map>
+
+namespace ni {
+
+using json = nlohmann::json;
+
+namespace {
+
+constexpr uint32_t kMaxAttnChunks = 64;
+
+size_t visit_conv_floats(const Ink2Config& c) {
+  const size_t kvd = size_t(c.hkv) * size_t(c.head_dim);
+  return 3 * (2 * kvd + 2 * size_t(c.hidden));  // conv_k, conv_v, conv_a, conv_m
+}
+
+Pipeline ink2_pipe(const std::string& name) {
+  static std::unordered_map<std::string, Pipeline> cache;
+  auto it = cache.find(name);
+  if (it == cache.end()) it = cache.emplace(name, ink2::pipeline(name)).first;
+  return it->second;
+}
+
+Pipeline base_pipe(const std::string& name) {
+  static std::unordered_map<std::string, Pipeline> cache;
+  auto it = cache.find(name);
+  if (it == cache.end()) it = cache.emplace(name, Gpu::get().pipeline(name)).first;
+  return it->second;
+}
+
+struct Ink2EmbedP {
+  uint32_t T, H, tok_off, V;
+  float eps;
+};
+struct Ink2NormP {
+  uint32_t T, H, has_w, w_f32;
+  float eps;
+};
+struct Ink2AttnResP {
+  uint32_t T, H, M, Q, q_f32;
+  float eps, scale;
+};
+struct Ink2MsgGateP {
+  uint32_t T, H, R, w_f32;
+  float eps;
+};
+struct Ink2MmP {
+  uint32_t M, N, K, x_ld, y_ld, w_f32, add;
+};
+struct Ink2SconvStaticP {
+  uint32_t T, C, w_f32;
+  float scale;
+};
+struct Ink2SconvDynP {
+  uint32_t T, C, n_heads, sw_f32;
+};
+struct Ink2QkvrP {
+  uint32_t T, Hq, Hkv, D, d_rel, pos0, kv_cap, is_swa, scale_f32;
+  float qk_clip, r_clip, v_eps, log_floor, log_alpha;
+};
+struct Ink2RelP {
+  uint32_t T, Hq, d_rel, extent, proj_f32;
+};
+struct Ink2AttnDecP {
+  uint32_t pos, kv_cap, Hq, Hkv, D, rel_extent, is_swa, swa, chunk, nchunks;
+  float scale;
+};
+struct Ink2AttnPfP {
+  uint32_t T, pos0, kv_cap, Hq, Hkv, D, rel_extent, is_swa, swa;
+  float scale;
+};
+struct Ink2RouteP {
+  uint32_t T, E, K, bias_f32;
+  float route_scale;
+};
+struct Ink2MoeP {
+  uint32_t T, H, I, K_top;
+};
+struct Ink2AddP {
+  uint32_t n;
+};
+struct Ink2SoftcapP {
+  uint32_t n;
+  float cap, inv_cap;
+};
+
+const json& text_cfg(const json& root) { return root.contains("text_config") ? root["text_config"] : root; }
+
+float read_elem_f32(const Tensor& t, size_t idx) {
+  if (t.dtype == DType::F32) return t.buf.as<float>()[idx];
+  if (t.dtype == DType::BF16) return bf16_to_f32(t.buf.as<uint16_t>()[idx]);
+  fatal("inkling2: unsupported scalar/vec dtype");
+}
+
+void enc_copy_buf(Encoder& e, const Buffer& src, const Buffer& dst, size_t bytes = 0) {
+  const uint64_t n = uint64_t(bytes ? bytes : std::min(src.size, dst.size));
+  if (!n) return;
+  e.use(ink2_pipe("ink2_copy_bytes"));
+  e.buf(0, src);
+  e.buf(1, dst);
+  e.val(2, n);
+  const uint32_t threads = uint32_t((n + 15) / 16);
+  e.dispatch((threads + 255) / 256, 1, 1, 256);
+}
+
+size_t safetensors_llm_bytes(const std::string& dir) {
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  size_t total = 0;
+  for (const auto& ent : fs::directory_iterator(dir, ec)) {
+    const std::string p = ent.path().string();
+    if (p.size() <= 12 || p.compare(p.size() - 12, 12, ".safetensors") != 0) continue;
+    std::ifstream in(p, std::ios::binary);
+    if (!in) continue;
+    uint64_t hlen = 0;
+    in.read(reinterpret_cast<char*>(&hlen), 8);
+    if (!in || hlen == 0 || hlen > (64u << 20)) continue;
+    std::string hdr(size_t(hlen), '\0');
+    in.read(hdr.data(), std::streamsize(hlen));
+    const json j = json::parse(hdr, nullptr, false);
+    if (!j.is_object()) continue;
+    for (auto it = j.begin(); it != j.end(); ++it) {
+      if (it.key().rfind("model.llm.", 0) != 0 || !it.value().is_object()) continue;
+      if (it.value().contains("data_offsets") && it.value()["data_offsets"].is_array() &&
+          it.value()["data_offsets"].size() == 2) {
+        const size_t a = it.value()["data_offsets"][0].get<size_t>();
+        const size_t b = it.value()["data_offsets"][1].get<size_t>();
+        if (b >= a) total += (b - a);
+      }
+    }
+  }
+  return total;
+}
+
+}  // namespace
+
+bool Inkling2::is_model(const std::string& dir) {
+  const auto jp = json_file(dir + "/config.json");
+  if (!jp || !jp->is_object()) return false;
+  if (jp->value("model_type", std::string()) == "inkling2_loop") return true;
+  return jp->contains("text_config") && (*jp)["text_config"].is_object() &&
+         (*jp)["text_config"].value("model_type", std::string()) == "inkling2_loop_text";
+}
+
+Ink2Config Inkling2::read_config(const std::string& dir) {
+  const auto rp = json_file(dir + "/config.json");
+  if (!rp || !rp->is_object()) fatal("%s: cannot read config.json", dir.c_str());
+  const json& root = *rp;
+  const json& t = text_cfg(root);
+  if (!t.is_object()) fatal("%s: missing text_config object", dir.c_str());
+
+  auto req_int = [&](const json& obj, const char* key) -> int {
+    if (!obj.contains(key) || !obj[key].is_number_integer())
+      fatal("%s: missing or non-integer %s in config.json", dir.c_str(), key);
+    return obj[key].get<int>();
+  };
+  auto opt_int = [&](const json& obj, const char* key, int def) -> int {
+    if (!obj.contains(key)) return def;
+    if (!obj[key].is_number_integer()) fatal("%s: non-integer %s in config.json", dir.c_str(), key);
+    return obj[key].get<int>();
+  };
+  auto opt_float = [&](const json& obj, const char* key, float def) -> float {
+    if (!obj.contains(key)) return def;
+    if (!obj[key].is_number()) fatal("%s: non-numeric %s in config.json", dir.c_str(), key);
+    return obj[key].get<float>();
+  };
+  auto opt_bool = [&](const json& obj, const char* key, bool def) -> bool {
+    if (!obj.contains(key)) return def;
+    if (!obj[key].is_boolean()) fatal("%s: non-boolean %s in config.json", dir.c_str(), key);
+    return obj[key].get<bool>();
+  };
+
+  Ink2Config c;
+  c.hidden = req_int(t, "hidden_size");
+  c.num_layers = req_int(t, "num_hidden_layers");
+  c.vocab_padded = req_int(t, "vocab_size");
+  c.vocab = opt_int(t, "unpadded_vocab_size", c.vocab_padded);
+  c.hq = req_int(t, "num_attention_heads");
+  c.hkv = req_int(t, "num_key_value_heads");
+  c.head_dim = req_int(t, "head_dim");
+  c.d_rel = opt_int(t, "d_rel", 16);
+  c.rel_extent = opt_int(t, "rel_extent", 1024);
+  c.swa = opt_int(t, "sliding_window_size", 1024);
+  c.block_sz = opt_int(t, "n_layers_per_attn_res_block", 6);
+  c.n_experts = opt_int(t, "n_routed_experts", 128);
+  c.top_k = opt_int(t, "num_experts_per_tok", 8);
+  c.moe_I = opt_int(t, "intermediate_size", 1152);
+  c.rms_eps = opt_float(t, "rms_norm_eps", 1e-6f);
+  c.qk_clip = opt_float(t, "qk_l2_clip_threshold", 22.627416997969522f);
+  c.rel_clip = opt_float(t, "rel_l2_clip_threshold", 8.0f);
+  c.log_floor = float(opt_int(t, "log_scaling_n_floor", 8192));
+  c.log_alpha = opt_float(t, "log_scaling_alpha", 0.1f);
+  c.route_scale = opt_float(t, "route_scale", 8.0f);
+  c.logit_softcap = opt_float(t, "final_logit_softcapping", 30.0f);
+
+  if (!t.contains("loop_config") || !t["loop_config"].is_object())
+    fatal("%s: missing loop_config in config.json", dir.c_str());
+  const json& loop = t["loop_config"];
+  c.core_start = req_int(loop, "core_start");
+  c.core_end = req_int(loop, "core_end");
+  c.num_passes = req_int(loop, "num_passes");
+  c.gate_rank = opt_int(loop, "gate_rank", 64);
+
+  if (opt_bool(t, "q_bias", false) || opt_bool(t, "o_bias", false))
+    fatal("%s: Inkling-2 with attention q_bias/o_bias is not supported", dir.c_str());
+  if (!opt_bool(t, "use_value_norm_no_gamma", true) || !opt_bool(t, "attn_res_normalize_values", true) ||
+      !opt_bool(t, "use_gate_bias", true))
+    fatal("%s: Inkling-2 requires use_value_norm_no_gamma, attn_res_normalize_values, and use_gate_bias", dir.c_str());
+  if (opt_bool(loop, "is_varloop", false))
+    fatal("%s: Inkling-2 varloop is not supported", dir.c_str());
+  if (opt_int(t, "sconv_kernel_size", 4) != 4 || opt_int(t, "n_shared_experts", 0) != 0)
+    fatal("%s: Inkling-2 requires sconv_kernel_size 4 and n_shared_experts 0", dir.c_str());
+  if (opt_int(t, "swa_head_dim", c.head_dim) != c.head_dim ||
+      opt_int(t, "swa_num_attention_heads", c.hq) != c.hq ||
+      opt_int(t, "swa_num_key_value_heads", c.hkv) != c.hkv)
+    fatal("%s: Inkling-2 heterogeneous SWA head geometry is not supported", dir.c_str());
+  if (std::fabs(opt_float(t, "mlp_gate_softcap", 4.0f) - 4.0f) > 1e-4f ||
+      std::fabs(opt_float(t, "mlp_up_softcap", 25.0f) - 25.0f) > 1e-4f)
+    fatal("%s: Inkling-2 requires mlp_gate_softcap 4 and mlp_up_softcap 25", dir.c_str());
+
+  if (c.hidden <= 0 || c.hidden > 2304 || c.hidden % 128 != 0 || c.num_layers < 2 || c.vocab <= 0 ||
+      c.vocab > c.vocab_padded || c.head_dim != 128 || c.hq <= 0 || c.hkv <= 0 || c.hq % c.hkv != 0 ||
+      c.d_rel <= 0 || c.d_rel > 128 || c.d_rel % 4 != 0 || c.rel_extent <= 0 || c.swa <= 0 ||
+      c.n_experts != 128 || c.top_k < 1 || c.top_k > 8 || c.moe_I <= 0 || c.moe_I % 32 != 0 ||
+      c.gate_rank != 64 || c.block_sz <= 0 || (c.num_layers + c.block_sz - 1) / c.block_sz > 4 ||
+      c.core_start <= 0 || c.core_start % c.block_sz != 0 || c.core_end <= c.core_start ||
+      c.core_end > c.num_layers || c.core_end % c.block_sz != 0 ||
+      c.core_end - c.core_start != 2 * c.block_sz || c.num_passes < 1 ||
+      !(c.rms_eps > 0.0f && c.qk_clip > 0.0f && c.rel_clip > 0.0f && c.log_floor > 0.0f &&
+        c.logit_softcap > 0.0f && std::isfinite(c.log_alpha) && std::isfinite(c.route_scale)))
+    fatal("%s: an Inkling-2 shape Kapitsa does not run (hidden %d, layers %d, heads %d/%d of %d, "
+          "%d experts top-%d I=%d, gate_rank=%d, block=%d core=%d..%d, vocab=%d/%d)",
+          dir.c_str(), c.hidden, c.num_layers, c.hq, c.hkv, c.head_dim, c.n_experts, c.top_k, c.moe_I,
+          c.gate_rank, c.block_sz, c.core_start, c.core_end, c.vocab, c.vocab_padded);
+
+  c.is_local.assign(size_t(c.num_layers), false);
+  if (t.contains("local_layer_ids")) {
+    if (!t["local_layer_ids"].is_array())
+      fatal("%s: local_layer_ids must be an array", dir.c_str());
+    for (const auto& lid : t["local_layer_ids"]) {
+      if (!lid.is_number_integer()) fatal("%s: local_layer_ids must contain integers", dir.c_str());
+      const int idx = lid.get<int>();
+      if (idx < 0 || idx >= c.num_layers)
+        fatal("%s: local_layer_ids contains out-of-range layer %d", dir.c_str(), idx);
+      c.is_local[size_t(idx)] = true;
+    }
+  }
+  if (!c.is_local[0])
+    fatal("%s: Inkling-2 layer 0 must be a local layer", dir.c_str());
+
+  for (int i = 0; i < c.core_start; ++i) c.schedule.push_back(i);
+  for (int pass = 0; pass < c.num_passes; ++pass)
+    for (int i = c.core_start; i < c.core_end; ++i) c.schedule.push_back(i);
+  for (int i = c.core_end; i < c.num_layers; ++i) c.schedule.push_back(i);
+
+  const auto gp = json_file(dir + "/generation_config.json");
+  auto push_eos = [&](const json& v) {
+    if (v.is_number_integer()) {
+      const int id = v.get<int>();
+      if (std::find(c.eos.begin(), c.eos.end(), id) == c.eos.end()) c.eos.push_back(id);
+    } else if (v.is_array()) {
+      for (const auto& x : v)
+        if (x.is_number_integer()) {
+          const int id = x.get<int>();
+          if (std::find(c.eos.begin(), c.eos.end(), id) == c.eos.end()) c.eos.push_back(id);
+        }
+    }
+  };
+  if (gp && gp->is_object()) {
+    if (gp->contains("eos_token_id")) push_eos((*gp)["eos_token_id"]);
+  }
+  if (root.contains("eos_token_id")) push_eos(root["eos_token_id"]);
+  if (c.eos.empty()) c.eos = {200006, 199999};
+  else if (std::find(c.eos.begin(), c.eos.end(), 199999) == c.eos.end()) c.eos.push_back(199999);
+  return c;
+}
+
+size_t Inkling2::kv_per_pos(const Ink2Config& c) {
+  int n_global = 0;
+  for (int ip : c.schedule)
+    if (!c.is_local[size_t(ip)]) ++n_global;
+  // 2 (K, V) * hkv * head_dim * sizeof(half)
+  return size_t(n_global) * 2 * size_t(c.hkv) * size_t(c.head_dim) * 2;
+}
+
+size_t Inkling2::conv_bytes_per_seq(const Ink2Config& c) {
+  return c.schedule.size() * visit_conv_floats(c) * 4;
+}
+
+size_t Inkling2::ring_bytes_per_seq(const Ink2Config& c, int tmax) {
+  int n_swa = 0;
+  for (int ip : c.schedule)
+    if (c.is_local[size_t(ip)]) ++n_swa;
+  const int rcap = (c.swa + std::max(1, tmax) + 15) / 16 * 16;
+  return size_t(n_swa) * 2 * size_t(rcap) * size_t(c.hkv) * size_t(c.head_dim) * 2;
+}
+
+MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
+  const Ink2Config c = read_config(dir);
+  const int chunk = prefill_chunk > 0 ? prefill_chunk : 512;
+  MemPlan m;
+  m.weights = safetensors_llm_bytes(dir);
+  m.kv_per_pos = kv_per_pos(c);
+  m.slot_state = 3 * (ring_bytes_per_seq(c, chunk) + conv_bytes_per_seq(c));
+  m.activations = size_t(chunk) * (24 * size_t(c.hidden) * 4 + size_t(c.hq) * size_t(c.rel_extent) * 4 +
+                                   size_t(c.top_k) * size_t(c.moe_I) * 4 + size_t(c.hq) * size_t(c.head_dim) * 12) +
+                  (32u << 20);
+  m.hidden = c.hidden;
+  m.layers = int(c.schedule.size());
+  m.formats = "NVFP4 (L0-19) + MXFP8 (L20-23) + BF16 dense (text-only)";
+  return m;
+}
+
+Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
+  path_ = path;
+  while (path_.size() > 1 && path_.back() == '/') path_.pop_back();
+  if (!is_model(path_)) fatal("%s: not an Inkling-2 checkpoint folder", path.c_str());
+  cfg_ = read_config(path_);
+  tmax_ = std::max(8, prefill_chunk > 0 ? prefill_chunk : 512);
+  ring_rows_ = (cfg_.swa + tmax_ + 15) / 16 * 16;
+  ink2::compile_kernels();
+  load();
+}
+
+Inkling2::~Inkling2() {
+  Gpu& g = Gpu::get();
+  for (Buffer& b : owned_bufs_) g.release(b);
+}
+
+void Inkling2::load() {
+  const double t0 = now_ms();
+  ws_.open_dir(path_, [](const std::string& n) { return n.rfind("model.llm.", 0) == 0; });
+  auto req_shape = [&](const std::string& name, std::initializer_list<int64_t> want) -> const Tensor* {
+    const Tensor* t = ws_.find(name);
+    if (!t) fatal("%s: missing tensor %s", path_.c_str(), name.c_str());
+    if (t->shape.size() != want.size() || !std::equal(want.begin(), want.end(), t->shape.begin()))
+      fatal("%s: %s has an unexpected shape", path_.c_str(), name.c_str());
+    return t;
+  };
+  auto req_float = [&](const std::string& name, std::initializer_list<int64_t> want) -> const Tensor* {
+    const Tensor* t = req_shape(name, want);
+    if (t->dtype != DType::BF16 && t->dtype != DType::F32)
+      fatal("%s: %s must be BF16 or F32", path_.c_str(), name.c_str());
+    return t;
+  };
+  auto req_raw = [&](const std::string& name, DType dtype, std::initializer_list<int64_t> want) -> const Tensor* {
+    const Tensor* t = req_shape(name, want);
+    if (t->dtype != dtype) fatal("%s: %s has an unexpected dtype", path_.c_str(), name.c_str());
+    return t;
+  };
+  auto req_any = [&](const std::string& name) -> const Tensor* {
+    const Tensor* t = ws_.find(name);
+    if (!t) fatal("%s: missing tensor %s", path_.c_str(), name.c_str());
+    return t;
+  };
+
+  const int64_t H64 = cfg_.hidden;
+  const int64_t QD64 = int64_t(cfg_.hq) * cfg_.head_dim;
+  const int64_t KVD64 = int64_t(cfg_.hkv) * cfg_.head_dim;
+  const int64_t E64 = cfg_.n_experts;
+  const int64_t I64 = cfg_.moe_I;
+
+  embed_ = req_any("model.llm.embed.weight");
+  if (embed_->dtype != DType::BF16 || embed_->shape.size() != 2 || embed_->shape[0] < cfg_.vocab ||
+      embed_->shape[1] != H64)
+    fatal("%s: model.llm.embed.weight must be BF16 [>=%d, %lld]", path_.c_str(), cfg_.vocab, (long long)H64);
+  embed_norm_ = req_raw("model.llm.embed_norm.weight", DType::BF16, {H64});
+  final_norm_ = req_float("model.llm.norm.weight", {H64});
+  unembed_ = req_any("model.llm.unembed.weight");
+  if ((unembed_->dtype != DType::BF16 && unembed_->dtype != DType::F32) || unembed_->shape.size() != 2 ||
+      unembed_->shape[0] < cfg_.vocab || unembed_->shape[1] != H64)
+    fatal("%s: model.llm.unembed.weight must be BF16/F32 [>=%d, %lld]", path_.c_str(), cfg_.vocab, (long long)H64);
+
+  attn_queries_.resize(size_t(cfg_.num_layers - 1));
+  for (int i = 0; i < cfg_.num_layers - 1; ++i) {
+    const std::string qn = "model.llm.attn_res.attn_queries." + std::to_string(i);
+    attn_queries_[size_t(i)] = cfg_.is_local[size_t(i + 1)] ? req_float(qn, {H64}) : req_float(qn, {3, H64});
+  }
+  mlp_queries_.resize(size_t(cfg_.num_layers));
+  for (int i = 0; i < cfg_.num_layers; ++i)
+    mlp_queries_[size_t(i)] = req_float("model.llm.attn_res.mlp_queries." + std::to_string(i), {H64});
+  output_query_ = req_float("model.llm.attn_res.output_query", {H64});
+
+  // Pre-interleave [12, 4, H] middle_cycle cross-pass queries: (attn, k, v, mlp)
+  const int ncore = cfg_.core_end - cfg_.core_start;
+  const Tensor* qam = req_float("model.llm.middle_cycle_cross_pass_queries", {int64_t(2) * ncore, H64});
+  const Tensor* qkv = req_float("model.llm.middle_cycle_cross_pass_kv_queries", {int64_t(2) * ncore, H64});
+  const size_t H = size_t(cfg_.hidden);
+  msg_queries_ = Gpu::get().alloc(size_t(ncore) * 4 * H * 4, "ink2_msg_queries");
+  owned_bufs_.push_back(msg_queries_);
+  {
+    float* dst = msg_queries_.as<float>();
+    for (int c = 0; c < ncore; ++c) {
+      for (size_t j = 0; j < H; ++j) {
+        dst[(size_t(c) * 4 + 0) * H + j] = read_elem_f32(*qam, (size_t(c) * 2 + 0) * H + j);
+        dst[(size_t(c) * 4 + 1) * H + j] = read_elem_f32(*qkv, (size_t(c) * 2 + 0) * H + j);
+        dst[(size_t(c) * 4 + 2) * H + j] = read_elem_f32(*qkv, (size_t(c) * 2 + 1) * H + j);
+        dst[(size_t(c) * 4 + 3) * H + j] = read_elem_f32(*qam, (size_t(c) * 2 + 1) * H + j);
+      }
+    }
+  }
+
+  auto make_outer = [&](const std::string& base) -> Buffer {
+    const Tensor* amax = req_float(base + "_amax", {E64});
+    const Tensor* denom = req_any(base + "_outer_scale_denominator");
+    if ((denom->dtype != DType::BF16 && denom->dtype != DType::F32) || denom->numel() != 1)
+      fatal("%s: %s_outer_scale_denominator must be a 1-element BF16/F32 tensor", path_.c_str(), base.c_str());
+    const float d = read_elem_f32(*denom, 0);
+    if (!std::isfinite(d) || d <= 0.0f)
+      fatal("%s: invalid %s_outer_scale_denominator (%g)", path_.c_str(), base.c_str(), d);
+    Buffer b = Gpu::get().alloc(size_t(cfg_.n_experts) * 4, "ink2_outer");
+    owned_bufs_.push_back(b);
+    float* out = b.as<float>();
+    for (int e = 0; e < cfg_.n_experts; ++e) out[e] = read_elem_f32(*amax, size_t(e)) / d;
+    return b;
+  };
+
+  layers_.assign(size_t(cfg_.num_layers), Ink2Layer{});
+  for (int i = 0; i < cfg_.num_layers; ++i) {
+    Ink2Layer& L = layers_[size_t(i)];
+    const std::string p = "model.llm.layers." + std::to_string(i) + ".";
+    L.is_swa = cfg_.is_local[size_t(i)];
+    L.has_ctrl = (i >= cfg_.core_start && i < cfg_.core_end);
+    L.wq_du = req_float(p + "attn.wq_du.weight", {QD64, H64});
+    L.wk_dv = req_float(p + "attn.wk_dv.weight", {KVD64, H64});
+    L.wv_dv = req_float(p + "attn.wv_dv.weight", {KVD64, H64});
+    L.wr_du = req_float(p + "attn.wr_du.weight", {int64_t(cfg_.hq) * cfg_.d_rel, H64});
+    L.attn_sink_proj = req_float(p + "attn.attn_sink_proj.weight", {cfg_.hq, H64});
+    L.gate_attn = req_float(p + "attn.gate_attn.weight", {QD64, H64});
+    L.wo_ud = req_float(p + "attn.wo_ud.weight", {H64, QD64});
+    L.q_scale = req_float(p + "attn.q_l2_clip.scale", {cfg_.hq, cfg_.head_dim});
+    L.rel_scale = req_float(p + "attn.rel_l2_clip.scale", {cfg_.hq, cfg_.d_rel});
+    if (L.q_scale->dtype != L.rel_scale->dtype)
+      fatal("%s: layer %d q_l2_clip.scale and rel_l2_clip.scale dtypes differ", path_.c_str(), i);
+    L.rel_proj = req_float(p + "attn.rel_logits_proj.proj", {cfg_.d_rel, cfg_.rel_extent});
+    L.mlp_norm = req_float(p + "mlp_norm.weight", {H64});
+    L.attn_sconv = req_float(p + "attn_sconv.weight", {H64, 1, 4});
+    L.mlp_sconv = req_float(p + "mlp_sconv.weight", {H64, 1, 4});
+    if (L.is_swa) {
+      L.attn_norm = req_float(p + "attn_norm.weight", {H64});
+      L.k_sconv = req_float(p + "attn.k_sconv.weight", {KVD64, 1, 4});
+      L.v_sconv = req_float(p + "attn.v_sconv.weight", {KVD64, 1, 4});
+    } else {
+      L.q_norm = req_float(p + "q_input_norm.weight", {H64});
+      L.k_norm = req_float(p + "k_input_norm.weight", {H64});
+      L.v_norm = req_float(p + "v_input_norm.weight", {H64});
+      L.k_static = req_float(p + "attn.k_sconv.static_w", {4, KVD64});
+      L.k_proj = req_float(p + "attn.k_sconv.weight_proj", {int64_t(4) * cfg_.hkv, H64});
+      L.v_static = req_float(p + "attn.v_sconv.static_w", {4, KVD64});
+      L.v_proj = req_float(p + "attn.v_sconv.weight_proj", {int64_t(4) * cfg_.hkv, H64});
+    }
+    if (L.has_ctrl) {
+      auto load_ctrl = [&](const char* name) {
+        const std::string c = p + "controllers." + name + ".";
+        Ink2Ctrl ctrl{req_float(c + "down_weight", {cfg_.gate_rank, 2 * H64}),
+                      req_float(c + "forget_weight", {H64, cfg_.gate_rank}),
+                      req_float(c + "gain_weight", {H64, cfg_.gate_rank})};
+        if (ctrl.down->dtype != ctrl.forget->dtype || ctrl.down->dtype != ctrl.gain->dtype)
+          fatal("%s: layer %d controller %s weight dtypes differ", path_.c_str(), i, name);
+        return ctrl;
+      };
+      L.ctrl_attn = load_ctrl("attn");
+      L.ctrl_k = load_ctrl("k");
+      L.ctrl_v = load_ctrl("v");
+      L.ctrl_mlp = load_ctrl("mlp");
+    }
+    L.router_w = req_float(p + "mlp.gate.weight", {E64, H64});
+    L.router_bias = req_float(p + "mlp.gate.bias", {E64});
+    const std::string m = p + "mlp.experts.";
+    L.w13 = req_any(m + "w13_weight");
+    if (L.w13->dtype == DType::U8) {
+      L.is_mxfp8 = false;
+      L.w13 = req_raw(m + "w13_weight", DType::U8, {E64, 2 * I64, H64 / 2});
+      L.w13_sc = req_raw(m + "w13_weight_scale", DType::F8E4M3, {E64, 2 * I64, H64 / 16});
+      L.w2 = req_raw(m + "w2_weight", DType::U8, {E64, H64, I64 / 2});
+      L.w2_sc = req_raw(m + "w2_weight_scale", DType::F8E4M3, {E64, H64, I64 / 16});
+      L.w13_outer = make_outer(m + "w13_weight");
+      L.w2_outer = make_outer(m + "w2_weight");
+    } else if (L.w13->dtype == DType::F8E4M3) {
+      L.is_mxfp8 = true;
+      L.w13 = req_raw(m + "w13_weight", DType::F8E4M3, {E64, 2 * I64, H64});
+      L.w13_sc = req_raw(m + "w13_weight_scale", DType::U8, {E64, 2 * I64, H64 / 32});
+      L.w2 = req_raw(m + "w2_weight", DType::F8E4M3, {E64, H64, I64});
+      L.w2_sc = req_raw(m + "w2_weight_scale", DType::U8, {E64, H64, I64 / 32});
+    } else {
+      fatal("%s: unexpected w13 dtype in layer %d", path_.c_str(), i);
+    }
+  }
+
+  Gpu::get().make_resident(ws_.buffers());
+  alloc_buffers();
+  Gpu::get().make_resident(owned_bufs_);
+  logi("loaded %s: Inkling-2-Mini (24 layers / 48 visits, vocab %d), %.2f GB text weights in %.0f ms",
+       path_.c_str(), cfg_.vocab, ws_.total_bytes() / 1e9, now_ms() - t0);
+}
+
+void Inkling2::alloc_buffers() {
+  Gpu& g = Gpu::get();
+  const size_t T = size_t(tmax_), H = size_t(cfg_.hidden);
+  const size_t QD = size_t(cfg_.hq) * size_t(cfg_.head_dim);
+  const size_t KVD = size_t(cfg_.hkv) * size_t(cfg_.head_dim);
+  const size_t V = size_t(cfg_.vocab);
+  auto alloc = [&](size_t bytes, const char* lbl) {
+    Buffer b = g.alloc(std::max<size_t>(bytes, 16), lbl);
+    owned_bufs_.push_back(b);
+    return b;
+  };
+  x_ = alloc(T * H * 4, "ink2_x");
+  x_pre_ = alloc(T * H * 4, "ink2_x_pre");
+  inp_sa_ = alloc(T * H * 4, "ink2_inp_sa");
+  ffn_inp_ = alloc(T * H * 4, "ink2_ffn_inp");
+  h_norm_ = alloc(T * H * 4, "ink2_h_norm");
+  for (int i = 0; i < 6; ++i) blocks_[i] = alloc(T * H * 4, "ink2_block");
+  for (int i = 0; i < 4; ++i) prelude_blocks_[i] = alloc(T * H * 4, "ink2_pre_block");
+  ar_out_ = alloc(4 * T * H * 4, "ink2_ar");
+  mg0_ = alloc(T * H * 4, "ink2_mg0");
+  mg1_ = alloc(T * H * 4, "ink2_mg1");
+  mg2_ = alloc(T * H * 4, "ink2_mg2");
+  n0_ = alloc(T * H * 4, "ink2_n0");
+  n1_ = alloc(T * H * 4, "ink2_n1");
+  n2_ = alloc(T * H * 4, "ink2_n2");
+  q_ = alloc(T * QD * 4, "ink2_q");
+  k_ = alloc(T * KVD * 4, "ink2_k");
+  v_ = alloc(T * KVD * 4, "ink2_v");
+  r_ = alloc(T * size_t(cfg_.hq) * size_t(cfg_.d_rel) * 4, "ink2_r");
+  sinks_ = alloc(T * size_t(cfg_.hq) * 4, "ink2_sinks");
+  gate_attn_ = alloc(T * QD * 4, "ink2_gate_attn");
+  att_out_ = alloc(T * QD * 4, "ink2_att_out");
+  a_out_ = alloc(T * H * 4, "ink2_a_out");
+  dyn_ = alloc(T * 4 * size_t(cfg_.hkv) * 4, "ink2_dyn");
+  rb_ = alloc(T * size_t(cfg_.hq) * size_t(cfg_.rel_extent) * 4, "ink2_rb");
+  part_m_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * 4, "ink2_part_m");
+  part_l_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * 4, "ink2_part_l");
+  part_o_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * size_t(cfg_.head_dim) * 4, "ink2_part_o");
+  h_mlp_ = alloc(T * H * 4, "ink2_h_mlp");
+  x_mlp_ = alloc(T * H * 4, "ink2_x_mlp");
+  rlog_ = alloc(T * size_t(cfg_.n_experts) * 4, "ink2_rlog");
+  eid_ = alloc(T * size_t(cfg_.top_k) * 4, "ink2_eid");
+  ew_ = alloc(T * size_t(cfg_.top_k) * 4, "ink2_ew");
+  moe_act_ = alloc(T * size_t(cfg_.top_k) * size_t(cfg_.moe_I) * 4, "ink2_moe_act");
+  moe_out_ = alloc(T * H * 4, "ink2_moe_out");
+  logits_ = alloc(V * 4, "ink2_logits");
+  cand_v_ = alloc((V / 2048 + 2) * 64 * 4, "ink2_cand_v");
+  cand_i_ = alloc((V / 2048 + 2) * 64 * 4, "ink2_cand_i");
+  sprob_ = alloc(64 * 4, "ink2_sprob");
+  samp_ = alloc(64 * 4, "ink2_samp");
+}
+
+// ---- sequences, KV caches, checkpoints ----
+std::unique_ptr<Seq> Inkling2::new_seq(int limit, int initial) {
+  Gpu& g = Gpu::get();
+  auto s = std::make_unique<Seq>();
+  s->limit = limit;
+  s->tok = g.alloc(size_t(limit + 8) * 4, "ink2_tokens");
+  const size_t nv = cfg_.schedule.size();
+  s->kc.resize(nv);
+  s->vc.resize(nv);
+  s->conv.push_back(g.alloc(conv_bytes_per_seq(cfg_), "ink2_conv"));
+  g.make_resident(s->conv);
+  reset(*s);
+  const int cap = initial < 0 ? limit : std::min(initial, limit);
+  if (cap > 0 && !reserve(*s, cap)) fatal("insufficient memory for a %d-token Inkling-2 KV cache", cap);
+  return s;
+}
+
+bool Inkling2::ensure_rings(Seq& s) {
+  if (s.cap <= 0 && !s.kc[0]) {
+    // Rings may be allocated alongside first linear KV capacity inside reserve(); if all visits were SWA they are handled below.
+  }
+  Gpu& g = Gpu::get();
+  const size_t row = size_t(cfg_.hkv) * size_t(cfg_.head_dim) * 2;
+  const size_t nv = cfg_.schedule.size();
+  size_t need = 0;
+  for (size_t v = 0; v < nv; ++v)
+    if (cfg_.is_local[size_t(cfg_.schedule[v])] && !s.kc[v]) need += 2 * row * size_t(ring_rows_);
+  if (!need) return true;
+  if (mem_budget_ && g.allocated_bytes() + need > mem_budget_) return false;
+  std::vector<Buffer> add;
+  for (size_t v = 0; v < nv; ++v)
+    if (cfg_.is_local[size_t(cfg_.schedule[v])] && !s.kc[v]) {
+      s.kc[v] = g.alloc(row * size_t(ring_rows_), "ink2_kv_ring");
+      s.vc[v] = g.alloc(row * size_t(ring_rows_), "ink2_kv_ring");
+      memset(s.kc[v].ptr(), 0, s.kc[v].size);
+      memset(s.vc[v].ptr(), 0, s.vc[v].size);
+      add.push_back(s.kc[v]);
+      add.push_back(s.vc[v]);
+    }
+  g.make_resident(add);
+  return true;
+}
+
+bool Inkling2::reserve(Seq& s, int need) {
+  if (need <= s.cap) return ensure_rings(s);
+  if (need > s.limit) return false;
+  Gpu& g = Gpu::get();
+  const size_t per = kv_per_pos(cfg_);
+  const size_t row = size_t(cfg_.hkv) * size_t(cfg_.head_dim) * 2;
+  auto round_up = [](int v, int m) { return (v + m - 1) / m * m; };
+  const size_t rings = s.kc[0] ? 0 : ring_bytes_per_seq(cfg_, tmax_);
+  auto fits = [&](int c) {
+    const size_t copy = std::min(size_t(256) << 20, size_t(s.cap) * per);
+    return !mem_budget_ || g.allocated_bytes() + size_t(c - s.cap) * per + copy + rings <= mem_budget_;
+  };
+  int target = std::min(s.limit, round_up(std::max(need, s.cap + s.cap / 4), 1024));
+  if (!fits(target)) target = std::min(s.limit, round_up(need, 256));
+  if (!fits(target)) return false;
+
+  const size_t nv = cfg_.schedule.size();
+  const size_t nb = row * size_t(target);
+  const int old = s.cap;
+  std::vector<Buffer> olds, news;
+  std::unique_ptr<Encoder> e;
+  size_t batch = 0;
+  auto flush = [&] {
+    if (e) e->commit_and_wait();
+    e.reset();
+    for (Buffer& b : olds) g.release(b);
+    olds.clear();
+    batch = 0;
+  };
+  for (size_t v = 0; v < nv; ++v) {
+    if (cfg_.is_local[size_t(cfg_.schedule[v])]) continue;
+    for (Buffer* b : {&s.kc[v], &s.vc[v]}) {
+      if (batch && batch + nb > (size_t(256) << 20)) flush();
+      Buffer nbuf = g.alloc(nb, "ink2_kv_global");
+      memset(nbuf.ptr(), 0, nbuf.size);
+      if (old > 0 && *b) {
+        if (!e) e = g.begin();
+        enc_copy_buf(*e, *b, nbuf, size_t(old) * row);
+      }
+      if (*b) olds.push_back(*b);
+      *b = nbuf;
+      news.push_back(nbuf);
+      batch += nb;
+    }
+  }
+  flush();
+  s.cap = target;
+  g.make_resident(news);
+  return ensure_rings(s);
+}
+
+void Inkling2::drop_kv(Seq& s) {
+  Gpu& g = Gpu::get();
+  for (auto* v : {&s.kc, &s.vc})
+    for (Buffer& b : *v) {
+      g.release(b);
+      b = Buffer{};
+    }
+  s.cap = 0;
+}
+
+void Inkling2::reset(Seq& s) {
+  if (!s.conv.empty() && s.conv[0]) memset(s.conv[0].ptr(), 0, s.conv[0].size);
+}
+
+Checkpoint Inkling2::new_checkpoint() { return Checkpoint{}; }
+
+void Inkling2::save(Encoder& e, const Seq& s, Checkpoint& c, int pos) {
+  Gpu& g = Gpu::get();
+  c.pos = -1;
+  const size_t nv = cfg_.schedule.size();
+  if (c.conv.empty() && !s.conv.empty() && s.conv[0]) {
+    if (mem_budget_ && g.allocated_bytes() + s.conv[0].size > mem_budget_) return;
+    c.conv.push_back(g.alloc(s.conv[0].size, "ink2_ckpt_conv"));
+    g.make_resident(c.conv);
+  }
+  if (!c.conv.empty() && !s.conv.empty() && s.conv[0]) enc_copy_buf(e, s.conv[0], c.conv[0]);
+  if (c.rec.size() != 2 * nv) c.rec.assign(2 * nv, Buffer{});
+  for (size_t v = 0; v < nv; ++v) {
+    const bool swa = cfg_.is_local[size_t(cfg_.schedule[v])];
+    for (int kv = 0; kv < 2; ++kv) {
+      const Buffer& src = kv ? s.vc[v] : s.kc[v];
+      Buffer& dst = c.rec[2 * v + size_t(kv)];
+      if (!swa || !src) {
+        if (dst) g.release(dst), dst = Buffer{};
+        continue;
+      }
+      if (!dst) {
+        if (mem_budget_ && g.allocated_bytes() + src.size > mem_budget_) return;
+        dst = g.alloc(src.size, "ink2_ckpt_ring");
+        g.make_resident({dst});
+      }
+      enc_copy_buf(e, src, dst);
+    }
+  }
+  c.pos = pos;
+}
+
+void Inkling2::restore(Encoder& e, Seq& s, const Checkpoint& c) {
+  if (!c.conv.empty() && !s.conv.empty() && s.conv[0]) enc_copy_buf(e, c.conv[0], s.conv[0]);
+  const size_t nv = cfg_.schedule.size();
+  for (size_t v = 0; v < nv && 2 * v + 1 < c.rec.size(); ++v) {
+    for (int kv = 0; kv < 2; ++kv) {
+      const Buffer& src = c.rec[2 * v + size_t(kv)];
+      const Buffer& dst = kv ? s.vc[v] : s.kc[v];
+      if (!src || !dst) continue;
+      enc_copy_buf(e, src, dst, std::min(src.size, dst.size));
+    }
+  }
+}
+
+// ---- primitives ----
+void Inkling2::enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer& y, int M, uint32_t N_limit,
+                      bool add, bool exact_f32) {
+  const uint32_t N = N_limit ? N_limit : uint32_t(w.shape[0]);
+  const uint32_t K = uint32_t(w.shape[1]);
+  if (M <= 32 || exact_f32) {
+    for (int m0 = 0; m0 < M; m0 += 8) {
+      const uint32_t mc = uint32_t(std::min(8, M - m0));
+      const Ink2MmP p{mc, N, K, K, N, w.dtype == DType::F32 ? 1u : 0u, add ? 1u : 0u};
+      e.use(ink2_pipe("ink2_bf16_mv"));
+      e.buf(0, x.view(size_t(m0) * K * 4, size_t(mc) * K * 4));
+      e.buf(1, w.buf);
+      e.buf(2, y.view(size_t(m0) * N * 4, size_t(mc) * N * 4));
+      e.val(3, p);
+      e.dispatch((N + 3) / 4, 1, 1, 128);
+    }
+  } else {
+    const Ink2MmP p{uint32_t(M), N, K, K, N, w.dtype == DType::F32 ? 1u : 0u, add ? 1u : 0u};
+    e.use(ink2_pipe("ink2_bf16_mm"));
+    e.buf(0, x);
+    e.buf(1, w.buf);
+    e.buf(2, y);
+    e.val(3, p);
+    e.dispatch((N + 63) / 64, (uint32_t(M) + 31) / 32, 1, 128);
+  }
+}
+
+void Inkling2::enc_norm(Encoder& e, const Buffer& x, const Tensor* w, const Buffer& out, int T, uint32_t dim) {
+  const Ink2NormP p{uint32_t(T), dim, w ? 1u : 0u, (w && w->dtype == DType::F32) ? 1u : 0u, cfg_.rms_eps};
+  e.use(ink2_pipe("ink2_rmsnorm"));
+  e.buf(0, x);
+  e.buf(1, w ? w->buf : x);
+  e.buf(2, out);
+  e.val(3, p);
+  e.dispatch(uint32_t(T), 1, 1, 512);
+}
+
+void Inkling2::enc_attn_res(Encoder& e, const Buffer* const* states, int M, const void* query_ptr, bool q_f32,
+                            uint32_t Q, const Buffer& out, int T) {
+  if (M < 1 || M > 6 || Q < 1 || Q > 4) fatal("inkling2: attn_res M=%d Q=%u out of range", M, Q);
+  const Ink2AttnResP p{uint32_t(T),
+                       uint32_t(cfg_.hidden),
+                       uint32_t(M),
+                       Q,
+                       q_f32 ? 1u : 0u,
+                       cfg_.rms_eps,
+                       1.0f / std::sqrt(float(cfg_.hidden))};
+  e.use(ink2_pipe("ink2_attn_res"));
+  for (int m = 0; m < 6; ++m) e.buf(m, m < M ? *states[m] : *states[0]);
+  e.buf(6, *static_cast<const Buffer*>(query_ptr));
+  e.buf(7, out);
+  e.val(8, p);
+  e.dispatch(uint32_t(T), 1, 1, 512);
+}
+
+void Inkling2::enc_msg_gate(Encoder& e, const Ink2Ctrl& c, const Buffer& h, const Buffer& m, const Buffer& out, int T) {
+  const Ink2MsgGateP p{uint32_t(T), uint32_t(cfg_.hidden), uint32_t(cfg_.gate_rank),
+                       c.down->dtype == DType::F32 ? 1u : 0u, cfg_.rms_eps};
+  e.use(ink2_pipe("ink2_msg_gate"));
+  e.buf(0, h);
+  e.buf(1, m);
+  e.buf(2, c.down->buf);
+  e.buf(3, c.forget->buf);
+  e.buf(4, c.gain->buf);
+  e.buf(5, out);
+  e.val(6, p);
+  e.dispatch(uint32_t(T), 1, 1, 512);
+}
+
+void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits, const Buffer* out_logits,
+                           bool need_all_logits, const Buffer* diag_rows) {
+  const uint32_t H = uint32_t(cfg_.hidden);
+  const uint32_t QD = uint32_t(cfg_.hq) * uint32_t(cfg_.head_dim);
+  const uint32_t KVD = uint32_t(cfg_.hkv) * uint32_t(cfg_.head_dim);
+  const size_t row_bytes = size_t(T) * H * 4;
+  const Buffer& conv = s.conv[0];
+  const float sconv_static_scale = 1.0f / std::sqrt(5.0f);
+
+  // Embed + norm -> x_
+  {
+    const Ink2EmbedP ep{uint32_t(T), H, uint32_t(pos0), uint32_t(embed_->shape[0]), cfg_.rms_eps};
+    e.use(ink2_pipe("ink2_embed_norm"));
+    e.buf(0, s.tok);
+    e.buf(1, embed_->buf);
+    e.buf(2, embed_norm_->buf);
+    e.buf(3, x_);
+    e.val(4, ep);
+    e.dispatch(uint32_t(T), 1, 1, 512);
+  }
+  if (diag_rows) enc_copy_buf(e, x_.view(size_t(T - 1) * H * 4, H * 4), diag_rows->view(0, H * 4), H * 4);
+
+  // Block buffers during pass:
+  // blocks_vec tracks active block boundaries (0..3 in blocks_[0..3]); blocks_[4..5] hold previous loop bank [b2, prev_last].
+  std::vector<const Buffer*> blocks_vec;
+  bool have_prelude = false;
+  bool have_prev = false;
+  int n_prelude_blocks = 0;
+
+  for (size_t v_idx = 0; v_idx < cfg_.schedule.size(); ++v_idx) {
+    const int ip = cfg_.schedule[v_idx];
+    const Ink2Layer& L = layers_[size_t(ip)];
+    const size_t cbase = v_idx * visit_conv_floats(cfg_) * 4;
+    const Buffer conv_k = conv.view(cbase + 0, 3 * KVD * 4);
+    const Buffer conv_v = conv.view(cbase + 3 * KVD * 4, 3 * KVD * 4);
+    const Buffer conv_a = conv.view(cbase + 6 * KVD * 4, 3 * H * 4);
+    const Buffer conv_m = conv.view(cbase + 6 * KVD * 4 + 3 * H * 4, 3 * H * 4);
+
+    if (ip == cfg_.core_start) {
+      if (!have_prelude) {
+        enc_copy_buf(e, x_, x_pre_, row_bytes);
+        n_prelude_blocks = int(blocks_vec.size());
+        for (int b = 0; b < n_prelude_blocks; ++b) enc_copy_buf(e, *blocks_vec[size_t(b)], prelude_blocks_[b], row_bytes);
+        have_prelude = true;
+      } else {
+        // previous = (blocks[len(pre_loop[1]) + 1 :], x): blocks[2] goes into blocks_[4], x into blocks_[5]
+        enc_copy_buf(e, *blocks_vec[size_t(n_prelude_blocks + 1)], blocks_[4], row_bytes);
+        enc_copy_buf(e, x_, blocks_[5], row_bytes);
+        enc_copy_buf(e, x_pre_, x_, row_bytes);
+        blocks_vec.clear();
+        for (int b = 0; b < n_prelude_blocks; ++b) {
+          enc_copy_buf(e, prelude_blocks_[b], blocks_[b], row_bytes);
+          blocks_vec.push_back(&blocks_[b]);
+        }
+        have_prev = true;
+      }
+    }
+
+    const bool has_msgs = have_prev && ip < cfg_.core_end;
+    const Buffer msg0 = ar_out_.view(0 * row_bytes, row_bytes);
+    const Buffer msg1 = ar_out_.view(1 * row_bytes, row_bytes);
+    const Buffer msg2 = ar_out_.view(2 * row_bytes, row_bytes);
+    const Buffer msg3 = ar_out_.view(3 * row_bytes, row_bytes);
+    if (has_msgs) {
+      const Buffer* bank_states[2] = {&blocks_[4], &blocks_[5]};
+      const Buffer qv = msg_queries_.view(size_t(ip - cfg_.core_start) * 4 * H * 4, 4 * H * 4);
+      enc_attn_res(e, bank_states, 2, &qv, true, 4, ar_out_, T);
+      // Preserve messages before ar_out_ is reused by attn_queries
+      enc_copy_buf(e, msg0, mg0_, row_bytes);
+      enc_copy_buf(e, msg1, mg1_, row_bytes);
+      enc_copy_buf(e, msg2, mg2_, row_bytes);
+      enc_copy_buf(e, msg3, h_norm_, row_bytes);  // h_norm_ holds msg3 until mlp message_gate
+    }
+
+    // Save x_ -> inp_sa_
+    enc_copy_buf(e, x_, inp_sa_, row_bytes);
+
+    // Attention input AttnRes
+    const Buffer* in_ptrs[3];
+    if (ip == 0) {
+      in_ptrs[0] = in_ptrs[1] = in_ptrs[2] = &inp_sa_;
+    } else {
+      std::vector<const Buffer*> st = blocks_vec;
+      st.push_back(&inp_sa_);
+      const Tensor* aq = attn_queries_[size_t(ip - 1)];
+      const uint32_t Q = aq->shape.size() == 2 ? uint32_t(aq->shape[0]) : 1u;
+      enc_attn_res(e, st.data(), int(st.size()), &aq->buf, aq->dtype == DType::F32, Q, ar_out_, T);
+      if (Q == 1) {
+        in_ptrs[0] = in_ptrs[1] = in_ptrs[2] = &ar_out_;
+      } else {
+        // Notice: ar_out_ holds [3, T, H] -> reuse msg0/1/2 views ONLY when !has_msgs; when has_msgs, mg0..mg2 already
+        // copied msg0..2 out before this call! Wait: keep separate slice views on ar_out_ cleanly.
+        in_ptrs[0] = &msg0;
+        in_ptrs[1] = &msg1;
+        in_ptrs[2] = &msg2;
+      }
+    }
+
+    if (has_msgs) {
+      // Apply controllers: inputs[*in_ptrs[i]] + message[mg*] -> write into blocks_[4..5]/n0_ or into h_mlp_/x_mlp_/moe_out_?
+      // Better: write directly into n0_, n1_, n2_ (alias safe with in_ptrs!)
+      enc_msg_gate(e, L.ctrl_attn, *in_ptrs[0], mg0_, n0_, T);
+      enc_msg_gate(e, L.ctrl_k, *in_ptrs[1], mg1_, n1_, T);
+      enc_msg_gate(e, L.ctrl_v, *in_ptrs[2], mg2_, n2_, T);
+      if (L.is_swa) {
+        enc_norm(e, n0_, L.attn_norm, n0_, T, H);
+        enc_norm(e, n1_, L.attn_norm, n1_, T, H);
+        enc_norm(e, n2_, L.attn_norm, n2_, T, H);
+      } else {
+        enc_norm(e, n0_, L.q_norm, n0_, T, H);
+        enc_norm(e, n1_, L.k_norm, n1_, T, H);
+        enc_norm(e, n2_, L.v_norm, n2_, T, H);
+      }
+    } else if (L.is_swa) {
+      enc_norm(e, *in_ptrs[0], L.attn_norm, n0_, T, H);
+      // n0_ feeds q, k, v, r, sinks, gate_attn
+    } else {
+      enc_norm(e, *in_ptrs[0], L.q_norm, n0_, T, H);
+      enc_norm(e, *in_ptrs[1], L.k_norm, n1_, T, H);
+      enc_norm(e, *in_ptrs[2], L.v_norm, n2_, T, H);
+    }
+
+    const Buffer& kn = (has_msgs || !L.is_swa) ? n1_ : n0_;
+    const Buffer& vn = (has_msgs || !L.is_swa) ? n2_ : n0_;
+
+    enc_mm(e, *L.wq_du, n0_, q_, T);
+    enc_mm(e, *L.wk_dv, kn, k_, T);
+    enc_mm(e, *L.wv_dv, vn, v_, T);
+    enc_mm(e, *L.wr_du, n0_, r_, T);
+    enc_mm(e, *L.attn_sink_proj, n0_, sinks_, T);
+    enc_mm(e, *L.gate_attn, n0_, gate_attn_, T);
+
+    // K / V short convolutions
+    if (L.is_swa) {
+      const Ink2SconvStaticP sp{uint32_t(T), KVD, L.k_sconv->dtype == DType::F32 ? 1u : 0u, sconv_static_scale};
+      e.use(ink2_pipe("ink2_sconv_static"));
+      e.buf(0, k_);
+      e.buf(1, L.k_sconv->buf);
+      e.buf(2, conv_k);
+      e.buf(3, k_);
+      e.val(4, sp);
+      e.dispatch((KVD + 255) / 256, 1, 1, 256);
+
+      const Ink2SconvStaticP svp{uint32_t(T), KVD, L.v_sconv->dtype == DType::F32 ? 1u : 0u, sconv_static_scale};
+      e.use(ink2_pipe("ink2_sconv_static"));
+      e.buf(0, v_);
+      e.buf(1, L.v_sconv->buf);
+      e.buf(2, conv_v);
+      e.buf(3, v_);
+      e.val(4, svp);
+      e.dispatch((KVD + 255) / 256, 1, 1, 256);
+    } else {
+      enc_mm(e, *L.k_proj, kn, dyn_, T);
+      const Ink2SconvDynP dp{uint32_t(T), KVD, uint32_t(cfg_.hkv), L.k_static->dtype == DType::F32 ? 1u : 0u};
+      e.use(ink2_pipe("ink2_sconv_dynamic"));
+      e.buf(0, k_);
+      e.buf(1, dyn_);
+      e.buf(2, L.k_static->buf);
+      e.buf(3, conv_k);
+      e.buf(4, k_);
+      e.val(5, dp);
+      e.dispatch((KVD + 255) / 256, 1, 1, 256);
+
+      enc_mm(e, *L.v_proj, vn, dyn_, T);
+      const Ink2SconvDynP dvp{uint32_t(T), KVD, uint32_t(cfg_.hkv), L.v_static->dtype == DType::F32 ? 1u : 0u};
+      e.use(ink2_pipe("ink2_sconv_dynamic"));
+      e.buf(0, v_);
+      e.buf(1, dyn_);
+      e.buf(2, L.v_static->buf);
+      e.buf(3, conv_v);
+      e.buf(4, v_);
+      e.val(5, dvp);
+      e.dispatch((KVD + 255) / 256, 1, 1, 256);
+    }
+
+    // Q/K/R clipping + V norm + log scaling + KV cache write
+    const uint32_t kv_cap = L.is_swa ? uint32_t(ring_rows_) : uint32_t(s.cap);
+    {
+      const Ink2QkvrP qp{uint32_t(T),
+                         uint32_t(cfg_.hq),
+                         uint32_t(cfg_.hkv),
+                         uint32_t(cfg_.head_dim),
+                         uint32_t(cfg_.d_rel),
+                         uint32_t(pos0),
+                         kv_cap,
+                         L.is_swa ? 1u : 0u,
+                         L.q_scale->dtype == DType::F32 ? 1u : 0u,
+                         cfg_.qk_clip,
+                         cfg_.rel_clip,
+                         cfg_.rms_eps,
+                         cfg_.log_floor,
+                         cfg_.log_alpha};
+      e.use(ink2_pipe("ink2_qkvr_prep"));
+      e.buf(0, q_);
+      e.buf(1, k_);
+      e.buf(2, v_);
+      e.buf(3, r_);
+      e.buf(4, L.q_scale->buf);
+      e.buf(5, L.rel_scale->buf);
+      e.buf(6, s.kc[v_idx]);
+      e.buf(7, s.vc[v_idx]);
+      e.val(8, qp);
+      e.dispatch(uint32_t(2 * cfg_.hq + 2 * cfg_.hkv), uint32_t(T), 1, uint32_t(cfg_.head_dim));
+    }
+
+    // Rel bias [T, Hq, rel_extent]
+    {
+      const Ink2RelP rp{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.d_rel), uint32_t(cfg_.rel_extent),
+                        L.rel_proj->dtype == DType::F32 ? 1u : 0u};
+      e.use(ink2_pipe("ink2_rel_bias"));
+      e.buf(0, r_);
+      e.buf(1, L.rel_proj->buf);
+      e.buf(2, rb_);
+      e.val(3, rp);
+      e.dispatch((uint32_t(cfg_.rel_extent) + 31) / 32, uint32_t(cfg_.hq), uint32_t(T), 32);
+    }
+
+    // Attention
+    const float attn_scale = 1.0f / std::sqrt(float(cfg_.head_dim));
+    if (T == 1) {
+      const uint32_t lk = L.is_swa ? std::min(uint32_t(pos0 + 1), uint32_t(cfg_.swa)) : uint32_t(pos0 + 1);
+      uint32_t chunk = std::max(32u, (lk + kMaxAttnChunks - 1) / kMaxAttnChunks);
+      chunk = (chunk + 3) / 4 * 4;
+      const uint32_t nchunks = std::max(1u, (lk + chunk - 1) / chunk);
+      const Ink2AttnDecP adp{uint32_t(pos0),
+                             kv_cap,
+                             uint32_t(cfg_.hq),
+                             uint32_t(cfg_.hkv),
+                             uint32_t(cfg_.head_dim),
+                             uint32_t(cfg_.rel_extent),
+                             L.is_swa ? 1u : 0u,
+                             uint32_t(cfg_.swa),
+                             chunk,
+                             nchunks,
+                             attn_scale};
+      e.use(ink2_pipe("ink2_attn_decode"));
+      e.buf(0, q_);
+      e.buf(1, s.kc[v_idx]);
+      e.buf(2, s.vc[v_idx]);
+      e.buf(3, rb_);
+      e.buf(4, part_m_);
+      e.buf(5, part_l_);
+      e.buf(6, part_o_);
+      e.val(7, adp);
+      e.dispatch(uint32_t(cfg_.hq), nchunks, 1, 128);
+
+      e.use(ink2_pipe("ink2_attn_decode_reduce"));
+      e.buf(0, part_m_);
+      e.buf(1, part_l_);
+      e.buf(2, part_o_);
+      e.buf(3, sinks_);
+      e.buf(4, gate_attn_);
+      e.buf(5, att_out_);
+      e.val(6, adp);
+      e.dispatch(uint32_t(cfg_.hq), 1, 1, 32);
+    } else {
+      const Ink2AttnPfP apf{uint32_t(T),
+                            uint32_t(pos0),
+                            kv_cap,
+                            uint32_t(cfg_.hq),
+                            uint32_t(cfg_.hkv),
+                            uint32_t(cfg_.head_dim),
+                            uint32_t(cfg_.rel_extent),
+                            L.is_swa ? 1u : 0u,
+                            uint32_t(cfg_.swa),
+                            attn_scale};
+      e.use(ink2_pipe("ink2_attn_prefill"));
+      e.buf(0, q_);
+      e.buf(1, s.kc[v_idx]);
+      e.buf(2, s.vc[v_idx]);
+      e.buf(3, rb_);
+      e.buf(4, sinks_);
+      e.buf(5, gate_attn_);
+      e.buf(6, att_out_);
+      e.val(7, apf);
+      e.dispatch(uint32_t(cfg_.hq), uint32_t(T), 1, 128);
+    }
+
+    // wo_ud + attn_sconv -> a_out_
+    enc_mm(e, *L.wo_ud, att_out_, a_out_, T);
+    {
+      const Ink2SconvStaticP sp{uint32_t(T), H, L.attn_sconv->dtype == DType::F32 ? 1u : 0u, sconv_static_scale};
+      e.use(ink2_pipe("ink2_sconv_static"));
+      e.buf(0, a_out_);
+      e.buf(1, L.attn_sconv->buf);
+      e.buf(2, conv_a);
+      e.buf(3, a_out_);
+      e.val(4, sp);
+      e.dispatch((H + 255) / 256, 1, 1, 256);
+    }
+
+    // AttnRes Block boundary
+    if (ip % cfg_.block_sz == 0) {
+      const int bslot = ip / cfg_.block_sz;
+      enc_copy_buf(e, inp_sa_, blocks_[bslot], row_bytes);
+      blocks_vec.push_back(&blocks_[bslot]);
+      enc_copy_buf(e, a_out_, ffn_inp_, row_bytes);
+    } else {
+      enc_copy_buf(e, inp_sa_, ffn_inp_, row_bytes);
+      const Ink2AddP ap{uint32_t(T) * H};
+      e.use(ink2_pipe("ink2_add"));
+      e.buf(0, a_out_);
+      e.buf(1, ffn_inp_);
+      e.val(2, ap);
+      e.dispatch((ap.n + 255) / 256, 1, 1, 256);
+    }
+
+    // MLP AttnRes + optional MessageGate + norm
+    {
+      std::vector<const Buffer*> st = blocks_vec;
+      st.push_back(&ffn_inp_);
+      const Tensor* mq = mlp_queries_[size_t(ip)];
+      enc_attn_res(e, st.data(), int(st.size()), &mq->buf, mq->dtype == DType::F32, 1, h_mlp_, T);
+    }
+    if (has_msgs) {
+      // h_norm_ holds msg3 saved at start of this visit
+      enc_msg_gate(e, L.ctrl_mlp, h_mlp_, h_norm_, h_mlp_, T);
+    }
+    enc_norm(e, h_mlp_, L.mlp_norm, x_mlp_, T, H);
+
+    // Router + MoE (router uses exact FP32 math on all M so prefill top-k matches decode)
+    enc_mm(e, *L.router_w, x_mlp_, rlog_, T, 0, false, true);
+    {
+      const Ink2RouteP rp{uint32_t(T), uint32_t(cfg_.n_experts), uint32_t(cfg_.top_k),
+                          L.router_bias->dtype == DType::F32 ? 1u : 0u, cfg_.route_scale};
+      e.use(ink2_pipe("ink2_moe_route"));
+      e.buf(0, rlog_);
+      e.buf(1, L.router_bias->buf);
+      e.buf(2, eid_);
+      e.buf(3, ew_);
+      e.val(4, rp);
+      e.dispatch(uint32_t(T), 1, 1, 128);
+    }
+    {
+      const Ink2MoeP mp{uint32_t(T), H, uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k)};
+      if (!L.is_mxfp8) {
+        e.use(ink2_pipe("ink2_moe_nvfp4_w13_situ"));
+        e.buf(0, x_mlp_);
+        e.buf(1, eid_);
+        e.buf(2, L.w13->buf);
+        e.buf(3, L.w13_sc->buf);
+        e.buf(4, L.w13_outer);
+        e.buf(5, moe_act_);
+        e.val(6, mp);
+        e.dispatch((uint32_t(cfg_.moe_I) + 3) / 4, uint32_t(cfg_.top_k), uint32_t(T), 128);
+
+        e.use(ink2_pipe("ink2_moe_nvfp4_w2_acc"));
+        e.buf(0, moe_act_);
+        e.buf(1, eid_);
+        e.buf(2, ew_);
+        e.buf(3, L.w2->buf);
+        e.buf(4, L.w2_sc->buf);
+        e.buf(5, L.w2_outer);
+        e.buf(6, moe_out_);
+        e.val(7, mp);
+        e.dispatch((H + 3) / 4, uint32_t(T), 1, 128);
+      } else {
+        e.use(ink2_pipe("ink2_moe_mxfp8_w13_situ"));
+        e.buf(0, x_mlp_);
+        e.buf(1, eid_);
+        e.buf(2, L.w13->buf);
+        e.buf(3, L.w13_sc->buf);
+        e.buf(4, moe_act_);
+        e.val(5, mp);
+        e.dispatch((uint32_t(cfg_.moe_I) + 3) / 4, uint32_t(cfg_.top_k), uint32_t(T), 128);
+
+        e.use(ink2_pipe("ink2_moe_mxfp8_w2_acc"));
+        e.buf(0, moe_act_);
+        e.buf(1, eid_);
+        e.buf(2, ew_);
+        e.buf(3, L.w2->buf);
+        e.buf(4, L.w2_sc->buf);
+        e.buf(5, moe_out_);
+        e.val(6, mp);
+        e.dispatch((H + 3) / 4, uint32_t(T), 1, 128);
+      }
+    }
+
+    // mlp_sconv + residual add -> x_
+    {
+      const Ink2SconvStaticP sp{uint32_t(T), H, L.mlp_sconv->dtype == DType::F32 ? 1u : 0u, sconv_static_scale};
+      e.use(ink2_pipe("ink2_sconv_static"));
+      e.buf(0, moe_out_);
+      e.buf(1, L.mlp_sconv->buf);
+      e.buf(2, conv_m);
+      e.buf(3, moe_out_);
+      e.val(4, sp);
+      e.dispatch((H + 255) / 256, 1, 1, 256);
+    }
+    enc_copy_buf(e, ffn_inp_, x_, row_bytes);
+    {
+      const Ink2AddP ap{uint32_t(T) * H};
+      e.use(ink2_pipe("ink2_add"));
+      e.buf(0, moe_out_);
+      e.buf(1, x_);
+      e.val(2, ap);
+      e.dispatch((ap.n + 255) / 256, 1, 1, 256);
+    }
+
+    if (diag_rows) {
+      int dslot = -1;
+      if (v_idx == 0) dslot = 1;
+      else if (v_idx == 5) dslot = 2;
+      else if (v_idx == 17) dslot = 3;
+      else if (v_idx == 18) dslot = 4;
+      else if (v_idx == 30) dslot = 5;
+      else if (v_idx == 44) dslot = 6;
+      if (dslot >= 0) enc_copy_buf(e, x_.view(size_t(T - 1) * H * 4, H * 4), diag_rows->view(size_t(dslot) * H * 4, H * 4), H * 4);
+    }
+
+    if (T >= 256 && (v_idx & 7) == 7 && v_idx + 1 < cfg_.schedule.size()) e.split();
+  }
+
+  if (!dump_logits && !need_all_logits) return;
+
+  // Final AttnRes + RMSNorm
+  {
+    std::vector<const Buffer*> st = blocks_vec;
+    st.push_back(&x_);
+    enc_attn_res(e, st.data(), int(st.size()), &output_query_->buf, output_query_->dtype == DType::F32, 1, ar_out_, T);
+  }
+  enc_norm(e, ar_out_, final_norm_, h_norm_, T, H);
+  if (diag_rows) enc_copy_buf(e, h_norm_.view(size_t(T - 1) * H * 4, H * 4), diag_rows->view(7 * H * 4, H * 4), H * 4);
+
+  const uint32_t V = uint32_t(cfg_.vocab);
+  const Buffer& dst = out_logits ? *out_logits : logits_;
+  const int rows_out = need_all_logits ? T : 1;
+  const Buffer h_in = need_all_logits ? h_norm_ : h_norm_.view(size_t(T - 1) * H * 4, size_t(H) * 4);
+  enc_mm(e, *unembed_, h_in, dst, rows_out, V, false);
+  {
+    const Ink2SoftcapP sp{uint32_t(rows_out) * V, cfg_.logit_softcap, 1.0f / cfg_.logit_softcap};
+    e.use(ink2_pipe("ink2_softcap"));
+    e.buf(0, dst);
+    e.val(1, sp);
+    e.dispatch((sp.n + 255) / 256, 1, 1, 256);
+  }
+}
+
+void Inkling2::enc_sample(Encoder& e, Seq& s, const Buffer& lrow, const Buffer& tokens, int out_index,
+                          const SamplingParams& sp, uint32_t step) {
+  (void)s;
+  if (full_vocab(sp)) {
+    enc_sample_full(e, lrow, uint32_t(cfg_.vocab), tokens, out_index, sprob_, sp, step);
+    return;
+  }
+  const uint32_t K = topk_k(sp);
+  const kp::TopkStage ts{uint32_t(cfg_.vocab), K, topk_chunk(K)};
+  const uint32_t ntg = topk_lists(uint32_t(cfg_.vocab), K);
+  e.use(base_pipe("topk_stage1"));
+  e.buf(0, lrow);
+  e.buf(1, cand_v_);
+  e.buf(2, cand_i_);
+  e.val(3, ts);
+  e.dispatch(ntg, 1, 1, topk_threads(K));
+  const kp::Sample p2{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, uint32_t(out_index)};
+  e.use(base_pipe("sample_stage2"));
+  e.buf(0, cand_v_);
+  e.buf(1, cand_i_);
+  e.buf(2, tokens);
+  e.buf(3, sprob_);
+  e.val(4, p2);
+  e.dispatch(1, 1, 1, 1024);
+}
+
+void Inkling2::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample) {
+  if (pos + 1 >= s.cap) fatal("context full (%d)", s.cap);
+  enc_forward(e, s, pos, 1, sample, nullptr, false);
+  if (!sample) return;
+  enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);
+  enc_sample(e, s, logits_, s.tok, pos + 1, sp, step);
+}
+
+void Inkling2::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
+                              Checkpoint* snap, int) {
+  if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
+  if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
+  if (snap) fatal("inkling2: in-pass snapshots are not supported");
+  if (s.embeds) fatal("inkling2: image inputs are not supported in Stage 1");
+  enc_forward(e, s, pos0, T, sample, nullptr, false);
+  if (!sample) return;
+  enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);
+  enc_sample(e, s, logits_, s.tok, pos0 + T, sp, step);
+}
+
+void Inkling2::encode_logits_rows(Encoder& e, Seq& s, int pos0, int T, const Buffer& out) {
+  if (T > tmax_) fatal("logits_rows chunk %d > %d", T, tmax_);
+  if (pos0 + T > s.cap) fatal("context full (%d)", s.cap);
+  enc_forward(e, s, pos0, T, true, &out, true);
+}
+
+void Inkling2::encode_prefill_diag(Encoder& e, Seq& s, int pos0, int T, const Buffer& diag_rows) {
+  if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
+  if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
+  enc_forward(e, s, pos0, T, true, nullptr, false, &diag_rows);
+}
+
+}  // namespace ni
