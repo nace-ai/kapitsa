@@ -651,11 +651,31 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     if ((v = getenv("NI_FLINT_SELF_MIN")) && *v) flint_self_min_ = std::max(0, atoi(v));
   }
 
-  // NI_PREFIX_CKPT=0: no prefix checkpoint. Not with LiLiCorr / KFlash drafters (their context has no rewind to an
-  // empty ring).
+  // Inkling-2-Mini bundled DFlare/DSpark drafter (mtp.safetensors): enabled by default when present unless --spec 0
+  // or NI_INK2_SPEC=0. Adaptive depth (2..7) by default; --spec K or NI_INK2_SPEC=K fixes the depth.
+  if (ink2_ && spec_asked != 0 && Ink2DFlare::is_available(opts_.model_dir)) {
+    const char* v = getenv("NI_INK2_SPEC");
+    const bool env_set = v && *v;
+    const int env_k = env_set ? atoi(v) : -1;
+    const int k = spec_asked > 0 ? spec_asked : (env_set ? env_k : Ink2DFlare::kMaxDrafts);
+    if (k > 0) {
+      ink2_dfl_ = std::make_unique<Ink2DFlare>(*ink2_, opts_.model_dir);
+      ink2_spec_ = std::min(k, ink2_dfl_->max_drafts());
+      ink2_spec_auto_ = (spec_asked < 0 && !env_set);
+      Gpu& g = Gpu::get();
+      const size_t H = size_t(ink2_->config().hidden);
+      const size_t V = size_t(ink2_->vocab());
+      const size_t pf_rows = size_t(prefill_chunk_room(opts_.prefill_chunk));
+      ink2_pf_taps_ = g.alloc(4 * pf_rows * H * 4, "ink2_pf_taps");
+      ink2_vf_taps_ = g.alloc(4 * size_t(Inkling2::kMaxVerify) * H * 4, "ink2_vf_taps");
+      ink2_vf_logits_ = g.alloc(size_t(Inkling2::kMaxVerify) * V * 4, "ink2_vf_logits");
+    }
+  }
+
+  // NI_PREFIX_CKPT=0: no prefix checkpoint. Not with LiLiCorr / KFlash / Ink2DFlare drafters.
   {
     const char* v = getenv("NI_PREFIX_CKPT");
-    prefix_ckpt_ = !(v && v[0] == '0' && v[1] == 0) && !lili_;
+    prefix_ckpt_ = !(v && v[0] == '0' && v[1] == 0) && !lili_ && !ink2_dfl_;
     { const char* c = getenv("NI_PREFIX_COPY"); prefix_copy_ = !(c && c[0] == '0' && c[1] == 0); }
   }
   std::shared_ptr<const TokenSuppression> suppression;
@@ -683,6 +703,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     s.seq->suppression = suppression;
     if (dfl_) s.dseq = dfl_->new_seq();
     if (lili_) s.lseq = lili_->new_seq();
+    if (ink2_dfl_) s.ink2_dseq = ink2_dfl_->new_seq();
     s.ckpts.push_back({model_->new_checkpoint()});
     s.ckpts.push_back({model_->new_checkpoint()});
     if (prefix_ckpt_) s.ckpts.push_back({model_->new_checkpoint(), false, true});
@@ -755,6 +776,10 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
                                                " drafts per cycle)"
                          : dfl_ && dfl_->tree() ? std::string("KFlash speculative decoding (DFlash2 lattice, tree verify)")
                          : dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(dfl_->verify_depth()) + " of 7)"
+                         : ink2_dfl_ ? "DFlare speculative decoding (" +
+                                           (ink2_spec_auto_ ? "adaptive 2-" + std::to_string(ink2_spec_)
+                                                            : "depth " + std::to_string(ink2_spec_)) +
+                                           ")"
                          : spec_ ? "MTP speculative decoding depth " + std::to_string(opts_.spec_depth)
                          : dory_spec_ > 0 ? "speculative decoding (" +
                                                     (dory_spec_kind() == "ngram"  ? std::string("prompt lookup")
@@ -772,6 +797,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     f.spec_off = spec_asked == 0;
     if (dfl_) f.loaded = dfl_dir_, f.loaded_kind = dfl_->config().v1 ? "DFlash" : "DFlash2";
     else if (lili_) f.loaded = lp.dflash, f.loaded_kind = lili_->name();
+    else if (ink2_dfl_) f.loaded = opts_.model_dir + "/mtp.safetensors", f.loaded_kind = "DFlare";
     f.left_out = lp.dflash_left_out;
     f.unsupported = dflash_unsupported;
     f.unbound = lp.dflash_unbound;
@@ -807,6 +833,7 @@ std::string Engine::kflash_source() const {
   if (!kflash_wrap_on()) return "";
   if (lili_) return lili_->name();
   if (dfl_) return "DFlash2";
+  if (ink2_dfl_) return "DFlare";
   if (flint_ngram_ > 0 || nh_ngram_ > 0) return "prompt lookup";
   if (spec_) return "MTP";
   if (dory_spec_ > 0)
@@ -1530,6 +1557,10 @@ void Engine::drop_slot(Slot& slot) {
   note_kv(slot);
   slot_pos_[&slot - slots_.data()].store(0, std::memory_order_relaxed);  // (its tokens are cleared below)
   model_->reset(*slot.seq);  // nothing in flight uses it: other slots are idle, this one's request has not started
+  if (ink2_dfl_ && slot.ink2_dseq) {
+    ink2_dfl_->reset(*slot.ink2_dseq);
+    slot.ink2_dseq_pos = 0;
+  }
   slot.tokens.clear();
   slot.img_spans.clear();
   slot.img_digests.clear();
@@ -3468,6 +3499,18 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // [max(start, n - 2047), n); the drafter projects them into its context ring after the last chunk.
   if (dfl_) dfl_->begin_prefill(n, start);
   if (lili_) lili_->begin_prefill(n, start);
+  if (ink2_dfl_ && slot.ink2_dseq) {
+    if (start == 0) {
+      ink2_dfl_->reset(*slot.ink2_dseq);
+      slot.ink2_dseq_pos = 0;
+    } else if (slot.ink2_dseq_pos != start) {
+      // Prefix reuse landed at a position the DFlare ring does not match (e.g. restored checkpoint): rebuild from 0.
+      start = 0;
+      model_->reset(s);
+      ink2_dfl_->reset(*slot.ink2_dseq);
+      slot.ink2_dseq_pos = 0;
+    }
+  }
   // Other requests take their turns between chunks up to the first row the drafter captures (its capture buffer is
   // shared); from there the prefill runs to its end (at most two chunks).
   const int capture_from = dfl_ ? std::max(start, n - DFlash2::kCtxKeep)
@@ -3743,6 +3786,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         model_->save(*e, s, *victim(), boundary);
       }
       vpf_rows(n);
+    } else if (ink2_dfl_ && slot.ink2_dseq) {
+      ink2_->encode_prefill_taps(*e, s, p, T, sp, 0, p + T == n, &ink2_pf_taps_);
+      ink2_dfl_->encode_commit(*e, *slot.ink2_dseq, ink2_pf_taps_, T, p, T);
+      slot.ink2_dseq_pos = p + T;
     } else {
       model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n && !clover_diffusion, snap, snap ? snap_at - p : 0);
     }
@@ -4134,6 +4181,196 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     auto e3 = g.begin();
     q35_->encode_flush(*e3, s);
     e3->commit_and_wait();
+    fed_until = P;
+  } else if (ink2_dfl_ && slot.ink2_dseq && !gm && !tc.on()) {
+    // Inkling-2-Mini bundled DFlare/DSpark speculative decoding (mtp.safetensors):
+    // tokens[P] is the pending anchor token; each cycle fuses previous conv rollback + tap commit +
+    // DFlare block draft (depth d) + Inkling-2 parallel verify (d + 1 rows) into one command buffer.
+    const int V = ink2_->vocab();
+    const bool greedy = sp.temperature <= 0.0f;
+    const float inv_t = greedy ? 1.0f : (1.0f / sp.temperature);
+    auto splitmix = [](uint64_t x) -> double {
+      x += 0x9e3779b97f4a7c15ULL;
+      x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
+      x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
+      x ^= x >> 31;
+      return double(x >> 11) * (1.0 / double(1ULL << 53));
+    };
+    auto argmax_row = [V](const float* row) -> int {
+      int best = 0;
+      float bv = row[0];
+      for (int i = 1; i < V; ++i) {
+        if (row[i] > bv) {
+          bv = row[i];
+          best = i;
+        }
+      }
+      return best;
+    };
+    std::vector<float> probs(greedy ? 0 : size_t(V));
+    std::vector<int> idx;
+    auto build_probs = [&](const float* row) {
+      float mx = row[0];
+      for (int i = 1; i < V; ++i)
+        if (row[i] > mx) mx = row[i];
+      if (sp.top_k > 0 && sp.top_k < V) {
+        idx.resize(size_t(V));
+        for (int i = 0; i < V; ++i) idx[size_t(i)] = i;
+        std::nth_element(idx.begin(), idx.begin() + sp.top_k, idx.end(),
+                         [row](int a, int b) { return row[a] > row[b]; });
+        idx.resize(size_t(sp.top_k));
+        std::fill(probs.begin(), probs.end(), 0.0f);
+        double sum = 0.0;
+        for (int id : idx) {
+          float p = std::exp((row[id] - mx) * inv_t);
+          probs[size_t(id)] = p;
+          sum += p;
+        }
+        float inv_s = sum > 0.0 ? float(1.0 / sum) : 0.0f;
+        for (int id : idx) probs[size_t(id)] *= inv_s;
+      } else {
+        double sum = 0.0;
+        for (int i = 0; i < V; ++i) {
+          float p = (row[i] > -1e20f) ? std::exp((row[i] - mx) * inv_t) : 0.0f;
+          probs[size_t(i)] = p;
+          sum += p;
+        }
+        float inv_s = sum > 0.0 ? float(1.0 / sum) : 0.0f;
+        for (int i = 0; i < V; ++i) probs[size_t(i)] *= inv_s;
+      }
+      if (sp.top_p > 0.0f && sp.top_p < 1.0f) {
+        if (idx.empty() || int(idx.size()) != sp.top_k) {
+          idx.clear();
+          for (int i = 0; i < V; ++i)
+            if (probs[size_t(i)] > 1e-6f) idx.push_back(i);
+        }
+        std::sort(idx.begin(), idx.end(), [&](int a, int b) { return probs[size_t(a)] > probs[size_t(b)]; });
+        float cum = 0.0f;
+        size_t keep = 0;
+        for (; keep < idx.size(); ++keep) {
+          cum += probs[size_t(idx[keep])];
+          if (cum >= sp.top_p) {
+            ++keep;
+            break;
+          }
+        }
+        if (keep < idx.size()) {
+          for (size_t j = keep; j < idx.size(); ++j) probs[size_t(idx[j])] = 0.0f;
+          float inv_c = cum > 0.0f ? (1.0f / cum) : 0.0f;
+          for (size_t j = 0; j < keep; ++j) probs[size_t(idx[j])] *= inv_c;
+        }
+      }
+    };
+    auto sample_probs = [&](int exclude_id, double u) -> int {
+      double tot = 1.0;
+      if (exclude_id >= 0 && exclude_id < V) {
+        tot -= probs[size_t(exclude_id)];
+        if (tot <= 1e-9) return argmax_row(probs.data());
+      }
+      double target = u * tot;
+      double acc = 0.0;
+      int last_nz = 0;
+      for (int i = 0; i < V; ++i) {
+        if (i == exclude_id) continue;
+        float p = probs[size_t(i)];
+        if (p <= 0.0f) continue;
+        last_nz = i;
+        acc += p;
+        if (acc >= target) return i;
+      }
+      return last_nz;
+    };
+
+    int P = n;
+    bool go = handle(s.tokens()[n]);
+    int cur_d = ink2_spec_auto_ ? std::min(2, ink2_spec_) : ink2_spec_;
+    int pending_commit = 0, pending_pos = 0, pending_stride = 0, pending_rb = -1;
+    while (go) {
+      if (P + cur_d + 2 >= s.cap) {
+        if (P + cur_d + 2 >= s.limit || !grow_kv(std::min(s.limit, P + cur_d + 3), [] {})) {
+          finish = "length";
+          res.context_full = true;
+          break;
+        }
+      }
+      const int d = cur_d;
+      {
+        auto e2 = g.begin();
+        if (pending_commit > 0) {
+          ink2_->encode_conv_rollback(*e2, s, pending_rb, pending_stride);
+          ink2_dfl_->encode_commit(*e2, *slot.ink2_dseq, ink2_vf_taps_, pending_commit, pending_pos, pending_stride);
+          slot.ink2_dseq_pos = pending_pos + pending_commit;
+          pending_commit = 0;
+        }
+        ink2_dfl_->encode_draft(*e2, s, *slot.ink2_dseq, P, d);
+        ink2_->encode_verify(*e2, s, P, d + 1, ink2_vf_logits_, &ink2_vf_taps_, true);
+        e2->commit_and_wait();
+      }
+      const float* vl = ink2_vf_logits_.as<float>();
+      int* tk = s.tokens();
+      int a = 0;
+      int bonus = 0;
+      if (greedy) {
+        for (int k = 0; k < d; ++k) {
+          int tgt = argmax_row(vl + size_t(k) * size_t(V));
+          if (tgt == tk[P + 1 + k]) {
+            ++a;
+          } else {
+            bonus = tgt;
+            break;
+          }
+        }
+        if (a == d) bonus = argmax_row(vl + size_t(d) * size_t(V));
+      } else {
+        for (int k = 0; k < d; ++k) {
+          build_probs(vl + size_t(k) * size_t(V));
+          int drf = tk[P + 1 + k];
+          double u = splitmix(uint64_t(sp.seed) ^ (uint64_t(P + k) * 0x9e3779b97f4a7c15ULL));
+          if (drf >= 0 && drf < V && u < double(probs[size_t(drf)])) {
+            ++a;
+          } else {
+            double u2 = splitmix(uint64_t(sp.seed) ^ (uint64_t(P + k) * 0xbf58476d1ce4e5b9ULL) ^ 1ULL);
+            bonus = sample_probs(drf, u2);
+            break;
+          }
+        }
+        if (a == d) {
+          build_probs(vl + size_t(d) * size_t(V));
+          double u = splitmix(uint64_t(sp.seed) ^ (uint64_t(P + d) * 0x9e3779b97f4a7c15ULL));
+          bonus = sample_probs(-1, u);
+        }
+      }
+      tk[P + a + 1] = bonus;
+      int m = 0;
+      while (m < a + 1) {
+        ++m;
+        if (!handle(tk[P + m])) {
+          go = false;
+          break;
+        }
+      }
+      ++spec_cycles_;
+      ++req_cycles;
+      spec_accepted_ += a;
+      cycle_done(m);
+      pending_rb = m - 1;
+      pending_commit = m;
+      pending_pos = P;
+      pending_stride = d + 1;
+      P += m;
+      if (ink2_spec_auto_) {
+        if (a == d) cur_d = std::min(ink2_spec_, cur_d + 2);
+        else cur_d = std::clamp(a + 1, 2, ink2_spec_);
+      }
+      if (go && contended()) yield_turn(res);
+    }
+    if (pending_commit > 0) {
+      auto e3 = g.begin();
+      ink2_->encode_conv_rollback(*e3, s, pending_rb, pending_stride);
+      ink2_dfl_->encode_commit(*e3, *slot.ink2_dseq, ink2_vf_taps_, pending_commit, pending_pos, pending_stride);
+      e3->commit_and_wait();
+      slot.ink2_dseq_pos = pending_pos + pending_commit;
+    }
     fed_until = P;
   } else if (clover_own) {
     // Clover, block diffusion (NI_CLOVER_DECODE=diffusion): a block of B rows at P starts as mask tokens; each
