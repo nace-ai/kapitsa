@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 namespace ni {
@@ -76,6 +77,13 @@ class ThinkControl {
   // the cap allows only the forced token at its position; every other row allows every token. Returns the rows that
   // force a token.
   int fill(uint32_t* mask, size_t W, const int* tokens, int P, int rows, const int* parent, int live) const;
+  // fill() for a DFlash2 cycle: tree, its KFlash tree descriptor (src/kernels/kflash.h: the parents and the live rows),
+  // null: a chain of `rows` live rows.
+  int fill_cycle(uint32_t* mask, size_t W, const int* tokens, int P, int rows, const int* tree) const;
+
+  // A batched member's rows in one cycle (at most 8) and the plain passes encoded before the one in flight is handled:
+  // a member whose control is near(kBatchNear) is batched masked (Engine::BatchJob::masked).
+  static constexpr int kBatchNear = 9;
 
   // the state after token t (the transition push() and fill() share)
   State step(State s, int t) const;
@@ -92,5 +100,21 @@ class ThinkControl {
   int forced_n_ = 0;          // forced tokens handled (usage: whether the cap was reached)
   mutable int unmasked_ = 0;  // (fill's fail-open rows, for the engine's warning)
 };
+
+// The decode loops that cannot mask their rows hand the reply to the constrained loop when near() this many rows after a
+// handled token (Engine::chat's tc_rows): a speculative loop, kf::kMaxRows + 1 (it waits for each verify and handles
+// its tokens in order, so it stops at the token before the cap; the margin hands over a cycle early); the plain loop,
+// 2 (its next step is in flight, unmasked, when a token is handled).
+int think_handover_rows(bool spec_loop);
+
+// A batched member's masks for `rows` chain rows from P (Engine::member_masks): its grammar's (structured output, once
+// the reasoning is over: grammar_on, grammar_fill), else its thinking budget's while armed, else every token allowed.
+template <class GrammarFill>
+void think_member_masks(bool grammar_on, GrammarFill&& grammar_fill, const ThinkControl* tc, uint32_t* mask, size_t W,
+                        const int* tokens, int P, int rows) {
+  if (grammar_on) grammar_fill();
+  else if (tc && tc->armed()) tc->fill(mask, W, tokens, P, rows, nullptr, rows);
+  else memset(mask, 0xff, size_t(rows) * W * 4);
+}
 
 }  // namespace ni
