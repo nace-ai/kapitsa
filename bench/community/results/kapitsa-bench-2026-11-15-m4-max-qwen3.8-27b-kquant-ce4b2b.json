@@ -1,0 +1,126 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-11-15T07:31:25Z",
+  "kapitsa": {
+    "version": "0.2.35",
+    "commit": "30b18f9"
+  },
+  "mac": {
+    "identifier": "Mac16,6",
+    "name": "MacBook Pro (14-inch, 2024)",
+    "year": 2024,
+    "chip": "Apple M4 Max",
+    "cpu_cores": 14,
+    "gpu_cores": 32,
+    "memory_gb": 36,
+    "macos": "26.5.2",
+    "macos_build": "25F84"
+  },
+  "model": {
+    "name": "qwen3.8-27b",
+    "title": "Qwen3.8-27B",
+    "variant": "kquant",
+    "precision": "kquant",
+    "catalog": true,
+    "revision": "8e62e9e",
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "nace-ai/Qwen3.8-27B-DFlash2-Kapitsa@4f95046",
+    "drafter_kind": "DFlash2",
+    "drafter_source": "dflash2",
+    "drafter_reason": "found in the model's folder"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 7.21,
+      "runs_tps": [
+        21.16,
+        12.52,
+        7.18,
+        7.21,
+        6.32
+      ],
+      "median_accepted_draft_tps": 5.78,
+      "median_accepted_draft_share": 0.8008
+    },
+    "decode_greedy": {
+      "median_tps": 7.18,
+      "runs_tps": [
+        6.99,
+        7.32,
+        7.88,
+        7.08,
+        7.18
+      ],
+      "median_accepted_draft_tps": 5.9,
+      "median_accepted_draft_share": 0.8223
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4132,
+        "ttft_s": 112.2569,
+        "tps": 36.8,
+        "followup_s": [
+          2.0703,
+          2.6977,
+          2.0846
+        ],
+        "followup_median_s": 2.0846,
+        "followup_suffix_tps": 10.4
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16287,
+        "ttft_s": 447.1333,
+        "tps": 36.4,
+        "followup_s": [
+          7.3067,
+          2.8104,
+          2.2541
+        ],
+        "followup_median_s": 2.8104,
+        "followup_suffix_tps": 9.3
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 20.07
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "high",
+    "low_power_mode": false,
+    "thermal_state": "critical",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 6.15,
+    "gpu_other_max_pct": 77.81,
+    "gpu_ambient_mean_pct": 1.03,
+    "gpu_users": [
+      "Google Chrome"
+    ],
+    "contention": [
+      "decode",
+      "decode_greedy",
+      "prefill_4000"
+    ]
+  },
+  "flags": [
+    "CONTENTION: sustained foreign GPU load > 5% in ['decode', 'decode_greedy', 'prefill_4000'] (mean 6.15%, top ['Google Chrome', 'NotificationCenter'])",
+    "thermal: critical during decode, decode_greedy, prefill_4000, prefill_16000 (macOS slows the chip down)"
+  ],
+  "invalid": []
+}
