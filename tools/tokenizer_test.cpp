@@ -328,18 +328,15 @@ void check_o200k_pretokenizer() {
       "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*"
       "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
       "\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
-  // Whitespace-varied version (extra space after top-level alternative pipe) must still select O200k, not Qwen.
-  const std::string kO200kSpaced = kO200kExact + " ";
   const std::string kTekkenExact =
       "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+|"
       "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*|"
       "\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
 
-  for (const auto& [label, re] : std::vector<std::pair<std::string, std::string>>{
-           {"exact O200k", kO200kExact}, {"whitespace-varied O200k", kO200kSpaced}}) {
+  {
     json j = {{"added_tokens", json::array()},
               {"normalizer", nullptr},
-              {"pre_tokenizer", make_pt(re)},
+              {"pre_tokenizer", make_pt(kO200kExact)},
               {"model", {{"type", "BPE"}, {"vocab", vocab}, {"merges", json::array()}, {"ignore_merges", true}}}};
     ni::Tokenizer tok;
     load(tok, j);
@@ -347,8 +344,25 @@ void check_o200k_pretokenizer() {
       std::vector<int> want;
       for (const std::string& p : c.pieces) want.push_back(tok.find(byte_level(p)));
       const std::vector<int> got = tok.encode(c.text);
-      check(got == want, label + " split: " + c.what, "ids " + ids_str(got) + ", want " + ids_str(want));
+      check(got == want, std::string("exact O200k split: ") + c.what, "ids " + ids_str(got) + ", want " + ids_str(want));
     }
+  }
+
+  // Regexes carrying the distinguishing substrings without matching kO200k exactly must keep default split (single digits).
+  for (const auto& [label, bad_re] : std::vector<std::pair<std::string, std::string>>{
+           {"truncated O200k missing tail alternatives",
+            "[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}][\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}](?i:'s|'t|'re|'ve|'m|'ll|'d)|\\p{N}{1,3}"},
+           {"O200k with extra alternative", kO200kExact + "|extra"}}) {
+    json bj = {{"added_tokens", json::array()},
+               {"normalizer", nullptr},
+               {"pre_tokenizer", make_pt(bad_re)},
+               {"model", {{"type", "BPE"}, {"vocab", vocab}, {"merges", json::array()}, {"ignore_merges", true}}}};
+    ni::Tokenizer btok;
+    load(btok, bj);
+    const std::vector<int> bgot = btok.encode("1234");
+    const std::vector<int> bwant = {btok.find(byte_level("1")), btok.find(byte_level("2")),
+                                    btok.find(byte_level("3")), btok.find(byte_level("4"))};
+    check(bgot == bwant, label + " does not select O200k", "ids " + ids_str(bgot));
   }
 
   // Tekken split remains distinct (no contractions, digits 1-by-1)
