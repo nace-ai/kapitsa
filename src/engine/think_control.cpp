@@ -86,6 +86,16 @@ int ThinkControl::fill(uint32_t* mask, size_t W, const int* tokens, int P, int r
       }
     }
     uint32_t* const w = mask + size_t(r) * W;
+    if (ok[size_t(r)] && cap_ == 0 && rs[size_t(r)].phase == kPre && open_ >= 0) {
+      memset(w, 0xff, W * 4);
+      if (size_t(open_) < W * 32) {
+        w[size_t(open_) / 32] &= ~(1u << (unsigned(open_) % 32));
+        ++n;
+      } else {
+        ++unmasked_;
+      }
+      continue;
+    }
     const int f = ok[size_t(r)] && rs[size_t(r)].phase == kThink ? forced_at(rs[size_t(r)].think) : -1;
     if (f < 0 || size_t(f) >= W * 32) {
       if (f >= 0) ++unmasked_;  // (the mask is narrower than the vocabulary: the engine warns)
