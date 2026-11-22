@@ -230,6 +230,11 @@ class Inkling2 : public Model {
   }
   void enc_msg_gate_f(Encoder& e, const Ink2Ctrl& c, const Buffer& h, const Buffer& m, const Buffer& lat,
                       const Buffer& out, int T, int stage);
+  // NVFP4 MoE decode kernels with a threadgroup byte -> float2 E2M1 LUT; NI_INK2_MOELUT=0 = constant-space lookups
+  static bool moe_lut() {
+    static const bool v = !getenv("NI_INK2_MOELUT") || atoi(getenv("NI_INK2_MOELUT")) != 0;
+    return v;
+  }
   static bool msg_mm() {
     static const bool v = !getenv("NI_INK2_MSG_MM") || atoi(getenv("NI_INK2_MSG_MM")) != 0;
     return v;

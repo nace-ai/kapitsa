@@ -42,6 +42,27 @@ NI_INLINE float ink2_nvfp4_dot(const device uchar* w, size_t wrow, uint half_k, 
   return d;
 }
 
+// Same sum as ink2_nvfp4_dot with a per-threadgroup byte -> (lo, hi) E2M1 table (one 8-byte LUT read per byte instead
+// of two constant-space lookups + nibble masks; lab2 probe: w13 6.30 -> 5.44 ms/token)
+NI_INLINE float ink2_nvfp4_dot_l(const device uchar* w, size_t wrow, uint half_k, uint blk, const thread float* xf,
+                                 threadgroup const float2* lut) {
+  const uint2 pw = *(const device uint2*)(w + wrow * half_k + blk * 8);
+  float d = 0.0f;
+  for (uint b = 0; b < 8; ++b) {
+    const float2 v = lut[((b < 4 ? pw.x : pw.y) >> (8u * (b & 3u))) & 0xFFu];
+    d += v.x * xf[2 * b] + v.y * xf[2 * b + 1];
+  }
+  return d;
+}
+#define INK2_NVFP4_LUT_FILL(tid, nthreads)                                                                      \
+  threadgroup float2 lut[256];                                                                                  \
+  if (LUT) {                                                                                                    \
+    for (uint i_ = tid; i_ < 256u; i_ += nthreads) lut[i_] = float2(kE2M1[i_ & 15u], kE2M1[i_ >> 4]);          \
+    threadgroup_barrier(mem_flags::mem_threadgroup);                                                            \
+  }
+#define INK2_NVFP4_DOT(w, row, half_k, blk, xf) \
+  (LUT ? ink2_nvfp4_dot_l(w, row, half_k, blk, xf, lut) : ink2_nvfp4_dot(w, row, half_k, blk, xf))
+
 // ---- 1. Embedding lookup + RMSNorm (BF16) ----
 struct Ink2EmbedP {
   uint T, H, tok_off, V;
@@ -2024,11 +2045,14 @@ struct Ink2MoeP {
   uint T, H, I, K_top;
 };
 
-[[kernel]] void ink2_moe_nvfp4_w13_situ(const device float* x [[buffer(0)]], const device uint* eid [[buffer(1)]],
+template <bool LUT>
+[[kernel]] void ink2_moe_nvfp4_w13_situ_t(const device float* x [[buffer(0)]], const device uint* eid [[buffer(1)]],
                                         const device uchar* w13 [[buffer(2)]], const device uchar* sc [[buffer(3)]],
                                         const device float* outer [[buffer(4)]], device float* act [[buffer(5)]],
                                         constant Ink2MoeP& p [[buffer(6)]], uint3 tg [[threadgroup_position_in_grid]],
-                                        uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+                                        uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],
+                                        uint tid [[thread_index_in_threadgroup]]) {
+  INK2_NVFP4_LUT_FILL(tid, 128u)
   const uint j0 = (tg.x * 4u + sg) * 4u;
   if (j0 >= p.I) return;
   const uint nr = min(4u, p.I - j0);
@@ -2047,8 +2071,8 @@ struct Ink2MoeP {
     };
     const thread float* xf = (const thread float*)xv;
     for (uint q = 0u; q < nr; ++q) {
-      ag[q] += ink2_nvfp4_dot(w13, wg0_row + 2u * q, half_h, blk, xf) * ink2_e4m3(sc[(wg0_row + 2u * q) * blocks + blk]);
-      au[q] += ink2_nvfp4_dot(w13, wg0_row + 2u * q + 1u, half_h, blk, xf) * ink2_e4m3(sc[(wg0_row + 2u * q + 1u) * blocks + blk]);
+      ag[q] += INK2_NVFP4_DOT(w13, wg0_row + 2u * q, half_h, blk, xf) * ink2_e4m3(sc[(wg0_row + 2u * q) * blocks + blk]);
+      au[q] += INK2_NVFP4_DOT(w13, wg0_row + 2u * q + 1u, half_h, blk, xf) * ink2_e4m3(sc[(wg0_row + 2u * q + 1u) * blocks + blk]);
     }
   }
   const float os = outer[e];
@@ -2062,12 +2086,17 @@ struct Ink2MoeP {
   }
 }
 
-[[kernel]] void ink2_moe_nvfp4_w2_acc(const device float* act [[buffer(0)]], const device uint* eid [[buffer(1)]],
+template [[host_name("ink2_moe_nvfp4_w13_situ")]] [[kernel]] decltype(ink2_moe_nvfp4_w13_situ_t<false>) ink2_moe_nvfp4_w13_situ_t<false>;
+template [[host_name("ink2_moe_nvfp4_w13_situ_l")]] [[kernel]] decltype(ink2_moe_nvfp4_w13_situ_t<true>) ink2_moe_nvfp4_w13_situ_t<true>;
+
+template <bool LUT>
+[[kernel]] void ink2_moe_nvfp4_w2_acc_t(const device float* act [[buffer(0)]], const device uint* eid [[buffer(1)]],
                                       const device float* ew [[buffer(2)]], const device uchar* w2 [[buffer(3)]],
                                       const device uchar* sc [[buffer(4)]], const device float* outer [[buffer(5)]],
                                       device float* out [[buffer(6)]], constant Ink2MoeP& p [[buffer(7)]],
                                       uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
-                                      uint lane [[thread_index_in_simdgroup]]) {
+                                      uint lane [[thread_index_in_simdgroup]], uint tid [[thread_index_in_threadgroup]]) {
+  INK2_NVFP4_LUT_FILL(tid, 128u)
   const uint n0 = (tg.x * 4u + sg) * 4u;
   if (n0 >= p.H) return;
   const uint nr = min(4u, p.H - n0);
@@ -2087,13 +2116,107 @@ struct Ink2MoeP {
       };
       const thread float* af = (const thread float*)av;
       for (uint q = 0u; q < nr; ++q)
-        sum[q] += ink2_nvfp4_dot(w2, wrow0 + q, half_i, blk, af) * ink2_e4m3(sc[(wrow0 + q) * blocks + blk]);
+        sum[q] += INK2_NVFP4_DOT(w2, wrow0 + q, half_i, blk, af) * ink2_e4m3(sc[(wrow0 + q) * blocks + blk]);
     }
     for (uint q = 0u; q < nr; ++q) total[q] += wt * (simd_sum(sum[q]) * outer[e]);
   }
   if (lane == 0u) {
     device float* dst = out + size_t(t) * p.H + n0;
     for (uint q = 0u; q < nr; ++q) dst[q] = total[q];
+  }
+}
+
+template [[host_name("ink2_moe_nvfp4_w2_acc")]] [[kernel]] decltype(ink2_moe_nvfp4_w2_acc_t<false>) ink2_moe_nvfp4_w2_acc_t<false>;
+template [[host_name("ink2_moe_nvfp4_w2_acc_l")]] [[kernel]] decltype(ink2_moe_nvfp4_w2_acc_t<true>) ink2_moe_nvfp4_w2_acc_t<true>;
+
+// ---- 11b. MoE NVFP4 decode, wide (lab4; NI_INK2_MOEBT=0 for the kernels above). E2M1 by bits, no table: a nibble
+// eem|s as half bits (eem << 9 | s << 15) is the value / 2^14 exactly (e=0 -> half subnormals 0, 2^-15). Probe
+// (lab2/moebench2, 44 visits, random weights): w13 5.50 -> 4.06 ms, w2 3.70 -> 2.74 ms.
+NI_INLINE float ink2_bt_dot8(uint w, const thread float* xf) {  // nibble k of w (bits 4k..) times xf[k]
+  float d = 0.0f;
+  _Pragma("clang loop unroll(full)") for (uint s = 0; s < 4; ++s) {
+    const uint v = w >> (4u * s);
+    const half2 h = as_type<half2>(((v << 9) & 0x0E000E00u) | ((v << 12) & 0x80008000u));
+    d += float(h.x) * xf[s] + float(h.y) * xf[s + 4];
+  }
+  return d;
+}
+NI_INLINE float ink2_bt_dot16(uint2 pw, const thread float* xf) {
+  return (ink2_bt_dot8(pw.x, xf) + ink2_bt_dot8(pw.y, xf + 8)) * 16384.0f;
+}
+
+// w13 + situ: 4 lanes per weight row, 4 blocks (32 bytes) per lane step (H/64 steps, H % 256 == 0: 9 per lane at
+// H = 2304), 8 rows = 4 j (gate, up) per simdgroup, 16 j per threadgroup (grid as ink2_moe_nvfp4_w13_situ)
+[[kernel]] void ink2_moe_nvfp4_w13_q4(const device float* x [[buffer(0)]], const device uint* eid [[buffer(1)]],
+                                      const device uchar* w13 [[buffer(2)]], const device uchar* sc [[buffer(3)]],
+                                      const device float* outer [[buffer(4)]], device float* act [[buffer(5)]],
+                                      constant Ink2MoeP& p [[buffer(6)]], uint3 tg [[threadgroup_position_in_grid]],
+                                      uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  const uint j0 = (tg.x * 4u + sg) * 4u;
+  if (j0 >= p.I) return;
+  const uint slot = tg.y, t = tg.z;
+  const uint e = eid[size_t(t) * p.K_top + slot];
+  const uint half_h = p.H / 2u, blocks = p.H / 16u, l4 = lane & 3u, rr = lane >> 2;
+  const size_t r = size_t(e) * 2u * p.I + 2u * j0 + min(rr, 2u * (p.I - j0) - 1u);
+  const device float* xp = x + size_t(t) * p.H;
+  float a = 0.0f;
+  for (uint bq = l4; bq < blocks / 4u; bq += 4u) {
+    const device uint4* wp = (const device uint4*)(w13 + r * half_h + bq * 32);
+    const uint4 w0 = wp[0], w1 = wp[1];
+    const uint s4 = *(const device uint*)(sc + r * blocks + 4u * bq);
+    _Pragma("clang loop unroll(full)") for (uint h = 0; h < 4; ++h) {
+      float4 xv[4];
+      _Pragma("clang loop unroll(full)") for (uint i = 0; i < 4; ++i)
+        xv[i] = *(const device float4*)(xp + bq * 64u + 16u * h + 4u * i);
+      const uint2 w = h == 0 ? w0.xy : h == 1 ? w0.zw : h == 2 ? w1.xy : w1.zw;
+      a += ink2_bt_dot16(w, (const thread float*)xv) * ink2_e4m3((s4 >> (8u * h)) & 0xFFu);
+    }
+  }
+  a += simd_shuffle_xor(a, 2);
+  a += simd_shuffle_xor(a, 1);
+  const float os = outer[e];
+  const float g = simd_shuffle(a, ushort((lane & 3u) * 8u)) * os, u = simd_shuffle(a, ushort((lane & 3u) * 8u + 4u)) * os;
+  if (lane < min(4u, p.I - j0))
+    act[(size_t(t) * p.K_top + slot) * p.I + j0 + lane] =
+        (4.0f * metal::precise::tanh(g * 0.25f)) * (1.0f / (1.0f + metal::precise::exp(-g))) *
+        (25.0f * metal::precise::tanh(u * 0.04f));
+}
+
+// w2 + weighted sum over the K slots: the (slot, block) loop flattened, K * I/16 units split evenly over the lanes
+// (I = 1152: 576 = 18 x 32; per slot 72 blocks gave lanes 3 or 2 steps), 2 rows per simdgroup (8 per threadgroup)
+[[kernel]] void ink2_moe_nvfp4_w2_f2(const device float* act [[buffer(0)]], const device uint* eid [[buffer(1)]],
+                                     const device float* ew [[buffer(2)]], const device uchar* w2 [[buffer(3)]],
+                                     const device uchar* sc [[buffer(4)]], const device float* outer [[buffer(5)]],
+                                     device float* out [[buffer(6)]], constant Ink2MoeP& p [[buffer(7)]],
+                                     uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+                                     uint lane [[thread_index_in_simdgroup]]) {
+  const uint n0 = (tg.x * 4u + sg) * 2u;
+  if (n0 >= p.H) return;
+  const uint n1 = min(n0 + 1u, p.H - 1u);
+  const uint t = tg.y, half_i = p.I / 2u, blocks = p.I / 16u, units = p.K_top * blocks;
+  float t0 = 0.0f, t1 = 0.0f;
+  uint slot = lane / blocks, blk = lane % blocks;
+  for (uint u = lane; u < units; u += 32u) {
+    const uint e = eid[size_t(t) * p.K_top + slot];
+    const float wt = ew[size_t(t) * p.K_top + slot] * outer[e];
+    const size_t ra = size_t(e) * p.H + n0, rb = size_t(e) * p.H + n1;
+    const device float* ap = act + (size_t(t) * p.K_top + slot) * p.I + blk * 16u;
+    const float4 av[4] = {*(const device float4*)(ap + 0u), *(const device float4*)(ap + 4u),
+                          *(const device float4*)(ap + 8u), *(const device float4*)(ap + 12u)};
+    const thread float* af = (const thread float*)av;
+    t0 += ink2_bt_dot16(*(const device uint2*)(w2 + ra * half_i + blk * 8), af) * (ink2_e4m3(sc[ra * blocks + blk]) * wt);
+    t1 += ink2_bt_dot16(*(const device uint2*)(w2 + rb * half_i + blk * 8), af) * (ink2_e4m3(sc[rb * blocks + blk]) * wt);
+    blk += 32u;
+    while (blk >= blocks) {
+      blk -= blocks;
+      ++slot;
+    }
+  }
+  t0 = simd_sum(t0);
+  t1 = simd_sum(t1);
+  if (lane == 0u) {
+    out[size_t(t) * p.H + n0] = t0;
+    if (n1 != n0) out[size_t(t) * p.H + n1] = t1;
   }
 }
 
