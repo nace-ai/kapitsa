@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <bit>
 #include <cfloat>
 #include <cmath>
 #include <cstring>
@@ -30,9 +31,9 @@ float e4m3_round(float v) {
   if (a < 0x1p-6f) {
     q = std::nearbyint(a * 0x1p9f) * 0x1p-9f;  // subnormals: steps of 2^-9
   } else {
-    int e = 0;
-    std::frexp(a, &e);                        // a = f * 2^e, f in [0.5, 1): the step is 2^(e - 1 - 3)
-    const float step = std::ldexp(1.0f, e - 4);
+    // A normal e4m3 value has three fraction bits. The fp32 exponent alone gives the power of two below a.
+    const float power = std::bit_cast<float>(std::bit_cast<uint32_t>(a) & 0x7f800000u);
+    const float step = power * 0.125f;
     q = std::nearbyint(a / step) * step;      // exact: a / step has at most 8 significant bits plus the fraction
   }
   return std::copysign(q, v);
