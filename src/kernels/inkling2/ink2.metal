@@ -1,4 +1,7 @@
 #include "common.h"
+#ifndef NI_UNROLL
+#define NI_UNROLL _Pragma("clang loop unroll(full)")
+#endif
 
 // Inkling-2-Mini (thinkingmachines/Inkling-2-Mini, model_type inkling2_loop) Metal kernels.
 // Decode, router GEMMs (exact_f32), norms, attention, and MoE kernels run in FP32 matching the PyTorch
@@ -593,6 +596,89 @@ struct Ink2MultiMmP {
     }
   }
 }
+
+// Verify-row matvec (2 <= M <= 8 rows, M compile-time): each simdgroup reads 4 weight rows once for all M input
+// rows with the accumulators in registers (the runtime-M acc[4][4] above lives in memory: 218 vs 57 us at M=4).
+// Per-row sum order equals the M=1 path, so verify rows match decode rows bit for bit.
+template <uint M>
+[[kernel]] void ink2_bf16_mvm(const device float* x [[buffer(0)]], const device void* w [[buffer(1)]],
+                              device float* y [[buffer(2)]], constant Ink2MmP& p [[buffer(3)]],
+                              uint tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+                              uint lane [[thread_index_in_simdgroup]]) {
+  const uint n0 = (tg * 4u + sg) * 4u;
+  if (n0 >= p.N) return;
+  const uint mc = min(4u, p.N - n0);
+  const size_t woff0 = size_t(n0) * p.K;
+  float acc[4][M];
+  NI_UNROLL for (uint q = 0u; q < 4u; ++q) NI_UNROLL for (uint m = 0u; m < M; ++m) acc[q][m] = 0.0f;
+  for (uint k = lane * 4u; k < p.K; k += 128u) {
+    float4 wv[4];
+    NI_UNROLL for (uint q = 0u; q < 4u; ++q) {
+      const size_t woff = woff0 + size_t(min(q, mc - 1u)) * p.K + k;
+      wv[q] = p.w_f32 ? *(const device float4*)((const device float*)w + woff)
+                      : ink2_bf16x4(*(const device uint2*)((const device bfloat*)w + woff));
+    }
+    NI_UNROLL for (uint m = 0u; m < M; ++m) {
+      const float4 xv = *(const device float4*)(x + size_t(m) * p.x_ld + k);
+      NI_UNROLL for (uint q = 0u; q < 4u; ++q) acc[q][m] += dot(xv, wv[q]);
+    }
+  }
+  NI_UNROLL for (uint m = 0u; m < M; ++m) {
+    float sv[4];
+    NI_UNROLL for (uint q = 0u; q < 4u; ++q) sv[q] = simd_sum(acc[q][m]);
+    if (lane == 0u) {
+      device float* dst = y + size_t(m) * p.y_ld + n0;
+      for (uint q = 0u; q < mc; ++q) dst[q] = p.add ? (dst[q] + sv[q]) : sv[q];
+    }
+  }
+}
+#define INK2_MVM(m) template [[host_name("ink2_bf16_mvm" #m)]] [[kernel]] decltype(ink2_bf16_mvm<m>) ink2_bf16_mvm<m>;
+INK2_MVM(2) INK2_MVM(3) INK2_MVM(4) INK2_MVM(5) INK2_MVM(6) INK2_MVM(7) INK2_MVM(8)
+#undef INK2_MVM
+
+// ink2_bf16_mv4_multi6 for 2 <= M <= 8 verify rows (compile-time M, as ink2_bf16_mvm).
+template <uint M>
+[[kernel]] void ink2_bf16_mvm_multi6(const device float* x [[buffer(0)]], const device bfloat* w [[buffer(1)]],
+                                     device float* y0 [[buffer(2)]], device float* y1 [[buffer(3)]],
+                                     device float* y2 [[buffer(4)]], device float* y3 [[buffer(5)]],
+                                     device float* y4 [[buffer(6)]], device float* y5 [[buffer(7)]],
+                                     constant Ink2MultiMmP& p [[buffer(8)]],
+                                     uint tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+                                     uint lane [[thread_index_in_simdgroup]]) {
+  const uint n0 = (tg * 4u + sg) * 4u;
+  if (n0 >= p.N_tot) return;
+  uint seg = 0u;
+  while (seg + 1u < p.n_segs && n0 >= p.offs[seg + 1u]) ++seg;
+  if (seg >= p.n_segs) return;
+  const uint seg_off = p.offs[seg];
+  const uint seg_len = p.offs[seg + 1u] - seg_off;
+  const uint mc = min(4u, p.offs[seg + 1u] - n0);
+  const size_t woff0 = size_t(n0) * p.K;
+  device float* bases[6] = {y0, y1, y2, y3, y4, y5};
+  device float* dst_base = bases[seg] + (n0 - seg_off);
+  float acc[4][M];
+  NI_UNROLL for (uint q = 0u; q < 4u; ++q) NI_UNROLL for (uint m = 0u; m < M; ++m) acc[q][m] = 0.0f;
+  for (uint k = lane * 4u; k < p.K; k += 128u) {
+    float4 wv[4];
+    NI_UNROLL for (uint q = 0u; q < 4u; ++q)
+      wv[q] = ink2_bf16x4(*(const device uint2*)(w + woff0 + size_t(min(q, mc - 1u)) * p.K + k));
+    NI_UNROLL for (uint m = 0u; m < M; ++m) {
+      const float4 xv = *(const device float4*)(x + size_t(m) * p.K + k);
+      NI_UNROLL for (uint q = 0u; q < 4u; ++q) acc[q][m] += dot(xv, wv[q]);
+    }
+  }
+  NI_UNROLL for (uint m = 0u; m < M; ++m) {
+    float sv[4];
+    NI_UNROLL for (uint q = 0u; q < 4u; ++q) sv[q] = simd_sum(acc[q][m]);
+    if (lane == 0u) {
+      device float* dst = dst_base + size_t(m) * seg_len;
+      for (uint q = 0u; q < mc; ++q) dst[q] = sv[q];
+    }
+  }
+}
+#define INK2_MVM6(m) template [[host_name("ink2_bf16_mvm_multi6_" #m)]] [[kernel]] decltype(ink2_bf16_mvm_multi6<m>) ink2_bf16_mvm_multi6<m>;
+INK2_MVM6(2) INK2_MVM6(3) INK2_MVM6(4) INK2_MVM6(5) INK2_MVM6(6) INK2_MVM6(7) INK2_MVM6(8)
+#undef INK2_MVM6
 
 [[kernel]] void ink2_bf16_mv8(const device float* x [[buffer(0)]], const device bfloat* w [[buffer(1)]],
                               device float* y [[buffer(2)]], constant Ink2MmP& p [[buffer(3)]],
@@ -1266,6 +1352,140 @@ INK2_DEC_G3(ink2_attn_decode_g3_k6fx, 6, true)
   const float4 sig = float4(1.0f) / (float4(1.0f) + float4(metal::precise::exp(-g4.x), metal::precise::exp(-g4.y),
                                                            metal::precise::exp(-g4.z), metal::precise::exp(-g4.w)));
   *(device float4*)(out + size_t(h) * p.D + d0) = (oo / ll) * sig;
+}
+
+// Verify rows (T = 2..8) as split-K decode: one threadgroup per (KV head, key chunk, group of TR rows) reads each K / V
+// row once for its TR rows x 3 heads (ink2_attn_prefill re-reads the context per row and head: 389 us a call at T=2,
+// 2k context). q in threadgroup memory, 4-key blocks per simdgroup, per-row causal / sliding-window masks.
+// Partials [t][h][nchunks] for ink2_attn_decode_reduce_t.
+struct Ink2AttnVerP {
+  uint pos0, T, kv_cap, Hq, Hkv, D, rel_extent, is_swa, swa, k_first, k_end, chunk, nchunks;
+  float scale;
+};
+
+template <uint TR>
+[[kernel]] void ink2_attn_verify_g3(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
+                                    const device half* vc [[buffer(2)]], const device float* rb [[buffer(3)]],
+                                    device float* pm [[buffer(4)]], device float* pl [[buffer(5)]],
+                                    device float* po [[buffer(6)]], constant Ink2AttnVerP& p [[buffer(7)]],
+                                    uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                                    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  constexpr uint G = 3, KB = 4, NQ = TR * G;
+  threadgroup float tq[NQ * 128];
+  threadgroup float tml[4 * NQ * 2];
+  threadgroup float to[4 * NQ * 128];
+  const uint hkv = tg.x, cid = tg.y, t0 = tg.z * TR, h0 = hkv * G, d0 = lane * 4;
+  const uint nr = min(TR, p.T - t0);
+  for (uint i = tid; i < NQ * 32u; i += 128u) {
+    const uint qi = i / 32u, c = (i % 32u) * 4u, t = qi / G, g = qi % G;
+    const float4 v = t < nr ? *(const device float4*)(q + (size_t(t0 + t) * p.Hq + h0 + g) * p.D + c) * p.scale
+                            : float4(0.0f);
+    *(threadgroup float4*)(tq + qi * 128u + c) = v;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const uint c0 = p.k_first + cid * p.chunk;
+  const uint c1 = min(p.k_end, c0 + p.chunk);
+  float mw[NQ], lw[NQ];
+  float4 ow[NQ];
+  NI_UNROLL for (uint i = 0; i < NQ; ++i) { mw[i] = -INFINITY; lw[i] = 0.0f; ow[i] = float4(0.0f); }
+  for (uint kb = c0 + sg * KB; kb < c1; kb += 4u * KB) {
+    float4 kv[KB], vv[KB];
+    NI_UNROLL for (uint j = 0; j < KB; ++j) {
+      const uint kp = min(kb + j, c1 - 1u);
+      const uint slot = p.is_swa ? (kp % p.kv_cap) : kp;
+      const size_t off = (size_t(slot) * p.Hkv + hkv) * p.D + d0;
+      kv[j] = float4(*(const device half4*)(kc + off));
+      vv[j] = float4(*(const device half4*)(vc + off));
+    }
+    NI_UNROLL for (uint t = 0; t < TR; ++t) {
+      const uint qpos = p.pos0 + t0 + t;
+      const uint lo = p.is_swa ? (qpos + 1u - min(qpos + 1u, p.swa)) : 0u;
+      NI_UNROLL for (uint g = 0; g < G; ++g) {
+        const uint qi = t * G + g;
+        const float4 qv = *(const threadgroup float4*)(tq + qi * 128u + d0);
+        float s[KB];
+        float bm = -INFINITY;
+        NI_UNROLL for (uint j = 0; j < KB; ++j) {
+          const uint kp = kb + j;
+          float sc = simd_sum(dot(qv, kv[j]));
+          const uint dist = qpos - kp;
+          if (dist < p.rel_extent) sc += rb[(size_t(t0 + t) * p.Hq + h0 + g) * p.rel_extent + dist];
+          s[j] = (t < nr && kp < c1 && kp <= qpos && kp >= lo) ? sc : -INFINITY;
+          bm = max(bm, s[j]);
+        }
+        if (bm == -INFINITY) continue;
+        const float nm = max(mw[qi], bm);
+        const float corr = fast::exp(mw[qi] - nm);
+        float4 o = ow[qi] * corr;
+        float l = lw[qi] * corr;
+        NI_UNROLL for (uint j = 0; j < KB; ++j) {
+          const float e = fast::exp(s[j] - nm);
+          o += vv[j] * e;
+          l += e;
+        }
+        ow[qi] = o; lw[qi] = l; mw[qi] = nm;
+      }
+    }
+  }
+  NI_UNROLL for (uint i = 0; i < NQ; ++i) {
+    if (lane == 0) { tml[(sg * NQ + i) * 2] = mw[i]; tml[(sg * NQ + i) * 2 + 1] = lw[i]; }
+    *(threadgroup float4*)(to + (sg * NQ + i) * 128u + d0) = ow[i];
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint i = sg; i < nr * G; i += 4u) {
+    float mm = -INFINITY, ll = 0.0f;
+    float4 oo = float4(0.0f);
+    for (uint s = 0; s < 4; ++s) {
+      const float l2 = tml[(s * NQ + i) * 2 + 1];
+      if (l2 == 0.0f) continue;
+      const float m2 = tml[(s * NQ + i) * 2];
+      const float4 o2 = *(const threadgroup float4*)(to + (s * NQ + i) * 128u + d0);
+      if (ll == 0.0f) {
+        mm = m2; ll = l2; oo = o2;
+      } else {
+        const float nm = max(mm, m2);
+        const float e1 = metal::precise::exp(mm - nm), e2 = metal::precise::exp(m2 - nm);
+        oo = oo * e1 + o2 * e2;
+        ll = ll * e1 + l2 * e2;
+        mm = nm;
+      }
+    }
+    const uint t = t0 + i / G, h = h0 + i % G;
+    const size_t out_idx = (size_t(t) * p.Hq + h) * p.nchunks + cid;
+    if (lane == 0) { pm[out_idx] = mm; pl[out_idx] = ll; }
+    *(device float4*)(po + out_idx * p.D + d0) = oo;
+  }
+}
+#define INK2_AVER(r) template [[host_name("ink2_attn_verify_g3_" #r)]] [[kernel]] decltype(ink2_attn_verify_g3<r>) ink2_attn_verify_g3<r>;
+INK2_AVER(2) INK2_AVER(3) INK2_AVER(4)
+#undef INK2_AVER
+
+// ink2_attn_decode_reduce for verify rows: grid (Hq, T), partials [t][h][nchunks].
+[[kernel]] void ink2_attn_verify_reduce(const device float* pm [[buffer(0)]], const device float* pl [[buffer(1)]],
+                                        const device float* po [[buffer(2)]], const device float* sinks [[buffer(3)]],
+                                        const device float* gate [[buffer(4)]], device float* out [[buffer(5)]],
+                                        constant Ink2AttnVerP& p [[buffer(6)]], uint2 tg [[threadgroup_position_in_grid]],
+                                        uint lane [[thread_index_in_simdgroup]]) {
+  const uint h = tg.x, t = tg.y, d0 = lane * 4;
+  const size_t th = size_t(t) * p.Hq + h;
+  float mm = sinks[th], ll = 1.0f;
+  float4 oo = float4(0.0f);
+  for (uint cid = 0; cid < p.nchunks; ++cid) {
+    const size_t idx = th * p.nchunks + cid;
+    const float l2 = pl[idx];
+    if (l2 == 0.0f) continue;
+    const float m2 = pm[idx];
+    const float4 o2 = *(const device float4*)(po + idx * p.D + d0);
+    const float nm = max(mm, m2);
+    const float e1 = metal::precise::exp(mm - nm), e2 = metal::precise::exp(m2 - nm);
+    oo = oo * e1 + o2 * e2;
+    ll = ll * e1 + l2 * e2;
+    mm = nm;
+  }
+  const float4 g4 = *(const device float4*)(gate + th * p.D + d0);
+  const float4 sig = float4(1.0f) / (float4(1.0f) + float4(metal::precise::exp(-g4.x), metal::precise::exp(-g4.y),
+                                                           metal::precise::exp(-g4.z), metal::precise::exp(-g4.w)));
+  *(device float4*)(out + th * p.D + d0) = (oo / ll) * sig;
 }
 
 struct Ink2AttnPfP {

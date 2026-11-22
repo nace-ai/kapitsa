@@ -155,6 +155,10 @@ struct Ink2AttnDecP {
   uint32_t pos, kv_cap, Hq, Hkv, D, rel_extent, is_swa, swa, chunk, nchunks;
   float scale;
 };
+struct Ink2AttnVerP {
+  uint32_t pos0, T, kv_cap, Hq, Hkv, D, rel_extent, is_swa, swa, k_first, k_end, chunk, nchunks;
+  float scale;
+};
 struct Ink2AttnPfP {
   uint32_t T, pos0, kv_cap, Hq, Hkv, D, rel_extent, is_swa, swa;
   float scale;
@@ -445,7 +449,7 @@ MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
                          size_t(c.n_experts) * 4 + 2 * size_t(c.top_k) * 4 + size_t(c.top_k) * size_t(c.moe_I) * 4;
   const size_t fixed = size_t(c.core_end - c.core_start) * 4 * H * 4 +
                        size_t(c.num_layers) * 2 * size_t(c.n_experts) * 4 +
-                       size_t(c.hq) * kMaxAttnChunks * (2 + size_t(c.head_dim)) * 4 + V * 4 +
+                       size_t(c.hq) * kMaxAttnChunks * kMaxVerify * (2 + size_t(c.head_dim)) * 4 + V * 4 +
                        2 * (V / 2048 + 2) * 64 * 4 + 2 * 64 * 4;
   const size_t P = T * size_t(c.top_k);
   const size_t moe_tmp_bytes = ink2_tensor_pf_want()
@@ -802,9 +806,9 @@ void Inkling2::alloc_buffers() {
   a_out_ = alloc(T * H * 4, "ink2_a_out");
   dyn_ = alloc(T * 4 * size_t(cfg_.hkv) * 4, "ink2_dyn");
   rb_ = alloc(T * size_t(cfg_.hq) * size_t(cfg_.rel_extent) * 4, "ink2_rb");
-  part_m_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * 4, "ink2_part_m");
-  part_l_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * 4, "ink2_part_l");
-  part_o_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * size_t(cfg_.head_dim) * 4, "ink2_part_o");
+  part_m_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * kMaxVerify * 4, "ink2_part_m");
+  part_l_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * kMaxVerify * 4, "ink2_part_l");
+  part_o_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * kMaxVerify * size_t(cfg_.head_dim) * 4, "ink2_part_o");
   h_mlp_ = alloc(T * H * 4, "ink2_h_mlp");
   x_mlp_ = alloc(T * H * 4, "ink2_x_mlp");
   rlog_ = alloc(T * size_t(cfg_.n_experts) * 4, "ink2_rlog");
@@ -1054,7 +1058,14 @@ void Inkling2::enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer
       const uint32_t mc = uint32_t(std::min(8, M - m0));
       const Ink2MmP p{mc, N, K, K, N, w.dtype == DType::F32 ? 1u : 0u, add ? 1u : 0u};
       const bool aligned_k = w.dtype == DType::F32 ? ((K & 3u) == 0u) : ((K & 7u) == 0u);
-      if (mc <= 4u && aligned_k) {
+      if (mc >= 2u && aligned_k && mvm()) {
+        e.use(ink2_pipe("ink2_bf16_mvm" + std::to_string(mc)));
+        e.buf(0, x.view(size_t(m0) * K * 4, size_t(mc) * K * 4));
+        e.buf(1, w.buf);
+        e.buf(2, y.view(size_t(m0) * N * 4, size_t(mc) * N * 4));
+        e.val(3, p);
+        e.dispatch((N + 15) / 16, 1, 1, 128);
+      } else if (mc <= 4u && aligned_k) {
         e.use(ink2_pipe("ink2_bf16_mv4"));
         e.buf(0, x.view(size_t(m0) * K * 4, size_t(mc) * K * 4));
         e.buf(1, w.buf);
@@ -1412,12 +1423,12 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     const Buffer& vn = (has_msgs || !L.is_swa) ? n2_ : n0_;
 
     const bool pf_sconv_kv = L.is_swa && T >= 16 && KVD <= H;
-    if (L.qkvrsg_w && T <= std::min(4, mv_rows()) && (H & 7u) == 0u) {
+    if (L.qkvrsg_w && T <= std::min(mvm() ? 8 : 4, mv_rows()) && (H & 7u) == 0u) {
       const uint32_t nsegs = (!has_msgs && L.is_swa) ? 6u : 4u;
       Ink2MultiMmP mp{uint32_t(T), H, L.qkvrsg_offs[nsegs], nsegs, {}};
       for (uint32_t i = 0; i < 7u; ++i) mp.offs[i] = L.qkvrsg_offs[i];
       if (nsegs == 4u) e.group_begin();
-      e.use(ink2_pipe("ink2_bf16_mv4_multi6"));
+      e.use(ink2_pipe(T >= 2 && mvm() ? "ink2_bf16_mvm_multi6_" + std::to_string(T) : std::string("ink2_bf16_mv4_multi6")));
       e.buf(0, n0_);
       e.buf(1, L.qkvrsg_w);
       e.buf(2, q_);
@@ -1635,8 +1646,42 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
                             attn_scale};
       static const bool qat_env = !getenv("NI_INK2_ATTN_T") || atoi(getenv("NI_INK2_ATTN_T")) != 0;
       static const bool qat_small = getenv("MTL_SHADER_VALIDATION") && atoi(getenv("MTL_SHADER_VALIDATION")) != 0;
-      const bool use_qat = qat_env && tensor_pf_ && T >= 16 && cfg_.head_dim == 128 && cfg_.hq == cfg_.hkv * 3;
-      if (use_qat) {
+      static const int qat_min = getenv("NI_INK2_QAT_MIN") ? atoi(getenv("NI_INK2_QAT_MIN")) : 16;
+      const bool use_qat = qat_env && tensor_pf_ && T >= qat_min && cfg_.head_dim == 128 && cfg_.hq == cfg_.hkv * 3;
+      static const bool aver = !getenv("NI_INK2_AVER") || atoi(getenv("NI_INK2_AVER")) != 0;
+      if (!use_qat && aver && T <= kMaxVerify && cfg_.hq == 3 * cfg_.hkv && cfg_.head_dim == 128) {
+        // verify rows: split-K over the union key range, K / V read once for all rows (ink2_attn_verify_g3)
+        const uint32_t k_first =
+            L.is_swa ? uint32_t(pos0 + 1) - std::min(uint32_t(pos0 + 1), uint32_t(cfg_.swa)) : 0u;
+        const uint32_t k_end = uint32_t(pos0 + T);
+        const uint32_t lk = k_end - k_first;
+        uint32_t chunk = std::max(32u, (lk + kMaxAttnChunks - 1) / kMaxAttnChunks);
+        chunk = (chunk + 3) / 4 * 4;
+        const uint32_t nchunks = std::max(1u, (lk + chunk - 1) / chunk);
+        const Ink2AttnVerP vp{uint32_t(pos0), uint32_t(T), kv_cap, uint32_t(cfg_.hq), uint32_t(cfg_.hkv),
+                              uint32_t(cfg_.head_dim), uint32_t(cfg_.rel_extent), L.is_swa ? 1u : 0u,
+                              uint32_t(cfg_.swa), k_first, k_end, chunk, nchunks, attn_scale};
+        const uint32_t tr = T <= 4 ? uint32_t(T) : uint32_t(T + 1) / 2;
+        e.use(ink2_pipe("ink2_attn_verify_g3_" + std::to_string(tr)));
+        e.buf(0, q_);
+        e.buf(1, s.kc[v_idx]);
+        e.buf(2, s.vc[v_idx]);
+        e.buf(3, rb_);
+        e.buf(4, part_m_);
+        e.buf(5, part_l_);
+        e.buf(6, part_o_);
+        e.val(7, vp);
+        e.dispatch(uint32_t(cfg_.hkv), nchunks, (uint32_t(T) + tr - 1) / tr, 128);
+        e.use(ink2_pipe("ink2_attn_verify_reduce"));
+        e.buf(0, part_m_);
+        e.buf(1, part_l_);
+        e.buf(2, part_o_);
+        e.buf(3, sinks_);
+        e.buf(4, gate_attn_);
+        e.buf(5, att_out_);
+        e.val(6, vp);
+        e.dispatch(uint32_t(cfg_.hq), uint32_t(T), 1, 32);
+      } else if (use_qat) {
         const uint32_t qat_tok = qat_small ? 16u : 32u;
         // Cooperative-tensor lane layout: Apple10+ (written for M5) vs the simdgroup_matrix layout of older GPUs (M1;
         // the M5 layout there gave wrong attention, ink2_check v0_out off). NI_INK2_ATTN_LAY=0|1 overrides.

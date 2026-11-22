@@ -205,6 +205,11 @@ class Inkling2 : public Model {
     static const int v = getenv("NI_INK2_MV_ROWS") ? atoi(getenv("NI_INK2_MV_ROWS")) : 32;
     return v;
   }
+  // compile-time-M matvec for 2..8 rows (ink2_bf16_mvm<M>, weights read once); NI_INK2_MVM=0 = old runtime-M kernels
+  static bool mvm() {
+    static const bool v = !getenv("NI_INK2_MVM") || atoi(getenv("NI_INK2_MVM")) != 0;
+    return v;
+  }
   static bool msg_mm() {
     static const bool v = !getenv("NI_INK2_MSG_MM") || atoi(getenv("NI_INK2_MSG_MM")) != 0;
     return v;
