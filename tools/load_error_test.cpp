@@ -7,6 +7,7 @@
 #include "gguf/gguf.h"
 #include "gguf_split_cleanup_test.h"
 #include "model/expert_store.h"
+#include "model/inkling2.h"
 #include "model/qwen35.h"
 #include "bench/bench.h"
 #include <nlohmann/json.hpp>
@@ -643,6 +644,45 @@ static void load_stop(const char* self) {
   std::filesystem::remove_all(dir);
   std::cout << "PASS a stop asked during the load ends it from one reader; none asked or no action reads it all\n";
 }
+void ink2_plan_tensor_scratch() {
+  const auto dir = std::filesystem::temp_directory_path() / ("ni_ink2_plan_" + std::to_string(getpid()));
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir);
+  {
+    std::ofstream f(dir / "config.json");
+    f << R"({"model_type":"inkling2_loop","hidden_size":2304,"num_hidden_layers":24,"num_attention_heads":24,)"
+      << R"("num_key_value_heads":8,"head_dim":128,"vocab_size":200058,"n_routed_experts":128,"num_experts_per_tok":8,)"
+      << R"("moe_intermediate_size":768,"sliding_window_size":1024,"rel_extent":1024,)"
+      << R"("local_layer_ids":[0,1,2,3,4,6,7,8,9,10,12,13,14,15,16,18,19,20,21,22],)"
+      << R"("loop_config":{"core_start":6,"core_end":18,"num_passes":3,"gate_rank":64,"is_varloop":false}})";
+  }
+  const char* prev_t = getenv("NI_INK2_TENSOR");
+  const std::string saved_t = prev_t ? prev_t : "";
+  const bool had_t = prev_t != nullptr;
+  unsetenv("NI_INK2_TENSOR");
+  const size_t prec_512 = Inkling2::plan(dir.string(), 512).activations;
+  const size_t prec_2048 = Inkling2::plan(dir.string(), 2048).activations;
+  setenv("NI_INK2_TENSOR", "0", 1);
+  const size_t off_512 = Inkling2::plan(dir.string(), 512).activations;
+  const size_t off_2048 = Inkling2::plan(dir.string(), 2048).activations;
+  CHECK(prec_512 == off_512);
+  CHECK(prec_2048 == off_2048);
+  if (__builtin_available(macOS 26.0, *)) {
+    setenv("NI_INK2_TENSOR", "1", 1);
+    const size_t on_512 = Inkling2::plan(dir.string(), 512).activations;
+    const size_t on_2048 = Inkling2::plan(dir.string(), 2048).activations;
+    const auto expect_tmp = [](size_t T) {
+      const size_t P = T * 8;
+      return P * 2304 * 4 + P * 1152 * 2 + 2 * P * 4 + (P / 16 + 128 + 2) * 16 + 16;
+    };
+    CHECK(on_512 - off_512 == expect_tmp(512));
+    CHECK(on_2048 - off_2048 == expect_tmp(2048));
+  }
+  if (had_t) setenv("NI_INK2_TENSOR", saved_t.c_str(), 1);
+  else unsetenv("NI_INK2_TENSOR");
+  std::filesystem::remove_all(dir);
+  std::cout << "PASS Inkling2::plan charges tensor-only MoE scratch only when tensor prefill is selected\n";
+}
 int main(int argc, char** argv) {
   if (argc > 3 && std::string(argv[1]) == "--load-stop") load_stop_child(argv[2], argv[3]);
   if (argc > 1 && std::string(argv[1]) == "--fatal") fatal("outside SDK recovery");
@@ -659,6 +699,7 @@ int main(int argc, char** argv) {
     else {
       cpu(argv[0]);
       load_stop(argv[0]);
+      ink2_plan_tensor_scratch();
     }
   } catch (const std::exception& e) { std::cerr << "FAIL " << e.what() << '\n'; return 1; }
 }

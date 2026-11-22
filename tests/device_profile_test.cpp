@@ -84,7 +84,7 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 20);  // +1: 9B mixed-format catalog policy (#493); +1: kflash_block16; +1: ane_proj_fast; +1: a4_qtm_fast
+  CHECK(ni::default_count() == 21);  // +1: 9B mixed-format catalog policy (#493); +1: kflash_block16; +1: ane_proj_fast; +1: a4_qtm_fast; +1: ink2_tensor_pf
   // ane_proj_fast: the 27B on the Apple M6 by name (slower on the M5 Pro; the 4B was over its bar; the fast profile reads it)
   const ni::DefaultRow* proj = row("ane_proj_fast");
   CHECK(proj && proj->scope == ni::DefaultScope::kName && proj->live && proj->exclusive && proj->win_pct >= 10 &&
@@ -170,6 +170,12 @@ int main() {
         a4q->win_pct == 56 && a4q->live);
   CHECK(ni::default_matches(*a4q, m5pro) && ni::default_matches(*a4q, m5max));
   CHECK(!ni::default_matches(*a4q, ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48))));
+  // ink2_tensor_pf: Inkling-2-Mini prefill GEMMs on the matrix units, fast profile only; the matrix class
+  const ni::DefaultRow* ink2t = row("ink2_tensor_pf");
+  CHECK(ink2t && ink2t->knob == ni::Knob::kInk2TensorPf && ink2t->scope == ni::DefaultScope::kMatrix &&
+        !ink2t->exclusive && ink2t->win_pct == 468 && ink2t->live);
+  CHECK(ni::default_matches(*ink2t, m5pro) && ni::default_matches(*ink2t, m5max));
+  CHECK(!ni::default_matches(*ink2t, ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48))));
   const ni::DefaultRow* slices = row("gemm_slices");
   const ni::DefaultRow* hc = row("hc_wide");
   const ni::DefaultRow* moe = row("moe4_dx");
