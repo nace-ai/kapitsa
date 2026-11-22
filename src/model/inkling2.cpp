@@ -1470,7 +1470,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
 
 void Inkling2::enc_sample(Encoder& e, Seq& s, const Buffer& lrow, const Buffer& tokens, int out_index,
                           const SamplingParams& sp, uint32_t step) {
-  (void)s;
+  enc_logit_mask(e, s, lrow, 1, cfg_.vocab, cfg_.vocab);
   if (full_vocab(sp)) {
     enc_sample_full(e, lrow, uint32_t(cfg_.vocab), tokens, out_index, sprob_, sp, step);
     return;
