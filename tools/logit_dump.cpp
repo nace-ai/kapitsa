@@ -3,7 +3,7 @@
 //
 //   logit_dump <model_dir> <out_dir> [--paths step,verify,batch] [--from DIR] [--corpus FILE] [--windows N]
 //              [--rows W] [--chunk C] [--batch N] [--batch-rows R] [--loops N] [--loop-kv last-loop|per-loop]
-//              [--verify-rows N] [--list-paths]
+//              [--verify-rows N] [--cut-last K [--cut-no-restore]] [--list-paths]
 //
 // --list-paths prints the paths this model has, comma-separated, and exits: step,verify,batch; step,verify for Flint
 // and Qwen3.8-Flash-Next's layout (under any model_type src/model/qwen4_config.cpp maps to it); step for Dory, and
@@ -13,7 +13,11 @@
 // A window is a cold request: its first L0 tokens are prefilled as the engine prefills a prompt (chunks of C rows,
 // default the engine's 2048, with the Neural Engine split wherever the model runs it), then W rows are fed
 // teacher-forced (every row the sequence's own next token, never the model's sample) and each row's logits over the
-// whole vocabulary are written. The paths (each from the same prefilled state: a checkpoint restored per path):
+// whole vocabulary are written. --cut-last K reads the prompt as two requests of a conversation: the first L0 - K tokens
+// (their last chunk sampling, as a prompt's end), saved to a checkpoint and restored, then the last K rows from it (a
+// turn checkpoint's reuse, Engine::chat; between the save and the restore, K other tokens are read past the cut, as the
+// first request's reply would be); --cut-no-restore reads the same two requests without the save, the other tokens and
+// the restore (the cut's chunks alone). The paths (each from the same prefilled state: a checkpoint restored per path):
 //   step    plain decoding, one row per pass (what --spec 0 runs)
 //   verify  the single-stream verify of 8 rows. Qwen: KFlash's tree verify (the default) as DFlash2's cycle encodes it,
 //           the tree a chain of 8 live rows, the experts' row-independent numerics (NI_KFLASH_EXACT_MOE), the K/V
@@ -204,12 +208,14 @@ int main(int argc, char** argv) {
   if (argc < 3) {
     fprintf(stderr, "usage: logit_dump <model_dir> <out_dir> [--paths step,verify,batch] [--from DIR] [--corpus FILE] "
                     "[--windows N] [--rows W] [--chunk C] [--batch N] [--batch-rows R] [--loops N] [--spec N] "
-                    "[--loop-kv last-loop|per-loop] [--verify-rows N] [--list-paths]\n");
+                    "[--loop-kv last-loop|per-loop] [--verify-rows N] [--cut-last K [--cut-no-restore]] [--list-paths]\n");
     return 1;
   }
   const std::string dir = argv[1], out = argv[2];
   std::string from, corpus = "bench/corpus.txt", paths_arg = "step,verify,batch", loop_kv;
   int n_windows = 8, rows = 24, chunk = 2048, members = 4, member_rows = 0, loops = 0, spec = -1;
+  int cut_last = 0;  // --cut-last K: the prompt's last K rows read after a save and restore at L0 - K
+  bool cut_restore = true;
   int tree_rows = kVerifyRows;  // --verify-rows: a Qwen KFlash tree's live rows (8, or a wide verify's 16 or 32)
   bool list_paths = false;
   for (int i = 3; i < argc; ++i) {
@@ -230,6 +236,8 @@ int main(int argc, char** argv) {
     else if (a == "--spec") spec = std::stoi(next());
     else if (a == "--loop-kv") loop_kv = next();
     else if (a == "--verify-rows") tree_rows = std::stoi(next());
+    else if (a == "--cut-last") cut_last = std::stoi(next());
+    else if (a == "--cut-no-restore") cut_restore = false;
     else if (a == "--list-paths") list_paths = true;
     else fatal("unknown argument %s", a.c_str());
   }
@@ -250,6 +258,7 @@ int main(int argc, char** argv) {
   if (n_windows < 1 || rows < 1 || chunk < 1 || members < 1 || members > 8)
     fatal("--windows, --rows, --chunk: positive; --batch: 1 to 8");
   if (tree_rows != 8 && tree_rows != 16 && tree_rows != 32) fatal("--verify-rows: 8, 16 or 32");
+  if (cut_last < 0 || (!cut_restore && cut_last == 0)) fatal("--cut-last: a positive row count (--cut-no-restore needs it)");
   {
     std::error_code ec;
     std::filesystem::create_directories(out, ec);
@@ -271,6 +280,8 @@ int main(int argc, char** argv) {
       }
     }
   }
+  for (const Window& w : wins)
+    if (w.W > 0 && w.L0 - cut_last < 1) fatal("--cut-last %d: a window prefills %d tokens", cut_last, w.L0);
   for (size_t i = 0; i < wins.size(); ++i)
     if (wins[i].W > 0 && wins[i].L0 < 1) fatal("sequence %zu: a scored prefix of one token leaves nothing to prefill", i);
 
@@ -446,6 +457,7 @@ int main(int argc, char** argv) {
       for (const auto& p : paths) need = std::max(need, w.L0 + path_rows(p, w));
   std::vector<std::unique_ptr<Seq>> seqs;
   std::vector<Checkpoint> cks;
+  Checkpoint cut_ck = cut_last > 0 ? m.new_checkpoint() : Checkpoint{};
   for (size_t j = 0; j < std::min(wins.size(), size_t(members)); ++j) {
     seqs.push_back(m.new_seq(need + 64));
     cks.push_back(m.new_checkpoint());
@@ -470,13 +482,40 @@ int main(int argc, char** argv) {
       // engine runs, --chunk 2048 NI_BAL=0 what it ran before, and --chunk 2048 with NI_BAL on changes only the split
       const int C = m.prefill_chunk();
       const bool even = prefill_even_chunks() && !m.ane_split_on();
+      const int cut = cut_last > 0 ? w.L0 - cut_last : 0;
       for (int p0 = 0; p0 < w.L0;) {
-        const int T = prefill_chunk_rows(C, p0, w.L0, even);
+        const int end = p0 < cut ? cut : w.L0;
+        const int T = prefill_chunk_rows(C, p0, end, even);
         auto e = g.begin();
-        m.encode_prefill(*e, s, p0, T, sp, 0, p0 + T == w.L0);
+        m.encode_prefill(*e, s, p0, T, sp, 0, p0 + T == end);
         e->commit_and_wait();
         if (!m.ane_finish_chunk()) fatal("the Neural Engine prefill split failed on a chunk; rerun with NI_ANE=0");
         p0 += T;
+        if (p0 == cut) {  // the first request's end: its turn checkpoint, restored for the next request
+          if (cut_restore) {
+            auto c = g.begin();
+            m.save(*c, s, cut_ck, cut);
+            c->commit_and_wait();
+            // the first request's reply runs past the cut before the next request restores it: other tokens (the
+            // window's first ones) overwrite the KV rows, rings and recurrent state the checkpoint must bring back
+            std::copy(w.toks.begin(), w.toks.begin() + cut_last, s.tokens() + cut);
+            for (int q = cut; q < w.L0;) {
+              const int T = prefill_chunk_rows(C, q, w.L0, even);
+              c = g.begin();
+              m.encode_prefill(*c, s, q, T, sp, 0, q + T == w.L0);
+              c->commit_and_wait();
+              if (!m.ane_finish_chunk()) fatal("the Neural Engine prefill split failed on a chunk; rerun with NI_ANE=0");
+              q += T;
+            }
+            c = g.begin();
+            m.restore(*c, s, cut_ck);
+            c->commit_and_wait();
+            s.n_pend = 0;
+            s.pend_tree = false;
+          }
+          load_tokens(s, w);  // the first request's sample took the token at cut
+          if (fn) fn->ple_forget();
+        }
       }
       t_prefill += now_ms() - t0;
       prefilled += w.L0;
@@ -614,6 +653,7 @@ int main(int argc, char** argv) {
     const Profile selected = ink2 ? ink2->effective_profile() : profile();
     meta["profile"] = selected == Profile::kFast ? "fast" : "precise";
     meta["prefill_chunk"] = m.prefill_chunk();
+    if (cut_last > 0) meta["cut_last"] = {{"rows", cut_last}, {"restore", cut_restore}};
     meta["ane"] = {{"chunks", ane.chunks}, {"evals", ane.evals}, {"reruns", ane.reruns}};
     if (dory) meta["dory"] = {{"loops", dory->default_loops()}, {"kv", loop_kv_name(dory->kv_mode())}};
     meta["records"] = o.done;

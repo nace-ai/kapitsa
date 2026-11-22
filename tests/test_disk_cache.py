@@ -16,6 +16,10 @@ compiles in the background, and a prefill's numbers depend on whether it was rea
      the image again
   6. a DFlash drafter (when the server loads one): a long system block, then the server stops (SIGTERM): it must save
      without crashing (the prefix checkpoint has no drafter ring), and the follow-up is cached after a restart
+  7. a turn checkpoint at the prompt's end after verify passes (a DFlash drafter, NI_VPF=1; the cache off): with
+     chat_template_kwargs {"add_generation_prompt": false} the turn boundary is the prompt's end, and a short follow-up
+     over a long cached prefix runs as verify passes, which leave their last rows pending; the checkpoint must hold
+     them: the next turn, restored from it, writes what the same prompt read cold writes
 usage: test_disk_cache.py <kapitsa> <model dir> [--tokens 4000] [--port 8197] [--server-args "--dflash none"] [--keep]
        test_disk_cache.py <kapitsa> <model dir> --ttft [--tokens N] [--rounds 2]
   --ttft: measures instead, per round: a server (cache on) writes turn 1 and stops; the next one answers turn 2 from the
@@ -76,13 +80,14 @@ def gpu_lock():
 
 
 class Server:
-    def __init__(self, home, log, slots=2, cache="2G", ane=False):
+    def __init__(self, home, log, slots=2, cache="2G", ane=False, env=None):
         self.log_path = log
         e = {k: v for k, v in os.environ.items() if not k.startswith("NI_") and not k.startswith("KAPITSA_")}
         e.update({"KAPITSA_HOME": home, "KAPITSA_NO_AUTO_UPDATE": "1", "KAPITSA_NO_PROMPT": "1",
                   "NI_DISK_CACHE_IDLE_MS": "1500"})
         if not ane:
             e["NI_ANE"] = "0"
+        e.update(env or {})
         self.log = open(log, "a")
         self.log.write(f"\n==== start: slots {slots}, cache {cache}\n")
         self.log.flush()
@@ -137,10 +142,12 @@ class Server:
         self.log.close()
 
 
-def chat(messages, max_tokens=200):
-    """(content, usage, time to first token, finish reason) of a streamed greedy chat completion"""
+def chat(messages, max_tokens=200, kwargs=None, reasoning=False):
+    """(content, usage, time to first token, finish reason) of a streamed greedy chat completion; reasoning: the text is
+    reasoning_content and content"""
     body = {"messages": messages, "max_tokens": max_tokens, "temperature": 0, "stream": True,
-            "stream_options": {"include_usage": True}, "chat_template_kwargs": {"enable_thinking": False}}
+            "stream_options": {"include_usage": True},
+            "chat_template_kwargs": {"enable_thinking": False, **(kwargs or {})}}
     req = urllib.request.Request(BASE + "/v1/chat/completions", data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
     t0, first, text, usage, finish = time.time(), None, "", None, None
@@ -156,7 +163,7 @@ def chat(messages, max_tokens=200):
                 d = ch.get("delta", {})
                 if ((d.get("content") or "") + (d.get("reasoning_content") or "")) and first is None:
                     first = time.time() - t0
-                text += d.get("content") or ""
+                text += (d.get("reasoning_content") or "" if reasoning else "") + (d.get("content") or "")
                 finish = ch.get("finish_reason") or finish
     return text, usage or {}, first or (time.time() - t0), finish
 
@@ -350,6 +357,40 @@ def functional(tmp, log):
         check(a7_other_ssd == a7_other_ram,
               "... and writes the RAM prefix checkpoint's text, token for token",
               f"\n RAM:  {a7_other_ram!r}\n SSD:  {a7_other_ssd!r}")
+
+    # 7. a turn checkpoint at the prompt's end after verify passes (kapitsa#1390). With add_generation_prompt false the
+    #    prompt is the conversation so far, so the turn boundary is the prompt's end; a short follow-up over a long
+    #    cached prefix runs as verify passes (NI_VPF=1 forces them on a target the default leaves out), which leave their
+    #    last rows pending (commit_rows) for the first decoding pass to fold. The checkpoint saved at the prompt's end
+    #    must hold those rows: the next turn, restored from it, writes what the same prompt read cold writes.
+    vpf_env = {"NI_VPF": "1", "NI_LOG": "2"}
+    s = Server(os.path.join(tmp, "home-vpf"), log, cache="0", env=vpf_env)
+    if "DFlash2 drafter" not in s.text()[s.start_at:]:
+        print("SKIP the end-of-prompt checkpoint step: this server loads no DFlash2 drafter", flush=True)
+        s.stop()
+    else:
+        kw = {"add_generation_prompt": False}
+        c8 = [{"role": "system", "content": "You are a coding agent. Repository notes:\n" + CORPUS_TEXT[:TOKENS * 4]},
+              {"role": "user", "content": "Summarize the notes in one sentence."}]
+        a8, _, _, _ = chat(c8, max_tokens=12, kwargs=kw)
+        t8 = c8 + [{"role": "assistant", "content": a8}, {"role": "user", "content": "Name one file in them."}]
+        m8 = s.mark()
+        b8, u8, _, _ = chat(t8, max_tokens=12, kwargs=kw)
+        log8 = s.text()[m8:]
+        passes = re.search(r"suffix rows after \d+ cached as verify passes", log8)
+        t9 = t8 + [{"role": "assistant", "content": b8}, {"role": "user", "content": "Name one function in them."}]
+        c9, u9, _, _ = chat(t9, max_tokens=32, kwargs=kw, reasoning=True)
+        s.stop()
+        s = Server(os.path.join(tmp, "home-vpf-cold"), log, cache="0", env=vpf_env)
+        c9_cold, v9, _, _ = chat(t9, max_tokens=32, kwargs=kw, reasoning=True)
+        s.stop()
+        check(passes is not None, "end-of-prompt checkpoint: the follow-up's suffix ran as verify passes",
+              log8[-600:])
+        check(cached(u9) == u8.get("prompt_tokens") and cached(v9) == 0,
+              "... and the next turn is restored from the checkpoint at that prompt's end",
+              f"cached {cached(u9)}, the previous prompt {u8.get('prompt_tokens')} tokens; cold {cached(v9)}")
+        check(c9 == c9_cold, "... and writes what the same prompt read cold writes, token for token",
+              f"\n cold:     {c9_cold!r}\n restored: {c9!r}")
 
 
 def dir_mb(path):
