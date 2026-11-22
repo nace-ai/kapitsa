@@ -27,7 +27,8 @@ void check(bool ok, const std::string& name, const std::string& detail = "") {
   ok ? ++passes : ++fails;
 }
 
-constexpr int kOpen = 10, kClose = 11, kCall = 12, kA = 40, kB = 41, kT1 = 50, kT2 = 51, kNl = 60, kSp = 61;
+constexpr int kOpen = 10, kClose = 11, kCall = 12, kA = 40, kB = 41, kT1 = 50, kT2 = 51, kNl = 60, kSp = 61,
+              kModel = 62, kTextHdr = 63;
 constexpr size_t W = 3;  // 96 tokens
 
 // whitespace-only tokens: a line break and a space
@@ -35,6 +36,16 @@ const std::vector<uint8_t>* spaces() {
   static const std::vector<uint8_t> s = [] {
     std::vector<uint8_t> v(96, 0);
     v[kNl] = v[kSp] = 1;
+    return v;
+  }();
+  return &s;
+}
+
+// kPre-allowed prefix tokens including a leading role header (e.g., Inkling-2's <|message_model|>)
+const std::vector<uint8_t>* pre_with_model() {
+  static const std::vector<uint8_t> s = [] {
+    std::vector<uint8_t> v = *spaces();
+    v[kModel] = 1;
     return v;
   }();
   return &s;
@@ -49,10 +60,16 @@ int allowed(const std::vector<uint32_t>& m, int r) {
   return n == int(W * 32) ? -1 : n == 1 ? tok : -2;
 }
 
-std::vector<int> rows_of(ThinkControl& tc, const std::vector<int>& tokens, int P, int rows, const int* parent,
-                         int live) {
+std::vector<uint32_t> masks_of(ThinkControl& tc, const std::vector<int>& tokens, int P, int rows, const int* parent,
+                               int live) {
   std::vector<uint32_t> m(size_t(rows) * W, 0x12345678u);
   tc.fill(m.data(), W, tokens.data(), P, rows, parent, live);
+  return m;
+}
+
+std::vector<int> rows_of(ThinkControl& tc, const std::vector<int>& tokens, int P, int rows, const int* parent,
+                         int live) {
+  const auto m = masks_of(tc, tokens, P, rows, parent, live);
   std::vector<int> a;
   for (int r = 0; r < rows; ++r) a.push_back(allowed(m, r));
   return a;
@@ -65,27 +82,28 @@ std::string str(const std::vector<int>& v) {
 }
 
 // fill() over a chain or a tree against push(): each row's mask must be what push() leaves after the tokens on the
-// row's path (a copy of the control, those tokens pushed, one row filled). Rows that cannot be accepted (an ancestor
-// forces a token and the path's next token differs) are not compared.
+// row's path (a copy of the control, those tokens pushed, one row filled). Rows that cannot be accepted (an ancestor's
+// mask forbids the path's next token) are not compared.
 bool equivalent(ThinkControl& tc, const std::vector<int>& tokens, int rows, const int* parent, int live,
                 std::string* why) {
-  const auto got = rows_of(tc, tokens, 0, rows, parent, live);
+  const auto m = masks_of(tc, tokens, 0, rows, parent, live);
   for (int r = 0; r < live; ++r) {
     std::vector<int> path;
     bool ok = true;
     for (int x = r; x > 0;) {
       const int par = parent ? parent[x] : x - 1;
-      if (got[size_t(par)] >= 0 && got[size_t(par)] != tokens[size_t(x)]) ok = false;
-      path.insert(path.begin(), tokens[size_t(x)]);
+      const int tok = tokens[size_t(x)];
+      if (tok < 0 || size_t(tok) >= W * 32 || ((m[size_t(par) * W + size_t(tok) / 32] >> (unsigned(tok) % 32)) & 1u) == 0)
+        ok = false;
+      path.insert(path.begin(), tok);
       x = par;
     }
     if (!ok) continue;
     ThinkControl seq = tc;
     for (int t : path) seq.push(t);
-    const int want = rows_of(seq, {0}, 0, 1, nullptr, 1)[0];
-    if (got[size_t(r)] != want) {
-      *why = "row " + std::to_string(r) + ": fill " + std::to_string(got[size_t(r)]) + ", push " +
-             std::to_string(want) + "; path " + str(path);
+    const auto want = masks_of(seq, {0}, 0, 1, nullptr, 1);
+    if (!std::equal(want.begin(), want.end(), m.begin() + ptrdiff_t(size_t(r) * W))) {
+      *why = "row " + std::to_string(r) + ": fill mismatch vs push; path " + str(path);
       return false;
     }
   }
@@ -194,6 +212,73 @@ int main() {
           "rows: whitespace then a drafted <think>: the cap applies from it");
     check(rows_of(f, {0, kA, kOpen, kA, kA}, 0, 5, nullptr, 5) == std::vector<int>({-1, -1, -1, -1, -1}),
           "rows: a drafted content token then <think>: nothing forced");
+  }
+  {  // Inkling-2 role-header pattern: <|message_model|> keeps kPre waiting until <|content_thinking|> (or disarms on
+     // <|content_text|>)
+    ThinkControl tc;
+    tc.start(4, {kT1, kClose}, kOpen, kClose, kCall, false, pre_with_model());
+    tc.push(kModel);
+    check(tc.armed() && !tc.in_reasoning() && tc.count() == 0,
+          "role header before thinking opener: stays armed in kPre without counting toward cap");
+    tc.push(kOpen);
+    check(tc.armed() && tc.in_reasoning() && tc.count() == 0,
+          "thinking opener after role header: enters kThink cleanly at count 0");
+    tc.push(kA);
+    tc.push(kB);
+    check(tc.count() == 2 && tc.near(1), "role-header block: counts reasoning tokens after opener");
+    const auto a = rows_of(tc, {kB, kT1, kClose}, 0, 3, nullptr, 3);
+    check(a == std::vector<int>({kT1, kClose, -1}),
+          "role-header block: forces closing text and close token within cap", str(a));
+    tc.push(kT1);
+    tc.push(kClose);
+    check(!tc.armed() && tc.count() == 4 && tc.forced(),
+          "role-header block: closed cleanly at exact cap");
+
+    // Short cap drops closing text and leaves role header + opener unmasked even at cap = 1
+    ThinkControl c1;
+    c1.start(1, {kT1, kClose}, kOpen, kClose, -1, false, pre_with_model());
+    check(rows_of(c1, {0, kModel, kOpen, kClose}, 0, 4, nullptr, 4) == std::vector<int>({-1, -1, kClose, -1}),
+          "role header with cap 1: header and opener unmasked, first reasoning row forces close");
+    const int tree_par[] = {-1, 0, 1, 1, 2};
+    check(rows_of(c1, {kA, kModel, kOpen, kTextHdr, kClose}, 0, 5, tree_par, 5) ==
+              std::vector<int>({-1, -1, kClose, -1, -1}),
+          "role header tree: branch through thinking forces close, sibling text-header branch is free");
+
+    // Role-header pattern with cap 0: header and opener wait in kPre with `open` forbidden (all other bits set), and
+    // once a text header is chosen the control disarms immediately so later rows allow everything.
+    ThinkControl c0;
+    c0.start(0, {kClose}, kOpen, kClose, -1, false, pre_with_model());
+    std::vector<uint32_t> m0(3 * W, 0u);
+    const std::vector<int> tk0 = {0, kModel, kTextHdr};
+    const int n0 = c0.fill(m0.data(), W, tk0.data(), 0, 3, nullptr, 3);
+    auto only_open_blocked = [&](int row) {
+      for (size_t w = 0; w < W; ++w) {
+        const uint32_t want = (w == size_t(kOpen) / 32) ? ~(1u << (unsigned(kOpen) % 32)) : 0xffffffffu;
+        if (m0[size_t(row) * W + w] != want) return false;
+      }
+      return true;
+    };
+    check(n0 == 2 && only_open_blocked(0) && only_open_blocked(1) && allowed(m0, 2) == -1,
+          "role header with cap 0: kPre rows forbid kOpen only, text header disarms row 2");
+    ThinkControl c0_text;
+    c0_text.start(0, {kClose}, kOpen, kClose, -1, false, pre_with_model());
+    c0_text.push(kModel);
+    c0_text.push(kTextHdr);
+    check(!c0_text.armed() && c0_text.count() == 0 && !c0_text.forced(),
+          "role header with cap 0: text header disarms without forcing");
+
+    // Non-thinking reply (<|message_model|><|content_text|>...) disarms immediately
+    ThinkControl nt;
+    nt.start(3, {kClose}, kOpen, kClose, -1, false, pre_with_model());
+    nt.push(kModel);
+    nt.push(kTextHdr);
+    check(!nt.armed() && !nt.in_reasoning() && nt.count() == 0 && !nt.forced(),
+          "role header followed by text header: disarmed immediately");
+    nt.push(kModel);
+    nt.push(kOpen);
+    nt.push(kA);
+    check(!nt.armed() && nt.count() == 0 && !nt.forced(),
+          "disarmed after text header: subsequent thinking block is not capped");
   }
   {  // the first reasoning block only: after its </think> a second <think> is neither counted nor capped
     ThinkControl tc;

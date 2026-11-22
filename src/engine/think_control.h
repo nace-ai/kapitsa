@@ -36,9 +36,9 @@ class ThinkControl {
  public:
   // The control's state after a path of tokens. push() (the handled tokens) and fill() (each verify row's path) take
   // the same step(), so a row is masked exactly as the token that reaches it would leave the control.
-  //   kPre:   the reasoning has not started: the template left <think> to the model. Whitespace-only tokens keep the
-  //           control waiting (a reply that opens with a line break and then <think> is still capped); any other token
-  //           is the reply starting outside a reasoning block, which ends the control.
+  //   kPre:   the reasoning has not started: the template left the opening tag to the model. Tokens marked in
+  //           `space` (whitespace-only tokens, or a leading role header such as Inkling-2's <|message_model|>) keep
+  //           the control waiting; any other token is the reply starting outside a reasoning block, which ends it.
   //   kThink: in the reasoning; `think` reasoning tokens so far, the row's sample takes reasoning position `think`.
   //   kEnded: </think>, a tool call (with end_on_tool_call), or a reply outside a reasoning block. Final: the cap
   //           covers the first reasoning block only (a later <think> in the same reply is not capped).
@@ -52,7 +52,7 @@ class ThinkControl {
   // (its last token), as think_close_for shortens it for the cap. open / close / call: the <think>, </think> and
   // <tool_call> token ids; call < 0: a tool call inside the reasoning does not end the control. in_think: the prompt
   // ends inside the reasoning (its template opened the think block), else the reasoning starts at a generated <think>.
-  // space: per token id, 1 when the token's text is whitespace only (null or short: no token is).
+  // space: per token id, 1 when a token keeps kPre waiting before `open` (whitespace, role headers; null or short: none).
   void start(int cap, std::vector<int> forced, int open, int close, int call, bool in_think,
              const std::vector<uint8_t>* space = nullptr);
   bool on() const { return cap_ >= 0 && !forced_.empty(); }
@@ -73,9 +73,9 @@ class ThinkControl {
 
   // Masks for a verify's rows (uint32 words, W per row; bit t set: token t allowed), row r sampling the token after
   // row r's path: row 0 after the handled tokens, row r > 0 after tokens[P + r] under its parent (parent[r]: a tree's,
-  // null: a chain's, r - 1; rows from `live` on are never accepted). A row whose path is in the reasoning at or past
-  // the cap allows only the forced token at its position; every other row allows every token. Returns the rows that
-  // force a token.
+  // null: a chain's, r - 1; rows from `live` on are never accepted). A row in kPre with cap 0 forbids `open`; a row in
+  // the reasoning at or past the cap allows only the forced token at its position; every other row allows every token.
+  // Returns the rows constrained by the control.
   int fill(uint32_t* mask, size_t W, const int* tokens, int P, int rows, const int* parent, int live) const;
   // fill() for a DFlash2 cycle: tree, its KFlash tree descriptor (src/kernels/kflash.h: the parents and the live rows),
   // null: a chain of `rows` live rows.

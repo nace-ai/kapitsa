@@ -735,7 +735,10 @@ model writes its reply in the same turn.
   `</think>` when the cap leaves room for it. `end_on_tool_call` (on by default when the request has tools) lets a tool
   call inside the reasoning end it.
 - **The count:** the cap counts every reasoning token, the forced `</think>` included, so the reasoning holds at most N
-  tokens. A cap of 0 turns thinking off; thinking disabled or absent is no cap.
+  tokens. A cap of 0 turns thinking off (on any model whose template leaves `<think>` to the model, it forbids opening
+  reasoning on token 0 unless a row-0 structured-output grammar already masks token 0; on Inkling-2,
+  `thinking_control.hard_cap: 0` outranks an explicit `reasoning_effort`, while `thinking_budget: 0` still ranks below
+  it); thinking disabled or absent is no cap.
 - **Usage:** `usage.kapitsa.thinking` reports `hard_cap`, `reasoning_tokens` (the capped block's) and `forced` (whether
   the close was forced).
 - **The first reasoning block:** the cap covers the reply's first reasoning block. When the template leaves `<think>` to

@@ -3436,6 +3436,18 @@ void inkling2_unit() {
     }
     {
       ChatRequest r;
+      r.think_cap = 0;
+      r.effort = "high";
+      check_effort("think_cap 0 overrides r.effort", r, "none", "0");
+    }
+    {
+      ChatRequest r;
+      r.think_cap = 0;
+      r.template_kwargs = {{"reasoning_effort", "high"}};
+      check_effort("think_cap 0 overrides template reasoning_effort", r, "none", "0");
+    }
+    {
+      ChatRequest r;
       r.template_kwargs = {{"enable_thinking", false}};
       check_effort("enable_thinking false resolves to none/0", r, "none", "0");
     }
@@ -3553,6 +3565,73 @@ void inkling2_unit() {
       }
       check(refused_special, "inkling2 inline token suppression refuses protected EOS token");
       unlink(mpath);
+    }
+
+    // Inkling-2 ThinkControl sequence: <|message_model|> waits in kPre for <|content_thinking|> (or disarms on
+    // <|content_text|>) and keeps OutputParser synchronized when <|end_message|> is forced.
+    {
+      const int m_tok = tok.find("<|message_model|>");
+      const int open_tok = tok.find("<|content_thinking|>");
+      const int close_tok = tok.find("<|end_message|>");
+      const int text_tok = tok.find("<|content_text|>");
+      const int call_tok = tok.find("<|content_invoke_tool_json|>");
+      std::vector<uint8_t> ink2_pre(size_t(tok.vocab_size()), 0);
+      if (m_tok >= 0 && size_t(m_tok) < ink2_pre.size()) ink2_pre[size_t(m_tok)] = 1;
+      ThinkControl tc;
+      tc.start(4, {close_tok}, open_tok, close_tok, call_tok, false, &ink2_pre);
+      OutputParser p(tok, open_tok, close_tok, call_tok, close_tok, false, true, tools, false, true, {},
+                     CallFormat::Inkling2);
+      auto feed_tok = [&](int id, ChatResult& out) {
+        tc.push(id);
+        const ChatDelta d = p.push(id);
+        out.reasoning += d.reasoning;
+        out.content += d.content;
+      };
+      ChatResult out;
+      const size_t mw = (size_t(tok.vocab_size()) + 31) / 32;
+      std::vector<uint32_t> mask(mw, 0xffffffffu);
+      auto is_forced = [&](int row_tok) -> int {
+        tc.fill(mask.data(), mw, &row_tok, 0, 1, nullptr, 1);
+        int cnt = 0, pick = -1;
+        for (int w = 0; w < int(mw); ++w)
+          for (int b = 0; b < 32; ++b)
+            if (mask[size_t(w)] >> b & 1u) {
+              ++cnt;
+              if (cnt > 1) return -1;
+              pick = w * 32 + b;
+            }
+        return cnt == 1 ? pick : -1;
+      };
+      feed_tok(m_tok, out);
+      check(tc.armed() && !tc.in_reasoning() && tc.count() == 0,
+            "inkling2 ThinkControl: <|message_model|> stays in kPre");
+      feed_tok(open_tok, out);
+      check(tc.armed() && tc.in_reasoning() && tc.count() == 0,
+            "inkling2 ThinkControl: <|content_thinking|> enters kThink");
+      for (int id : tok.encode("abc")) {
+        if (is_forced(id) >= 0) break;
+        feed_tok(id, out);
+      }
+      const int forced_tok = is_forced(tok.encode("d")[0]);
+      check(forced_tok == close_tok && tc.count() == 3,
+            "inkling2 ThinkControl: forces <|end_message|> at reasoning pos 3 for cap 4");
+      feed_tok(forced_tok, out);
+      check(!tc.armed() && tc.forced() && tc.count() == 4,
+            "inkling2 ThinkControl: ends at exact cap 4 on forced <|end_message|>");
+      for (int id : {m_tok, text_tok, tok.encode("4")[0], close_tok}) feed_tok(id, out);
+      const ChatDelta tail = p.finish(true);
+      out.reasoning += tail.reasoning;
+      out.content += tail.content;
+      check(out.reasoning == "abc" && out.content == "4",
+            "inkling2 ThinkControl + OutputParser: forced close cleanly splits reasoning and content",
+            out.reasoning + " | " + out.content);
+
+      ThinkControl nt;
+      nt.start(4, {close_tok}, open_tok, close_tok, call_tok, false, &ink2_pre);
+      nt.push(m_tok);
+      nt.push(text_tok);
+      check(!nt.armed() && nt.count() == 0 && !nt.forced(),
+            "inkling2 ThinkControl: <|message_model|><|content_text|> disarms cleanly");
     }
   }
 
