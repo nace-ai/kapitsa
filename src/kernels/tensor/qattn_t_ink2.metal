@@ -63,11 +63,23 @@ NI_INLINE void ink2a_mma(thread nhf_f8& c0, thread nhf_f8& c1, thread const vec<
     }
 }
 
-// K fragment (right operand of S = Q K^T, keys r0 + n, dims c0 + k): LAY 1 holds k = fm + 8i, n = col(j)
-template <int LD, int LAY>
+// K fragment (right operand of S = Q K^T, keys r0 + n, dims c0 + k): LAY 1 holds k = fm + 8i, n = col(j).
+// KTR: the K tile is staged transposed ([D][BK + 8] halves), so the M1 layout's 4 keys of one dim are 2 half2 reads.
+template <int LD, int LAY, int KTR, int BK>
 NI_INLINE nhf_h8 ink2a_load_k(const threadgroup half* base, uint r0, uint c0, short fm, short fn) {
   if (LAY == 0) return qa_load_kv<LD>(base, r0, c0, fm, fn);
   nhf_h8 v;
+  if (KTR) {
+    _Pragma("clang loop unroll(full)")
+    for (short i = 0; i < 2; ++i)
+      _Pragma("clang loop unroll(full)")
+      for (short h = 0; h < 2; ++h) {
+        const half2 x = *(const threadgroup half2*)(base + (c0 + fm + 8 * i) * (BK + 8) + r0 + fn + 8 * h);
+        v[4 * i + 2 * h] = x.x;
+        v[4 * i + 2 * h + 1] = x.y;
+      }
+    return v;
+  }
   _Pragma("clang loop unroll(full)")
   for (short i = 0; i < 2; ++i)
     _Pragma("clang loop unroll(full)")
@@ -90,7 +102,7 @@ NI_INLINE nhf_h8 ink2a_load_v(const threadgroup half* base, uint r0, uint c0, sh
   return v;
 }
 
-template <int NB, int BK, int LD, int LAY>
+template <int NB, int BK, int LD, int LAY, int KTR, int QS>
 NI_INLINE void qattn_ink2_impl(const device float* q, const device half* kc, const device half* vc,
                                const device float* rb, const device float* sinks, const device float* gate,
                                device float* out, constant Ink2AttnTP& p, uint2 tg, uint sg, ushort lane,
@@ -155,7 +167,16 @@ NI_INLINE void qattn_ink2_impl(const device float* q, const device half* kc, con
         kv4 = *(const device uint4*)(kc + at);
         vv4 = *(const device uint4*)(vc + at);
       }
-      *(threadgroup uint4*)(kt + r * LD + c) = kv4;
+      if (KTR) {
+        const half4 a = as_type<half4>(kv4.xy), b = as_type<half4>(kv4.zw);
+        _Pragma("clang loop unroll(full)")
+        for (short e = 0; e < 4; ++e) {
+          kt[(c + e) * (BK + 8) + r] = a[e];
+          kt[(c + 4 + e) * (BK + 8) + r] = b[e];
+        }
+      } else {
+        *(threadgroup uint4*)(kt + r * LD + c) = kv4;
+      }
       *(threadgroup uint4*)(vt + r * LD + c) = vv4;
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -168,10 +189,14 @@ NI_INLINE void qattn_ink2_impl(const device float* q, const device half* kc, con
     for (short f = 0; f < KT; f += 2)
       _Pragma("clang loop unroll(full)")
       for (short id = 0; id < D / 16; ++id) {
-        const nhf_h8 ka = ink2a_load_k<LD, LAY>(kt, 16 * f, id * 16, fm, fn);
-        const nhf_h8 kb2 = ink2a_load_k<LD, LAY>(kt, KT > 1 ? 16 * f + 16 : 0, id * 16, fm, fn);
-        ink2a_mma<LAY, half, half, true>(sf[f], sf[f + 1], qf[id], ka, kb2);
-        ink2a_mma<LAY, half, half, true>(sf[f], sf[f + 1], ql[id], ka, kb2);
+        const nhf_h8 ka = ink2a_load_k<LD, LAY, KTR, BK>(kt, 16 * f, id * 16, fm, fn);
+        const nhf_h8 kb2 = ink2a_load_k<LD, LAY, KTR, BK>(kt, KT > 1 ? 16 * f + 16 : 0, id * 16, fm, fn);
+        if (QS == 2) {  // one fp32 product (q hi + lo as float, K's halves widened)
+          ink2a_mma<LAY, float, float, true>(sf[f], sf[f + 1], nhf_f8(qf[id]) + nhf_f8(ql[id]), nhf_f8(ka), nhf_f8(kb2));
+        } else {
+          ink2a_mma<LAY, half, half, true>(sf[f], sf[f + 1], qf[id], ka, kb2);
+          if (QS) ink2a_mma<LAY, half, half, true>(sf[f], sf[f + 1], ql[id], ka, kb2);
+        }
       }
 
     const bool edge = k0 + BK - 1 > sfirst || k0 < slo;
@@ -255,18 +280,18 @@ NI_INLINE void qattn_ink2_impl(const device float* q, const device half* kc, con
   }
 }
 
-#define QATTN_INK2(NAME, NB, BK, LD, LAY)                                                                                   \
+#define QATTN_INK2(NAME, NB, BK, LD, LAY, KTR, QS)                                                                                   \
   [[kernel, max_total_threads_per_threadgroup(32 * (NB) * 3)]] void NAME(                                              \
       const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]],   \
       const device float* rb [[buffer(3)]], const device float* sinks [[buffer(4)]],                                   \
       const device float* gate [[buffer(5)]], device float* out [[buffer(6)]], constant Ink2AttnTP& p [[buffer(7)]],   \
       uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],                           \
       uint lane [[thread_index_in_simdgroup]]) {                                                                       \
-    threadgroup half kt[BK * LD], vt[BK * LD];                                                                         \
-    qattn_ink2_impl<NB, BK, LD, LAY>(q, kc, vc, rb, sinks, gate, out, p, tg, sg, ushort(lane), kt, vt);                     \
+    threadgroup half kt[(KTR) ? 128 * ((BK) + 8) : (BK) * (LD)], vt[BK * LD];                                                                         \
+    qattn_ink2_impl<NB, BK, LD, LAY, KTR, QS>(q, kc, vc, rb, sinks, gate, out, p, tg, sg, ushort(lane), kt, vt);                     \
   }
 
-QATTN_INK2(qattn_ink2_s6k32p, 2, 32, 136, 0)
-QATTN_INK2(qattn_ink2_s3k16, 1, 16, 128, 0)
-QATTN_INK2(qattn_ink2_s6k32p_l1, 2, 32, 136, 1)
-QATTN_INK2(qattn_ink2_s3k16_l1, 1, 16, 128, 1)
+QATTN_INK2(qattn_ink2_s6k32p, 2, 32, 136, 0, 0, 1)
+QATTN_INK2(qattn_ink2_s3k16, 1, 16, 128, 0, 0, 1)
+QATTN_INK2(qattn_ink2_s6k32p_l1, 2, 32, 136, 1, 0, 1)
+QATTN_INK2(qattn_ink2_s3k16_l1, 1, 16, 128, 1, 0, 1)

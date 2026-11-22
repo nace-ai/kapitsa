@@ -87,7 +87,7 @@ void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
       "ink2_bf16_mv8",         "ink2_bf16_mm",           "ink2_rmsnorm",          "ink2_attn_res",
       "ink2_msg_gate",         "ink2_msg_gate_prep_s",   "ink2_msg_gate_down_s",  "ink2_msg_gate_up_mix_s",
       "ink2_embed_norm",       "ink2_sconv_static",      "ink2_sconv_static_pf",  "ink2_sconv_dynamic",    "ink2_qkvr_prep",         "ink2_rel_bias",         "ink2_rel_bias_pf",
-      "ink2_attn_decode",      "ink2_attn_decode_reduce", "ink2_msg_gate_mix","ink2_attn_prefill",     "ink2_moe_route",
+      "ink2_attn_decode",      "ink2_attn_decode_reduce", "ink2_attn_decode_g3", "ink2_attn_decode_g3_fx", "ink2_attn_res1", "ink2_msg_gate_mix","ink2_attn_prefill",     "ink2_moe_route",
       "ink2_moe_nvfp4_w13_situ","ink2_moe_nvfp4_w2_acc", "ink2_moe_mxfp8_w13_situ","ink2_moe_mxfp8_w2_acc",
       "ink2_softcap",          "ink2_moe_bucket",        "ink2_moe_situ_half",    "ink2_moe_combine",
   };
@@ -1166,7 +1166,8 @@ void Inkling2::enc_attn_res(Encoder& e, const Buffer* const* states, int M, cons
                        q_f32 ? 1u : 0u,
                        cfg_.rms_eps,
                        1.0f / std::sqrt(float(cfg_.hidden))};
-  e.use(ink2_pipe("ink2_attn_res"));
+  static const bool res1 = !getenv("NI_INK2_RES1") || atoi(getenv("NI_INK2_RES1")) != 0;
+  e.use(ink2_pipe(res1 ? "ink2_attn_res1" : "ink2_attn_res"));
   for (int m = 0; m < 6; ++m) e.buf(m, m < M ? *states[m] : *states[0]);
   e.buf(6, *static_cast<const Buffer*>(query_ptr));
   e.buf(7, out);
@@ -1572,7 +1573,12 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
                              chunk,
                              nchunks,
                              attn_scale};
-      e.use(ink2_pipe("ink2_attn_decode"));
+      static const int dec_g_mode = getenv("NI_INK2_DEC_G") ? atoi(getenv("NI_INK2_DEC_G")) : 1;
+      const bool dec_g = dec_g_mode != 0;
+      const bool g3 = dec_g && cfg_.hq == 3 * cfg_.hkv && cfg_.head_dim == 128;
+      // NI_INK2_DEC_G: 1 (default) GQA kernel with fast::exp (decbench 40K: 1.83 -> 0.80 ms a global visit), 2 the
+      // same with precise::exp (1.37 ms), 0 the per-head kernel
+      e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : "ink2_attn_decode_g3_fx"));
       e.buf(0, q_);
       e.buf(1, s.kc[v_idx]);
       e.buf(2, s.vc[v_idx]);
@@ -1581,7 +1587,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       e.buf(5, part_l_);
       e.buf(6, part_o_);
       e.val(7, adp);
-      e.dispatch(uint32_t(cfg_.hq), nchunks, 1, 128);
+      e.dispatch(uint32_t(g3 ? cfg_.hkv : cfg_.hq), nchunks, 1, 128);
 
       e.use(ink2_pipe("ink2_attn_decode_reduce"));
       e.buf(0, part_m_);
@@ -1612,7 +1618,8 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         // the M5 layout there gave wrong attention, ink2_check v0_out off). NI_INK2_ATTN_LAY=0|1 overrides.
         static const bool lay1 = getenv("NI_INK2_ATTN_LAY") ? atoi(getenv("NI_INK2_ATTN_LAY")) != 0
                                                              : Gpu::get().apple_family() < 10;
-        e.use(base_pipe(std::string(qat_small ? "qattn_ink2_s3k16" : "qattn_ink2_s6k32p") + (lay1 ? "_l1" : "")));
+        e.use(base_pipe(std::string(qat_small ? "qattn_ink2_s3k16" : "qattn_ink2_s6k32p") +
+                        (lay1 ? "_l1" : "")));
         e.buf(0, q_);
         e.buf(1, s.kc[v_idx]);
         e.buf(2, s.vc[v_idx]);
