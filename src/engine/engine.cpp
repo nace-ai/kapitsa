@@ -4024,7 +4024,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       tr_margin.push_back(a - b);
     }
   };
-  if (live) live->spec.store(full_steps ? 0 : lili_ ? 3 : dfl_ ? 2 : depth > 0 ? 1 : 0, std::memory_order_relaxed),
+  if (live) live->spec.store(full_steps ? 0 : lili_ ? 3 : (dfl_ || (ink2_dfl_ && !gm && !tc.on())) ? 2 : depth > 0 ? 1 : 0, std::memory_order_relaxed),
       live->phase.store(2, std::memory_order_relaxed);
   // batched decode: this request decodes (other requests' batch_wanted() counts it) until its loop ends
   struct Decoding {
@@ -5258,7 +5258,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   slot.live_ok = finish == "tool_calls";
   ++slot.version;  // (a state the SSD prefix cache does not have yet)
   char cyc[192] = "";
-  if ((dfl_ || lili_ || dory_spec_ || nh_ngram_ || flint_ngram_ || flint_self_) && req_cycles > 0)
+  if ((dfl_ || lili_ || ink2_dfl_ || dory_spec_ || nh_ngram_ || flint_ngram_ || flint_self_) && req_cycles > 0)
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
   if (clover_own && clover_own->self_spec() && req_cycles > 0)
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle (%d-row draft and verify)", double(gen - 1) / req_cycles,
