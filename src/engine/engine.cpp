@@ -4215,76 +4215,73 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       }
       return best;
     };
-    std::vector<float> probs(greedy ? 0 : size_t(V));
-    std::vector<int> idx;
+    std::vector<std::pair<int, float>> active;
+    active.reserve(256);
     auto build_probs = [&](const float* row) {
       float mx = row[0];
       for (int i = 1; i < V; ++i)
         if (row[i] > mx) mx = row[i];
-      if (sp.top_k > 0 && sp.top_k < V) {
-        idx.resize(size_t(V));
-        for (int i = 0; i < V; ++i) idx[size_t(i)] = i;
-        std::nth_element(idx.begin(), idx.begin() + sp.top_k, idx.end(),
-                         [row](int a, int b) { return row[a] > row[b]; });
-        idx.resize(size_t(sp.top_k));
-        std::fill(probs.begin(), probs.end(), 0.0f);
-        double sum = 0.0;
-        for (int id : idx) {
-          float p = std::exp((row[id] - mx) * inv_t);
-          probs[size_t(id)] = p;
-          sum += p;
-        }
-        float inv_s = sum > 0.0 ? float(1.0 / sum) : 0.0f;
-        for (int id : idx) probs[size_t(id)] *= inv_s;
-      } else {
-        double sum = 0.0;
-        for (int i = 0; i < V; ++i) {
-          float p = (row[i] > -1e20f) ? std::exp((row[i] - mx) * inv_t) : 0.0f;
-          probs[size_t(i)] = p;
-          sum += p;
-        }
-        float inv_s = sum > 0.0 ? float(1.0 / sum) : 0.0f;
-        for (int i = 0; i < V; ++i) probs[size_t(i)] *= inv_s;
+      // Sparse active set: exp(-18) = 1.5e-8 is negligible in FP32, avoiding 200K expf + nth_element per verify row.
+      const float cutoff = mx - 18.0f * sp.temperature;
+      active.clear();
+      for (int i = 0; i < V; ++i)
+        if (row[i] >= cutoff) active.emplace_back(i, row[i]);
+      if (sp.top_k > 0 && int(active.size()) > sp.top_k) {
+        std::nth_element(active.begin(), active.begin() + sp.top_k, active.end(),
+                         [](const auto& a, const auto& b) { return a.second > b.second; });
+        active.resize(size_t(sp.top_k));
       }
-      if (sp.top_p > 0.0f && sp.top_p < 1.0f) {
-        if (idx.empty() || int(idx.size()) != sp.top_k) {
-          idx.clear();
-          for (int i = 0; i < V; ++i)
-            if (probs[size_t(i)] > 1e-6f) idx.push_back(i);
-        }
-        std::sort(idx.begin(), idx.end(), [&](int a, int b) { return probs[size_t(a)] > probs[size_t(b)]; });
+      double sum = 0.0;
+      for (auto& kv : active) {
+        kv.second = std::exp((kv.second - mx) * inv_t);
+        sum += kv.second;
+      }
+      const float inv_s = sum > 0.0 ? float(1.0 / sum) : 0.0f;
+      for (auto& kv : active) kv.second *= inv_s;
+      if (sp.top_p > 0.0f && sp.top_p < 1.0f && active.size() > 1) {
+        std::sort(active.begin(), active.end(),
+                  [](const auto& a, const auto& b) { return a.second > b.second; });
         float cum = 0.0f;
         size_t keep = 0;
-        for (; keep < idx.size(); ++keep) {
-          cum += probs[size_t(idx[keep])];
+        for (; keep < active.size(); ++keep) {
+          cum += active[keep].second;
           if (cum >= sp.top_p) {
             ++keep;
             break;
           }
         }
-        if (keep < idx.size()) {
-          for (size_t j = keep; j < idx.size(); ++j) probs[size_t(idx[j])] = 0.0f;
-          float inv_c = cum > 0.0f ? (1.0f / cum) : 0.0f;
-          for (size_t j = 0; j < keep; ++j) probs[size_t(idx[j])] *= inv_c;
+        if (keep < active.size()) {
+          active.resize(keep);
+          const float inv_c = cum > 0.0f ? (1.0f / cum) : 0.0f;
+          for (auto& kv : active) kv.second *= inv_c;
         }
       }
+    };
+    auto prob_of = [&](int id) -> float {
+      for (const auto& kv : active)
+        if (kv.first == id) return kv.second;
+      return 0.0f;
     };
     auto sample_probs = [&](int exclude_id, double u) -> int {
       double tot = 1.0;
       if (exclude_id >= 0 && exclude_id < V) {
-        tot -= probs[size_t(exclude_id)];
-        if (tot <= 1e-9) return argmax_row(probs.data());
+        tot -= double(prob_of(exclude_id));
+        if (tot <= 1e-9) {
+          int best = active.empty() ? 0 : active[0].first;
+          float bv = -1.0f;
+          for (const auto& kv : active)
+            if (kv.second > bv) bv = kv.second, best = kv.first;
+          return best;
+        }
       }
-      double target = u * tot;
+      const double target = u * tot;
       double acc = 0.0;
-      int last_nz = 0;
-      for (int i = 0; i < V; ++i) {
-        if (i == exclude_id) continue;
-        float p = probs[size_t(i)];
-        if (p <= 0.0f) continue;
-        last_nz = i;
-        acc += p;
-        if (acc >= target) return i;
+      int last_nz = active.empty() ? 0 : active[0].first;
+      for (const auto& kv : active) {
+        if (kv.first == exclude_id || kv.second <= 0.0f) continue;
+        last_nz = kv.first;
+        acc += kv.second;
+        if (acc >= target) return kv.first;
       }
       return last_nz;
     };
@@ -4370,7 +4367,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
           build_probs(vl + size_t(k) * size_t(V));
           int drf = tk[P + 1 + k];
           double u = splitmix(uint64_t(sp.seed) ^ (uint64_t(P + k) * 0x9e3779b97f4a7c15ULL));
-          if (drf >= 0 && drf < V && u < double(probs[size_t(drf)])) {
+          if (drf >= 0 && drf < V && u < double(prob_of(drf))) {
             ++a;
           } else {
             double u2 = splitmix(uint64_t(sp.seed) ^ (uint64_t(P + k) * 0xbf58476d1ce4e5b9ULL) ^ 1ULL);
