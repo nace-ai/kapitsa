@@ -3508,15 +3508,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   if (dfl_) dfl_->begin_prefill(n, start);
   if (lili_) lili_->begin_prefill(n, start);
   if (ink2_dfl_ && slot.ink2_dseq) {
-    if (start == 0) {
+    if (start == 0 || slot.ink2_dseq_pos != start) {
+      // Reset DFlare's rolling context ring when starting from 0 or from a restored checkpoint/history
+      // whose ring was not kept; the prefill suffix [start, n) and subsequent decode steps repopulate it.
       ink2_dfl_->reset(*slot.ink2_dseq);
-      slot.ink2_dseq_pos = 0;
-    } else if (slot.ink2_dseq_pos != start) {
-      // Prefix reuse landed at a position the DFlare ring does not match (e.g. restored checkpoint): rebuild from 0.
-      start = 0;
-      model_->reset(s);
-      ink2_dfl_->reset(*slot.ink2_dseq);
-      slot.ink2_dseq_pos = 0;
+      slot.ink2_dseq_pos = start;
     }
   }
   // Other requests take their turns between chunks up to the first row the drafter captures (its capture buffer is
@@ -4222,7 +4218,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       for (int i = 1; i < V; ++i)
         if (row[i] > mx) mx = row[i];
       // Sparse active set: exp(-18) = 1.5e-8 is negligible in FP32, avoiding 200K expf + nth_element per verify row.
-      const float cutoff = mx - 18.0f * sp.temperature;
+      // Match sample.metal's exact transformation order: top-k, then top-p on the untempered
+      // distribution exp(logit - mx), then temperature scaling exp((logit - mx) / T).
+      const float cutoff = mx - 18.0f * std::max(1.0f, sp.temperature);
       active.clear();
       for (int i = 0; i < V; ++i)
         if (row[i] >= cutoff) active.emplace_back(i, row[i]);
@@ -4231,6 +4229,22 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
                          [](const auto& a, const auto& b) { return a.second > b.second; });
         active.resize(size_t(sp.top_k));
       }
+      if (sp.top_p > 0.0f && sp.top_p < 1.0f && active.size() > 1) {
+        std::sort(active.begin(), active.end(),
+                  [](const auto& a, const auto& b) { return a.second > b.second; });
+        double utot = 0.0;
+        for (const auto& kv : active) utot += std::exp(kv.second - mx);
+        double cum = 0.0;
+        size_t keep = active.size();
+        for (size_t r = 0; r < active.size(); ++r) {
+          cum += std::exp(active[r].second - mx) / utot;
+          if (cum >= double(sp.top_p)) {
+            keep = r + 1;
+            break;
+          }
+        }
+        active.resize(keep);
+      }
       double sum = 0.0;
       for (auto& kv : active) {
         kv.second = std::exp((kv.second - mx) * inv_t);
@@ -4238,24 +4252,6 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       }
       const float inv_s = sum > 0.0 ? float(1.0 / sum) : 0.0f;
       for (auto& kv : active) kv.second *= inv_s;
-      if (sp.top_p > 0.0f && sp.top_p < 1.0f && active.size() > 1) {
-        std::sort(active.begin(), active.end(),
-                  [](const auto& a, const auto& b) { return a.second > b.second; });
-        float cum = 0.0f;
-        size_t keep = 0;
-        for (; keep < active.size(); ++keep) {
-          cum += active[keep].second;
-          if (cum >= sp.top_p) {
-            ++keep;
-            break;
-          }
-        }
-        if (keep < active.size()) {
-          active.resize(keep);
-          const float inv_c = cum > 0.0f ? (1.0f / cum) : 0.0f;
-          for (auto& kv : active) kv.second *= inv_c;
-        }
-      }
     };
     auto prob_of = [&](int id) -> float {
       for (const auto& kv : active)
