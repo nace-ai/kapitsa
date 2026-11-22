@@ -77,6 +77,8 @@ struct Ink2Layer {
   const Tensor *router_w = nullptr, *router_bias = nullptr;
   const Tensor *w13 = nullptr, *w13_sc = nullptr, *w2 = nullptr, *w2_sc = nullptr;
   Buffer w13_outer, w2_outer;  // FP32 [128] = amax[e] / outer_scale_denominator[0] (NVFP4 only)
+  Buffer qkvrsg_w;             // Fused BF16 [wq_du; wr_du; attn_sink_proj; gate_attn; wk_dv; wv_dv]
+  uint32_t qkvrsg_offs[7] = {};
 };
 
 class Inkling2 : public Model {
@@ -96,6 +98,7 @@ class Inkling2 : public Model {
   const std::vector<int>& eos_ids() const override { return cfg_.eos; }
   int prefill_chunk() const override { return tmax_; }
   bool can_snapshot() const override { return false; }
+  bool grouped_passes() const override { return true; }
 
   void set_mem_budget(size_t bytes) override { mem_budget_ = bytes; }
   std::unique_ptr<Seq> new_seq(int limit, int initial = -1) override;
@@ -129,6 +132,8 @@ class Inkling2 : public Model {
   void enc_attn_res(Encoder& e, const Buffer* const* states, int M, const void* query_ptr, bool q_f32, uint32_t Q,
                     const Buffer& out, int T);
   void enc_msg_gate(Encoder& e, const Ink2Ctrl& c, const Buffer& h, const Buffer& m, const Buffer& out, int T);
+  void enc_msg_gate3(Encoder& e, const Ink2Layer& L, const Buffer* const* in_ptrs, const Buffer& m0, const Buffer& m1,
+                     const Buffer& m2, int T);
   void enc_sample(Encoder& e, Seq& s, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
                   uint32_t step);
 
@@ -152,7 +157,8 @@ class Inkling2 : public Model {
   Buffer blocks_[6];        // block boundary states + bank state during middle cycle
   Buffer prelude_blocks_[4];
   Buffer ar_out_;           // attn_res output: up to 4 * tmax * H
-  Buffer mg0_, mg1_, mg2_;  // saved cross-pass messages across attn_queries
+  Buffer msg_out_;          // cross-pass messages: 4 * tmax * H
+  Buffer mg_cat_, mg_lat_;  // split MessageGate staging buffers (T <= 16)
   Buffer n0_, n1_, n2_;     // normed inputs [tmax, H]
   Buffer q_, k_, v_, r_, sinks_, gate_attn_, att_out_, a_out_;
   Buffer dyn_, rb_, part_m_, part_l_, part_o_;
