@@ -94,6 +94,7 @@ void prewarm_pipelines(bool tensor_pf) {
         "ink2_t_nvfp4_moe_w2_m16",  "ink2_t_nvfp4_moe_w2_m32",  "ink2_t_nvfp4_moe_w2_m64",
         "ink2_t_mxfp8_moe_w13_m16", "ink2_t_mxfp8_moe_w13_m32", "ink2_t_mxfp8_moe_w13_m64",
         "ink2_t_mxfp8_moe_w2_m16",  "ink2_t_mxfp8_moe_w2_m32",  "ink2_t_mxfp8_moe_w2_m64",
+        "qattn_ink2_s6k32p",        "qattn_ink2_s3k16",
     };
     for (const char* n : kTensorNames) (void)base_pipe(n);
   }
@@ -1371,16 +1372,33 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
                             L.is_swa ? 1u : 0u,
                             uint32_t(cfg_.swa),
                             attn_scale};
-      e.use(ink2_pipe("ink2_attn_prefill"));
-      e.buf(0, q_);
-      e.buf(1, s.kc[v_idx]);
-      e.buf(2, s.vc[v_idx]);
-      e.buf(3, rb_);
-      e.buf(4, sinks_);
-      e.buf(5, gate_attn_);
-      e.buf(6, att_out_);
-      e.val(7, apf);
-      e.dispatch(uint32_t(cfg_.hq), uint32_t(T), 1, 128);
+      static const bool qat_env = !getenv("NI_INK2_ATTN_T") || atoi(getenv("NI_INK2_ATTN_T")) != 0;
+      static const bool qat_small = getenv("MTL_SHADER_VALIDATION") && atoi(getenv("MTL_SHADER_VALIDATION")) != 0;
+      const bool use_qat = qat_env && tensor_pf_ && T >= 16 && cfg_.head_dim == 128 && cfg_.hq == cfg_.hkv * 3;
+      if (use_qat) {
+        const uint32_t qat_tok = qat_small ? 16u : 32u;
+        e.use(base_pipe(qat_small ? "qattn_ink2_s3k16" : "qattn_ink2_s6k32p"));
+        e.buf(0, q_);
+        e.buf(1, s.kc[v_idx]);
+        e.buf(2, s.vc[v_idx]);
+        e.buf(3, rb_);
+        e.buf(4, sinks_);
+        e.buf(5, gate_attn_);
+        e.buf(6, att_out_);
+        e.val(7, apf);
+        e.dispatch((uint32_t(T) + qat_tok - 1) / qat_tok, uint32_t(cfg_.hkv), 1, qat_small ? 96 : 192);
+      } else {
+        e.use(ink2_pipe("ink2_attn_prefill"));
+        e.buf(0, q_);
+        e.buf(1, s.kc[v_idx]);
+        e.buf(2, s.vc[v_idx]);
+        e.buf(3, rb_);
+        e.buf(4, sinks_);
+        e.buf(5, gate_attn_);
+        e.buf(6, att_out_);
+        e.val(7, apf);
+        e.dispatch(uint32_t(cfg_.hq), uint32_t(T), 1, 128);
+      }
     }
 
     // wo_ud + attn_sconv (+ *cur_x residual on non-boundary layers -> ffn_inp_)
