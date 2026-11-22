@@ -87,9 +87,10 @@ void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
       "ink2_bf16_mv8",         "ink2_bf16_mm",           "ink2_rmsnorm",          "ink2_attn_res",
       "ink2_msg_gate",         "ink2_msg_gate_prep_s",   "ink2_msg_gate_down_s",  "ink2_msg_gate_up_mix_s", "ink2_msg_gate_down_f", "ink2_msg_gate_up_mix_c",
       "ink2_embed_norm",       "ink2_sconv_static",      "ink2_sconv_static_pf",  "ink2_sconv_dynamic",    "ink2_qkvr_prep",         "ink2_rel_bias",         "ink2_rel_bias_pf",
-      "ink2_attn_decode",      "ink2_attn_decode_reduce", "ink2_attn_decode_g3", "ink2_attn_decode_g3_fx", "ink2_attn_res1", "ink2_msg_gate_mix","ink2_attn_prefill",     "ink2_moe_route",
+      "ink2_attn_decode",      "ink2_attn_decode_reduce", "ink2_attn_decode_g3", "ink2_attn_decode_g3_fx", "ink2_attn_decode_g3kw", "ink2_attn_res1", "ink2_msg_gate_mix","ink2_attn_prefill",     "ink2_moe_route",
       "ink2_moe_nvfp4_w13_situ","ink2_moe_nvfp4_w2_acc", "ink2_moe_mxfp8_w13_situ","ink2_moe_mxfp8_w2_acc",
-      "ink2_softcap",          "ink2_moe_bucket",        "ink2_moe_situ_half",    "ink2_moe_combine",
+      "ink2_softcap",           "ink2_moe_bucket",       "ink2_moe_situ_half",
+      "ink2_moe_combine",
   };
   for (const char* n : kInk2Names) (void)ink2_pipe(n);
   if (tensor_pf) {
@@ -1712,8 +1713,12 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     const float attn_scale = 1.0f / std::sqrt(float(cfg_.head_dim));
     if (T == 1) {
       const uint32_t lk = L.is_swa ? std::min(uint32_t(pos0 + 1), uint32_t(cfg_.swa)) : uint32_t(pos0 + 1);
-      uint32_t chunk = std::max(32u, (lk + kMaxAttnChunks - 1) / kMaxAttnChunks);
-      chunk = (chunk + 3) / 4 * 4;
+      static const int dec_g_mode = getenv("NI_INK2_DEC_G") ? atoi(getenv("NI_INK2_DEC_G")) : 3;
+      const bool kw = dec_g_mode == 3;
+      // (keys-across-lanes kernel: chunks of whole 32-key blocks; NI_INK2_KW_MINCHUNK for the SWA window's)
+      static const uint32_t kw_min = getenv("NI_INK2_KW_MINCHUNK") ? uint32_t(atoi(getenv("NI_INK2_KW_MINCHUNK"))) : 64u;
+      uint32_t chunk = std::max(kw ? kw_min : 32u, (lk + kMaxAttnChunks - 1) / kMaxAttnChunks);
+      chunk = kw ? (chunk + 31) / 32 * 32 : (chunk + 3) / 4 * 4;
       const uint32_t nchunks = std::max(1u, (lk + chunk - 1) / chunk);
       const Ink2AttnDecP adp{uint32_t(pos0),
                              kv_cap,
@@ -1726,12 +1731,12 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
                              chunk,
                              nchunks,
                              attn_scale};
-      static const int dec_g_mode = getenv("NI_INK2_DEC_G") ? atoi(getenv("NI_INK2_DEC_G")) : 1;
       const bool dec_g = dec_g_mode != 0;
       const bool g3 = dec_g && cfg_.hq == 3 * cfg_.hkv && cfg_.head_dim == 128;
-      // NI_INK2_DEC_G: 1 (default) GQA kernel with fast::exp (decbench 40K: 1.83 -> 0.80 ms a global visit), 2 the
-      // same with precise::exp (1.37 ms), 0 the per-head kernel
-      e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : "ink2_attn_decode_g3_fx"));
+      // NI_INK2_DEC_G: 1 GQA kernel with fast::exp (decbench 40K: 1.83 -> 0.80 ms a global visit), 2 the
+      // same with precise::exp (1.37 ms), 0 the per-head kernel; 3 (default, round 3) keys across lanes (0.59 ms)
+      e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : kw ? "ink2_attn_decode_g3kw"
+                                                                                               : "ink2_attn_decode_g3_fx"));
       e.buf(0, q_);
       e.buf(1, s.kc[v_idx]);
       e.buf(2, s.vc[v_idx]);

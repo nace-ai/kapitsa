@@ -1458,6 +1458,107 @@ INK2_DEC_G3(ink2_attn_decode_g3_k4, 4, false)
 INK2_DEC_G3(ink2_attn_decode_g3_k4fx, 4, true)
 INK2_DEC_G3(ink2_attn_decode_g3_k6fx, 6, true)
 
+// GQA split-K decode, keys across lanes (round 3): for QK each lane takes one key of a 32-key block and dots all 128
+// dims for the 3 query heads (q in threadgroup memory, 16-byte K loads; no simd_sum per (key, head)); for PV lanes
+// take 4 dims and the weights are shuffled from the key's lane. Same partials as ink2_attn_decode_g3.
+// decbench 84K global: g3_fx 1.60 -> 1.20 ms a visit (raw K+V read 0.93); 40K 0.80 -> 0.59.
+template <uint VB>
+NI_INLINE void ink2_attn_decode_g3kw_impl(const device float* q, const device half* kc, const device half* vc,
+                                        const device float* rb, device float* pm, device float* pl, device float* po,
+                                        constant Ink2AttnDecP& p, uint2 tg, uint sg, uint lane, uint tid,
+                                        threadgroup float* tgb, threadgroup float4* qs) {
+  constexpr uint G = 3;
+  const uint hkv = tg.x, cid = tg.y, h0 = hkv * G, d0 = lane * 4;
+  for (uint i = tid; i < G * 32u; i += 128u) qs[i] = *(const device float4*)(q + size_t(h0) * p.D + i * 4u) * p.scale;
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const uint lk = p.is_swa ? min(p.pos + 1u, p.swa) : (p.pos + 1u);
+  const uint k_first = p.pos + 1u - lk;
+  const uint c0 = k_first + cid * p.chunk;
+  const uint c1 = min(p.pos + 1u, c0 + p.chunk);
+  float mw[G], lw[G];
+  float4 ow[G];
+  for (uint g = 0; g < G; ++g) { mw[g] = -INFINITY; lw[g] = 0.0f; ow[g] = float4(0.0f); }
+  for (uint kb = c0 + sg * 32u; kb < c1; kb += 128u) {
+    const uint kp = kb + lane;
+    const uint kpc = min(kp, c1 - 1u);
+    const uint slot = p.is_swa ? (kpc % p.kv_cap) : kpc;
+    const device uint4* kr = (const device uint4*)(kc + (size_t(slot) * p.Hkv + hkv) * p.D);
+    float s[G] = {0.0f, 0.0f, 0.0f};
+    for (uint c = 0; c < 32u; c += 2u) {
+      const uint4 kk = kr[c >> 1];
+      const float4 k0 = float4(as_type<half4>(kk.xy)), k1 = float4(as_type<half4>(kk.zw));
+      for (uint g = 0; g < G; ++g) s[g] += dot(k0, qs[g * 32u + c]) + dot(k1, qs[g * 32u + c + 1u]);
+    }
+    const uint dist = p.pos - kp;
+    float e[G];
+    for (uint g = 0; g < G; ++g) {
+      float sc = s[g];
+      if (dist < p.rel_extent && kp < c1) sc += rb[size_t(h0 + g) * p.rel_extent + dist];
+      sc = kp < c1 ? sc : -INFINITY;
+      const float nm = max(mw[g], simd_max(sc));
+      const float corr = fast::exp(mw[g] - nm);
+      e[g] = fast::exp(sc - nm);
+      ow[g] *= corr;
+      lw[g] = lw[g] * corr + e[g];
+      mw[g] = nm;
+    }
+    const uint nk = min(32u, c1 - kb);
+    for (uint j0 = 0; j0 < nk; j0 += VB) {
+      half4 vv[VB];
+      for (uint j = 0; j < VB; ++j) {
+        const uint vp = min(kb + j0 + j, c1 - 1u);
+        const uint vs = p.is_swa ? (vp % p.kv_cap) : vp;
+        vv[j] = *(const device half4*)(vc + (size_t(vs) * p.Hkv + hkv) * p.D + d0);
+      }
+      for (uint j = 0; j < VB; ++j) {
+        const float4 v = float4(vv[j]);
+        for (uint g = 0; g < G; ++g) ow[g] += v * simd_shuffle(e[g], ushort(j0 + j));  // (e = 0 past c1)
+      }
+    }
+  }
+  for (uint g = 0; g < G; ++g) {
+    const float l = simd_sum(lw[g]);
+    if (lane == 0) { tgb[sg * G + g] = mw[g]; tgb[12 + sg * G + g] = l; }
+    *(threadgroup float4*)(tgb + 24 + (sg * G + g) * 128 + d0) = ow[g];
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (sg < G) {
+    const uint g = sg;
+    float mm = -INFINITY, ll = 0.0f;
+    float4 oo = float4(0.0f);
+    for (uint s2 = 0; s2 < 4; ++s2) {
+      const float l2 = tgb[12 + s2 * G + g];
+      if (l2 == 0.0f) continue;
+      const float m2 = tgb[s2 * G + g];
+      const float4 o2 = *(const threadgroup float4*)(tgb + 24 + (s2 * G + g) * 128 + d0);
+      if (ll == 0.0f) {
+        mm = m2; ll = l2; oo = o2;
+      } else {
+        const float nm = max(mm, m2);
+        const float e1 = metal::precise::exp(mm - nm), e2 = metal::precise::exp(m2 - nm);
+        oo = oo * e1 + o2 * e2;
+        ll = ll * e1 + l2 * e2;
+        mm = nm;
+      }
+    }
+    const size_t out_idx = size_t(h0 + g) * p.nchunks + cid;
+    if (lane == 0) { pm[out_idx] = mm; pl[out_idx] = ll; }
+    *(device float4*)(po + out_idx * p.D + d0) = oo;
+  }
+}
+#define INK2_DEC_G3KW(NAME, VB)                                                                                         \
+  [[kernel]] void NAME(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],                        \
+                       const device half* vc [[buffer(2)]], const device float* rb [[buffer(3)]],                     \
+                       device float* pm [[buffer(4)]], device float* pl [[buffer(5)]], device float* po [[buffer(6)]], \
+                       constant Ink2AttnDecP& p [[buffer(7)]], uint2 tg [[threadgroup_position_in_grid]],             \
+                       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],           \
+                       uint tid [[thread_index_in_threadgroup]]) {                                                    \
+    threadgroup float tgb[24 + 12 * 128];                                                                              \
+    threadgroup float4 qs[3 * 32];                                                                                     \
+    ink2_attn_decode_g3kw_impl<VB>(q, kc, vc, rb, pm, pl, po, p, tg, sg, lane, tid, tgb, qs);                          \
+  }
+INK2_DEC_G3KW(ink2_attn_decode_g3kw, 4)
+
 // ink2_attn_decode_g3 with a transpose-reduce: per 8-key block a lane holds the 24 partial (head, key) dots of its 4
 // dims; 5 halving shuffle steps (31 shuffles, not 24 simd_sums) leave lane L = 8 g + j with head g's score of key j,
 // so the softmax runs once per (head, key) (fast::exp; the scores are fp32) and the 3 x 8 weights are broadcast for PV.
