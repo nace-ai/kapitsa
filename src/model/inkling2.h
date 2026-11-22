@@ -62,11 +62,18 @@ struct Ink2Blocks {
 };
 
 struct Ink2Mat {
-  const Tensor* raw = nullptr;  // BF16 or F32 when not Q8-packed
+  const Tensor* raw = nullptr;  // BF16 or F32 when not Q8-packed (or kept beside the Q8 copy: NI_INK2_Q8_BF16)
   Buffer q, s;                  // Q8_0: int8 [N, K], half [N, K/32]
   Ink2Blocks gguf;
   uint32_t N = 0, K = 0;
   bool is_q8() const { return bool(q); }
+};
+
+// The fused qkvrsg rows' Q8_0 copy (int8 codes + half block-32 scales; the segments' #1381 packing, end to end)
+struct Ink2Q8 {
+  Buffer q, s;
+  uint32_t N = 0, K = 0;
+  explicit operator bool() const { return bool(q); }
 };
 
 struct Ink2Layer {
@@ -94,6 +101,7 @@ struct Ink2Layer {
   Ink2Blocks gguf_gu, gguf_down;
   Buffer w13_outer, w2_outer;  // FP32 [128] = amax[e] / outer_scale_denominator[0] (NVFP4 only)
   Buffer qkvrsg_w;             // Fused BF16 [wq_du; wr_du; attn_sink_proj; gate_attn; wk_dv; wv_dv]
+  Ink2Q8 qkvrsg_q8;            // its Q8 copy (decode / verify rows)
   uint32_t qkvrsg_offs[7] = {};
 };
 
@@ -210,6 +218,11 @@ class Inkling2 : public Model {
     static const bool v = !getenv("NI_INK2_MVM") || atoi(getenv("NI_INK2_MVM")) != 0;
     return v;
   }
+  // Q8_0 dense decode/verify matvecs for rows <= 8 (attention projections, fused qkvrsg, unembed) on #1381's packing
+  // (NI_INK2_Q8). NI_INK2_Q8M=0: #1381's own kernels for those rows. NI_INK2_Q8_BF16=1 keeps the BF16
+  // copies beside the Q8 ones for the prefill GEMMs (the tensor-unit BF16 GEMMs; +1.04 GB), =0 frees them (#1381)
+  bool q8m_ = false, q8_bf16_ = false;
+  bool enc_q8(Encoder& e, const Ink2Mat& w, const Buffer& x, const Buffer& y, int M, uint32_t N, bool add);
   static bool msg_mm() {
     static const bool v = !getenv("NI_INK2_MSG_MM") || atoi(getenv("NI_INK2_MSG_MM")) != 0;
     return v;
