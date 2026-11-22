@@ -650,6 +650,29 @@ struct Ink2MmP {
   }
 }
 
+// One row (M = 1) per 128-thread TG, K split over the 4 simdgroups: for the small-N matvecs (router N = 128, sinks,
+// gates) that left ink2_bf16_mv4 with 8 TGs (25 us a call, latency-bound)
+[[kernel]] void ink2_mv_sk(const device float* x [[buffer(0)]], const device void* w [[buffer(1)]],
+                           device float* y [[buffer(2)]], constant Ink2MmP& p [[buffer(3)]],
+                           uint n [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                           uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float part[4];
+  const size_t woff = size_t(n) * p.K;
+  float a = 0.0f;
+  for (uint k = tid * 4u; k < p.K; k += 512u) {
+    const float4 xv = *(const device float4*)(x + k);
+    a += dot(xv, p.w_f32 ? *(const device float4*)((const device float*)w + woff + k)
+                         : ink2_bf16x4(*(const device uint2*)((const device bfloat*)w + woff + k)));
+  }
+  a = simd_sum(a);
+  if (lane == 0u) part[sg] = a;
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid == 0u) {
+    const float v = (part[0] + part[1]) + (part[2] + part[3]);
+    y[n] = p.add ? y[n] + v : v;
+  }
+}
+
 [[kernel]] void ink2_bf16_mv4(const device float* x [[buffer(0)]], const device void* w [[buffer(1)]],
                               device float* y [[buffer(2)]], constant Ink2MmP& p [[buffer(3)]],
                               uint tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],

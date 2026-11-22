@@ -84,7 +84,7 @@ void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
   if (const char* v = getenv("NI_PREWARM"); v && !strcmp(v, "0")) return;
   static const char* const kInk2Names[] = {
       "ink2_copy_bytes",       "ink2_bf16_mv",           "ink2_bf16_mv4",         "ink2_bf16_mv4_multi6",
-      "ink2_bf16_mv8",         "ink2_bf16_mm",           "ink2_rmsnorm",          "ink2_attn_res",
+      "ink2_bf16_mv8",         "ink2_bf16_mm", "ink2_mv_sk",           "ink2_rmsnorm",          "ink2_attn_res",
       "ink2_msg_gate",         "ink2_msg_gate_prep_s",   "ink2_msg_gate_down_s",  "ink2_msg_gate_up_mix_s", "ink2_msg_gate_down_f", "ink2_msg_gate_up_mix_c",
       "ink2_embed_norm",       "ink2_sconv_static",      "ink2_sconv_static_pf",  "ink2_sconv_dynamic",    "ink2_qkvr_prep",         "ink2_rel_bias",         "ink2_rel_bias_pf",
       "ink2_attn_decode",      "ink2_attn_decode_reduce", "ink2_attn_decode_g3", "ink2_attn_decode_g3_fx", "ink2_attn_decode_g3kw", "ink2_attn_res1", "ink2_msg_gate_mix","ink2_attn_prefill",     "ink2_moe_route",
@@ -1118,6 +1118,17 @@ void Inkling2::enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer
     e.buf(2, y);
     e.val(3, p);
     e.dispatch((N + 15) / 16, (uint32_t(M) + 7) / 8, 1, 128);
+    return;
+  }
+  static const uint32_t sk_max = getenv("NI_INK2_MVSK") ? uint32_t(atoi(getenv("NI_INK2_MVSK"))) : 256u;
+  if (M == 1 && N <= sk_max && (K & 3u) == 0u && (w.dtype == DType::BF16 || w.dtype == DType::F32)) {
+    const Ink2MmP p{1u, N, K, K, N, w.dtype == DType::F32 ? 1u : 0u, add ? 1u : 0u};
+    e.use(ink2_pipe("ink2_mv_sk"));
+    e.buf(0, x);
+    e.buf(1, w.buf);
+    e.buf(2, y);
+    e.val(3, p);
+    e.dispatch(N, 1, 1, 128);
     return;
   }
   if (M <= mv_rows() || exact_f32) {
