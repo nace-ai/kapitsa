@@ -85,7 +85,7 @@ void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
   static const char* const kInk2Names[] = {
       "ink2_copy_bytes",       "ink2_bf16_mv",           "ink2_bf16_mv4",         "ink2_bf16_mv4_multi6",
       "ink2_bf16_mv8",         "ink2_bf16_mm",           "ink2_rmsnorm",          "ink2_attn_res",
-      "ink2_msg_gate",         "ink2_msg_gate_prep_s",   "ink2_msg_gate_down_s",  "ink2_msg_gate_up_mix_s",
+      "ink2_msg_gate",         "ink2_msg_gate_prep_s",   "ink2_msg_gate_down_s",  "ink2_msg_gate_up_mix_s", "ink2_msg_gate_down_f", "ink2_msg_gate_up_mix_c",
       "ink2_embed_norm",       "ink2_sconv_static",      "ink2_sconv_static_pf",  "ink2_sconv_dynamic",    "ink2_qkvr_prep",         "ink2_rel_bias",         "ink2_rel_bias_pf",
       "ink2_attn_decode",      "ink2_attn_decode_reduce", "ink2_attn_decode_g3", "ink2_attn_decode_g3_fx", "ink2_attn_res1", "ink2_msg_gate_mix","ink2_attn_prefill",     "ink2_moe_route",
       "ink2_moe_nvfp4_w13_situ","ink2_moe_nvfp4_w2_acc", "ink2_moe_mxfp8_w13_situ","ink2_moe_mxfp8_w2_acc",
@@ -1260,6 +1260,11 @@ void Inkling2::enc_attn_res(Encoder& e, const Buffer* const* states, int M, cons
 void Inkling2::enc_msg_gate(Encoder& e, const Ink2Ctrl& c, const Buffer& h, const Buffer& m, const Buffer& out, int T) {
   const Ink2MsgGateP p{uint32_t(T), uint32_t(cfg_.hidden), uint32_t(cfg_.gate_rank),
                        c.down->dtype == DType::F32 ? 1u : 0u, cfg_.rms_eps};
+  if (T <= 16 && msg_fused()) {
+    enc_msg_gate_f(e, c, h, m, mg_lat_, out, T, 0);  // (outside a group: the grouped encoder puts a barrier between)
+    enc_msg_gate_f(e, c, h, m, mg_lat_, out, T, 1);
+    return;
+  }
   if (T <= 16) {
     const uint32_t H = uint32_t(cfg_.hidden), R = uint32_t(cfg_.gate_rank);
     e.use(ink2_pipe("ink2_msg_gate_prep_s"));
@@ -1301,11 +1306,38 @@ void Inkling2::enc_msg_gate(Encoder& e, const Ink2Ctrl& c, const Buffer& h, cons
   e.dispatch(uint32_t(T), 1, 1, 512);
 }
 
+// stage 0: fused norms + down -> lat; stage 1: forget / gain up + tanh mix -> out (out may alias h)
+void Inkling2::enc_msg_gate_f(Encoder& e, const Ink2Ctrl& c, const Buffer& h, const Buffer& m, const Buffer& lat,
+                              const Buffer& out, int T, int stage) {
+  const uint32_t H = uint32_t(cfg_.hidden), R = uint32_t(cfg_.gate_rank);
+  const Ink2MsgGateP p{uint32_t(T), H, R, c.down->dtype == DType::F32 ? 1u : 0u, cfg_.rms_eps};
+  if (stage == 0) {
+    e.use(ink2_pipe("ink2_msg_gate_down_f"));
+    e.buf(0, h); e.buf(1, m); e.buf(2, c.down->buf); e.buf(3, lat); e.val(4, p);
+    e.dispatch(R, (uint32_t(T) + 3) / 4, 1, 256);
+  } else {
+    e.use(ink2_pipe("ink2_msg_gate_up_mix_c"));
+    e.buf(0, h); e.buf(1, m); e.buf(2, lat); e.buf(3, c.forget->buf); e.buf(4, c.gain->buf); e.buf(5, out);
+    e.val(6, p);
+    e.dispatch((H + 31) / 32, (uint32_t(T) + 7) / 8, 1, 256);
+  }
+}
+
 void Inkling2::enc_msg_gate3(Encoder& e, const Ink2Layer& L, const Buffer* const* in_ptrs, const Buffer& m0,
                              const Buffer& m1, const Buffer& m2, int T) {
   const Ink2Ctrl* cs[3] = {&L.ctrl_attn, &L.ctrl_k, &L.ctrl_v};
   const Buffer* ms[3] = {&m0, &m1, &m2};
   const Buffer* outs[3] = {&n0_, &n1_, &n2_};
+  if (T <= 16 && msg_fused()) {
+    const size_t lat_sz = size_t(T) * uint32_t(cfg_.gate_rank) * 4;
+    for (int stage = 0; stage < 2; ++stage) {
+      e.group_begin();
+      for (int i = 0; i < 3; ++i)
+        enc_msg_gate_f(e, *cs[i], *in_ptrs[i], *ms[i], mg_lat_.view(size_t(i) * lat_sz, lat_sz), *outs[i], T, stage);
+      e.group_end();
+    }
+    return;
+  }
   if (T <= 16) {
     const uint32_t H = uint32_t(cfg_.hidden), R = uint32_t(cfg_.gate_rank);
     const size_t cat_sz = size_t(T) * 2 * H * 4, lat_sz = size_t(T) * R * 4;

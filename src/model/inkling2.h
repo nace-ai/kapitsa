@@ -223,6 +223,13 @@ class Inkling2 : public Model {
   // copies beside the Q8 ones for the prefill GEMMs (the tensor-unit BF16 GEMMs; +1.04 GB), =0 frees them (#1381)
   bool q8m_ = false, q8_bf16_ = false;
   bool enc_q8(Encoder& e, const Ink2Mat& w, const Buffer& x, const Buffer& y, int M, uint32_t N, bool add);
+  // small-T MessageGate as 2 kernels (norms folded into down, coalesced up_mix); NI_INK2_MSGF=0 = prep/down_s/up_mix_s
+  static bool msg_fused() {
+    static const bool v = !getenv("NI_INK2_MSGF") || atoi(getenv("NI_INK2_MSGF")) != 0;
+    return v;
+  }
+  void enc_msg_gate_f(Encoder& e, const Ink2Ctrl& c, const Buffer& h, const Buffer& m, const Buffer& lat,
+                      const Buffer& out, int T, int stage);
   static bool msg_mm() {
     static const bool v = !getenv("NI_INK2_MSG_MM") || atoi(getenv("NI_INK2_MSG_MM")) != 0;
     return v;

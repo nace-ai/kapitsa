@@ -530,6 +530,89 @@ struct Ink2MsgGateP {
   }
 }
 
+// Small-T MessageGate, fused (round 3): down reads h and m directly and folds the two RMSNorms in as scalars
+// (lat = invh * h.w0 + invm * m.w1), one threadgroup of 256 per latent row (64 TGs, was 16 TGs of 4 rows plus a
+// separate prep kernel); up_mix reads each 64-wide forget / gain row with 8 lanes (16 B each, coalesced).
+[[kernel]] void ink2_msg_gate_down_f(const device float* h [[buffer(0)]], const device float* m [[buffer(1)]],
+                                     const device void* down_w [[buffer(2)]], device float* lat [[buffer(3)]],
+                                     constant Ink2MsgGateP& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],
+                                     uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+                                     uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float red[8][16];
+  threadgroup float tot[16];
+  const uint r = tg.x, t0 = tg.y * 4u, mc = min(4u, p.T - t0);
+  const size_t row0 = size_t(r) * (2u * p.H), row1 = row0 + p.H;
+  float ah[4] = {0, 0, 0, 0}, am[4] = {0, 0, 0, 0}, sh[4] = {0, 0, 0, 0}, sm[4] = {0, 0, 0, 0};
+  for (uint c = tid * 4u; c < p.H; c += 1024u) {
+    float4 w0, w1;
+    if (p.w_f32) {
+      w0 = *(const device float4*)((const device float*)down_w + row0 + c);
+      w1 = *(const device float4*)((const device float*)down_w + row1 + c);
+    } else {
+      w0 = ink2_bf16x4(*(const device uint2*)((const device bfloat*)down_w + row0 + c));
+      w1 = ink2_bf16x4(*(const device uint2*)((const device bfloat*)down_w + row1 + c));
+    }
+    for (uint j = 0u; j < mc; ++j) {
+      const float4 hv = *(const device float4*)(h + size_t(t0 + j) * p.H + c);
+      const float4 mv = *(const device float4*)(m + size_t(t0 + j) * p.H + c);
+      ah[j] += dot(hv, w0); am[j] += dot(mv, w1);
+      sh[j] += dot(hv, hv); sm[j] += dot(mv, mv);
+    }
+  }
+  for (uint j = 0u; j < 4u; ++j) {
+    const float a = simd_sum(ah[j]), b = simd_sum(am[j]), c2 = simd_sum(sh[j]), d = simd_sum(sm[j]);
+    if (lane == 0u) { red[sg][j] = a; red[sg][4 + j] = b; red[sg][8 + j] = c2; red[sg][12 + j] = d; }
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid < 16u) {
+    float v = 0.0f;
+    for (uint g = 0u; g < 8u; ++g) v += red[g][tid];
+    tot[tid] = v;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid < mc) {
+    const float invh = metal::precise::rsqrt(tot[8 + tid] / float(p.H) + p.eps);
+    const float invm = metal::precise::rsqrt(tot[12 + tid] / float(p.H) + p.eps);
+    lat[size_t(t0 + tid) * p.R + r] = tot[tid] * invh + tot[4 + tid] * invm;
+  }
+}
+
+// R == 64: 8 lanes per row (8 weights each), 4 rows per simdgroup, 32 rows per 256-thread TG; up to 8 tokens per TG.
+[[kernel]] void ink2_msg_gate_up_mix_c(const device float* h [[buffer(0)]], const device float* m_buf [[buffer(1)]],
+                                       const device float* lat [[buffer(2)]], const device void* forget_w [[buffer(3)]],
+                                       const device void* gain_w [[buffer(4)]], device float* out [[buffer(5)]],
+                                       constant Ink2MsgGateP& p [[buffer(6)]], uint2 tg [[threadgroup_position_in_grid]],
+                                       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  const uint c = tg.x * 32u + sg * 4u + (lane >> 3u), sub = lane & 7u;
+  const uint t0 = tg.y * 8u, mc = min(8u, p.T - t0);
+  if (c >= p.H) return;
+  const size_t off = size_t(c) * 64u + sub * 8u;
+  float4 f0, f1, g0, g1;
+  if (p.w_f32) {
+    f0 = *(const device float4*)((const device float*)forget_w + off);
+    f1 = *(const device float4*)((const device float*)forget_w + off + 4u);
+    g0 = *(const device float4*)((const device float*)gain_w + off);
+    g1 = *(const device float4*)((const device float*)gain_w + off + 4u);
+  } else {
+    const uint4 fr = *(const device uint4*)((const device bfloat*)forget_w + off);
+    const uint4 gr = *(const device uint4*)((const device bfloat*)gain_w + off);
+    f0 = ink2_bf16x4(fr.xy); f1 = ink2_bf16x4(fr.zw);
+    g0 = ink2_bf16x4(gr.xy); g1 = ink2_bf16x4(gr.zw);
+  }
+  for (uint j = 0u; j < mc; ++j) {
+    const device float* lr = lat + size_t(t0 + j) * 64u + sub * 8u;
+    const float4 l0 = *(const device float4*)lr, l1 = *(const device float4*)(lr + 4u);
+    float df = dot(l0, f0) + dot(l1, f1), dg = dot(l0, g0) + dot(l1, g1);
+    df += simd_shuffle_xor(df, 1u); dg += simd_shuffle_xor(dg, 1u);
+    df += simd_shuffle_xor(df, 2u); dg += simd_shuffle_xor(dg, 2u);
+    df += simd_shuffle_xor(df, 4u); dg += simd_shuffle_xor(dg, 4u);
+    if (sub == (j & 7u)) {
+      const size_t idx = size_t(t0 + j) * p.H + c;
+      out[idx] = (1.0f - metal::precise::tanh(df)) * h[idx] + metal::precise::tanh(dg) * m_buf[idx];
+    }
+  }
+}
+
 // ---- 5. Linear Projections: BF16/F32 MatVec (M <= 8) and Tiled MMA GEMM (M > 8) ----
 struct Ink2MmP {
   uint M, N, K, x_ld, y_ld, w_f32, add;
