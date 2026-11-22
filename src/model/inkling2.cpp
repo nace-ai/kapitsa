@@ -1246,7 +1246,10 @@ void Inkling2::enc_attn_res(Encoder& e, const Buffer* const* states, int M, cons
                        cfg_.rms_eps,
                        1.0f / std::sqrt(float(cfg_.hidden))};
   static const bool res1 = !getenv("NI_INK2_RES1") || atoi(getenv("NI_INK2_RES1")) != 0;
-  e.use(ink2_pipe(res1 ? "ink2_attn_res1" : "ink2_attn_res"));
+  static const bool resmq = !getenv("NI_INK2_RESMQ") || atoi(getenv("NI_INK2_RESMQ")) != 0;
+  e.use(ink2_pipe(!res1  ? std::string("ink2_attn_res")
+                  : resmq ? "ink2_attn_res_m" + std::to_string(M) + "q" + std::to_string(Q)
+                          : std::string("ink2_attn_res1")));
   for (int m = 0; m < 6; ++m) e.buf(m, m < M ? *states[m] : *states[0]);
   e.buf(6, *static_cast<const Buffer*>(query_ptr));
   e.buf(7, out);
@@ -1707,7 +1710,8 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       e.val(7, adp);
       e.dispatch(uint32_t(g3 ? cfg_.hkv : cfg_.hq), nchunks, 1, 128);
 
-      e.use(ink2_pipe("ink2_attn_decode_reduce"));
+      static const bool red_p = !getenv("NI_INK2_REDP") || atoi(getenv("NI_INK2_REDP")) != 0;
+      e.use(ink2_pipe(red_p ? "ink2_attn_decode_reduce_p" : "ink2_attn_decode_reduce"));
       e.buf(0, part_m_);
       e.buf(1, part_l_);
       e.buf(2, part_o_);
@@ -1755,7 +1759,8 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         e.buf(6, part_o_);
         e.val(7, vp);
         e.dispatch(uint32_t(cfg_.hkv), nchunks, (uint32_t(T) + tr - 1) / tr, 128);
-        e.use(ink2_pipe("ink2_attn_verify_reduce"));
+        static const bool vred_p = !getenv("NI_INK2_REDP") || atoi(getenv("NI_INK2_REDP")) != 0;
+        e.use(ink2_pipe(vred_p ? "ink2_attn_verify_reduce_p" : "ink2_attn_verify_reduce"));
         e.buf(0, part_m_);
         e.buf(1, part_l_);
         e.buf(2, part_o_);

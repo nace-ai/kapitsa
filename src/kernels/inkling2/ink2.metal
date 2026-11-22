@@ -243,6 +243,82 @@ struct Ink2AttnResP {
   }
 }
 
+
+// ink2_attn_res1 with M states / Q queries compile-time (the runtime-indexed acc[30] of ink2_attn_res1 lives in memory:
+// 42 us a call at T=1, 120 calls a token). Same math and reduction tree.
+template <uint M, uint Q>
+[[kernel]] void ink2_attn_res_mq(const device float* s0 [[buffer(0)]], const device float* s1 [[buffer(1)]],
+                                 const device float* s2 [[buffer(2)]], const device float* s3 [[buffer(3)]],
+                                 const device float* s4 [[buffer(4)]], const device float* s5 [[buffer(5)]],
+                                 const device void* queries [[buffer(6)]], device float* out [[buffer(7)]],
+                                 constant Ink2AttnResP& p [[buffer(8)]], uint t [[threadgroup_position_in_grid]],
+                                 uint tid [[thread_index_in_threadgroup]], uint ntg [[threads_per_threadgroup]],
+                                 uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  constexpr uint S = Q + 1, N = M * S;
+  const device float* ptrs[6] = {s0, s1, s2, s3, s4, s5};
+  threadgroup float part[16][N];
+  threadgroup float tot[N];
+  threadgroup float tinv[M];
+  threadgroup float tw[M][Q];
+  float acc[N];
+  NI_UNROLL for (uint i = 0; i < N; ++i) acc[i] = 0.0f;
+  for (uint c = tid; c < p.H; c += ntg) {
+    float qv[Q];
+    NI_UNROLL for (uint q = 0; q < Q; ++q) {
+      const uint idx = q * p.H + c;
+      qv[q] = p.q_f32 ? ((const device float*)queries)[idx] : float(((const device bfloat*)queries)[idx]);
+    }
+    NI_UNROLL for (uint m = 0; m < M; ++m) {
+      const float v = ptrs[m][size_t(t) * p.H + c];
+      acc[m * S] += v * v;
+      NI_UNROLL for (uint q = 0; q < Q; ++q) acc[m * S + 1 + q] += v * qv[q];
+    }
+  }
+  const uint nsg = (ntg + 31) / 32;
+  NI_UNROLL for (uint i = 0; i < N; ++i) {
+    const float s = simd_sum(acc[i]);
+    if (lane == 0) part[sg][i] = s;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid < N) {
+    float s = 0.0f;
+    for (uint g = 0; g < nsg; ++g) s += part[g][tid];
+    tot[tid] = s;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid < Q) {
+    float sc[M], mx = -INFINITY;
+    NI_UNROLL for (uint m = 0; m < M; ++m) {
+      const float inv = metal::precise::rsqrt(tot[m * S] / float(p.H) + p.eps);
+      if (tid == 0) tinv[m] = inv;
+      sc[m] = tot[m * S + 1 + tid] * inv * p.scale;
+      mx = max(mx, sc[m]);
+    }
+    float exps[M], sum = 0.0f;
+    NI_UNROLL for (uint m = 0; m < M; ++m) {
+      exps[m] = metal::precise::exp(sc[m] - mx);
+      sum += exps[m];
+    }
+    const float isum = 1.0f / sum;
+    NI_UNROLL for (uint m = 0; m < M; ++m) tw[m][tid] = exps[m] * isum;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint c = tid; c < p.H; c += ntg) {
+    float o[Q];
+    NI_UNROLL for (uint q = 0; q < Q; ++q) o[q] = 0.0f;
+    NI_UNROLL for (uint m = 0; m < M; ++m) {
+      const float kv = ptrs[m][size_t(t) * p.H + c] * tinv[m];
+      NI_UNROLL for (uint q = 0; q < Q; ++q) o[q] += tw[m][q] * kv;
+    }
+    NI_UNROLL for (uint q = 0; q < Q; ++q) out[(size_t(q) * p.T + t) * p.H + c] = o[q];
+  }
+}
+#define INK2_ARES(m, q) template [[host_name("ink2_attn_res_m" #m "q" #q)]] [[kernel]] decltype(ink2_attn_res_mq<m, q>) ink2_attn_res_mq<m, q>;
+#define INK2_ARES_Q(m) INK2_ARES(m, 1) INK2_ARES(m, 2) INK2_ARES(m, 3) INK2_ARES(m, 4)
+INK2_ARES_Q(1) INK2_ARES_Q(2) INK2_ARES_Q(3) INK2_ARES_Q(4) INK2_ARES_Q(5) INK2_ARES_Q(6)
+#undef INK2_ARES_Q
+#undef INK2_ARES
+
 // ---- 4. Cross-Pass Controller MessageGate (rank 64) ----
 struct Ink2MsgGateP {
   uint T, H, R, w_f32;
@@ -1431,6 +1507,43 @@ INK2_DEC_G3(ink2_attn_decode_g3_k6fx, 6, true)
   *(device float4*)(out + size_t(h) * p.D + d0) = (oo / ll) * sig;
 }
 
+// Split-K combine without the serial exp chain: one max over all chunks (simd_max), then per-chunk weights in
+// parallel and one weighted sum (ink2_attn_decode_reduce runs nchunks dependent rescale steps: ~40 us a call).
+NI_INLINE void ink2_attn_reduce_par(const device float* pm, const device float* pl, const device float* po,
+                                    float sink, const device float* gate, device float* out, size_t base, uint nchunks,
+                                    uint D, uint lane, threadgroup float* wsh) {
+  const uint d0 = lane * 4;
+  float mloc = -INFINITY;
+  for (uint c = lane; c < nchunks; c += 32u)
+    if (pl[base + c] != 0.0f) mloc = max(mloc, pm[base + c]);
+  const float mx = max(simd_max(mloc), sink);
+  float lloc = 0.0f;
+  for (uint c = lane; c < nchunks; c += 32u) {
+    const float l2 = pl[base + c];
+    const float w = l2 != 0.0f ? metal::precise::exp(pm[base + c] - mx) : 0.0f;
+    wsh[c] = w;
+    lloc += w * l2;
+  }
+  const float ll = simd_sum(lloc) + metal::precise::exp(sink - mx);
+  simdgroup_barrier(mem_flags::mem_threadgroup);
+  float4 oo = float4(0.0f);
+  for (uint c = 0; c < nchunks; ++c) oo += wsh[c] * *(const device float4*)(po + (base + c) * D + d0);
+  const float4 g4 = *(const device float4*)(gate + d0);
+  const float4 sig = float4(1.0f) / (float4(1.0f) + float4(metal::precise::exp(-g4.x), metal::precise::exp(-g4.y),
+                                                           metal::precise::exp(-g4.z), metal::precise::exp(-g4.w)));
+  *(device float4*)(out + d0) = (oo / ll) * sig;
+}
+
+[[kernel]] void ink2_attn_decode_reduce_p(const device float* pm [[buffer(0)]], const device float* pl [[buffer(1)]],
+                                          const device float* po [[buffer(2)]], const device float* sinks [[buffer(3)]],
+                                          const device float* gate [[buffer(4)]], device float* out [[buffer(5)]],
+                                          constant Ink2AttnDecP& p [[buffer(6)]], uint h [[threadgroup_position_in_grid]],
+                                          uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float wsh[128];
+  ink2_attn_reduce_par(pm, pl, po, sinks[h], gate + size_t(h) * p.D, out + size_t(h) * p.D, size_t(h) * p.nchunks,
+                       p.nchunks, p.D, lane, wsh);
+}
+
 // Verify rows (T = 2..8) as split-K decode: one threadgroup per (KV head, key chunk, group of TR rows) reads each K / V
 // row once for its TR rows x 3 heads (ink2_attn_prefill re-reads the context per row and head: 389 us a call at T=2,
 // 2k context). q in threadgroup memory, 4-key blocks per simdgroup, per-row causal / sliding-window masks.
@@ -1563,6 +1676,16 @@ INK2_AVER(2) INK2_AVER(3) INK2_AVER(4)
   const float4 sig = float4(1.0f) / (float4(1.0f) + float4(metal::precise::exp(-g4.x), metal::precise::exp(-g4.y),
                                                            metal::precise::exp(-g4.z), metal::precise::exp(-g4.w)));
   *(device float4*)(out + th * p.D + d0) = (oo / ll) * sig;
+}
+
+[[kernel]] void ink2_attn_verify_reduce_p(const device float* pm [[buffer(0)]], const device float* pl [[buffer(1)]],
+                                          const device float* po [[buffer(2)]], const device float* sinks [[buffer(3)]],
+                                          const device float* gate [[buffer(4)]], device float* out [[buffer(5)]],
+                                          constant Ink2AttnVerP& p [[buffer(6)]], uint2 tg [[threadgroup_position_in_grid]],
+                                          uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float wsh[128];
+  const size_t th = size_t(tg.y) * p.Hq + tg.x;
+  ink2_attn_reduce_par(pm, pl, po, sinks[th], gate + th * p.D, out + th * p.D, th * p.nchunks, p.nchunks, p.D, lane, wsh);
 }
 
 struct Ink2AttnPfP {
