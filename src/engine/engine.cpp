@@ -2957,7 +2957,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     std::vector<int> bt = tok_.encode(base);
     if (bt.size() < prompt.size() && std::equal(bt.begin(), bt.end(), prompt.begin())) boundary = int(bt.size());
   }
-  if (boundary >= int(prompt.size())) boundary = -1;
+  // A template that adds no generation prompt (Inkling-2) renders the same text with and without it: the
+  // conversation so far is the whole prompt, and the checkpoint goes at its end (else no turn checkpoint is kept and
+  // every follow-up reads the conversation again)
+  if (boundary < 0 && prefix_ok && text.size() == base.size() && !prompt.empty()) boundary = int(prompt.size());
+  if (boundary > int(prompt.size())) boundary = -1;
   // images: each placeholder becomes the image's rows; prefix reuse compares keys that tell images apart by content
   vision::Prompt mm;
   const vision::Prompt* mmp = nullptr;
