@@ -98,7 +98,7 @@ void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
         "ink2_t_nvfp4_moe_w2_m16",  "ink2_t_nvfp4_moe_w2_m32",  "ink2_t_nvfp4_moe_w2_m64",
         "ink2_t_mxfp8_moe_w13_m16", "ink2_t_mxfp8_moe_w13_m32", "ink2_t_mxfp8_moe_w13_m64",
         "ink2_t_mxfp8_moe_w2_m16",  "ink2_t_mxfp8_moe_w2_m32",  "ink2_t_mxfp8_moe_w2_m64",
-        "qattn_ink2_s6k32p",        "qattn_ink2_s3k16",
+        "qattn_ink2_s6k32p",        "qattn_ink2_s3k16",        "qattn_ink2_s6k32p_l1",     "qattn_ink2_s3k16_l1",
     };
     for (const char* n : kTensorNames) (void)base_pipe(n);
   }
@@ -1584,7 +1584,11 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       const bool use_qat = qat_env && tensor_pf_ && T >= 16 && cfg_.head_dim == 128 && cfg_.hq == cfg_.hkv * 3;
       if (use_qat) {
         const uint32_t qat_tok = qat_small ? 16u : 32u;
-        e.use(base_pipe(qat_small ? "qattn_ink2_s3k16" : "qattn_ink2_s6k32p"));
+        // Cooperative-tensor lane layout: Apple10+ (written for M5) vs the simdgroup_matrix layout of older GPUs (M1;
+        // the M5 layout there gave wrong attention, ink2_check v0_out off). NI_INK2_ATTN_LAY=0|1 overrides.
+        static const bool lay1 = getenv("NI_INK2_ATTN_LAY") ? atoi(getenv("NI_INK2_ATTN_LAY")) != 0
+                                                             : Gpu::get().apple_family() < 10;
+        e.use(base_pipe(std::string(qat_small ? "qattn_ink2_s3k16" : "qattn_ink2_s6k32p") + (lay1 ? "_l1" : "")));
         e.buf(0, q_);
         e.buf(1, s.kc[v_idx]);
         e.buf(2, s.vc[v_idx]);
