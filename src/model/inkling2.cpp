@@ -88,7 +88,7 @@ void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
       "ink2_msg_gate",         "ink2_msg_gate_prep_s",   "ink2_msg_gate_down_s",  "ink2_msg_gate_up_mix_s", "ink2_msg_gate_down_f", "ink2_msg_gate_up_mix_c",
       "ink2_embed_norm",       "ink2_sconv_static",      "ink2_sconv_static_pf",  "ink2_sconv_dynamic",    "ink2_qkvr_prep",         "ink2_rel_bias",         "ink2_rel_bias_pf",
       "ink2_attn_decode",      "ink2_attn_decode_reduce", "ink2_attn_decode_g3", "ink2_attn_decode_g3_fx", "ink2_attn_decode_g3kw", "ink2_attn_res1", "ink2_msg_gate_mix","ink2_attn_prefill",     "ink2_moe_route",
-      "ink2_moe_nvfp4_w13_situ","ink2_moe_nvfp4_w2_acc", "ink2_moe_mxfp8_w13_situ","ink2_moe_mxfp8_w2_acc",
+      "ink2_moe_nvfp4_w13_situ","ink2_moe_nvfp4_w2_acc", "ink2_moe_mxfp8_w13_situ","ink2_moe_mxfp8_w2_acc", "ink2_moe_mxfp8_w13_situ_v", "ink2_moe_mxfp8_w2_acc_v",
       "ink2_softcap",           "ink2_moe_bucket",       "ink2_moe_situ_half",
       "ink2_moe_combine",
   };
@@ -2018,7 +2018,9 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
           e.val(7, mp);
           e.dispatch((H + 15) / 16, uint32_t(T), 1, 128);
         } else {
-          e.use(ink2_pipe("ink2_moe_mxfp8_w13_situ"));
+          static const bool mxv = !getenv("NI_INK2_MXV") || atoi(getenv("NI_INK2_MXV")) != 0;
+          const bool v8 = mxv && H % 256 == 0 && cfg_.moe_I % 128 == 0;  // (16-byte loads + LUT; NI_INK2_MXV=0 old)
+          e.use(ink2_pipe(v8 ? "ink2_moe_mxfp8_w13_situ_v" : "ink2_moe_mxfp8_w13_situ"));
           e.buf(0, x_mlp_);
           e.buf(1, eid_);
           e.buf(2, L.w13->buf);
@@ -2027,7 +2029,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
           e.val(5, mp);
           e.dispatch((uint32_t(cfg_.moe_I) + 3) / 4, uint32_t(cfg_.top_k), uint32_t(T), 128);
 
-          e.use(ink2_pipe("ink2_moe_mxfp8_w2_acc"));
+          e.use(ink2_pipe(v8 ? "ink2_moe_mxfp8_w2_acc_v" : "ink2_moe_mxfp8_w2_acc"));
           e.buf(0, moe_act_);
           e.buf(1, eid_);
           e.buf(2, ew_);
@@ -2035,7 +2037,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
           e.buf(4, L.w2_sc->buf);
           e.buf(5, moe_out_);
           e.val(6, mp);
-          e.dispatch((H + 3) / 4, uint32_t(T), 1, 128);
+          e.dispatch(v8 ? (H + 15) / 16 : (H + 3) / 4, uint32_t(T), 1, 128);
         }
       }
     }

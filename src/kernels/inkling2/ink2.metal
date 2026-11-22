@@ -2168,6 +2168,88 @@ struct Ink2MoeP {
   if (lane == 0) out[size_t(t) * p.H + n] = total;
 }
 
+// Vectorized MXFP8 decode (round 3): 16-byte weight loads, E4M3 through a threadgroup float LUT[256]; w13: 16 lanes
+// per row (144 uint4 = 9 per lane), a simdgroup = one j (gate lanes 0-15, up lanes 16-31); w2: 8 lanes per row
+// (72 uint4 = 9 per lane), 4 rows per simdgroup, 16 per TG.
+NI_INLINE float ink2_e4m3_dot16(uint4 w, const thread float4* xv, threadgroup const float* lut) {
+  float d = 0.0f;
+  for (uint i = 0; i < 4; ++i) {
+    const uint wd = w[i];
+    const float4 wf = float4(lut[wd & 0xFFu], lut[(wd >> 8) & 0xFFu], lut[(wd >> 16) & 0xFFu], lut[wd >> 24]);
+    d += dot(wf, xv[i]);
+  }
+  return d;
+}
+
+[[kernel]] void ink2_moe_mxfp8_w13_situ_v(const device float* x [[buffer(0)]], const device uint* eid [[buffer(1)]],
+                                          const device uchar* w13 [[buffer(2)]], const device uchar* sc [[buffer(3)]],
+                                          device float* act [[buffer(4)]], constant Ink2MoeP& p [[buffer(5)]],
+                                          uint3 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+                                          uint lane [[thread_index_in_simdgroup]], uint tid [[thread_index_in_threadgroup]]) {
+  threadgroup float lut[256];
+  for (uint i = tid; i < 256u; i += 128u) lut[i] = ink2_e4m3(i);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const uint j = tg.x * 4 + sg;
+  if (j >= p.I) return;
+  const uint slot = tg.y, t = tg.z;
+  const uint e = eid[size_t(t) * p.K_top + slot];
+  const uint blocks = p.H / 32u, half_lane = lane & 15u;
+  const size_t row = size_t(e) * 2u * p.I + 2u * j + (lane >> 4);
+  const device uint4* wr = (const device uint4*)(w13 + row * p.H);
+  const device uchar* sr = sc + row * blocks;
+  const device float* xp = x + size_t(t) * p.H;
+  float a = 0.0f;
+  for (uint c = half_lane; c < p.H / 16u; c += 16u) {
+    const device float4* xq = (const device float4*)(xp + c * 16u);
+    const float4 xv[4] = {xq[0], xq[1], xq[2], xq[3]};
+    a += ink2_e4m3_dot16(wr[c], xv, lut) * ink2_ue8m0(sr[c >> 1]);
+  }
+  a += simd_shuffle_xor(a, 8u);
+  a += simd_shuffle_xor(a, 4u);
+  a += simd_shuffle_xor(a, 2u);
+  a += simd_shuffle_xor(a, 1u);
+  const float g = simd_shuffle(a, ushort(0)), u = simd_shuffle(a, ushort(16));
+  if (lane == 0) {
+    act[(size_t(t) * p.K_top + slot) * p.I + j] =
+        (4.0f * metal::precise::tanh(g * 0.25f)) * (1.0f / (1.0f + metal::precise::exp(-g))) *
+        (25.0f * metal::precise::tanh(u * 0.04f));
+  }
+}
+
+[[kernel]] void ink2_moe_mxfp8_w2_acc_v(const device float* act [[buffer(0)]], const device uint* eid [[buffer(1)]],
+                                        const device float* ew [[buffer(2)]], const device uchar* w2 [[buffer(3)]],
+                                        const device uchar* sc [[buffer(4)]], device float* out [[buffer(5)]],
+                                        constant Ink2MoeP& p [[buffer(6)]], uint2 tg [[threadgroup_position_in_grid]],
+                                        uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],
+                                        uint tid [[thread_index_in_threadgroup]]) {
+  threadgroup float lut[256];
+  for (uint i = tid; i < 256u; i += 128u) lut[i] = ink2_e4m3(i);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const uint n = (tg.x * 4u + sg) * 4u + (lane >> 3);
+  if (n >= p.H) return;
+  const uint t = tg.y, sub = lane & 7u, blocks = p.I / 32u;
+  float total = 0.0f;
+  for (uint slot = 0; slot < p.K_top; ++slot) {
+    const uint e = eid[size_t(t) * p.K_top + slot];
+    const float wt = ew[size_t(t) * p.K_top + slot];
+    const size_t row = size_t(e) * p.H + n;
+    const device uint4* wr = (const device uint4*)(w2 + row * p.I);
+    const device uchar* sr = sc + row * blocks;
+    const device float* ap = act + (size_t(t) * p.K_top + slot) * p.I;
+    float sum = 0.0f;
+    for (uint c = sub; c < p.I / 16u; c += 8u) {
+      const device float4* aq = (const device float4*)(ap + c * 16u);
+      const float4 av[4] = {aq[0], aq[1], aq[2], aq[3]};
+      sum += ink2_e4m3_dot16(wr[c], av, lut) * ink2_ue8m0(sr[c >> 1]);
+    }
+    sum += simd_shuffle_xor(sum, 4u);
+    sum += simd_shuffle_xor(sum, 2u);
+    sum += simd_shuffle_xor(sum, 1u);
+    total += wt * sum;
+  }
+  if (sub == 0u) out[size_t(t) * p.H + n] = total;
+}
+
 // ---- 13. Buffer Copy, Final Logit Softcap ----
 [[kernel]] void ink2_copy_bytes(const device uchar* src [[buffer(0)]], device uchar* dst [[buffer(1)]],
                                 constant uint64_t& n [[buffer(2)]], uint i [[thread_position_in_grid]]) {
