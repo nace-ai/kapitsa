@@ -3011,9 +3011,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   std::unique_ptr<GrammarMatcher> gm;
   if (r.grammar) {
     std::string why;
-    if (ink2_)
-      why = "structured output grammar is not supported with Inkling-2 yet";
-    else if (grammar_calls(*r.grammar) && (tc_open_ < 0 || tc_close_ < 0))
+    if (grammar_calls(*r.grammar) && (tc_open_ < 0 || tc_close_ < 0))
       why = "this model has no <tool_call> / </tool_call> tokens: its replies cannot be held to tool calls";
     else if (grammar_calls(*r.grammar) && (flint_ || hy4_))
       why = std::string(flint_ ? "Flint" : "Hy4-flash") +
