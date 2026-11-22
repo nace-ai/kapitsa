@@ -25,7 +25,7 @@ enum class ModelClass { kOther, kQwen35Shape, kQwen35A3b, kQwen27bDense };
 // compile error, not a default that silently reads as off. kNone is a documentation row (a class or a guard the
 // call site still reads itself); default_on never looks one up.
 enum class Knob { kPfWave, kKflashHist, kGemmSlices, kHcWide, kMoe4Dx, kTreeG6, kKflashNarrow, kQwen9bQ4, kKflashBlock16, kAneProjFast,
-                  kA4QtmFast, kInk2TensorPf, kNone };
+                  kA4QtmFast, kInk2TensorPf, kInk2Q8Fast, kNone };
 
 // A row's device half. A class matches its own chips, and kMatrix also matches kWide (a wide chip has matrix
 // units). kName is a narrow exception: the name must match, and the row
@@ -33,7 +33,7 @@ enum class Knob { kPfWave, kKflashHist, kGemmSlices, kHcWide, kMoe4Dx, kTreeG6, 
 // kAneBuiltinNonMatrix requires an ANE and a built-in share, excluding matrix/wide GPUs and calibration-only chips.
 // kGuard is not that. It documents a predicate the call site still reads: a shape, a RAM size, or a
 // correctness miss on the wider chip. It is not a class, and it does not claim a 10% win.
-enum class DefaultScope { kLegacy, kSimd, kMatrix, kWide, kAneBuiltinNonMatrix, kName, kGuard };
+enum class DefaultScope { kAll, kLegacy, kSimd, kMatrix, kWide, kAneBuiltinNonMatrix, kName, kGuard };
 
 struct DeviceFacts {
   int apple_family = 0;  // Gpu::apple_family(): 7 M1, 8 M2, 9 M3 and M4, 10 M5, higher when a later family exists.

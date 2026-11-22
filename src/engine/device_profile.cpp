@@ -168,6 +168,12 @@ const DefaultRow kDefaults[] = {
     // precise: step passes --reorder (2 near-tie flips / 192, mean KL 1.03e-3), prefill 0 flips / 8 (mean KL 3.60e-3).
     {"ink2_tensor_pf", Knob::kInk2TensorPf, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 468, 603, false,
      "Mac mini M6; fast profile only", true},
+    // Fast profile only (docs/profiles.md): Inkling-2-Mini load-time Q8_0 packing for BF16 dense projections and
+    // unembed (NI_INK2_Q8). All Apple Silicon (uses scalar/SIMD + simdgroup_half8x8 kernels): M6 32 GB decode
+    // 20.25 -> 26.17 tok/s (+29.2%), resident text weights 18.89 -> 17.85 GB (-1.04 GB); M5 Pro 48 GB decode
+    // +20-22%, prefill +8-16%; 192 step rows 1 flip, mean KL 2.0e-3 (within the fast fallback bar).
+    {"ink2_q8_fast", Knob::kInk2Q8Fast, ModelClass::kOther, DefaultScope::kAll, nullptr, "on", 20, 29, false,
+     "Mac mini M6 (+29.2%, -1.04 GB), M5 Pro (+20-22%); fast profile only", true},
 };
 
 bool guard_matches(const char* id, const DeviceProfile& dev) {
@@ -242,6 +248,7 @@ const DefaultRow& default_at(int i) { return kDefaults[i]; }
 
 bool default_matches(const DefaultRow& row, const DeviceProfile& dev) {
   switch (row.scope) {
+    case DefaultScope::kAll: return true;
     case DefaultScope::kAneBuiltinNonMatrix:
       return dev.ane && ane_builtin_share(dev.name) && dev.chip != ChipClass::kMatrix && dev.chip != ChipClass::kWide;
     case DefaultScope::kLegacy: return dev.chip == ChipClass::kLegacy;
@@ -259,6 +266,7 @@ namespace {
 const char* scope_name(const DefaultRow& row) {
   if (row.scope == DefaultScope::kName) return row.chip_name ? row.chip_name : "name";
   switch (row.scope) {
+    case DefaultScope::kAll: return "all";
     case DefaultScope::kAneBuiltinNonMatrix: return "ane-builtin-nonmatrix";
     case DefaultScope::kLegacy: return "legacy";
     case DefaultScope::kSimd: return "simd";
