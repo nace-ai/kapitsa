@@ -168,6 +168,11 @@ const DefaultRow kDefaults[] = {
     // precise: step passes --reorder (2 near-tie flips / 192, mean KL 1.03e-3), prefill 0 flips / 8 (mean KL 3.60e-3).
     {"ink2_tensor_pf", Knob::kInk2TensorPf, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 468, 603, false,
      "Mac mini M6; fast profile only", true},
+    // Fast profile only (docs/profiles.md): Inkling-2-Mini load-time Q8_0 packing for BF16 dense projections and
+    // unembed (NI_INK2_Q8). Matrix class (M5/M6): Mac mini M6 decode 12.8 -> 20.6 tok/s (+61%), resident weights
+    // -2.7 GB; M5 Pro output check: 192 step rows 1 flip, mean KL 1.999e-3 (within the fast fallback bar).
+    {"ink2_q8_fast", Knob::kInk2Q8Fast, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 61, 0, false,
+     "Mac mini M6, M5 Pro; fast profile only", true},
 };
 
 bool guard_matches(const char* id, const DeviceProfile& dev) {

@@ -1,4 +1,5 @@
 #include "model/inkling2.h"
+#include "engine/device_profile.h"
 
 #include "engine/device_profile.h"
 #include "engine/profile.h"
@@ -446,7 +447,7 @@ Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
   cfg_ = read_config(path_);
   tmax_ = std::max(8, prefill_chunk > 0 ? prefill_chunk : 512);
   ring_rows_ = (cfg_.swa + tmax_ + 15) / 16 * 16;
-  q8_dense_ = profile_switch("NI_INK2_Q8", true,
+  q8_dense_ = profile_switch("NI_INK2_Q8", default_on(Knob::kInk2Q8Fast, {}),
                              "Inkling-2-Mini Q8-packed dense projections and unembed (NI_INK2_Q8)");
   ink2::compile_kernels();
   if (ink2_tensor_pf_want()) {
