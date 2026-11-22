@@ -3763,7 +3763,13 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       model_->save(*e, s, slot.ckpts[0], p);
     }
     if (p == pbound) model_->save(*e, s, *prefix_slot(), pbound);
-    if (p == boundary) model_->save(*e, s, *victim(), boundary);
+    if (p == boundary) {
+      // verify passes leave their last rows pending (commit_rows): fold them before the checkpoint copies the state,
+      // as the boundary inside the suffix does above (a boundary at the prompt's end: a template without a
+      // generation prompt, or add_generation_prompt false)
+      if (vpf) q35_->encode_flush(*e, s);
+      model_->save(*e, s, *victim(), boundary);
+    }
     // DFlash2: once every prompt row is captured (a rerun included), disarm the hook and project the rows into
     // the drafter's ring: behind the trunk's command buffer, encoded while the GPU runs it (the first token
     // does not wait for it; the first drafting pass is queued after it), or in it with NI_MTP_DEFER=0
