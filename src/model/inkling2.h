@@ -86,6 +86,8 @@ struct Ink2Layer {
   Buffer w13_outer, w2_outer;  // FP32 [128] = amax[e] / outer_scale_denominator[0] (NVFP4 only)
   Buffer qkvrsg_w;             // Fused BF16 [wq_du; wr_du; attn_sink_proj; gate_attn; wk_dv; wv_dv]
   uint32_t qkvrsg_offs[7] = {};
+  uint32_t qkvrsg_lens[6] = {};
+  Tensor qkvrsg_views[6];
 };
 
 class Inkling2 : public Model {

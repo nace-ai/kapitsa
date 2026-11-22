@@ -3754,10 +3754,37 @@ void inkling2_unit() {
                    2 * size_t(okc.top_k) * 4 + size_t(okc.top_k) * okc.moe_I * 4) +
           size_t(okc.core_end - okc.core_start) * 4 * H * 4 + size_t(okc.num_layers) * 2 * okc.n_experts * 4 +
           size_t(okc.hq) * 64 * (2 + size_t(okc.head_dim)) * 4 + V * 4 + 2 * (V / 2048 + 2) * 64 * 4 + 2 * 64 * 4;
-      check(Inkling2::is_model(dir) && okc.schedule.size() == 48 &&
+      check(Inkling2::is_model(dir) && okc.schedule.size() == 48 && mp.weights == 0 &&
                 mp.slot_state == 3 * (Inkling2::ring_bytes_per_seq(okc, 512) + Inkling2::conv_bytes_per_seq(okc)) &&
                 mp2048.activations >= expect_2048,
             "inkling2 read_config & plan (3x slot_state and chunk-2048 activations)");
+      {
+        const std::string st_path = dir + "/model.safetensors";
+        const std::string hdr =
+            R"({"model.llm.embed.weight":{"dtype":"BF16","shape":[1,2304],"data_offsets":[0,4608]}})";
+        static_assert(sizeof(unsigned long long) == 8);
+        const unsigned long long hlen = hdr.size();
+        if (FILE* f = fopen(st_path.c_str(), "wb")) {
+          fwrite(&hlen, 8, 1, f);
+          fwrite(hdr.data(), 1, hdr.size(), f);
+          fclose(f);
+        }
+        const char* prev_q8 = getenv("NI_INK2_Q8");
+        const std::string saved_q8 = prev_q8 ? prev_q8 : "";
+        unsetenv("NI_INK2_Q8");
+        const MemPlan mp_w = Inkling2::plan(dir, 512);
+        check(mp_w.weights == 4608 + 884736, "inkling2 plan weights includes 16-row qkvrsg_w padding (precise default)");
+        setenv("NI_INK2_Q8", "0", 1);
+        const MemPlan mp_w_off = Inkling2::plan(dir, 512);
+        check(mp_w_off.weights == 4608 + 884736,
+              "inkling2 plan weights includes 16-row qkvrsg_w padding when NI_INK2_Q8=0");
+        setenv("NI_INK2_Q8", "1", 1);
+        const MemPlan mp_w_on = Inkling2::plan(dir, 512);
+        check(mp_w_on.weights == 4608, "inkling2 plan weights omits qkvrsg_w padding when NI_INK2_Q8=1");
+        if (prev_q8) setenv("NI_INK2_Q8", saved_q8.c_str(), 1);
+        else unsetenv("NI_INK2_Q8");
+        remove(st_path.c_str());
+      }
 
       auto must_refuse = [&](const char* label, auto mutator) {
         nlohmann::json bad = make_base_cfg();

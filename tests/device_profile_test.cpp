@@ -88,6 +88,8 @@ int main() {
   const ni::DefaultRow* i2q8 = row("ink2_q8_fast");
   CHECK(i2q8 && i2q8->scope == ni::DefaultScope::kAll && i2q8->live && !i2q8->exclusive && i2q8->win_pct == 20 &&
         i2q8->win_pct_hi == 29);
+  // kInk2Q8Fast is DefaultScope::kAll: resolvable purely from empty DeviceProfile without live Metal init.
+  CHECK(ni::default_on(ni::Knob::kInk2Q8Fast, ni::DeviceProfile{}, ni::ModelFacts{}));
   CHECK(ni::default_on(ni::Knob::kInk2Q8Fast, ni::resolve_device(mac(11, 12, "Apple M6", 32L << 30)), {}));
   CHECK(ni::default_on(ni::Knob::kInk2Q8Fast, ni::resolve_device(mac(10, 20, "Apple M5 Pro", g48)), {}));
   CHECK(ni::default_on(ni::Knob::kInk2Q8Fast, ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48)), {}));

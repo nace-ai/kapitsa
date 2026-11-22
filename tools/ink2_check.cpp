@@ -154,5 +154,49 @@ int main(int argc, char** argv) {
       }
     }
   }
+
+  // Explicit T=5..8 parity check exercising ink2_bf16_mv8_multi6 against T=1 step rollout.
+  if (golden.at("prompts").size() >= 2) {
+    const std::vector<int> mv8_ids = golden.at("prompts")[1].at("ids").get<std::vector<int>>();
+    auto argmax_v = [&](const float* l) -> int {
+      int best = 0;
+      for (int v = 1; v < V; ++v)
+        if (l[v] > l[best]) best = v;
+      return best;
+    };
+    for (int mv8_t : {5, 6, 7, 8}) {
+      if (int(mv8_ids.size()) < mv8_t) continue;
+      auto ref_seq = model.new_seq(512, 512);
+      auto got_seq = model.new_seq(512, 512);
+      for (int i = 0; i < mv8_t; ++i) ref_seq->tokens()[i] = got_seq->tokens()[i] = mv8_ids[size_t(i)];
+      {
+        auto e = gpu.begin();
+        model.encode_prefill(*e, *ref_seq, 0, 1, greedy, 0, false);
+        e->commit_and_wait();
+      }
+      for (int step = 1; step < mv8_t; ++step) {
+        auto e = gpu.begin();
+        model.encode_step(*e, *ref_seq, step, greedy, uint32_t(step), step + 1 == mv8_t);
+        e->commit_and_wait();
+      }
+      const std::vector<float> ref_logits(model.logits(), model.logits() + V);
+      const int ref_top1 = argmax_v(ref_logits.data());
+      const int ref_tok = ref_seq->tokens()[mv8_t];
+      {
+        auto e = gpu.begin();
+        model.encode_prefill(*e, *got_seq, 0, mv8_t, greedy, 0, true);
+        e->commit_and_wait();
+      }
+      const float* got_logits = model.logits();
+      const int got_top1 = argmax_v(got_logits);
+      const int got_tok = got_seq->tokens()[mv8_t];
+      float max_abs_diff = 0.0f;
+      for (int v = 0; v < V; ++v) max_abs_diff = std::max(max_abs_diff, std::fabs(got_logits[v] - ref_logits[v]));
+      const bool ok = (got_top1 == ref_top1) && (got_tok == ref_tok) && (max_abs_diff < 0.05f);
+      printf("%s mv8_T%d: top1=%d (ref %d) max_abs_diff=%.6f\n", ok ? "PASS" : "FAIL", mv8_t, got_top1, ref_top1,
+             max_abs_diff);
+      if (!ok) ++fails;
+    }
+  }
   return fails ? 1 : 0;
 }
