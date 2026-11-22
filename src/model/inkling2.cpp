@@ -782,6 +782,36 @@ void Inkling2::restore(Encoder& e, Seq& s, const Checkpoint& c) {
   }
 }
 
+std::string Inkling2::disk_format() const {
+  char b[256];
+  snprintf(b, sizeof b, "inkling2; %zu visits; K,V f16 [cap][%d*%d]; SWA rings %d; conv %zu B",
+           cfg_.schedule.size(), cfg_.hkv, cfg_.head_dim, ring_rows_, conv_bytes_per_seq(cfg_));
+  return b;
+}
+
+void Inkling2::disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const {
+  (void)mtp;
+  const size_t nv = cfg_.schedule.size();
+  const size_t rb = size_t(cfg_.hkv) * size_t(cfg_.head_dim) * 2;
+  for (size_t v = 0; v < nv; ++v) {
+    if (cfg_.is_local[size_t(cfg_.schedule[v])]) continue;
+    out.push_back({s.kc[v], 1, rb});
+    out.push_back({s.vc[v], 1, rb});
+  }
+}
+
+void Inkling2::disk_state(const Seq& s, const Checkpoint* ck, std::vector<Buffer>& out) const {
+  out.push_back(!ck ? (s.conv.empty() ? Buffer{} : s.conv[0]) : (ck->conv.empty() ? Buffer{} : ck->conv[0]));
+  const size_t nv = cfg_.schedule.size();
+  for (size_t v = 0; v < nv; ++v) {
+    if (!cfg_.is_local[size_t(cfg_.schedule[v])]) continue;
+    for (size_t kv = 0; kv < 2; ++kv) {
+      out.push_back(!ck ? (kv ? s.vc[v] : s.kc[v])
+                        : (2 * v + kv < ck->rec.size() ? ck->rec[2 * v + kv] : Buffer{}));
+    }
+  }
+}
+
 // ---- primitives ----
 void Inkling2::enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer& y, int M, uint32_t N_limit,
                       bool add, bool exact_f32) {

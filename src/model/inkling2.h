@@ -106,6 +106,9 @@ class Inkling2 : public Model {
   Checkpoint new_checkpoint() override;
   void save(Encoder& e, const Seq& s, Checkpoint& c, int pos) override;
   void restore(Encoder& e, Seq& s, const Checkpoint& c) override;
+  std::string disk_format() const override;
+  void disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const override;
+  void disk_state(const Seq& s, const Checkpoint* ck, std::vector<Buffer>& out) const override;
 
   void encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample = true) override;
   void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
