@@ -988,13 +988,21 @@ MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
     if (const auto it = plans.find(key); it != plans.end()) return it->second;
   }
   if (const std::string why = unsupported_model(model_dir); !why.empty()) throw std::runtime_error(why);
-  const MemPlan p = Inkling2::is_model(model_dir) ? Inkling2::plan(model_dir, prefill_chunk)
+  MemPlan p = Inkling2::is_model(model_dir) ? Inkling2::plan(model_dir, prefill_chunk)
                     : Hy4Flash::is_model(model_dir) ? Hy4Flash::plan(model_dir, prefill_chunk)
                     : Dory::is_model(model_dir)     ? Dory::plan(model_dir, prefill_chunk)
                     : Flint::is_model(model_dir)    ? Flint::plan(model_dir, prefill_chunk)
                     : Qwen4Exp::is_model(model_dir) ? Qwen4Exp::plan(model_dir, prefill_chunk)
                     : NemotronH::is_model(model_dir) ? NemotronH::plan(model_dir, prefill_chunk)
                                                      : Qwen35::plan(model_dir, prefill_chunk);
+  if (Inkling2::is_model(model_dir) && Ink2DFlare::is_available(model_dir)) {
+    const Ink2Config ic = Inkling2::read_config(model_dir);
+    const size_t pf_rows = size_t(prefill_chunk_room(prefill_chunk > 0 ? prefill_chunk : 512));
+    p.mtp += 450ull * 1024ull * 1024ull;  // 0.44 GB Q8 DFlare drafter + folded Markov head
+    p.activations += 4 * (pf_rows + size_t(Inkling2::kMaxVerify)) * size_t(ic.hidden) * 4 +
+                     size_t(Inkling2::kMaxVerify) * size_t(ic.vocab) * 4;
+    p.slot_state += 3ull * 2ull * 1023ull * 1024ull * 2ull;  // 3-layer DFlare context ring (12.6 MB/slot)
+  }
   std::lock_guard<std::mutex> lk(mu);
   plans.emplace(key, p);
   return p;
@@ -4284,14 +4292,50 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     int P = n;
     bool go = handle(s.tokens()[n]);
     int cur_d = ink2_spec_auto_ ? std::min(2, ink2_spec_) : ink2_spec_;
+    int zero_streak = 0, plain_rem = 0;
     int pending_commit = 0, pending_pos = 0, pending_stride = 0, pending_rb = -1;
+    // Flush pending rollback + tap commit before yielding the GPU turn, growing KV, or leaving the loop so another
+    // concurrent slot can never overwrite shared conv_snap_ / ink2_vf_taps_ buffers in between.
+    auto flush_pending = [&] {
+      if (pending_commit > 0) {
+        auto ef = g.begin();
+        ink2_->encode_conv_rollback(*ef, s, pending_rb, pending_stride);
+        ink2_dfl_->encode_commit(*ef, *slot.ink2_dseq, ink2_vf_taps_, pending_commit, pending_pos, pending_stride);
+        ef->commit_and_wait();
+        slot.ink2_dseq_pos = pending_pos + pending_commit;
+        pending_commit = 0;
+      }
+    };
     while (go) {
-      if (P + cur_d + 2 >= s.cap) {
-        if (P + cur_d + 2 >= s.limit || !grow_kv(std::min(s.limit, P + cur_d + 3), [] {})) {
+      const int need_rows = plain_rem > 0 ? 1 : (cur_d + 1);
+      if (P + need_rows + 1 >= s.cap) {
+        flush_pending();
+        if (P + need_rows + 1 >= s.limit || !grow_kv(std::min(s.limit, P + need_rows + 2), [] {})) {
           finish = "length";
           res.context_full = true;
           break;
         }
+      }
+      if (plain_rem > 0) {
+        // Adaptive plain-step backoff on high-entropy text: keep DFlare ring in sync while avoiding verify overhead.
+        auto e2 = g.begin();
+        if (pending_commit > 0) {
+          ink2_->encode_conv_rollback(*e2, s, pending_rb, pending_stride);
+          ink2_dfl_->encode_commit(*e2, *slot.ink2_dseq, ink2_vf_taps_, pending_commit, pending_pos, pending_stride);
+          slot.ink2_dseq_pos = pending_pos + pending_commit;
+          pending_commit = 0;
+        }
+        ink2_->encode_step_taps(*e2, s, P, sp, uint32_t(P), true, &ink2_vf_taps_);
+        ink2_dfl_->encode_commit(*e2, *slot.ink2_dseq, ink2_vf_taps_, 1, P, 1);
+        e2->commit_and_wait();
+        slot.ink2_dseq_pos = P + 1;
+        if (!handle(s.tokens()[P + 1])) go = false;
+        ++req_cycles;
+        cycle_done(1);
+        ++P;
+        --plain_rem;
+        if (go && contended()) yield_turn(res);
+        continue;
       }
       const int d = cur_d;
       {
@@ -4359,18 +4403,25 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       pending_stride = d + 1;
       P += m;
       if (ink2_spec_auto_) {
-        if (a == d) cur_d = std::min(ink2_spec_, cur_d + 2);
-        else cur_d = std::clamp(a + 1, 2, ink2_spec_);
+        if (a == 0) {
+          ++zero_streak;
+          cur_d = std::min(2, ink2_spec_);
+          if (zero_streak >= 2) {
+            plain_rem = 6;
+            zero_streak = 0;
+          }
+        } else {
+          zero_streak = 0;
+          if (a == d) cur_d = std::min(ink2_spec_, cur_d + 2);
+          else cur_d = std::clamp(a + 1, 2, ink2_spec_);
+        }
       }
-      if (go && contended()) yield_turn(res);
+      if (go && contended()) {
+        flush_pending();
+        yield_turn(res);
+      }
     }
-    if (pending_commit > 0) {
-      auto e3 = g.begin();
-      ink2_->encode_conv_rollback(*e3, s, pending_rb, pending_stride);
-      ink2_dfl_->encode_commit(*e3, *slot.ink2_dseq, ink2_vf_taps_, pending_commit, pending_pos, pending_stride);
-      e3->commit_and_wait();
-      slot.ink2_dseq_pos = pending_pos + pending_commit;
-    }
+    flush_pending();
     fed_until = P;
   } else if (clover_own) {
     // Clover, block diffusion (NI_CLOVER_DECODE=diffusion): a block of B rows at P starts as mask tokens; each
