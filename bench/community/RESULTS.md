@@ -35,7 +35,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [MacBook Pro (14-inch, 2024) · M4 10-core GPU · 16 GB](#macbook-pro-14-inch-2024--m4-10-core-gpu--16-gb) | 2 |
 | [MacBook Pro (14-inch, 2024) · M4 Max 40-core GPU · 64 GB](#macbook-pro-14-inch-2024--m4-max-40-core-gpu--64-gb) | 2 |
 | [MacBook Pro (14-inch, 2024) · M4 Max 40-core GPU · 128 GB](#macbook-pro-14-inch-2024--m4-max-40-core-gpu--128-gb) | 1 |
-| [MacBook Pro (14-inch, 2024) · M4 Pro 16-core GPU · 48 GB](#macbook-pro-14-inch-2024--m4-pro-16-core-gpu--48-gb) | 1 |
+| [MacBook Pro (14-inch, 2024) · M4 Pro 16-core GPU · 48 GB](#macbook-pro-14-inch-2024--m4-pro-16-core-gpu--48-gb) | 2 |
 | [MacBook Pro (16-inch, 2024) · M4 Max 32-core GPU · 36 GB](#macbook-pro-16-inch-2024--m4-max-32-core-gpu--36-gb) | 1 |
 | [MacBook Pro (16-inch, 2024) · M4 Max 40-core GPU · 48 GB](#macbook-pro-16-inch-2024--m4-max-40-core-gpu--48-gb) | 1 |
 | [MacBook Pro (16-inch, 2024) · M4 Max 40-core GPU · 64 GB](#macbook-pro-16-inch-2024--m4-max-40-core-gpu--64-gb) | 1 |
@@ -593,6 +593,12 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
 | [2026-10-21](results/kapitsa-bench-2026-10-21-m4-pro-qwen3.8-27b-4bit-c6b34c.json) | 52.3 tok/s | 51.8 tok/s | 271 tok/s | 222 tok/s | 0.28 s | 0.30 s | 19.6 GB | pass | KFlash | 0.2.2 | 27.0.1 | swap, on battery |
+
+### Qwen3.8 27B · Nace Q4
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-11-22](results/kapitsa-bench-2026-11-22-m4-pro-qwen3.8-27b-q4-quick-e3b856.json) quick | 50.9 tok/s | 46.8 tok/s | 234 tok/s ⚠ | – | 0.30 s ⚠ | – | 19.4 GB | pass ⚠ | KFlash | 0.2.39 | 26.6.2 | contention (prefill_4000, tools) |
 
 ## MacBook Pro (16-inch, 2024) · M4 Max 32-core GPU · 36 GB
 
