@@ -395,6 +395,14 @@ size_t Inkling2::ring_bytes_per_seq(const Ink2Config& c, int tmax) {
   return size_t(n_swa) * 2 * size_t(rcap) * size_t(c.hkv) * size_t(c.head_dim) * 2;
 }
 
+static bool ink2_tensor_pf_want() {
+  if (__builtin_available(macOS 26.0, *)) {
+    const bool here = default_on(Knob::kInk2TensorPf, ModelFacts{});
+    return profile_switch("NI_INK2_TENSOR", here, "Inkling-2-Mini prefill GEMMs on the matrix units (NI_INK2_TENSOR)");
+  }
+  return false;
+}
+
 MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
   const Ink2Config c = read_config(dir);
   const int chunk = prefill_chunk > 0 ? prefill_chunk : 512;
@@ -411,8 +419,10 @@ MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
                        size_t(c.hq) * kMaxAttnChunks * (2 + size_t(c.head_dim)) * 4 + V * 4 +
                        2 * (V / 2048 + 2) * 64 * 4 + 2 * 64 * 4;
   const size_t P = T * size_t(c.top_k);
-  const size_t moe_tmp_bytes = P * std::max(H, size_t(2) * size_t(c.moe_I)) * 4 + P * size_t(c.moe_I) * 2 +
-                               2 * P * 4 + (P / 16 + size_t(c.n_experts) + 2) * 16 + 16;
+  const size_t moe_tmp_bytes = ink2_tensor_pf_want()
+                                   ? (P * std::max(H, size_t(2) * size_t(c.moe_I)) * 4 + P * size_t(c.moe_I) * 2 +
+                                      2 * P * 4 + (P / 16 + size_t(c.n_experts) + 2) * 16 + 16)
+                                   : 0;
   MemPlan m;
   m.weights = safetensors_llm_bytes(dir);
   m.kv_per_pos = kv_per_pos(c);
@@ -432,16 +442,10 @@ Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
   tmax_ = std::max(8, prefill_chunk > 0 ? prefill_chunk : 512);
   ring_rows_ = (cfg_.swa + tmax_ + 15) / 16 * 16;
   ink2::compile_kernels();
-  {
-    bool here = false;
-    if (__builtin_available(macOS 26.0, *)) here = default_on(Knob::kInk2TensorPf, ModelFacts{});
-    const bool want =
-        profile_switch("NI_INK2_TENSOR", here, "Inkling-2-Mini prefill GEMMs on the matrix units (NI_INK2_TENSOR)");
-    if (want) {
-      if (__builtin_available(macOS 26.0, *)) {
-        Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
-        tensor_pf_ = Gpu::get().pipeline("ink2_t_bf16_m64", false).pso != nullptr;
-      }
+  if (ink2_tensor_pf_want()) {
+    if (__builtin_available(macOS 26.0, *)) {
+      Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
+      tensor_pf_ = Gpu::get().pipeline("ink2_t_bf16_m64", false).pso != nullptr;
     }
   }
   prewarm_pipelines(tensor_pf_);
