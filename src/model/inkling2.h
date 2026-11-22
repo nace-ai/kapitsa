@@ -192,6 +192,11 @@ class Inkling2 : public Model {
   Buffer ar_out_;           // attn_res output: up to 4 * tmax * H
   Buffer msg_out_;          // cross-pass messages: 4 * tmax * H
   Buffer mg_cat_, mg_lat_;  // split MessageGate staging buffers (T <= 16)
+  Buffer mg_catb_, mg_latb_, mg_gb_;  // MessageGate as GEMMs (T > 16, NI_INK2_MSG_MM)
+  static bool msg_mm() {
+    static const bool v = !getenv("NI_INK2_MSG_MM") || atoi(getenv("NI_INK2_MSG_MM")) != 0;
+    return v;
+  }
   Buffer n0_, n1_, n2_;     // normed inputs [tmax, H]
   Buffer q_, k_, v_, r_, sinks_, gate_attn_, att_out_, a_out_;
   Buffer dyn_, rb_, part_m_, part_l_, part_o_;

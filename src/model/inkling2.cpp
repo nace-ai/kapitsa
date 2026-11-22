@@ -71,7 +71,8 @@ Pipeline base_pipe(const std::string& name) {
 struct Ink2Grouped {
   Encoder& e;
   const bool on;
-  Ink2Grouped(Encoder& enc, bool want) : e(enc), on(want && !enc.grouped() && !Encoder::profiling()) {
+  Ink2Grouped(Encoder& enc, bool want)
+      : e(enc), on(want && !enc.grouped() && !Encoder::profiling()) {
     if (on) e.set_grouped(true);
   }
   ~Ink2Grouped() {
@@ -86,7 +87,7 @@ void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
       "ink2_bf16_mv8",         "ink2_bf16_mm",           "ink2_rmsnorm",          "ink2_attn_res",
       "ink2_msg_gate",         "ink2_msg_gate_prep_s",   "ink2_msg_gate_down_s",  "ink2_msg_gate_up_mix_s",
       "ink2_embed_norm",       "ink2_sconv_static",      "ink2_sconv_static_pf",  "ink2_sconv_dynamic",    "ink2_qkvr_prep",         "ink2_rel_bias",         "ink2_rel_bias_pf",
-      "ink2_attn_decode",      "ink2_attn_decode_reduce","ink2_attn_prefill",     "ink2_moe_route",
+      "ink2_attn_decode",      "ink2_attn_decode_reduce", "ink2_msg_gate_mix","ink2_attn_prefill",     "ink2_moe_route",
       "ink2_moe_nvfp4_w13_situ","ink2_moe_nvfp4_w2_acc", "ink2_moe_mxfp8_w13_situ","ink2_moe_mxfp8_w2_acc",
       "ink2_softcap",          "ink2_moe_bucket",        "ink2_moe_situ_half",    "ink2_moe_combine",
   };
@@ -438,7 +439,7 @@ MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
   const size_t QD = size_t(c.hq) * size_t(c.head_dim);
   const size_t KVD = size_t(c.hkv) * size_t(c.head_dim);
   const size_t V = size_t(c.vocab);
-  const size_t per_row = 30 * H * 4 + 3 * QD * 4 + 2 * KVD * 4 + size_t(c.hq) * size_t(c.d_rel) * 4 +
+  const size_t per_row = 33 * H * 4 + size_t(c.gate_rank) * 4 + 3 * QD * 4 + 2 * KVD * 4 + size_t(c.hq) * size_t(c.d_rel) * 4 +
                          size_t(c.hq) * 4 + 4 * size_t(c.hkv) * 4 + size_t(c.hq) * size_t(c.rel_extent) * 4 +
                          size_t(c.n_experts) * 4 + 2 * size_t(c.top_k) * 4 + size_t(c.top_k) * size_t(c.moe_I) * 4;
   const size_t fixed = size_t(c.core_end - c.core_start) * 4 * H * 4 +
@@ -784,6 +785,9 @@ void Inkling2::alloc_buffers() {
   msg_out_ = alloc(4 * T * H * 4, "ink2_msg");
   mg_cat_ = alloc(3 * 16 * 2 * H * 4, "ink2_mg_cat");
   mg_lat_ = alloc(3 * 16 * size_t(cfg_.gate_rank) * 4, "ink2_mg_lat");
+  mg_catb_ = alloc(T * 2 * H * 4, "ink2_mg_catb");
+  mg_latb_ = alloc(T * size_t(cfg_.gate_rank) * 4, "ink2_mg_latb");
+  mg_gb_ = alloc(T * H * 4, "ink2_mg_gb");
   n0_ = alloc(T * H * 4, "ink2_n0");
   n1_ = alloc(T * H * 4, "ink2_n1");
   n2_ = alloc(T * H * 4, "ink2_n2");
@@ -1187,6 +1191,22 @@ void Inkling2::enc_msg_gate(Encoder& e, const Ink2Ctrl& c, const Buffer& h, cons
     e.dispatch((H + 127) / 128, (uint32_t(T) + 7) / 8, 1, 128);
     return;
   }
+  if (msg_mm()) {
+    // T > 16 as GEMMs (the per-token kernel re-reads the gate's 1.2 MB of weights for every row: 14 ms per 2112-row
+    // call on the M1 Max): rmsnorm both inputs -> [T, 2H], down -> [T, R], forget / gain -> [T, H], tanh mix.
+    const uint32_t H = uint32_t(cfg_.hidden);
+    e.use(ink2_pipe("ink2_msg_gate_prep_s"));
+    e.buf(0, h); e.buf(1, m); e.buf(2, mg_catb_); e.val(3, p);
+    e.dispatch(uint32_t(T), 1, 1, 512);
+    enc_mm(e, *c.down, mg_catb_, mg_latb_, T);
+    enc_mm(e, *c.forget, mg_latb_, mg_catb_, T);  // (cat is consumed: forget logits go there; out may alias h)
+    enc_mm(e, *c.gain, mg_latb_, mg_gb_, T);
+    const Ink2SituP mp{uint32_t(T) * H};
+    e.use(ink2_pipe("ink2_msg_gate_mix"));
+    e.buf(0, h); e.buf(1, m); e.buf(2, mg_catb_); e.buf(3, mg_gb_); e.buf(4, out); e.val(5, mp);
+    e.dispatch((mp.n + 255) / 256, 1, 1, 256);
+    return;
+  }
   e.use(ink2_pipe("ink2_msg_gate"));
   e.buf(0, h);
   e.buf(1, m);
@@ -1232,6 +1252,10 @@ void Inkling2::enc_msg_gate3(Encoder& e, const Ink2Layer& L, const Buffer* const
       e.dispatch((H + 127) / 128, (uint32_t(T) + 7) / 8, 1, 128);
     }
     e.group_end();
+    return;
+  }
+  if (msg_mm()) {  // shared staging buffers: one gate after another
+    for (int i = 0; i < 3; ++i) enc_msg_gate(e, *cs[i], *in_ptrs[i], *ms[i], *outs[i], T);
     return;
   }
   e.group_begin();
@@ -1835,7 +1859,8 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         enc_copy_buf(e, cur_x->view(size_t(T - 1) * H * 4, H * 4), diag_rows->view(size_t(dslot) * H * 4, H * 4), H * 4);
     }
 
-    if (T >= 256 && (v_idx & 7) == 7 && v_idx + 1 < cfg_.schedule.size()) e.split();
+    constexpr uint32_t split_every = 8u;
+    if (T >= 256 && (v_idx % split_every) == split_every - 1 && v_idx + 1 < cfg_.schedule.size()) e.split();
   }
 
   if (!dump_logits && !need_all_logits) return;

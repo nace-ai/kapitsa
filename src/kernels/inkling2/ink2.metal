@@ -281,6 +281,15 @@ struct Ink2MsgGateP {
   }
 }
 
+// MessageGate tail of the GEMM path (T > 16): f forget logits, g gain logits -> (1 - tanh f) h + tanh g m (out may be h)
+[[kernel]] void ink2_msg_gate_mix(const device float* h [[buffer(0)]], const device float* m [[buffer(1)]],
+                                  const device float* f [[buffer(2)]], const device float* g [[buffer(3)]],
+                                  device float* out [[buffer(4)]], constant uint& n [[buffer(5)]],
+                                  uint i [[thread_position_in_grid]]) {
+  if (i >= n) return;
+  out[i] = (1.0f - metal::precise::tanh(f[i])) * h[i] + metal::precise::tanh(g[i]) * m[i];
+}
+
 [[kernel]] void ink2_msg_gate_prep_s(const device float* h [[buffer(0)]], const device float* m [[buffer(1)]],
                                      device float* cat [[buffer(2)]], constant Ink2MsgGateP& p [[buffer(3)]],
                                      uint t [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
