@@ -1025,6 +1025,10 @@ bool Engine::disk_restore(Slot& slot, const pcache::Hit& hit) {
     if (sn.flags & pcache::Snap::kPrefix) DFlash2::reset(*slot.dseq);
     slot.dseq->ctx = sn.dctx, slot.dseq->valid_lo = sn.dvalid;
   }
+  if (ink2_dfl_ && slot.ink2_dseq) {
+    ink2_dfl_->reset(*slot.ink2_dseq);
+    slot.ink2_dseq_pos = 0;
+  }
   if (d.mtp && q35_) q35_->draft_vocab_restore(s, e.vocab, e.vocab_scanned);
   slot.turns = std::max(slot.turns, 2);
   slot.live_ok = false;

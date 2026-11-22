@@ -3027,6 +3027,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   const std::vector<int>& keys = mmp ? mm.keys : prompt;
   const int n = int(prompt.size());
   res.prompt_tokens = n;
+  // Inkling-2 has no assistant generation prompt suffix (the model emits <|message_model|> itself), so the
+  // end of the prompt is the turn boundary; saving a checkpoint at n costs one blit on the last chunk and
+  // gives both RAM turn reuse and the SSD prefix cache a restore point after every prompt.
+  if (ink2_ && boundary < 0 && n > 0) boundary = n;
   // The prefix checkpoint's row: the end of the system block (where the first user turn starts) when it is at least 64
   // rows in and a strict prefix of the prompt. A new question after the same system prompt and tools (a subagent's
   // task, an agent's next conversation) then reuses the block however early it diverges.
@@ -3511,7 +3515,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   if (lili_) lili_->begin_prefill(n, start);
   if (ink2_dfl_ && slot.ink2_dseq) {
     if (start == 0 || slot.ink2_dseq_pos != start) {
-      // Reset DFlare's rolling context ring when starting from 0 or from a restored checkpoint/history
+      // Reset DFlare's rolling context ring when starting from 0 or from a restored RAM/SSD checkpoint
       // whose ring was not kept; the prefill suffix [start, n) and subsequent decode steps repopulate it.
       ink2_dfl_->reset(*slot.ink2_dseq);
       slot.ink2_dseq_pos = start;

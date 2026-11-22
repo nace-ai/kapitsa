@@ -120,6 +120,9 @@ class Inkling2 : public Model {
   bool reserve(Seq& s, int need) override;
   size_t kv_grow_held(const Seq& s) const override;
   void drop_kv(Seq& s) override;
+  std::string disk_format() const override;
+  void disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const override;
+  void disk_state(const Seq& s, const Checkpoint* ck, std::vector<Buffer>& out) const override;
   size_t kv_bytes_per_pos() const override { return kv_per_pos(cfg_); }
   void reset(Seq& s) override;
   Checkpoint new_checkpoint() override;
