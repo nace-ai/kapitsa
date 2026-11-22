@@ -33,7 +33,7 @@ enum class Knob { kPfWave, kKflashHist, kGemmSlices, kHcWide, kMoe4Dx, kTreeG6, 
 // kAneBuiltinNonMatrix requires an ANE and a built-in share, excluding matrix/wide GPUs and calibration-only chips.
 // kGuard is not that. It documents a predicate the call site still reads: a shape, a RAM size, or a
 // correctness miss on the wider chip. It is not a class, and it does not claim a 10% win.
-enum class DefaultScope { kLegacy, kSimd, kMatrix, kWide, kAneBuiltinNonMatrix, kName, kGuard };
+enum class DefaultScope { kAll, kLegacy, kSimd, kMatrix, kWide, kAneBuiltinNonMatrix, kName, kGuard };
 
 struct DeviceFacts {
   int apple_family = 0;  // Gpu::apple_family(): 7 M1, 8 M2, 9 M3 and M4, 10 M5, higher when a later family exists.
