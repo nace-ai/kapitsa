@@ -1504,3 +1504,38 @@ NI_INLINE float ink2_q8_dot16(uint4 v, const device float4* xp) {
       simdgroup_barrier(mem_flags::mem_threadgroup);
     }
 }
+
+// ---- 14. Multi-row verify attention reduce (paired with ink2_attn_t_rows_k32 / k16 in tensor/qattn_t_ink2_verify.metal) ----
+struct Ink2AttnVfP {
+  uint T, pos0, k_first, kv_cap, Hq, Hkv, D, rel_extent, is_swa, swa, chunk, nchunks;
+  float scale;
+};
+
+[[kernel]] void ink2_attn_verify_reduce(const device float* pm [[buffer(0)]], const device float* pl [[buffer(1)]],
+                                        const device float* po [[buffer(2)]], const device float* sinks [[buffer(3)]],
+                                        const device float* gate [[buffer(4)]], device float* out [[buffer(5)]],
+                                        constant Ink2AttnVfP& p [[buffer(6)]],
+                                        uint2 tg [[threadgroup_position_in_grid]],
+                                        uint lane [[thread_index_in_simdgroup]]) {
+  const uint h = tg.x, r = tg.y;
+  const uint d0 = lane * 4u;
+  const size_t base = (size_t(r) * p.Hq + h) * p.nchunks;
+  float mm = sinks[size_t(r) * p.Hq + h], ll = 1.0f;
+  float4 oo = float4(0.0f);
+  for (uint c = 0u; c < p.nchunks; ++c) {
+    const float l2 = pl[base + c];
+    if (l2 == 0.0f) continue;
+    const float m2 = pm[base + c];
+    const float4 o2 = *(const device float4*)(po + (base + c) * p.D + d0);
+    const float nm = max(mm, m2);
+    const float e1 = metal::precise::exp(mm - nm), e2 = metal::precise::exp(m2 - nm);
+    oo = oo * e1 + o2 * e2;
+    ll = ll * e1 + l2 * e2;
+    mm = nm;
+  }
+  const size_t qoff = (size_t(r) * p.Hq + h) * p.D + d0;
+  const float4 g4 = *(const device float4*)(gate + qoff);
+  const float4 sig = float4(1.0f) / (float4(1.0f) + float4(metal::precise::exp(-g4.x), metal::precise::exp(-g4.y),
+                                                           metal::precise::exp(-g4.z), metal::precise::exp(-g4.w)));
+  *(device float4*)(out + qoff) = (oo / ll) * sig;
+}

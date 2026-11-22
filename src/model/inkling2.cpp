@@ -28,6 +28,7 @@
 #include <unordered_map>
 
 namespace ni {
+extern const char* const kTensorKernelSource;
 
 extern const char* const kTensorKernelSource;
 
@@ -427,7 +428,7 @@ MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
                          size_t(c.n_experts) * 4 + 2 * size_t(c.top_k) * 4 + size_t(c.top_k) * size_t(c.moe_I) * 4;
   const size_t fixed = size_t(c.core_end - c.core_start) * 4 * H * 4 +
                        size_t(c.num_layers) * 2 * size_t(c.n_experts) * 4 +
-                       size_t(c.hq) * kMaxAttnChunks * (2 + size_t(c.head_dim)) * 4 + V * 4 +
+                       8 * size_t(c.hq) * kMaxAttnChunks * (2 + size_t(c.head_dim)) * 4 + V * 4 +
                        2 * (V / 2048 + 2) * 64 * 4 + 2 * 64 * 4;
   const size_t P = T * size_t(c.top_k);
   const size_t moe_tmp_bytes = ink2_tensor_pf_want()
@@ -458,10 +459,13 @@ Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
   q8_dense_ = profile_switch("NI_INK2_Q8", default_on(Knob::kInk2Q8Fast, {}),
                              "Inkling-2-Mini Q8-packed dense projections and unembed (NI_INK2_Q8)");
   ink2::compile_kernels();
-  if (ink2_tensor_pf_want()) {
+  const bool want_tensor_pf = ink2_tensor_pf_want();
+  const bool want_vattn_t = !getenv("NI_INK2_VATTN_T") || atoi(getenv("NI_INK2_VATTN_T")) != 0;
+  if (want_tensor_pf || want_vattn_t) {
     if (__builtin_available(macOS 26.0, *)) {
       Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
-      tensor_pf_ = Gpu::get().pipeline("ink2_t_bf16_m64", false).pso != nullptr;
+      if (want_tensor_pf) tensor_pf_ = Gpu::get().pipeline("ink2_t_bf16_m64", false).pso != nullptr;
+      if (want_vattn_t) vattn_t_ = Gpu::get().pipeline("ink2_attn_t_rows_k32", false).pso != nullptr;
     }
   }
   prewarm_pipelines(tensor_pf_, q8_dense_);
@@ -779,9 +783,9 @@ void Inkling2::alloc_buffers() {
   a_out_ = alloc(T * H * 4, "ink2_a_out");
   dyn_ = alloc(T * 4 * size_t(cfg_.hkv) * 4, "ink2_dyn");
   rb_ = alloc(T * size_t(cfg_.hq) * size_t(cfg_.rel_extent) * 4, "ink2_rb");
-  part_m_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * 4, "ink2_part_m");
-  part_l_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * 4, "ink2_part_l");
-  part_o_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * size_t(cfg_.head_dim) * 4, "ink2_part_o");
+  part_m_ = alloc(8 * size_t(cfg_.hq) * kMaxAttnChunks * 4, "ink2_part_m");
+  part_l_ = alloc(8 * size_t(cfg_.hq) * kMaxAttnChunks * 4, "ink2_part_l");
+  part_o_ = alloc(8 * size_t(cfg_.hq) * kMaxAttnChunks * size_t(cfg_.head_dim) * 4, "ink2_part_o");
   h_mlp_ = alloc(T * H * 4, "ink2_h_mlp");
   x_mlp_ = alloc(T * H * 4, "ink2_x_mlp");
   rlog_ = alloc(T * size_t(cfg_.n_experts) * 4, "ink2_rlog");
@@ -1539,6 +1543,50 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       e.buf(5, att_out_);
       e.val(6, adp);
       e.dispatch(uint32_t(cfg_.hq), 1, 1, 32);
+    } else if (vattn_t_ && T >= 2 && T <= 8 && !L.is_swa && pos0 >= 1024 && cfg_.head_dim == 128 &&
+               cfg_.hq == cfg_.hkv * 3) {
+      struct Ink2AttnVfP {
+        uint32_t T, pos0, k_first, kv_cap, Hq, Hkv, D, rel_extent, is_swa, swa, chunk, nchunks;
+        float scale;
+      };
+      static const bool vattn_small = getenv("MTL_SHADER_VALIDATION") && atoi(getenv("MTL_SHADER_VALIDATION")) != 0;
+      const uint32_t span = uint32_t(pos0 + T);
+      uint32_t chunk = std::max(64u, (span + kMaxAttnChunks - 1) / kMaxAttnChunks);
+      chunk = (chunk + 31) / 32 * 32;
+      const uint32_t nchunks = std::max(1u, (span + chunk - 1) / chunk);
+      const Ink2AttnVfP avp{uint32_t(T),
+                            uint32_t(pos0),
+                            0u,
+                            kv_cap,
+                            uint32_t(cfg_.hq),
+                            uint32_t(cfg_.hkv),
+                            uint32_t(cfg_.head_dim),
+                            uint32_t(cfg_.rel_extent),
+                            0u,
+                            uint32_t(cfg_.swa),
+                            chunk,
+                            nchunks,
+                            attn_scale};
+      e.use(base_pipe(vattn_small ? "ink2_attn_t_rows_k16" : "ink2_attn_t_rows_k32"));
+      e.buf(0, q_);
+      e.buf(1, s.kc[v_idx]);
+      e.buf(2, s.vc[v_idx]);
+      e.buf(3, rb_);
+      e.buf(4, part_m_);
+      e.buf(5, part_l_);
+      e.buf(6, part_o_);
+      e.val(7, avp);
+      e.dispatch(nchunks, uint32_t(cfg_.hkv), 1, 96);
+
+      e.use(ink2_pipe("ink2_attn_verify_reduce"));
+      e.buf(0, part_m_);
+      e.buf(1, part_l_);
+      e.buf(2, part_o_);
+      e.buf(3, sinks_);
+      e.buf(4, gate_attn_);
+      e.buf(5, att_out_);
+      e.val(6, avp);
+      e.dispatch(uint32_t(cfg_.hq), uint32_t(T), 1, 32);
     } else {
       const Ink2AttnPfP apf{uint32_t(T),
                             uint32_t(pos0),

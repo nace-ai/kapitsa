@@ -189,6 +189,7 @@ class Inkling2 : public Model {
   size_t mem_budget_ = 0;
   bool tensor_pf_ = false;
   bool q8_dense_ = false;
+  bool vattn_t_ = false;
 
   // Reusable activations sized for `tmax_` rows
   Buffer x_, x_pre_, inp_sa_, ffn_inp_, h_norm_;
