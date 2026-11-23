@@ -12,7 +12,7 @@
 int main() {
   std::mt19937 rng(754);
   size_t checked = 0;
-  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 20u, 23u}) {
+  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 16u, 20u, 23u}) {
     const unsigned n = ink2_gguf::block_values(type), bytes = ink2_gguf::block_bytes(type);
     for (int trial = 0; trial < 1000; ++trial) {
       std::vector<unsigned char> b(bytes * 3);

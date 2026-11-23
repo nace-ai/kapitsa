@@ -85,7 +85,7 @@ add_custom_command(
   OUTPUT ${NI_INK2_EMBED}
   COMMAND ${CMAKE_COMMAND} -DOUT=${NI_INK2_EMBED} -DSRC_DIR=${CMAKE_SOURCE_DIR}/src/kernels
           -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_inkling2.cmake
-  DEPENDS ${NI_INK2_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h
+  DEPENDS ${NI_INK2_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/src/gguf/iq_grids.h
           ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_inkling2.cmake
   COMMENT "Embedding the Inkling-2 Metal kernels")
 
