@@ -245,6 +245,13 @@ class Inkling2 : public Model {
   Buffer h_mlp_, x_mlp_, rlog_, eid_, ew_, moe_act_, moe_out_;
   Buffer moe_sorted_, moe_rank_, moe_tiles_, moe_ntiles_, moe_tmp_, moe_act_h_;
   Buffer logits_, cand_v_, cand_i_, sprob_, samp_;
+  // row groups for one pass over several sequences (one row each); null: one sequence
+  struct StepGroup {
+    Seq* s = nullptr;
+    int pos = 0;
+    SamplingParams sp;
+  };
+  const std::vector<StepGroup>* multi_ = nullptr;
   Buffer conv_snap_;  // lazy [kMaxVerify, conv_bytes_per_seq] for speculative verify conv rollback
 };
 

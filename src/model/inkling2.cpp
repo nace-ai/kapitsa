@@ -1443,6 +1443,15 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
   const uint32_t KVD = uint32_t(cfg_.hkv) * uint32_t(cfg_.head_dim);
   const size_t row_bytes = size_t(T) * H * 4;
   const Buffer& conv = s.conv[0];
+  // row groups (multi_: one row per sequence, buffer views at row gi); one sequence: ng = 1
+  const int ng = multi_ ? int(multi_->size()) : 1;
+  const uint32_t Tg = multi_ ? 1u : uint32_t(T);
+  auto gseq = [&](int gi) -> Seq& { return multi_ ? *(*multi_)[size_t(gi)].s : s; };
+  auto gpos = [&](int gi) { return multi_ ? (*multi_)[size_t(gi)].pos : pos0; };
+  auto rv = [&](const Buffer& b, size_t rb, int gi) { return multi_ ? b.view(size_t(gi) * rb, rb) : b; };
+  // (multi rows: a per-sequence stage's group dispatches run concurrently: distinct rows and state)
+  static const bool mconc = !getenv("NI_INK2_MCONC") || atoi(getenv("NI_INK2_MCONC")) != 0;
+  const bool gconc = multi_ && ng > 1 && mconc;
   const float sconv_static_scale = 1.0f / std::sqrt(5.0f);
   const uint32_t snap_stride = (save_conv_snap && T <= kMaxVerify) ? uint32_t(conv_bytes_per_seq(cfg_) / 4) : 0u;
   if (snap_stride && !conv_snap_) {
@@ -1452,27 +1461,31 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
   }
 
   // Embed + norm -> x_
-  if (gguf_embed_.is_q8() || gguf_embed_.gguf.data) {
-    const auto& blocks = gguf_embed_.gguf;
-    const Ink2GgufEmbedP ep{uint32_t(T), H, uint32_t(pos0), gguf_embed_.N,
-                           embed_norm_->dtype == DType::F32 ? 1u : 0u, cfg_.rms_eps,
-                           blocks.type, blocks.row_bytes};
-    e.use(ink2_pipe("ink2_gguf_embed"));
-    e.buf(0, s.tok);
-    e.buf(1, blocks.data ? blocks.data : gguf_embed_.q);
-    e.buf(2, blocks.data ? blocks.data : gguf_embed_.s);
-    e.buf(3, embed_norm_->buf); e.buf(4, x_); e.val(5, ep);
-    e.dispatch(uint32_t(T), 1, 1, 512);
-  } else {
-    const Ink2EmbedP ep{uint32_t(T), H, uint32_t(pos0), uint32_t(embed_->shape[0]), cfg_.rms_eps};
+  if (gconc) e.group_begin();
+  for (int gi = 0; gi < ng; ++gi) {
+    if (gguf_embed_.is_q8() || gguf_embed_.gguf.data) {
+      const auto& blocks = gguf_embed_.gguf;
+      const Ink2GgufEmbedP ep{Tg, H, uint32_t(gpos(gi)), gguf_embed_.N,
+                             embed_norm_->dtype == DType::F32 ? 1u : 0u, cfg_.rms_eps,
+                             blocks.type, blocks.row_bytes};
+      e.use(ink2_pipe("ink2_gguf_embed"));
+      e.buf(0, gseq(gi).tok);
+      e.buf(1, blocks.data ? blocks.data : gguf_embed_.q);
+      e.buf(2, blocks.data ? blocks.data : gguf_embed_.s);
+      e.buf(3, embed_norm_->buf); e.buf(4, rv(x_, H * 4, gi)); e.val(5, ep);
+      e.dispatch(Tg, 1, 1, 512);
+      continue;
+    }
+    const Ink2EmbedP ep{Tg, H, uint32_t(gpos(gi)), uint32_t(embed_->shape[0]), cfg_.rms_eps};
     e.use(ink2_pipe("ink2_embed_norm"));
-    e.buf(0, s.tok);
+    e.buf(0, gseq(gi).tok);
     e.buf(1, embed_->buf);
     e.buf(2, embed_norm_->buf);
-    e.buf(3, x_);
+    e.buf(3, rv(x_, H * 4, gi));
     e.val(4, ep);
-    e.dispatch(uint32_t(T), 1, 1, 512);
+    e.dispatch(Tg, 1, 1, 512);
   }
+  if (gconc) e.group_end();
   if (diag_rows) enc_copy_buf(e, x_.view(size_t(T - 1) * H * 4, H * 4), diag_rows->view(0, H * 4), H * 4);
 
   // Ping-pong active residual stream between x_ and inp_sa_ with zero extra copies.
@@ -1491,6 +1504,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     const Buffer conv_v = conv.view(cbase + 3 * KVD * 4, 3 * KVD * 4);
     const Buffer conv_a = conv.view(cbase + 6 * KVD * 4, 3 * H * 4);
     const Buffer conv_m = conv.view(cbase + 6 * KVD * 4 + 3 * H * 4, 3 * H * 4);
+    auto gconv = [&](int gi, size_t off, size_t bytes) { return gseq(gi).conv[0].view(cbase + off, bytes); };
 
     if (ip == cfg_.core_start) {
       if (!have_prelude) {
@@ -1662,69 +1676,80 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         e.group_end();
       } else {
         e.group_begin();
-        const Ink2SconvStaticP sp{uint32_t(T), KVD, L.k_sconv->dtype == DType::F32 ? 1u : 0u, 0u, sconv_static_scale,
-                                  snap_stride};
-        e.use(ink2_pipe("ink2_sconv_static"));
-        e.buf(0, k_);
-        e.buf(1, L.k_sconv->buf);
-        e.buf(2, conv_k);
-        e.buf(3, k_);
-        e.val(4, sp);
-        e.buf(5, k_);
-        e.buf(6, snap_stride ? conv_snap_.view(cbase + 0, conv_snap_.size - (cbase + 0)) : conv_k);
-        e.dispatch((KVD + 255) / 256, 1, 1, 256);
+        for (int gi = 0; gi < ng; ++gi) {
+          const Ink2SconvStaticP sp{Tg, KVD, L.k_sconv->dtype == DType::F32 ? 1u : 0u, 0u, sconv_static_scale,
+                                    snap_stride};
+          e.use(ink2_pipe("ink2_sconv_static"));
+          e.buf(0, rv(k_, KVD * 4, gi));
+          e.buf(1, L.k_sconv->buf);
+          e.buf(2, gconv(gi, 0, 3 * KVD * 4));
+          e.buf(3, rv(k_, KVD * 4, gi));
+          e.val(4, sp);
+          e.buf(5, rv(k_, KVD * 4, gi));
+          e.buf(6, snap_stride ? conv_snap_.view(cbase + 0, conv_snap_.size - (cbase + 0)) : conv_k);
+          e.dispatch((KVD + 255) / 256, 1, 1, 256);
 
-        const Ink2SconvStaticP svp{uint32_t(T), KVD, L.v_sconv->dtype == DType::F32 ? 1u : 0u, 0u, sconv_static_scale,
-                                   snap_stride};
-        e.use(ink2_pipe("ink2_sconv_static"));
-        e.buf(0, v_);
-        e.buf(1, L.v_sconv->buf);
-        e.buf(2, conv_v);
-        e.buf(3, v_);
-        e.val(4, svp);
-        e.buf(5, v_);
-        e.buf(6, snap_stride ? conv_snap_.view(cbase + 3 * KVD * 4, conv_snap_.size - (cbase + 3 * KVD * 4)) : conv_v);
-        e.dispatch((KVD + 255) / 256, 1, 1, 256);
+          const Ink2SconvStaticP svp{Tg, KVD, L.v_sconv->dtype == DType::F32 ? 1u : 0u, 0u, sconv_static_scale,
+                                     snap_stride};
+          e.use(ink2_pipe("ink2_sconv_static"));
+          e.buf(0, rv(v_, KVD * 4, gi));
+          e.buf(1, L.v_sconv->buf);
+          e.buf(2, gconv(gi, 3 * KVD * 4, 3 * KVD * 4));
+          e.buf(3, rv(v_, KVD * 4, gi));
+          e.val(4, svp);
+          e.buf(5, rv(v_, KVD * 4, gi));
+          e.buf(6, snap_stride ? conv_snap_.view(cbase + 3 * KVD * 4, conv_snap_.size - (cbase + 3 * KVD * 4)) : conv_v);
+          e.dispatch((KVD + 255) / 256, 1, 1, 256);
+        }
         e.group_end();
       }
     } else {
       enc_mm(e, *L.k_proj, kn, dyn_, T);
-      const Ink2SconvDynP dp{uint32_t(T), KVD, uint32_t(cfg_.hkv), L.k_static->dtype == DType::F32 ? 1u : 0u,
-                             snap_stride};
-      e.use(ink2_pipe("ink2_sconv_dynamic"));
-      e.buf(0, k_);
-      e.buf(1, dyn_);
-      e.buf(2, L.k_static->buf);
-      e.buf(3, conv_k);
-      e.buf(4, k_);
-      e.val(5, dp);
-      e.buf(6, snap_stride ? conv_snap_.view(cbase + 0, conv_snap_.size - (cbase + 0)) : conv_k);
-      e.dispatch((KVD + 255) / 256, 1, 1, 256);
+      if (gconc) e.group_begin();
+      for (int gi = 0; gi < ng; ++gi) {
+        const Ink2SconvDynP dp{Tg, KVD, uint32_t(cfg_.hkv), L.k_static->dtype == DType::F32 ? 1u : 0u, snap_stride};
+        e.use(ink2_pipe("ink2_sconv_dynamic"));
+        e.buf(0, rv(k_, KVD * 4, gi));
+        e.buf(1, rv(dyn_, 4 * size_t(cfg_.hkv) * 4, gi));
+        e.buf(2, L.k_static->buf);
+        e.buf(3, gconv(gi, 0, 3 * KVD * 4));
+        e.buf(4, rv(k_, KVD * 4, gi));
+        e.val(5, dp);
+        e.buf(6, snap_stride ? conv_snap_.view(cbase + 0, conv_snap_.size - (cbase + 0)) : conv_k);
+        e.dispatch((KVD + 255) / 256, 1, 1, 256);
+      }
+      if (gconc) e.group_end();
 
       enc_mm(e, *L.v_proj, vn, dyn_, T);
-      const Ink2SconvDynP dvp{uint32_t(T), KVD, uint32_t(cfg_.hkv), L.v_static->dtype == DType::F32 ? 1u : 0u,
-                              snap_stride};
-      e.use(ink2_pipe("ink2_sconv_dynamic"));
-      e.buf(0, v_);
-      e.buf(1, dyn_);
-      e.buf(2, L.v_static->buf);
-      e.buf(3, conv_v);
-      e.buf(4, v_);
-      e.val(5, dvp);
-      e.buf(6, snap_stride ? conv_snap_.view(cbase + 3 * KVD * 4, conv_snap_.size - (cbase + 3 * KVD * 4)) : conv_v);
-      e.dispatch((KVD + 255) / 256, 1, 1, 256);
+      if (gconc) e.group_begin();
+      for (int gi = 0; gi < ng; ++gi) {
+        const Ink2SconvDynP dvp{Tg, KVD, uint32_t(cfg_.hkv), L.v_static->dtype == DType::F32 ? 1u : 0u, snap_stride};
+        e.use(ink2_pipe("ink2_sconv_dynamic"));
+        e.buf(0, rv(v_, KVD * 4, gi));
+        e.buf(1, rv(dyn_, 4 * size_t(cfg_.hkv) * 4, gi));
+        e.buf(2, L.v_static->buf);
+        e.buf(3, gconv(gi, 3 * KVD * 4, 3 * KVD * 4));
+        e.buf(4, rv(v_, KVD * 4, gi));
+        e.val(5, dvp);
+        e.buf(6, snap_stride ? conv_snap_.view(cbase + 3 * KVD * 4, conv_snap_.size - (cbase + 3 * KVD * 4)) : conv_v);
+        e.dispatch((KVD + 255) / 256, 1, 1, 256);
+      }
+      if (gconc) e.group_end();
     }
 
     // Q/K/R clipping + V norm + log scaling + KV cache write
     const uint32_t kv_cap = L.is_swa ? uint32_t(ring_rows_) : uint32_t(s.cap);
-    {
-      const Ink2QkvrP qp{uint32_t(T),
+    const size_t rrow = size_t(cfg_.hq) * size_t(cfg_.d_rel) * 4;
+    if (gconc) e.group_begin();
+    for (int gi = 0; gi < ng; ++gi) {
+      const uint32_t g_cap = L.is_swa ? uint32_t(ring_rows_) : uint32_t(gseq(gi).cap);
+      const Ink2QkvrP qp{Tg,
                          uint32_t(cfg_.hq),
                          uint32_t(cfg_.hkv),
                          uint32_t(cfg_.head_dim),
                          uint32_t(cfg_.d_rel),
-                         uint32_t(pos0),
-                         kv_cap,
+                         uint32_t(gpos(gi)),
+                         g_cap,
                          L.is_swa ? 1u : 0u,
                          L.q_scale->dtype == DType::F32 ? 1u : 0u,
                          cfg_.qk_clip,
@@ -1733,17 +1758,18 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
                          cfg_.log_floor,
                          cfg_.log_alpha};
       e.use(ink2_pipe("ink2_qkvr_prep"));
-      e.buf(0, q_);
-      e.buf(1, k_);
-      e.buf(2, v_);
-      e.buf(3, r_);
+      e.buf(0, rv(q_, QD * 4, gi));
+      e.buf(1, rv(k_, KVD * 4, gi));
+      e.buf(2, rv(v_, KVD * 4, gi));
+      e.buf(3, rv(r_, rrow, gi));
       e.buf(4, L.q_scale->buf);
       e.buf(5, L.rel_scale->buf);
-      e.buf(6, s.kc[v_idx]);
-      e.buf(7, s.vc[v_idx]);
+      e.buf(6, gseq(gi).kc[v_idx]);
+      e.buf(7, gseq(gi).vc[v_idx]);
       e.val(8, qp);
-      e.dispatch(uint32_t(2 * cfg_.hq + 2 * cfg_.hkv), uint32_t(T), 1, uint32_t(cfg_.head_dim));
+      e.dispatch(uint32_t(2 * cfg_.hq + 2 * cfg_.hkv), Tg, 1, uint32_t(cfg_.head_dim));
     }
+    if (gconc) e.group_end();
 
     // Rel bias [T, Hq, rel_extent]
     {
@@ -1768,7 +1794,14 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
 
     // Attention
     const float attn_scale = 1.0f / std::sqrt(float(cfg_.head_dim));
-    if (T == 1) {
+    if (T == 1 || multi_) {
+      // (multi rows: one decode attention per sequence, each into its own partials; then the reduces)
+      const size_t pm = size_t(cfg_.hq) * kMaxAttnChunks * 4, rbr = size_t(cfg_.hq) * size_t(cfg_.rel_extent) * 4;
+      std::vector<Ink2AttnDecP> adps;
+      if (gconc) e.group_begin();
+      for (int gi = 0; gi < ng; ++gi) {
+      const int pos0 = gpos(gi);
+      const uint32_t kv_cap = L.is_swa ? uint32_t(ring_rows_) : uint32_t(gseq(gi).cap);
       const uint32_t lk = L.is_swa ? std::min(uint32_t(pos0 + 1), uint32_t(cfg_.swa)) : uint32_t(pos0 + 1);
       static const int dec_g_mode = getenv("NI_INK2_DEC_G") ? atoi(getenv("NI_INK2_DEC_G")) : 3;
       const bool kw = dec_g_mode == 3;
@@ -1794,26 +1827,33 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       // same with precise::exp (1.37 ms), 0 the per-head kernel; 3 (default, round 3) keys across lanes (0.59 ms)
       e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : kw ? "ink2_attn_decode_g3kw"
                                                                                                : "ink2_attn_decode_g3_fx"));
-      e.buf(0, q_);
-      e.buf(1, s.kc[v_idx]);
-      e.buf(2, s.vc[v_idx]);
-      e.buf(3, rb_);
-      e.buf(4, part_m_);
-      e.buf(5, part_l_);
-      e.buf(6, part_o_);
+      e.buf(0, rv(q_, QD * 4, gi));
+      e.buf(1, gseq(gi).kc[v_idx]);
+      e.buf(2, gseq(gi).vc[v_idx]);
+      e.buf(3, rv(rb_, rbr, gi));
+      e.buf(4, rv(part_m_, pm, gi));
+      e.buf(5, rv(part_l_, pm, gi));
+      e.buf(6, rv(part_o_, pm * cfg_.head_dim, gi));
       e.val(7, adp);
       e.dispatch(uint32_t(g3 ? cfg_.hkv : cfg_.hq), nchunks, 1, 128);
+      adps.push_back(adp);
+      }
+      if (gconc) e.group_end(), e.group_begin();
+      for (int gi = 0; gi < ng; ++gi) {
+      const Ink2AttnDecP& adp = adps[size_t(gi)];
 
       static const bool red_p = !getenv("NI_INK2_REDP") || atoi(getenv("NI_INK2_REDP")) != 0;
       e.use(ink2_pipe(red_p ? "ink2_attn_decode_reduce_p" : "ink2_attn_decode_reduce"));
-      e.buf(0, part_m_);
-      e.buf(1, part_l_);
-      e.buf(2, part_o_);
-      e.buf(3, sinks_);
-      e.buf(4, gate_attn_);
-      e.buf(5, att_out_);
+      e.buf(0, rv(part_m_, pm, gi));
+      e.buf(1, rv(part_l_, pm, gi));
+      e.buf(2, rv(part_o_, pm * cfg_.head_dim, gi));
+      e.buf(3, rv(sinks_, size_t(cfg_.hq) * 4, gi));
+      e.buf(4, rv(gate_attn_, QD * 4, gi));
+      e.buf(5, rv(att_out_, QD * 4, gi));
       e.val(6, adp);
       e.dispatch(uint32_t(cfg_.hq), 1, 1, 32);
+      }
+      if (gconc) e.group_end();
     } else {
       const Ink2AttnPfP apf{uint32_t(T),
                             uint32_t(pos0),
@@ -1912,13 +1952,17 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     const bool is_boundary = (ip % cfg_.block_sz == 0);
     const Ink2SconvStaticP asp{uint32_t(T), H, L.attn_sconv->dtype == DType::F32 ? 1u : 0u, is_boundary ? 0u : 1u,
                                sconv_static_scale, snap_stride};
+    if (gconc) e.group_begin();
+    for (int gi = 0; gi < ng; ++gi) {
+    Ink2SconvStaticP gasp = asp;
+    gasp.T = Tg;
     e.use(ink2_pipe(T >= 16 ? "ink2_sconv_static_pf" : "ink2_sconv_static"));
-    e.buf(0, a_out_);
+    e.buf(0, rv(a_out_, H * 4, gi));
     e.buf(1, L.attn_sconv->buf);
-    e.buf(2, conv_a);
-    e.buf(3, ffn_inp_);
-    e.val(4, asp);
-    e.buf(5, *cur_x);
+    e.buf(2, gconv(gi, 6 * KVD * 4, 3 * H * 4));
+    e.buf(3, rv(ffn_inp_, H * 4, gi));
+    e.val(4, gasp);
+    e.buf(5, rv(*cur_x, H * 4, gi));
     e.buf(6, snap_stride ? conv_snap_.view(cbase + 6 * KVD * 4, conv_snap_.size - (cbase + 6 * KVD * 4)) : conv_a);
     if (T >= 16) {
       e.dispatch((H + 127) / 128, (uint32_t(T) + 15) / 16, 1, 128);
@@ -1926,6 +1970,8 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     } else {
       e.dispatch((H + 255) / 256, 1, 1, 256);
     }
+    }
+    if (gconc) e.group_end();
     if (is_boundary) {
       const int bslot = ip / cfg_.block_sz;
       const Buffer& dst_b = (bslot == 0) ? prelude_blocks_[0] : blocks_[bslot];
@@ -2111,15 +2157,17 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
 
     // mlp_sconv + residual add -> *alt_x, then swap(cur_x, alt_x)
     {
-      const Ink2SconvStaticP msp{uint32_t(T), H, L.mlp_sconv->dtype == DType::F32 ? 1u : 0u, 1u, sconv_static_scale,
+      if (gconc) e.group_begin();
+      for (int gi = 0; gi < ng; ++gi) {
+      const Ink2SconvStaticP msp{Tg, H, L.mlp_sconv->dtype == DType::F32 ? 1u : 0u, 1u, sconv_static_scale,
                                  snap_stride};
       e.use(ink2_pipe(T >= 16 ? "ink2_sconv_static_pf" : "ink2_sconv_static"));
-      e.buf(0, moe_out_);
+      e.buf(0, rv(moe_out_, H * 4, gi));
       e.buf(1, L.mlp_sconv->buf);
-      e.buf(2, conv_m);
-      e.buf(3, *alt_x);
+      e.buf(2, gconv(gi, 6 * KVD * 4 + 3 * H * 4, 3 * H * 4));
+      e.buf(3, rv(*alt_x, H * 4, gi));
       e.val(4, msp);
-      e.buf(5, ffn_inp_);
+      e.buf(5, rv(ffn_inp_, H * 4, gi));
       e.buf(6, snap_stride ? conv_snap_.view(cbase + 6 * KVD * 4 + 3 * H * 4,
                                              conv_snap_.size - (cbase + 6 * KVD * 4 + 3 * H * 4))
                            : conv_m);
@@ -2129,6 +2177,8 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       } else {
         e.dispatch((H + 255) / 256, 1, 1, 256);
       }
+      }
+      if (gconc) e.group_end();
     }
     std::swap(cur_x, alt_x);
     if (alt_x == &x_pre_) alt_x = &x_;
