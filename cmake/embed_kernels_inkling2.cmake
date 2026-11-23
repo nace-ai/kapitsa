@@ -1,7 +1,8 @@
 # Concatenates src/kernels/common.h + src/kernels/inkling2/*.metal into one C++ string literal:
 # Inkling-2 kernels compiled once lazily via Gpu::compile_extra("Ink2", kInk2KernelSource).
 file(READ ${SRC_DIR}/common.h COMMON)
-set(ALL "${COMMON}\n")
+file(READ ${SRC_DIR}/inkling2/gguf_blocks.h GGUF_BLOCKS)
+set(ALL "${COMMON}\n${GGUF_BLOCKS}\n")
 file(GLOB METALS ${SRC_DIR}/inkling2/*.metal)
 list(SORT METALS)
 foreach(m ${METALS})
