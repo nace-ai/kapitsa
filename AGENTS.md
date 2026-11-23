@@ -200,6 +200,11 @@ sense.
 - **Narrow gates are the exception.** An exact chip name, core count, RAM size or single model is allowed only when the
   win is both big (at least 10% faster on the target) and exclusive (measured slower, or broken, on the wider class).
   The profile table row cites that evidence. "Only measured here" is not a reason for a narrow gate.
+  A per-chip-class default in the device profile table also needs a shown mechanism: a profile or kernel-cost
+  measurement explaining why the change is faster on that class and not others. Measured speed differences alone,
+  including a slower or broken class member, do not justify a chip-class exception. Without that mechanism,
+  require wins on two measured devices and default on for all Macs, or do not merge. These are additional
+  requirements; they do not waive the narrow-gate evidence, setup coverage or output checks.
 - **One place.** Every device- or model-dependent default lives in the device profile table
   (`src/engine/device_profile.cpp`, printed by `kapitsa doctor --print-profile`). No new inline `apple_family()`,
   chip-name or core-count checks outside it.
