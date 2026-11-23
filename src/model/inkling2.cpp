@@ -1968,7 +1968,12 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         const uint32_t E = uint32_t(cfg_.n_experts);
         const uint32_t I = uint32_t(cfg_.moe_I);
         const uint32_t per = P / E;
-        const uint32_t bm = per >= 40 ? 64u : per >= 12 ? 32u : 16u;
+        // 64-row expert tiles lose to 32 in-model (lab5: routing is skewed, so 64-row tiles are mostly padding;
+        // 8k prefill 391.6 -> 431.1 tok/s at m32). NI_INK2_MOE_M64=1 = old rule (64 from 40 rows/expert),
+        // NI_INK2_MOE_BM=16|32|64 forces one tile height
+        static const uint32_t bm_env = getenv("NI_INK2_MOE_BM") ? uint32_t(atoi(getenv("NI_INK2_MOE_BM"))) : 0u;
+        static const bool m64 = getenv("NI_INK2_MOE_M64") && atoi(getenv("NI_INK2_MOE_M64")) != 0;
+        const uint32_t bm = bm_env ? bm_env : (m64 && per >= 40) ? 64u : per >= 12 ? 32u : 16u;
         const std::string ms = "_m" + std::to_string(bm);
         const uint32_t max_tiles = P / bm + E + 1;
         {

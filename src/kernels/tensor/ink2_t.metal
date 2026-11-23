@@ -92,11 +92,11 @@ NI_INLINE void ink2t_dec(const Ink2tRaw r, threadgroup half* dst) {
   *(threadgroup half4*)(dst + 12) = half4(w[12], w[13], w[14], w[15]);
 }
 
-template <int FMT, int MODE, int MR, int BN, int BK>
+template <int FMT, int MODE, int MR, int BN, int BK, int GNF = 0>
 NI_INLINE void ink2t_tile(const device void* X, const device uchar* q, const device uchar* s, device float* Y,
                           constant Ink2tGemmP& p, const device uint* sorted, uint m0, uint M, uint n0, float gs,
                           uint tid, uint sg, threadgroup half* xs, threadgroup half* ws) {
-  constexpr int GN = MR >= 64 ? 2 : 4, SM = MR / (4 / GN), SN = BN / GN;
+  constexpr int GN = GNF ? GNF : MR >= 64 ? 2 : 4, SM = MR / (4 / GN), SN = BN / GN;
   const uint sm = sg / GN, sn = sg % GN;
   constexpr auto desc =
       matmul2d_descriptor(SM, SN, BK, false, true, false, matmul2d_descriptor::mode::multiply_accumulate);
@@ -193,14 +193,14 @@ NI_INLINE void ink2t_tile(const device void* X, const device uchar* q, const dev
   }
 }
 
-template <int FMT, int MODE, int BM, int BN, int BK>
+template <int FMT, int MODE, int BM, int BN, int BK, int GNF = 0>
 NI_INLINE void ink2t_gemm_impl(const device void* X, const device uchar* Wq, const device uchar* Ws, device float* Y,
                                constant Ink2tGemmP& p, const device uint4* tiles, const device uint* ntiles,
                                const device uint* sorted, const device float* gse, uint2 tg, uint tid, uint sg,
                                threadgroup half* xs, threadgroup half* ws) {
   const uint n0 = tg.x * BN;
   if (MODE == 0) {
-    ink2t_tile<FMT, 0, BM, BN, BK>(X, Wq, Ws, Y, p, sorted, tg.y * BM, p.M, n0, 1.0f, tid, sg, xs, ws);
+    ink2t_tile<FMT, 0, BM, BN, BK, GNF>(X, Wq, Ws, Y, p, sorted, tg.y * BM, p.M, n0, 1.0f, tid, sg, xs, ws);
     return;
   }
   if (tg.y >= ntiles[0]) return;
@@ -208,10 +208,10 @@ NI_INLINE void ink2t_gemm_impl(const device void* X, const device uchar* Wq, con
   const device uchar* q = Wq + size_t(t.x) * p.q_estride;
   const device uchar* s = Ws + size_t(t.x) * p.s_estride;
   const float gs = FMT == 1 ? gse[t.x] : 1.0f;
-  ink2t_tile<FMT, MODE, BM, BN, BK>(X, q, s, Y, p, sorted, t.y, t.y + t.z, n0, gs, tid, sg, xs, ws);
+  ink2t_tile<FMT, MODE, BM, BN, BK, GNF>(X, q, s, Y, p, sorted, t.y, t.y + t.z, n0, gs, tid, sg, xs, ws);
 }
 
-#define INK2T_GEMM(NAME, FMT, MODE, BM, BN, BK)                                                                        \
+#define INK2T_GEMM(NAME, FMT, MODE, BM, BN, BK, ...)                                                                      \
   [[kernel, max_total_threads_per_threadgroup(128)]] void NAME(                                                        \
       const device void* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]], const device uchar* Ws [[buffer(2)]],  \
       device float* Y [[buffer(3)]], constant Ink2tGemmP& p [[buffer(4)]], const device uint4* tiles [[buffer(5)]],    \
@@ -220,7 +220,7 @@ NI_INLINE void ink2t_gemm_impl(const device void* X, const device uchar* Wq, con
       uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]]) {                          \
     threadgroup half xs[2 * BM * BK];                                                                                  \
     threadgroup half ws[2 * BN * BK];                                                                                  \
-    ink2t_gemm_impl<FMT, MODE, BM, BN, BK>(X, Wq, Ws, Y, p, tiles, ntiles, sorted, gse, tg, tid, sg, xs, ws);          \
+    ink2t_gemm_impl<FMT, MODE, BM, BN, BK, ##__VA_ARGS__>(X, Wq, Ws, Y, p, tiles, ntiles, sorted, gse, tg, tid, sg, xs, ws);          \
   }
 
 INK2T_GEMM(ink2_t_bf16_m64, 0, 0, 64, 64, 32)
