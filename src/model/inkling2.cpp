@@ -79,7 +79,7 @@ struct Ink2Grouped {
   }
 };
 
-void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
+void prewarm_pipelines(bool tensor_pf, bool q8_dense, bool expert_reuse) {
   if (const char* v = getenv("NI_PREWARM"); v && !strcmp(v, "0")) return;
   static const char* const kInk2Names[] = {
       "ink2_copy_bytes",       "ink2_bf16_mv",           "ink2_bf16_mv4",         "ink2_bf16_mv4_multi6",
@@ -91,6 +91,9 @@ void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
       "ink2_softcap",          "ink2_moe_bucket",        "ink2_moe_situ_half",    "ink2_moe_combine",
   };
   for (const char* n : kInk2Names) (void)ink2_pipe(n);
+  if (expert_reuse) {
+    for (const char* n : {"ink2_moe_nvfp4_w13_shared", "ink2_moe_mxfp8_w13_shared"}) (void)ink2_pipe(n);
+  }
   if (tensor_pf) {
     static const char* const kTensorNames[] = {
         "ink2_t_bf16_m64",
@@ -410,6 +413,11 @@ static bool ink2_tensor_pf_want() {
   return false;
 }
 
+static bool ink2_expert_reuse_want() {
+  const char* v = getenv("NI_INK2_EXPERT_REUSE");
+  return v && strcmp(v, "0") != 0;
+}
+
 MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
   const Ink2Config c = read_config(dir);
   const int chunk = prefill_chunk > 0 ? prefill_chunk : 512;
@@ -426,10 +434,13 @@ MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
                        size_t(c.hq) * kMaxAttnChunks * (2 + size_t(c.head_dim)) * 4 + V * 4 +
                        2 * (V / 2048 + 2) * 64 * 4 + 2 * 64 * 4;
   const size_t P = T * size_t(c.top_k);
-  const size_t moe_tmp_bytes = ink2_tensor_pf_want()
+  const bool tensor_pf = ink2_tensor_pf_want();
+  const size_t short_P = std::min(T, size_t(32)) * size_t(c.top_k);
+  const size_t short_plan_bytes = ink2_expert_reuse_want() ? 2 * short_P * 4 + size_t(c.n_experts) * 16 + 16 : 0;
+  const size_t moe_tmp_bytes = tensor_pf
                                    ? (P * std::max(H, size_t(2) * size_t(c.moe_I)) * 4 + P * size_t(c.moe_I) * 2 +
                                       2 * P * 4 + (P / 16 + size_t(c.n_experts) + 2) * 16 + 16)
-                                   : 0;
+                                   : short_plan_bytes;
   MemPlan m;
   m.weights = safetensors_llm_bytes(dir);
   m.kv_per_pos = kv_per_pos(c);
@@ -450,6 +461,7 @@ Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
   ring_rows_ = (cfg_.swa + tmax_ + 15) / 16 * 16;
   q8_dense_ = profile_switch("NI_INK2_Q8", default_on(Knob::kInk2Q8Fast, {}),
                              "Inkling-2-Mini Q8-packed dense projections and unembed (NI_INK2_Q8)");
+  expert_reuse_ = ink2_expert_reuse_want();
   ink2::compile_kernels();
   if (ink2_tensor_pf_want()) {
     if (__builtin_available(macOS 26.0, *)) {
@@ -457,7 +469,8 @@ Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
       tensor_pf_ = Gpu::get().pipeline("ink2_t_bf16_m64", false).pso != nullptr;
     }
   }
-  prewarm_pipelines(tensor_pf_, q8_dense_);
+  prewarm_pipelines(tensor_pf_, q8_dense_, expert_reuse_);
+  logi("Inkling-2 short-block expert reuse: %s (W13, 2..32 rows)", expert_reuse_ ? "on" : "off");
   load();
 }
 
@@ -778,13 +791,16 @@ void Inkling2::alloc_buffers() {
   ew_ = alloc(T * size_t(cfg_.top_k) * 4, "ink2_ew");
   moe_act_ = alloc(T * size_t(cfg_.top_k) * size_t(cfg_.moe_I) * 4, "ink2_moe_act");
   moe_out_ = alloc(T * H * 4, "ink2_moe_out");
-  if (tensor_pf_) {
-    const size_t P = T * size_t(cfg_.top_k);
-    const size_t max_tiles = P / 16 + size_t(cfg_.n_experts) + 2;
+  if (tensor_pf_ || expert_reuse_) {
+    const size_t P = (tensor_pf_ ? T : std::min(T, size_t(32))) * size_t(cfg_.top_k);
+    const size_t max_tiles = tensor_pf_ ? P / 16 + size_t(cfg_.n_experts) + 2 : size_t(cfg_.n_experts);
     moe_sorted_ = alloc(P * 4, "ink2_moe_sorted");
     moe_rank_ = alloc(P * 4, "ink2_moe_rank");
     moe_tiles_ = alloc(max_tiles * 16, "ink2_moe_tiles");
     moe_ntiles_ = alloc(16, "ink2_moe_ntiles");
+  }
+  if (tensor_pf_) {
+    const size_t P = T * size_t(cfg_.top_k);
     moe_tmp_ = alloc(P * std::max(H, size_t(2) * size_t(cfg_.moe_I)) * 4, "ink2_moe_tmp");
     moe_act_h_ = alloc(P * size_t(cfg_.moe_I) * 2, "ink2_moe_act_h");
   }
@@ -1649,8 +1665,21 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         }
       } else {
         const Ink2MoeP mp{uint32_t(T), H, uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k)};
+        const bool reuse = expert_reuse_ && T > 1 && T <= 32;
+        const uint32_t groups = std::min(mp.T * mp.K_top, uint32_t(cfg_.n_experts));
+        if (reuse) {
+          const Ink2BucketP bp{mp.T * mp.K_top, uint32_t(cfg_.n_experts), 32u};
+          e.use(ink2_pipe("ink2_moe_bucket"));
+          e.buf(0, eid_);
+          e.buf(1, moe_sorted_);
+          e.buf(2, moe_tiles_);
+          e.buf(3, moe_ntiles_);
+          e.buf(4, moe_rank_);
+          e.val(5, bp);
+          e.dispatch(1, 1, 1, 256);
+        }
         if (!L.is_mxfp8) {
-          e.use(ink2_pipe("ink2_moe_nvfp4_w13_situ"));
+          e.use(ink2_pipe(reuse ? "ink2_moe_nvfp4_w13_shared" : "ink2_moe_nvfp4_w13_situ"));
           e.buf(0, x_mlp_);
           e.buf(1, eid_);
           e.buf(2, L.w13->buf);
@@ -1658,7 +1687,14 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
           e.buf(4, L.w13_outer);
           e.buf(5, moe_act_);
           e.val(6, mp);
-          e.dispatch((uint32_t(cfg_.moe_I) + 15) / 16, uint32_t(cfg_.top_k), uint32_t(T), 128);
+          if (reuse) {
+            e.buf(7, moe_sorted_);
+            e.buf(8, moe_tiles_);
+            e.buf(9, moe_ntiles_);
+            e.dispatch((mp.I + 3) / 4, groups, 1, 128);
+          } else {
+            e.dispatch((mp.I + 15) / 16, mp.K_top, mp.T, 128);
+          }
 
           e.use(ink2_pipe("ink2_moe_nvfp4_w2_acc"));
           e.buf(0, moe_act_);
@@ -1671,14 +1707,21 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
           e.val(7, mp);
           e.dispatch((H + 15) / 16, uint32_t(T), 1, 128);
         } else {
-          e.use(ink2_pipe("ink2_moe_mxfp8_w13_situ"));
+          e.use(ink2_pipe(reuse ? "ink2_moe_mxfp8_w13_shared" : "ink2_moe_mxfp8_w13_situ"));
           e.buf(0, x_mlp_);
           e.buf(1, eid_);
           e.buf(2, L.w13->buf);
           e.buf(3, L.w13_sc->buf);
           e.buf(4, moe_act_);
           e.val(5, mp);
-          e.dispatch((uint32_t(cfg_.moe_I) + 3) / 4, uint32_t(cfg_.top_k), uint32_t(T), 128);
+          if (reuse) {
+            e.buf(6, moe_sorted_);
+            e.buf(7, moe_tiles_);
+            e.buf(8, moe_ntiles_);
+            e.dispatch(mp.I, groups, 1, 128);
+          } else {
+            e.dispatch((mp.I + 3) / 4, mp.K_top, mp.T, 128);
+          }
 
           e.use(ink2_pipe("ink2_moe_mxfp8_w2_acc"));
           e.buf(0, moe_act_);
