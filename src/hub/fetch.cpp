@@ -1230,6 +1230,16 @@ bool plan_has_model(const std::string& dir) {
     uint64_t size = 0;
     if (file_size(dir + "/" + f, size) && size >= kHeaderBytes) return true;
   }
+  // GGUF planning uses a full-logical-size sparse input containing only its header. Only a completed retained import
+  // certifies the configured payload: its marker, listed size and every other listed file must agree.
+  try {
+    const json m = json::parse(read_text(manifest_path(dir)));
+    if (!m.at("gguf").value("retained", false)) return false;
+    const std::string payload = json::parse(read_text(dir + "/config.json")).at("gguf_file").get<std::string>();
+    for (const auto& f : m.at("files"))
+      if (f.at("path").get<std::string>() == payload && f.at("size").get<uint64_t>() > 0) return is_complete(dir);
+  } catch (const std::exception&) {
+  }
   return false;
 }
 
