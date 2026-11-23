@@ -974,7 +974,8 @@ Tok make_tokenizer(const File& f, const Hp& h) {
                     "\"end_of_word_suffix\":\"\",";
   t.tokenizer_json = "{\"version\":\"1.0\",\"truncation\":null,\"padding\":null,\"added_tokens\":[" + added +
                      "],\"normalizer\":" + pre_tok +
-                     "\"fuse_unk\":false,\"byte_fallback\":false,\"ignore_merges\":false,\"vocab\":{" + vocab +
+                     "\"fuse_unk\":false,\"byte_fallback\":false,\"ignore_merges\":" +
+                      (inkling ? "true" : "false") + ",\"vocab\":{" + vocab +
                      "},\"merges\":[" + mg + "]}}";
   auto tok_at = [&](const char* key) -> json {
     const int64_t id = f.num(key, -1);
