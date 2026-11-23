@@ -988,6 +988,7 @@ void Encoder::dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint3
   [E(enc_) dispatchThreadgroups:MTLSizeMake(gx, gy, gz) threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];
   if (dup_kernel(cur_name_))
     [E(enc_) dispatchThreadgroups:MTLSizeMake(gx, gy, gz) threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];
+  end_pass_if_each();
   if (profiling()) {
     // close this dispatch into its own command buffer and continue in a fresh one
     [E(enc_) endEncoding];
@@ -1022,6 +1023,7 @@ void Encoder::dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uin
   [E(enc_) dispatchThreadgroupsWithIndirectBuffer:(__bridge id<MTLBuffer>)args.mtl
                              indirectBufferOffset:args.offset + off
                             threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];
+  end_pass_if_each();
   if (profiling()) {
     [E(enc_) endEncoding];
     id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
@@ -1299,6 +1301,12 @@ double Encoder::gpu_ms() const {
   id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
   id<MTLCommandBuffer> first = prev_.empty() ? cb : (__bridge id<MTLCommandBuffer>)prev_.front();
   return (cb.GPUEndTime - first.GPUStartTime) * 1000.0;
+}
+void Encoder::end_pass_if_each() {
+  if (!pass_each_ || profiling()) return;  // (profiling: every dispatch has its own command buffer already)
+  [E(enc_) endEncoding];
+  CFRelease(enc_);
+  open_encoder();  // (the next dispatch binds its own pipeline and buffers, as after split())
 }
 void Encoder::open_encoder() {
   id<MTLComputeCommandEncoder> ne = [(__bridge id<MTLCommandBuffer>)cb_

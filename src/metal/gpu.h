@@ -214,6 +214,11 @@ class Encoder {
   // each dispatch outside a group, as begin_grouped()) or a plain encoder's (off: serial). The open compute encoder
   // ends and a new one starts in the same command buffer, as at an event wait; the next dispatch binds its own state.
   void set_grouped(bool on);
+  // Pass per dispatch (on): each dispatch ends its compute encoder, so Metal orders the dispatches by their tracked
+  // buffers instead of one encoder's barriers / serial order. Big prefill grids: Inkling-2-Mini 8K prefill on the M1
+  // Max 312 -> 380 tok/s; decode-size dispatches pay ~13 us a pass (keep it off there). Not while recording.
+  void set_pass_per_dispatch(bool on) { pass_each_ = on; }
+  bool pass_per_dispatch() const { return pass_each_; }
   void commit();             // non-blocking
   // `f` runs (on a Metal thread) once the GPU has finished this command buffer; set before commit(). For progress
   // displays: no wait, nothing on the GPU's path.
@@ -287,6 +292,8 @@ class Encoder {
 
  private:
   Tape* rec_ = nullptr;
+  bool pass_each_ = false;
+  void end_pass_if_each();
   std::vector<Tape::Bind> rec_state_;  // the bindings so far while recording: 32 buffer indices, then 8 tg memory
   bool rec_dispatched_ = false, rec_barrier_ = false;
   void rec_set(int kind, int idx, void* mtl, size_t off, uint32_t len);

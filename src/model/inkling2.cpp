@@ -68,6 +68,19 @@ Pipeline base_pipe(const std::string& name) {
   return cache.emplace(name, p).first->second;
 }
 
+// Prefill-size passes: one compute pass per dispatch (Encoder::set_pass_per_dispatch) from NI_INK2_PASS_MIN rows
+// (default 256; 0 = off). ink2_bench 8K prefill 312 -> 380 tok/s on the M1 Max (one big encoder, grouped or serial,
+// ran 311); decode / verify rows keep one encoder (a pass costs ~13 us there: 26 -> 40 ms a step).
+struct Ink2PassEach {
+  Encoder& e;
+  const bool prev;
+  Ink2PassEach(Encoder& enc, int T) : e(enc), prev(enc.pass_per_dispatch()) {
+    static const int min_rows = getenv("NI_INK2_PASS_MIN") ? atoi(getenv("NI_INK2_PASS_MIN")) : 256;
+    if (min_rows > 0 && T >= min_rows && !enc.recording()) e.set_pass_per_dispatch(true);
+  }
+  ~Ink2PassEach() { e.set_pass_per_dispatch(prev); }
+};
+
 struct Ink2Grouped {
   Encoder& e;
   const bool on;
@@ -1394,6 +1407,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
                            bool need_all_logits, const Buffer* diag_rows, const Buffer* taps_out,
                            bool save_conv_snap) {
   Ink2Grouped gp(e, true);
+  Ink2PassEach pe(e, T);
   const uint32_t H = uint32_t(cfg_.hidden);
   const uint32_t QD = uint32_t(cfg_.hq) * uint32_t(cfg_.head_dim);
   const uint32_t KVD = uint32_t(cfg_.hkv) * uint32_t(cfg_.head_dim);
