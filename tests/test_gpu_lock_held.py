@@ -144,13 +144,52 @@ finally:
 # 5. no script keeps its own spelling of the variable
 SITES = ("bench/harness/bench.py", "bench/quality/eval_mlx.py", "bench/quality/eval_stream.py",
          "bench/quality/speed_variants.py", "bench/quality/speed_mlx.py", "bench/harness/agent_replay.py",
-         "bench/harness/compare_engines.py", "bench/reasoning/reasoning.py", "tools/qwen4_exp_pack.py")
+         "bench/harness/compare_engines.py", "bench/reasoning/reasoning.py", "tools/qwen4_exp_pack.py",
+         "tests/vision/test_ink2_vit.py")
 own = re.compile(r"""environ(\.get\(|\[)\s*["'](NI_LOCK_HELD|NACE_GPU_LOCK_HELD)["']|getenv\(\s*["'](NI_LOCK_HELD|NACE_GPU_LOCK_HELD)["']""")
 for rel in SITES:
     with open(os.path.join(REPO, rel)) as f:
         text = f.read()
     bad = [i + 1 for i, line in enumerate(text.splitlines()) if own.search(line) and "environ[" not in line.split("=")[0]]
     check("held_by_caller()" in text and not bad, f"{rel} uses held_by_caller()", f"own reads on lines {bad}")
+
+# 6. tests/vision/test_ink2_vit.py acquires BENCH_GPU_LOCK before vit_check unless held_by_caller() is set
+with tempfile.TemporaryDirectory() as tmp:
+    import time
+    stubs, lock_path, call_log = os.path.join(tmp, "stubs"), os.path.join(tmp, "gpu.lock"), os.path.join(tmp, "called")
+    for rel, code in (
+        ("numpy.py", "ndarray = object\n"), ("torch.py", "Tensor = object\nno_grad = lambda: (lambda f: f)\n"),
+        ("PIL/__init__.py", "Image = object\n"), ("safetensors.py", "safe_open = None\n"),
+        ("transformers/vision_utils.py", "get_vision_position_ids = None\n"),
+        ("transformers/models/inkling2.py", "Inkling2VisionConfig = Inkling2VisionModel = object\nclass Inkling2ImageProcessor:\n    def __init__(self): raise SystemExit(0)\n"),
+    ):
+        os.makedirs(os.path.dirname(os.path.join(stubs, rel)), exist_ok=True)
+        open(os.path.join(stubs, rel), "w").write(code)
+    fake_vit = os.path.join(tmp, "vit_check")
+    open(fake_vit, "w").write('#!/bin/sh\necho "$1" >> "$VIT_CALL_LOG"\n'); os.chmod(fake_vit, 0o755)
+    vit_env = clean_env(BENCH_GPU_LOCK=lock_path, VIT_CHECK=fake_vit, VIT_CALL_LOG=call_log, PYTHONPATH=stubs)
+    vit_cmd = [sys.executable, os.path.join(REPO, "tests/vision/test_ink2_vit.py"), tmp]
+    lk = gpu_hogs.GpuLock(path=lock_path, **quiet).acquire()
+    try:
+        p = subprocess.Popen(vit_cmd, env=vit_env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        time.sleep(0.8)
+        check(p.poll() is None and not os.path.exists(call_log), "test_ink2_vit: held lock blocks before vit_check")
+        lk.release()
+        out, _ = p.communicate(timeout=20)
+        check(p.returncode == 0 and os.path.exists(call_log) and "kernels" in open(call_log).read(),
+              "test_ink2_vit: runs kernels once lock is released", f"rc={p.returncode} out={out!r}")
+        lk.acquire()
+        for name in NAMES:
+            os.path.exists(call_log) and os.remove(call_log)
+            r = subprocess.run(vit_cmd, env=dict(vit_env, **{name: "1"}), capture_output=True, text=True, timeout=20)
+            check(r.returncode == 0 and os.path.exists(call_log) and "kernels" in open(call_log).read(), f"test_ink2_vit: {name}=1 skips lock wait")
+        os.path.exists(call_log) and os.remove(call_log)
+        p0 = subprocess.Popen(vit_cmd, env=dict(vit_env, NI_LOCK_HELD="0"), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        time.sleep(0.8)
+        check(p0.poll() is None and not os.path.exists(call_log), "test_ink2_vit: NI_LOCK_HELD=0 still waits on lock")
+        p0.kill(); p0.communicate()
+    finally:
+        lk.release()
 
 if FAILS:
     print(f"\n{len(FAILS)} FAILED")

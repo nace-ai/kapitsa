@@ -5,6 +5,7 @@ Hugging Face transformers' reference Inkling2ImageProcessor + Inkling2VisionMode
 Usage:
   /Users/audreyt/w/ink2-ref-venv/bin/python tests/vision/test_ink2_vit.py [MODEL_DIR]
 """
+import contextlib
 import json
 import os
 import subprocess
@@ -21,6 +22,16 @@ from transformers.models.inkling2 import (
     Inkling2VisionModel,
 )
 from transformers.vision_utils import get_vision_position_ids
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "bench", "harness")))
+import gpu_hogs  # noqa: E402
+
+
+def gpu_lock():
+    if gpu_hogs.held_by_caller():
+        return contextlib.nullcontext()
+    gpu_hogs.configure()
+    return gpu_hogs.GpuLock()
 
 
 def bf16_bytes_to_f32(path: str, shape: tuple[int, ...]) -> np.ndarray:
@@ -90,7 +101,7 @@ def hf_forward_at_layer(model: Inkling2VisionModel, pv: torch.Tensor, grid: torc
     return h.numpy()
 
 
-def main() -> int:
+def _run() -> int:
     repo = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     model_dir = sys.argv[1] if len(sys.argv) > 1 else "/Users/audreyt/models/Inkling-2-Mini"
     vit_check = os.environ.get("VIT_CHECK", os.path.join(repo, "build", "vit_check"))
@@ -194,6 +205,11 @@ def main() -> int:
 
     print(f"\nSUMMARY: {fails} failed")
     return 1 if fails else 0
+
+
+def main() -> int:
+    with gpu_lock():
+        return _run()
 
 
 if __name__ == "__main__":
