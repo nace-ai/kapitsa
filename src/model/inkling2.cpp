@@ -1004,7 +1004,8 @@ void Inkling2::alloc_buffers() {
   part_m_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * kMaxVerify * 4, "ink2_part_m");
   part_l_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * kMaxVerify * 4, "ink2_part_l");
   part_o_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * kMaxVerify * size_t(cfg_.head_dim) * 4, "ink2_part_o");
-  attn_cnt_ = alloc(size_t(kMaxVerify) * size_t(cfg_.hkv) * 4, "ink2_attn_cnt");
+  // (+ 16 bytes: the router's arrival counter, ink2_mv_sk_route)
+  attn_cnt_ = alloc(size_t(kMaxVerify) * size_t(cfg_.hkv) * 4 + 16, "ink2_attn_cnt");
   memset(attn_cnt_.base + attn_cnt_.offset, 0, attn_cnt_.size);
   h_mlp_ = alloc(T * H * 4, "ink2_h_mlp");
   x_mlp_ = alloc(T * H * 4, "ink2_x_mlp");
@@ -2281,10 +2282,36 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
 
     bool mlp_sc_fused = false;
     // Router + MoE (router uses exact FP32 math on all M so prefill top-k matches decode)
-    enc_mm(e, *L.router_w, x_mlp_, rlog_, T, 0, false, true);
+    // NI_INK2_RTLAST=1 (lab11; BENCH_AB-able): one row, the router matvec's last threadgroup runs the route
+    // (ink2_mv_sk_route: same logits, same route math), one stage less per visit
+    static const int rtlast_env = ink2_env("NI_INK2_RTLAST", 0);
+    static const uint32_t sk_max_r = getenv("NI_INK2_MVSK") ? uint32_t(atoi(getenv("NI_INK2_MVSK"))) : 256u;
+    const uint32_t rN = uint32_t(L.router_w->shape[0]), rK = uint32_t(L.router_w->shape[1]);
+    const bool rtlast = ink2_ab("NI_INK2_RTLAST", rtlast_env) != 0 && T == 1 && rN <= sk_max_r && (rK & 3u) == 0u &&
+                        (L.router_w->dtype == DType::BF16 || L.router_w->dtype == DType::F32) &&
+                        uint32_t(cfg_.n_experts) == rN && cfg_.top_k <= 8 && cfg_.n_experts <= 256;
+    if (rtlast) {
+      const Ink2MmP mp{1u, rN, rK, rK, rN, L.router_w->dtype == DType::F32 ? 1u : 0u, 0u};
+      const Ink2RouteP rp{1u, uint32_t(cfg_.n_experts), uint32_t(cfg_.top_k),
+                          L.router_bias->dtype == DType::F32 ? 1u : 0u, cfg_.route_scale};
+      e.use(ink2_pipe("ink2_mv_sk_route"));
+      e.buf(0, x_mlp_);
+      e.buf(1, L.router_w->buf);
+      e.buf(2, rlog_);
+      e.val(3, mp);
+      e.buf(4, L.router_bias->buf);
+      e.buf(5, eid_);
+      e.buf(6, ew_);
+      e.val(7, rp);
+      e.buf(8, attn_cnt_.view(size_t(kMaxVerify) * size_t(cfg_.hkv) * 4, 16));
+      e.dispatch(rN, 1, 1, 128);
+    } else {
+      enc_mm(e, *L.router_w, x_mlp_, rlog_, T, 0, false, true);
+    }
     {
       const Ink2RouteP rp{uint32_t(T), uint32_t(cfg_.n_experts), uint32_t(cfg_.top_k),
                           L.router_bias->dtype == DType::F32 ? 1u : 0u, cfg_.route_scale};
+      if (!rtlast) {
       e.use(ink2_pipe("ink2_moe_route"));
       e.buf(0, rlog_);
       e.buf(1, L.router_bias->buf);
@@ -2292,6 +2319,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       e.buf(3, ew_);
       e.val(4, rp);
       e.dispatch(uint32_t(T), 1, 1, 32);
+      }
     }
     {
       if (L.gguf_gu.data || L.gguf_down.data) {

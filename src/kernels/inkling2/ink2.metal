@@ -2584,6 +2584,90 @@ struct Ink2RouteP {
   }
 }
 
+#if __METAL_VERSION__ >= 320
+// lab11 (NI_INK2_RTLAST=1): the router matvec (ink2_mv_sk, one logit per threadgroup, same sums) whose last
+// threadgroup to finish runs ink2_moe_route (verbatim, simdgroup 0) on the logits: no route stage. The logits go
+// through device coherent(device) memory with thread_scope_device fences around the arrival count (lab11/coh: the
+// only variant that passes). cnt returns to 0 for the next dispatch. M = 1 row.
+[[kernel]] void ink2_mv_sk_route(const device float* x [[buffer(0)]], const device void* w [[buffer(1)]],
+                                 device coherent(device) float* y [[buffer(2)]], constant Ink2MmP& p [[buffer(3)]],
+                                 const device void* bias [[buffer(4)]], device uint* eid [[buffer(5)]],
+                                 device float* ew [[buffer(6)]], constant Ink2RouteP& rp [[buffer(7)]],
+                                 device atomic_uint* cnt [[buffer(8)]], uint n [[threadgroup_position_in_grid]],
+                                 uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+                                 uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float part[4];
+  threadgroup uint last;
+  const size_t woff = size_t(n) * p.K;
+  float a = 0.0f;
+  for (uint k = tid * 4u; k < p.K; k += 512u) {
+    const float4 xv = *(const device float4*)(x + k);
+    a += dot(xv, p.w_f32 ? *(const device float4*)((const device float*)w + woff + k)
+                         : ink2_bf16x4(*(const device uint2*)((const device bfloat*)w + woff + k)));
+  }
+  a = simd_sum(a);
+  if (lane == 0u) part[sg] = a;
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid == 0u) {
+    const float v = (part[0] + part[1]) + (part[2] + part[3]);
+    y[n] = v;
+  }
+  atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+  threadgroup_barrier(mem_flags::mem_device | mem_flags::mem_threadgroup);
+  if (tid == 0u) {
+    last = atomic_fetch_add_explicit(cnt, 1u, memory_order_relaxed) == p.N - 1u ? 1u : 0u;
+    if (last) atomic_store_explicit(cnt, 0u, memory_order_relaxed);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (last == 0u || sg != 0u) return;
+  atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+  // ---- ink2_moe_route, t = 0 ----
+  const uint t = 0u;
+  float ss[8], sb[8];
+  uint cnt8 = 0u;
+  for (uint e = lane; e < rp.E && cnt8 < 8u; e += 32u, ++cnt8) {
+    const float l = y[size_t(t) * rp.E + e];
+    const float s = 1.0f / (1.0f + metal::precise::exp(-l));
+    const float b = rp.bias_f32 ? ((const device float*)bias)[e] : float(((const device bfloat*)bias)[e]);
+    ss[cnt8] = s;
+    sb[cnt8] = s + b;
+  }
+  uint chosen[8];
+  float c_ss[8];
+  float wsum = 0.0f;
+  for (uint slot = 0; slot < rp.K; ++slot) {
+    float lbest = -INFINITY;
+    uint lidx = 0xFFFFFFFFu;
+    for (uint i = 0; i < cnt8; ++i) {
+      if (sb[i] > lbest) {
+        lbest = sb[i];
+        lidx = lane + i * 32u;
+      }
+    }
+    const float gbest = simd_max(lbest);
+    const uint cand = (lbest == gbest && isfinite(gbest)) ? lidx : 0xFFFFFFFFu;
+    const uint winner = simd_min(cand);
+    const uint wlane = winner & 31u;
+    const uint wi = (winner < rp.E && wlane == lane) ? (winner >> 5) : 0u;
+    const float my_s = (winner < rp.E && wlane == lane) ? ss[wi] : 0.0f;
+    if (winner < rp.E && wlane == lane) sb[wi] = -INFINITY;
+    const float ws = (winner < rp.E) ? simd_broadcast(my_s, ushort(wlane)) : 0.0f;
+    if (lane == 0u) {
+      chosen[slot] = winner < rp.E ? winner : 0u;
+      c_ss[slot] = ws;
+      wsum += ws;
+    }
+  }
+  if (lane == 0u) {
+    const float inv = rp.route_scale / (wsum + 1e-20f);
+    for (uint slot = 0; slot < rp.K; ++slot) {
+      eid[size_t(t) * rp.K + slot] = chosen[slot];
+      ew[size_t(t) * rp.K + slot] = c_ss[slot] * inv;
+    }
+  }
+}
+#endif
+
 // ---- 11. MoE NVFP4 (layers 0..19): vectorized loads with exact FP32 E2M1 accumulation ----
 struct Ink2MoeP {
   uint T, H, I, K_top;
