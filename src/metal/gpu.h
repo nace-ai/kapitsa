@@ -205,6 +205,8 @@ class Encoder {
   void dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uint32_t ty = 1, uint32_t tz = 1);
   // Memory barrier between dependent dispatches in a concurrent encoder.
   void barrier();
+  // barriers encoded so far by all encoders (lab probe: stages per step = the difference over a step, + 1)
+  static uint64_t& barrier_count();
   // With begin_grouped(): the dispatches between group_begin() and group_end() are independent of each other (none
   // reads what another writes) and may overlap on the GPU. No effect on other encoders.
   void group_begin() { in_group_ = true; group_first_ = true; }

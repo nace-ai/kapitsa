@@ -33,9 +33,25 @@ extern const char* const kTensorKernelSource;
 
 using json = nlohmann::json;
 
+int g_ink2_ab_phase = 0;
+int ink2_ab(const char* name, int v) {
+  static const char* ab = getenv("BENCH_AB");
+  if (!g_ink2_ab_phase || !ab) return v;
+  const size_t n = strlen(name);
+  for (const char* p = ab; p && *p; p = strchr(p, ',') ? strchr(p, ',') + 1 : nullptr)
+    if (!strncmp(p, name, n) && p[n] == '=') return atoi(p + n + 1);
+  return v;
+}
+
 namespace {
 
 constexpr uint32_t kMaxAttnChunks = 64;
+
+// NI_INK2_SCFOLD mask (unset = 3: wo / w2 and SWA k / v folds on), A/B-able
+int ink2_scfold() {
+  static const int v = getenv("NI_INK2_SCFOLD") ? atoi(getenv("NI_INK2_SCFOLD")) : 3;
+  return ink2_ab("NI_INK2_SCFOLD", v);
+}
 
 size_t visit_conv_floats(const Ink2Config& c) {
   const size_t kvd = size_t(c.hkv) * size_t(c.head_dim);
@@ -1334,7 +1350,8 @@ bool Inkling2::enc_attn_res_norm(Encoder& e, const Buffer* const* states, int M,
                                  const Tensor* const* w, const Buffer* const* nout) {
   // NI_INK2_NFOLD=0: separate ink2_rmsnorm stages (lab7: the fold is bit-identical)
   // (bit mask: 1 attention input, 2 MLP input, 4 final norm)
-  static const int nfold = getenv("NI_INK2_NFOLD") ? atoi(getenv("NI_INK2_NFOLD")) : 7;
+  static const int nfold_env = getenv("NI_INK2_NFOLD") ? atoi(getenv("NI_INK2_NFOLD")) : 7;
+  const int nfold = ink2_ab("NI_INK2_NFOLD", nfold_env);
   static const bool res1 = !getenv("NI_INK2_RES1") || atoi(getenv("NI_INK2_RES1")) != 0;
   static const bool resmq = !getenv("NI_INK2_RESMQ") || atoi(getenv("NI_INK2_RESMQ")) != 0;
   const int site = nout[0] == &n0_ ? 1 : nout[0] == &x_mlp_ ? 2 : 4;
@@ -1581,6 +1598,8 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     const Buffer conv_m = conv.view(cbase + 6 * KVD * 4 + 3 * H * 4, 3 * H * 4);
     auto gconv = [&](int gi, size_t off, size_t bytes) { return gseq(gi).conv[0].view(cbase + off, bytes); };
 
+    static const int cpgrp_env = getenv("NI_INK2_CPGRP") ? atoi(getenv("NI_INK2_CPGRP")) : 1;
+    const bool cpgrp = ink2_ab("NI_INK2_CPGRP", cpgrp_env) != 0;
     if (ip == cfg_.core_start) {
       if (!have_prelude) {
         enc_copy_buf(e, *cur_x, x_pre_, row_bytes);
@@ -1592,8 +1611,11 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         have_prelude = true;
       } else {
         // previous = (blocks[len(pre_loop[1]) + 1 :], x): blocks[2] into blocks_[4], *cur_x into blocks_[5].
+        // NI_INK2_CPGRP (lab8, default 1): the two independent copies in one step
+        if (cpgrp) e.group_begin();
         enc_copy_buf(e, *blocks_vec[size_t(n_prelude_blocks + 1)], blocks_[4], row_bytes);
         enc_copy_buf(e, *cur_x, blocks_[5], row_bytes);
+        if (cpgrp) e.group_end();
         cur_x = &x_pre_;
         alt_x = &inp_sa_;
         blocks_vec.clear();
@@ -1685,7 +1707,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       for (uint32_t i = 0; i < 7u; ++i) mp.offs[i] = L.qkvrsg_offs[i];
       if (nsegs == 4u) e.group_begin();
       // one row, one sequence, Q8 (NI_INK2_SCFOLD): SWA k / v short convs in the projections' epilogues
-      static const bool scfold_kv = !getenv("NI_INK2_SCFOLD") || (atoi(getenv("NI_INK2_SCFOLD")) & 2) != 0;
+      const bool scfold_kv = (ink2_scfold() & 2) != 0;
       kv_sc_fused = scfold_kv && L.is_swa && T == 1 && ng == 1 && L.qkvrsg_q8 && !pf_sconv_kv &&
                     (nsegs == 6u || ((q8m_ && L.wk_dv.is_q8()) && (q8m_ && L.wv_dv.is_q8())));
       const bool kf32 = kv_sc_fused && L.k_sconv->dtype == DType::F32, vf32 = kv_sc_fused && L.v_sconv->dtype == DType::F32;
@@ -1826,37 +1848,45 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         e.group_end();
       }
     } else {
-      enc_mm(e, *L.k_proj, kn, dyn_, T);
-      if (gconc) e.group_begin();
-      for (int gi = 0; gi < ng; ++gi) {
-        const Ink2SconvDynP dp{Tg, KVD, uint32_t(cfg_.hkv), L.k_static->dtype == DType::F32 ? 1u : 0u, snap_stride};
+      // NI_INK2_KVGRP (lab8, default 1; Kapitsa #1393): k_proj + v_proj in one step (v's dynamic weights in a second
+      // dyn_ region), then both dynamic convs in one step: 4 -> 2 stages per global visit (one-dispatch matvecs, T <= 8)
+      static const int kvgrp_env = getenv("NI_INK2_KVGRP") ? atoi(getenv("NI_INK2_KVGRP")) : 1;
+      const bool kvgrp = ink2_ab("NI_INK2_KVGRP", kvgrp_env) != 0 && T <= 8 && 2 * T <= tmax_;
+      const size_t dynb = size_t(T) * 4 * size_t(cfg_.hkv) * 4;
+      const Buffer dyn_v = kvgrp ? dyn_.view(dynb, dynb) : dyn_;
+      auto dyn_conv = [&](int gi, bool is_v) {
+        const Tensor* sw = is_v ? L.v_static : L.k_static;
+        const Ink2SconvDynP dp{Tg, KVD, uint32_t(cfg_.hkv), sw->dtype == DType::F32 ? 1u : 0u, snap_stride};
+        const size_t co = is_v ? 3 * KVD * 4 : 0;
+        const Buffer& xb = is_v ? v_ : k_;
         e.use(ink2_pipe("ink2_sconv_dynamic"));
-        e.buf(0, rv(k_, KVD * 4, gi));
-        e.buf(1, rv(dyn_, 4 * size_t(cfg_.hkv) * 4, gi));
-        e.buf(2, L.k_static->buf);
-        e.buf(3, gconv(gi, 0, 3 * KVD * 4));
-        e.buf(4, rv(k_, KVD * 4, gi));
+        e.buf(0, rv(xb, KVD * 4, gi));
+        e.buf(1, rv(is_v ? dyn_v : dyn_, 4 * size_t(cfg_.hkv) * 4, gi));
+        e.buf(2, sw->buf);
+        e.buf(3, gconv(gi, co, 3 * KVD * 4));
+        e.buf(4, rv(xb, KVD * 4, gi));
         e.val(5, dp);
-        e.buf(6, snap_stride ? conv_snap_.view(cbase + 0, conv_snap_.size - (cbase + 0)) : conv_k);
+        e.buf(6, snap_stride ? conv_snap_.view(cbase + co, conv_snap_.size - (cbase + co)) : (is_v ? conv_v : conv_k));
         e.dispatch((KVD + 255) / 256, 1, 1, 256);
+      };
+      if (kvgrp) {
+        e.group_begin();
+        enc_mm(e, *L.k_proj, kn, dyn_, T);
+        enc_mm(e, *L.v_proj, vn, dyn_v, T);
+        e.group_end();
+        e.group_begin();
+        for (int gi = 0; gi < ng; ++gi) dyn_conv(gi, false), dyn_conv(gi, true);
+        e.group_end();
+      } else {
+        enc_mm(e, *L.k_proj, kn, dyn_, T);
+        if (gconc) e.group_begin();
+        for (int gi = 0; gi < ng; ++gi) dyn_conv(gi, false);
+        if (gconc) e.group_end();
+        enc_mm(e, *L.v_proj, vn, dyn_, T);
+        if (gconc) e.group_begin();
+        for (int gi = 0; gi < ng; ++gi) dyn_conv(gi, true);
+        if (gconc) e.group_end();
       }
-      if (gconc) e.group_end();
-
-      enc_mm(e, *L.v_proj, vn, dyn_, T);
-      if (gconc) e.group_begin();
-      for (int gi = 0; gi < ng; ++gi) {
-        const Ink2SconvDynP dvp{Tg, KVD, uint32_t(cfg_.hkv), L.v_static->dtype == DType::F32 ? 1u : 0u, snap_stride};
-        e.use(ink2_pipe("ink2_sconv_dynamic"));
-        e.buf(0, rv(v_, KVD * 4, gi));
-        e.buf(1, rv(dyn_, 4 * size_t(cfg_.hkv) * 4, gi));
-        e.buf(2, L.v_static->buf);
-        e.buf(3, gconv(gi, 3 * KVD * 4, 3 * KVD * 4));
-        e.buf(4, rv(v_, KVD * 4, gi));
-        e.val(5, dvp);
-        e.buf(6, snap_stride ? conv_snap_.view(cbase + 3 * KVD * 4, conv_snap_.size - (cbase + 3 * KVD * 4)) : conv_v);
-        e.dispatch((KVD + 255) / 256, 1, 1, 256);
-      }
-      if (gconc) e.group_end();
     }
 
     // Q/K/R clipping + V norm + log scaling + KV cache write
@@ -2074,13 +2104,19 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     const Ink2SconvStaticP asp{uint32_t(T), H, L.attn_sconv->dtype == DType::F32 ? 1u : 0u, is_boundary ? 0u : 1u,
                                sconv_static_scale, snap_stride};
     // one row, one sequence, Q8 wo: attn_sconv in the matvec's epilogue (NI_INK2_SCFOLD=0: own stage)
-    static const bool scfold_a = !getenv("NI_INK2_SCFOLD") || ((atoi(getenv("NI_INK2_SCFOLD")) & 5) == 1);
+    const bool scfold_a = (ink2_scfold() & 5) == 1;
     const Ink2Mat& woq = L.wo_ud;
     const bool attn_sc_fused = scfold_a && T == 1 && ng == 1 && (q8m_ && woq.is_q8() && woq.K % 256 == 0);
+    // NI_INK2_CPGRP: a block boundary's copy of *cur_x runs beside the fused wo (wo reads *cur_x only as its residual,
+    // which a boundary does not add; nothing here reads the block slot)
+    const bool bcopy_grp = cpgrp && is_boundary && attn_sc_fused;
+    const Buffer& bdst = (ip / cfg_.block_sz == 0) ? prelude_blocks_[0] : blocks_[ip / cfg_.block_sz];
     if (attn_sc_fused) {
+      if (bcopy_grp) e.group_begin();
       enc_q8_sc(e, L.wo_ud, att_out_, a_out_, L.attn_sconv->buf, gconv(0, 6 * KVD * 4, 3 * H * 4), ffn_inp_, asp,
                 *cur_x, snap_stride ? conv_snap_.view(cbase + 6 * KVD * 4, conv_snap_.size - (cbase + 6 * KVD * 4))
                                     : conv_a);
+      if (bcopy_grp) enc_copy_buf(e, *cur_x, bdst, row_bytes), e.group_end();
     } else {
       enc_mm(e, L.wo_ud, att_out_, a_out_, T);
     }
@@ -2105,10 +2141,8 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     }
     if (gconc) e.group_end();
     if (is_boundary) {
-      const int bslot = ip / cfg_.block_sz;
-      const Buffer& dst_b = (bslot == 0) ? prelude_blocks_[0] : blocks_[bslot];
-      enc_copy_buf(e, *cur_x, dst_b, row_bytes);
-      blocks_vec.push_back(&dst_b);
+      if (!bcopy_grp) enc_copy_buf(e, *cur_x, bdst, row_bytes);
+      blocks_vec.push_back(&bdst);
     }
 
     // MLP AttnRes + optional MessageGate + norm
@@ -2267,7 +2301,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
                           (w2b == 1u || (w2b == 2u && cfg_.moe_I % 32 == 0));
           // NI_INK2_SCFOLD (mask 1 wo / w2, 2 SWA k / v, +4 / +8 drop wo / w2; 0 = own stages): mlp_sconv in the w2 epilogue
           // (one row, one sequence). W2R 4 / 8 and B = 2 were slower in-model (lab7: +0.6 / +1.8 ms), R = 1 +1.9 ms
-          static const bool scfold = !getenv("NI_INK2_SCFOLD") || ((atoi(getenv("NI_INK2_SCFOLD")) & 9) == 1);
+          const bool scfold = (ink2_scfold() & 9) == 1;
           const bool rok = (w2r == 2u || w2r == 4u || w2r == 8u) && (w2b == 1u || (w2b == 2u && cfg_.moe_I % 32 == 0));
           mlp_sc_fused = bt && rok && scfold && T == 1 && ng == 1;
           const bool wr2 = wr || mlp_sc_fused;

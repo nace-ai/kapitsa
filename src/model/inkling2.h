@@ -19,6 +19,12 @@
 
 namespace ni {
 
+// In-process A/B timer (lab8; ink2_bench BENCH_AB="VAR=val[,VAR=val..]"): while g_ink2_ab_phase is 1, the knobs read
+// through ink2_ab(name, v) return the BENCH_AB value instead of v (the environment's), so one process alternates two
+// configs step by step over the same KV state.
+extern int g_ink2_ab_phase;
+int ink2_ab(const char* name, int v);
+
 struct Ink2Config {
   int hidden = 2304;
   int num_layers = 24;

@@ -973,7 +973,12 @@ static bool dup_kernel(const char* name) {
 // grouped encoders: a barrier before each dispatch but the second and later of a group
 void Encoder::pre_dispatch() {
   if (!auto_barrier_) return;
-  if (dispatched_ && (!in_group_ || group_first_)) barrier();
+  if (dispatched_ && (!in_group_ || group_first_)) {
+    barrier();
+    // NI_STAGE_NAMES=1 (lab probe): stderr line per stage-opening dispatch (the kernel after each barrier)
+    static const bool names = getenv("NI_STAGE_NAMES") && atoi(getenv("NI_STAGE_NAMES")) != 0;
+    if (names) fprintf(stderr, "stage %s\n", cur_name_);
+  }
   group_first_ = false;
   dispatched_ = true;
 }
@@ -1045,7 +1050,13 @@ void Encoder::dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uin
     if (cur_pso_) [ne setComputePipelineState:(__bridge id<MTLComputePipelineState>)cur_pso_];
   }
 }
+uint64_t& Encoder::barrier_count() {
+  static uint64_t n = 0;
+  return n;
+}
+
 void Encoder::barrier() {
+  ++barrier_count();
   if (rec_) {
     rec_barrier_ = true;
     return;
