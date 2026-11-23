@@ -1663,7 +1663,7 @@ std::string import_inkling(const ImportOptions& opt, const Source& source, const
     }
     const ojson manifest{{"name", name}, {"repo", ""}, {"revision", ""}, {"commit", ""},
                          {"variant", "gguf"}, {"quant", "GGUF blocks as stored"},
-                         {"gguf", {{"files", sid}, {"conversions", ojson::object()}}},
+                         {"gguf", {{"files", sid}, {"conversions", ojson::object()}, {"retained", true}}},
                          {"files", files}, {"companions", ojson::array()}, {"total_bytes", bytes},
                          {"kapitsa", KAPITSA_VERSION}};
     write_text(tmp + "/.kapitsa/manifest.json", manifest.dump(2) + "\n");
