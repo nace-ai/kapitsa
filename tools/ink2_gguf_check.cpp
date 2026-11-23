@@ -1,8 +1,9 @@
-// Synthetic GPU check, no model. Takes the shared GPU lock before initializing Metal.
+// GPU block/GEMM/MoE checks, no model load. Takes the shared lock before initializing Metal.
 #include "bench/bench.h"
 #include "metal/gpu.h"
 #include "model/inkling2_kernels.h"
 #include "kernels/inkling2/gguf_blocks.h"
+#include "../tests/fixtures/ink2_iq3_reference.h"
 #include <bit>
 #include <cmath>
 #include <cstring>
@@ -39,8 +40,31 @@ static int run_checks(ni::Gpu& gpu, std::vector<ni::Buffer>& owned) {
     ++checked;
     return true;
   };
-  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 16u, 20u, 23u}) {
-    const unsigned K = ink2_gguf::block_values(type) == 32 ? 1152 : 256, M = 3, N = 7;
+  {
+    // Basis-vector inputs isolate each trained value through the production GEMM, without reduction drift.
+    constexpr unsigned K = 768;
+    auto w = buffer(sizeof(ink2_iq3_reference::trained_blocks)), x = buffer(size_t(K) * K * 4), y = buffer(K * 4);
+    std::memcpy(w.ptr(), ink2_iq3_reference::trained_blocks, w.size);
+    std::memset(x.ptr(), 0, x.size);
+    for (unsigned k = 0; k < K; ++k) x.as<float>()[size_t(k) * K + k] = 1;
+    ink2_iq3_reference::block_iq3_xxs blocks[3];
+    std::memcpy(blocks, w.ptr(), sizeof(blocks));
+    float ref[K];
+    ink2_iq3_reference::dequantize_row_iq3_xxs(blocks, ref, K);
+    const MmP p{K, 1, K, 18, 3 * 98, 0};
+    { auto e = gpu.begin(); e->use(ni::ink2::pipeline("ink2_gguf_mm"));
+      e->buf(0, x); e->buf(1, w); e->buf(2, y); e->val(3, p); e->dispatch(1, K, 1, 128); e->commit_and_wait(); }
+    for (unsigned k = 0; k < K; ++k) {
+      if (std::bit_cast<uint32_t>(y.as<float>()[k]) != std::bit_cast<uint32_t>(ref[k])) {
+        std::fprintf(stderr, "trained IQ3_XXS k=%u: Metal=%a llama=%a\n", k, y.as<float>()[k], ref[k]);
+        return 1;
+      }
+      ++checked;
+    }
+    std::printf("IQ3_XXS Metal: 768 trained values bitwise match pinned llama.cpp through basis-vector GEMM\n");
+  }
+  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 16u, 18u, 20u, 23u}) {
+    const unsigned K = ink2_gguf::block_values(type) == 32 ? 1152 : (type == 18 ? 768 : 256), M = 3, N = 7;
     const unsigned rb = K / ink2_gguf::block_values(type) * ink2_gguf::block_bytes(type);
     auto w = data(type, K, N), x = buffer(M * K * 4), y = buffer(M * N * 4);
     for (unsigned k = 0; k < M * K; ++k) x.as<float>()[k] = float(int(rng() % 101) - 50) / 100;
