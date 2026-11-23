@@ -10,6 +10,7 @@ using namespace mpp::tensor_ops;
 //   FMT 0: BF16 dense weights [N, K], float X [M, x_ld] -> float Y [M, y_ld] (MODE 0, optional add)
 //   FMT 1: NVFP4 MoE experts [E, N, K/2] (adjacent nibbles 2b, 2b+1) + F8E4M3 block-16 scales + per-expert outer[e]
 //   FMT 2: MXFP8 MoE experts [E, N, K] (F8E4M3) + UE8M0 block-32 scales
+//   FMT 3: FMT 1 with the nibbles repacked for the decode kernels (lab10 NI_INK2_REPACK; ink2_t_unrp undoes it)
 // Modes:
 //   MODE 0: dense GEMM (float X -> float Y)
 //   MODE 1: grouped MoE w13 (float X indexed by sorted[m] / k -> float Y in sorted order m)
@@ -41,6 +42,16 @@ struct Ink2tRaw {
   uint4 a, b;
 };
 
+// inverse of Inkling2's repack16 on both 16-bit halves: original nibble k (sign 3, eem 0-2) back at bits 4k..4k+3
+NI_INLINE uint ink2t_unrp(uint w) {
+  return ((w >> 12) & 0x00080008u) | ((w >> 9) & 0x00070007u) | ((w >> 5) & 0x00800080u) | ((w >> 2) & 0x00700070u) |
+         ((w >> 2) & 0x08000800u) | ((w << 5) & 0x07000700u) | ((w << 1) & 0x80008000u) | ((w << 12) & 0x70007000u);
+}
+
+#ifndef INK2T_UNRP
+#define INK2T_UNRP 0  // 1: FMT 3 unrepacks to FMT 1 bits and uses the table (lab10 first cut: -3.5% 8k prefill)
+#endif
+
 template <int FMT>
 NI_INLINE Ink2tRaw ink2t_raw(const device uchar* q, const device uchar* s, uint K, uint n, uint k) {
   Ink2tRaw r;
@@ -48,8 +59,9 @@ NI_INLINE Ink2tRaw ink2t_raw(const device uchar* q, const device uchar* s, uint 
     const device uint4* wp = (const device uint4*)(q + size_t(n) * K * 2 + k * 2);
     r.a = wp[0];
     r.b = wp[1];
-  } else if (FMT == 1) {
+  } else if (FMT == 1 || FMT == 3) {
     r.a.xy = *(const device uint2*)(q + size_t(n) * (K / 2) + k / 2);
+    if (FMT == 3 && INK2T_UNRP) r.a.x = ink2t_unrp(r.a.x), r.a.y = ink2t_unrp(r.a.y);
     r.a.z = s[size_t(n) * (K / 16) + k / 16];
   } else {
     r.a = *(const device uint4*)(q + size_t(n) * K + k);
@@ -69,7 +81,19 @@ NI_INLINE void ink2t_dec(const Ink2tRaw r, threadgroup half* dst) {
         w[h * 8 + 2 * i + 1] = half(as_type<float>(v[i] & 0xFFFF0000u));
       }
     }
-  } else if (FMT == 1) {
+  } else if (FMT == 3 && !INK2T_UNRP) {  // repacked: the decode kernels' half-bit trick, value = half x 2^14 (exact)
+    const float sc = ink2t_e4m3(r.a.z) * 16384.0f;
+    for (int i = 0; i < 2; ++i) {
+      const uint v = i ? r.a.y : r.a.x;
+      const half2 h[4] = {as_type<half2>(v & 0x8E008E00u), as_type<half2>((v << 3) & 0x8E008E00u),
+                          as_type<half2>(((v << 6) & 0x0E000E00u) | ((v << 2) & 0x80008000u)),
+                          as_type<half2>(((v << 9) & 0x0E000E00u) | ((v << 1) & 0x80008000u))};
+      for (int j = 0; j < 4; ++j) {
+        w[8 * i + j] = half(float(h[j].x) * sc);
+        w[8 * i + 4 + j] = half(float(h[j].y) * sc);
+      }
+    }
+  } else if (FMT == 1 || FMT == 3) {
     const float sc = ink2t_e4m3(r.a.z);
     for (int j = 0; j < 8; ++j) {
       const uint b = ((j < 4 ? r.a.x : r.a.y) >> (8 * (j & 3))) & 0xFFu;
@@ -208,7 +232,7 @@ NI_INLINE void ink2t_gemm_impl(const device void* X, const device uchar* Wq, con
   const uint4 t = tiles[tg.y];
   const device uchar* q = Wq + size_t(t.x) * p.q_estride;
   const device uchar* s = Ws + size_t(t.x) * p.s_estride;
-  const float gs = FMT == 1 ? gse[t.x] : 1.0f;
+  const float gs = FMT == 1 || FMT == 3 ? gse[t.x] : 1.0f;
   ink2t_tile<FMT, MODE, BM, BN, BK, GNF>(X, q, s, Y, p, sorted, t.y, t.y + t.z, n0, gs, tid, sg, xs, ws);
 }
 
@@ -231,6 +255,12 @@ INK2T_GEMM(ink2_t_nvfp4_moe_w13_m64, 1, 1, 64, 64, 32)
 INK2T_GEMM(ink2_t_nvfp4_moe_w2_m16, 1, 2, 16, 64, 32)
 INK2T_GEMM(ink2_t_nvfp4_moe_w2_m32, 1, 2, 32, 64, 32)
 INK2T_GEMM(ink2_t_nvfp4_moe_w2_m64, 1, 2, 64, 64, 32)
+INK2T_GEMM(ink2_t_nvfp4_moe_w13_m16_rp, 3, 1, 16, 64, 32)
+INK2T_GEMM(ink2_t_nvfp4_moe_w13_m32_rp, 3, 1, 32, 64, 32)
+INK2T_GEMM(ink2_t_nvfp4_moe_w13_m64_rp, 3, 1, 64, 64, 32)
+INK2T_GEMM(ink2_t_nvfp4_moe_w2_m16_rp, 3, 2, 16, 64, 32)
+INK2T_GEMM(ink2_t_nvfp4_moe_w2_m32_rp, 3, 2, 32, 64, 32)
+INK2T_GEMM(ink2_t_nvfp4_moe_w2_m64_rp, 3, 2, 64, 64, 32)
 INK2T_GEMM(ink2_t_mxfp8_moe_w13_m16, 2, 1, 16, 64, 32)
 INK2T_GEMM(ink2_t_mxfp8_moe_w13_m32, 2, 1, 32, 64, 32)
 INK2T_GEMM(ink2_t_mxfp8_moe_w13_m64, 2, 1, 64, 64, 32)

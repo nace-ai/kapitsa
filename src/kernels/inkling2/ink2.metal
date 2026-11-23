@@ -2625,9 +2625,42 @@ NI_INLINE float ink2_bt_dot16(uint2 pw, const thread float* xf) {
   return (ink2_bt_dot8(pw.x, xf) + ink2_bt_dot8(pw.y, xf + 8)) * 16384.0f;
 }
 
+// lab10 DEC mask for the bt kernels (0 = the code above). Exact: 1 = nibbles repacked at load (Inkling2::repack_moe:
+// per 16-bit half, nibble 0 sign 15 / eem 9-11, 1: 12 / 6-8, 2: 13 / 3-5, 3: 14 / 0-2): 5 left shifts per word instead
+// of 7 (one right; lab10 M4: 7.3 -> 3.9 issue cycles / nibble). The half values are identical (lab10/repack_check.cpp,
+// all 2^32 words) but fast math sums the 16 products in another order once the integer code around them changes (any
+// change: DEC 2 alone too; an equal-depth layout did not restore it), so logits are ulp-level, not bit-identical. 2 = E4M3 block scales sign-0 (checked at load), decoded without the
+// sign term (w13: two scales per shift), the x16384 (E2M1) and x256 (E4M3) folded into the outer scale as 2^22.
+// Timing probes (wrong math): 4 = decode-lite (every half2 = w & mask), 8 = x / act read from a 4 KB window.
+template <uint DEC>
+NI_INLINE float ink2_dot8d(uint w, const thread float* xf) {
+  if ((DEC & 5u) == 0u) return ink2_bt_dot8(w, xf);
+  float d = 0.0f;  // one half2 per step, decoded where ink2_bt_dot8 decodes it
+  NI_UNROLL for (uint s = 0; s < 4; ++s) {
+    const half2 h = as_type<half2>((DEC & 4u) ? w & 0x8E008E00u
+                                   : s == 0   ? w & 0x8E008E00u
+                                   : s == 1   ? (w << 3) & 0x8E008E00u
+                                   : s == 2   ? ((w << 6) & 0x0E000E00u) | ((w << 2) & 0x80008000u)
+                                              : ((w << 9) & 0x0E000E00u) | ((w << 1) & 0x80008000u));
+    d += float(h.x) * xf[s] + float(h.y) * xf[s + 4];
+  }
+  return d;
+}
+template <uint DEC>
+NI_INLINE float ink2_dot16d(uint2 pw, const thread float* xf) {
+  const float d = ink2_dot8d<DEC>(pw.x, xf) + ink2_dot8d<DEC>(pw.y, xf + 8);
+  return (DEC & 2u) ? d : d * 16384.0f;
+}
+template <uint DEC>
+NI_INLINE float ink2_e4m3d(uint b) {  // DEC & 2: sign-0 byte, value / 256
+  return (DEC & 2u) ? float(as_type<half>(ushort(b << 7))) : ink2_e4m3(b);
+}
+constant constexpr float kInk2Fold = 4194304.0f;  // 2^22 = 16384 x 256
+
 // w13 + situ: 4 lanes per weight row, 4 blocks (32 bytes) per lane step (H/64 steps, H % 256 == 0: 9 per lane at
 // H = 2304), 8 rows = 4 j (gate, up) per simdgroup, 16 j per threadgroup (grid as ink2_moe_nvfp4_w13_situ)
-[[kernel]] void ink2_moe_nvfp4_w13_q4(const device float* x [[buffer(0)]], const device uint* eid [[buffer(1)]],
+template <uint DEC>
+[[kernel]] void ink2_moe_nvfp4_w13_q4_t(const device float* x [[buffer(0)]], const device uint* eid [[buffer(1)]],
                                       const device uchar* w13 [[buffer(2)]], const device uchar* sc [[buffer(3)]],
                                       const device float* outer [[buffer(4)]], device float* act [[buffer(5)]],
                                       constant Ink2MoeP& p [[buffer(6)]], uint3 tg [[threadgroup_position_in_grid]],
@@ -2644,27 +2677,38 @@ NI_INLINE float ink2_bt_dot16(uint2 pw, const thread float* xf) {
     const device uint4* wp = (const device uint4*)(w13 + r * half_h + bq * 32);
     const uint4 w0 = wp[0], w1 = wp[1];
     const uint s4 = *(const device uint*)(sc + r * blocks + 4u * bq);
+    const half2 se = as_type<half2>((s4 << 7) & 0x7F807F80u), so = as_type<half2>((s4 >> 1) & 0x7F807F80u);
     _Pragma("clang loop unroll(full)") for (uint h = 0; h < 4; ++h) {
       float4 xv[4];
       _Pragma("clang loop unroll(full)") for (uint i = 0; i < 4; ++i)
-        xv[i] = *(const device float4*)(xp + bq * 64u + 16u * h + 4u * i);
+        xv[i] = *(const device float4*)(xp + ((DEC & 8u) ? (bq * 64u + 16u * h + 4u * i) & 1023u : bq * 64u + 16u * h + 4u * i));
       const uint2 w = h == 0 ? w0.xy : h == 1 ? w0.zw : h == 2 ? w1.xy : w1.zw;
-      a += ink2_bt_dot16(w, (const thread float*)xv) * ink2_e4m3((s4 >> (8u * h)) & 0xFFu);
+      if (DEC & 2u)
+        a += ink2_dot16d<DEC>(w, (const thread float*)xv) * float(h == 0 ? se.x : h == 1 ? so.x : h == 2 ? se.y : so.y);
+      else
+        a += ink2_dot16d<DEC>(w, (const thread float*)xv) * ink2_e4m3((s4 >> (8u * h)) & 0xFFu);
     }
   }
   a += simd_shuffle_xor(a, 2);
   a += simd_shuffle_xor(a, 1);
-  const float os = outer[e];
+  const float os = (DEC & 2u) ? outer[e] * kInk2Fold : outer[e];
   const float g = simd_shuffle(a, ushort((lane & 3u) * 8u)) * os, u = simd_shuffle(a, ushort((lane & 3u) * 8u + 4u)) * os;
   if (lane < min(4u, p.I - j0))
     act[(size_t(t) * p.K_top + slot) * p.I + j0 + lane] =
         (4.0f * metal::precise::tanh(g * 0.25f)) * (1.0f / (1.0f + metal::precise::exp(-g))) *
         (25.0f * metal::precise::tanh(u * 0.04f));
 }
+#define INK2_W13Q4(name, dec) \
+  template [[host_name(name)]] [[kernel]] decltype(ink2_moe_nvfp4_w13_q4_t<dec>) ink2_moe_nvfp4_w13_q4_t<dec>;
+INK2_W13Q4("ink2_moe_nvfp4_w13_q4", 0) INK2_W13Q4("ink2_moe_nvfp4_w13_q4_d1", 1) INK2_W13Q4("ink2_moe_nvfp4_w13_q4_d2", 2)
+INK2_W13Q4("ink2_moe_nvfp4_w13_q4_d3", 3) INK2_W13Q4("ink2_moe_nvfp4_w13_q4_d4", 4) INK2_W13Q4("ink2_moe_nvfp4_w13_q4_d8", 8)
+INK2_W13Q4("ink2_moe_nvfp4_w13_q4_d7", 7) INK2_W13Q4("ink2_moe_nvfp4_w13_q4_d11", 11)
+#undef INK2_W13Q4
 
 // w2 + weighted sum over the K slots: the (slot, block) loop flattened, K * I/16 units split evenly over the lanes
 // (I = 1152: 576 = 18 x 32; per slot 72 blocks gave lanes 3 or 2 steps), 2 rows per simdgroup (8 per threadgroup)
-[[kernel]] void ink2_moe_nvfp4_w2_f2(const device float* act [[buffer(0)]], const device uint* eid [[buffer(1)]],
+template <uint DEC>
+[[kernel]] void ink2_moe_nvfp4_w2_f2_t(const device float* act [[buffer(0)]], const device uint* eid [[buffer(1)]],
                                      const device float* ew [[buffer(2)]], const device uchar* w2 [[buffer(3)]],
                                      const device uchar* sc [[buffer(4)]], const device float* outer [[buffer(5)]],
                                      device float* out [[buffer(6)]], constant Ink2MoeP& p [[buffer(7)]],
@@ -2678,14 +2722,15 @@ NI_INLINE float ink2_bt_dot16(uint2 pw, const thread float* xf) {
   uint slot = lane / blocks, blk = lane % blocks;
   for (uint u = lane; u < units; u += 32u) {
     const uint e = eid[size_t(t) * p.K_top + slot];
-    const float wt = ew[size_t(t) * p.K_top + slot] * outer[e];
+    const float wt = (DEC & 2u) ? (ew[size_t(t) * p.K_top + slot] * outer[e]) * kInk2Fold
+                                : ew[size_t(t) * p.K_top + slot] * outer[e];
     const size_t ra = size_t(e) * p.H + n0, rb = size_t(e) * p.H + n1;
     const device float* ap = act + (size_t(t) * p.K_top + slot) * p.I + blk * 16u;
     const float4 av[4] = {*(const device float4*)(ap + 0u), *(const device float4*)(ap + 4u),
                           *(const device float4*)(ap + 8u), *(const device float4*)(ap + 12u)};
     const thread float* af = (const thread float*)av;
-    t0 += ink2_bt_dot16(*(const device uint2*)(w2 + ra * half_i + blk * 8), af) * (ink2_e4m3(sc[ra * blocks + blk]) * wt);
-    t1 += ink2_bt_dot16(*(const device uint2*)(w2 + rb * half_i + blk * 8), af) * (ink2_e4m3(sc[rb * blocks + blk]) * wt);
+    t0 += ink2_dot16d<DEC>(*(const device uint2*)(w2 + ra * half_i + blk * 8), af) * (ink2_e4m3d<DEC>(sc[ra * blocks + blk]) * wt);
+    t1 += ink2_dot16d<DEC>(*(const device uint2*)(w2 + rb * half_i + blk * 8), af) * (ink2_e4m3d<DEC>(sc[rb * blocks + blk]) * wt);
     blk += 32u;
     while (blk >= blocks) {
       blk -= blocks;
@@ -2699,13 +2744,17 @@ NI_INLINE float ink2_bt_dot16(uint2 pw, const thread float* xf) {
     if (n1 != n0) out[size_t(t) * p.H + n1] = t1;
   }
 }
+template [[host_name("ink2_moe_nvfp4_w2_f2")]] [[kernel]] decltype(ink2_moe_nvfp4_w2_f2_t<0>) ink2_moe_nvfp4_w2_f2_t<0>;
+template [[host_name("ink2_moe_nvfp4_w2_f2_d1")]] [[kernel]] decltype(ink2_moe_nvfp4_w2_f2_t<1>) ink2_moe_nvfp4_w2_f2_t<1>;
+template [[host_name("ink2_moe_nvfp4_w2_f2_d2")]] [[kernel]] decltype(ink2_moe_nvfp4_w2_f2_t<2>) ink2_moe_nvfp4_w2_f2_t<2>;
+template [[host_name("ink2_moe_nvfp4_w2_f2_d3")]] [[kernel]] decltype(ink2_moe_nvfp4_w2_f2_t<3>) ink2_moe_nvfp4_w2_f2_t<3>;
 
 // w2_f2 with R rows per simdgroup: act (fp32 [K_top, I], 36.9 KB > 8 KB L1) is re-read once per R rows instead of per
 // 2. B = 1: the f2 lane walk, so each row's sum is bit-identical to f2; B = 2: 2 blocks (16-byte weight loads) per unit
 // (sum order changes, ~ulp). Grid: (H / (4 R), T) x 128.
 // SC: one row (T = 1) with the mlp short conv + residual (ink2_sconv_static's T = 1 body) applied by the lane that owns
 // the output channel (lab7: one stage less per MoE visit).
-template <uint R, uint B, bool SC>
+template <uint R, uint B, bool SC, uint DEC = 0>
 [[kernel]] void ink2_moe_nvfp4_w2_fr(const device float* act [[buffer(0)]], const device uint* eid [[buffer(1)]],
                                      const device float* ew [[buffer(2)]], const device uchar* w2 [[buffer(3)]],
                                      const device uchar* sc [[buffer(4)]], const device float* outer [[buffer(5)]],
@@ -2724,8 +2773,11 @@ template <uint R, uint B, bool SC>
   uint slot = lane / ub, blk = lane % ub;
   for (uint u = lane; u < units; u += 32u) {
     const uint e = eid[size_t(t) * p.K_top + slot];
-    const float wt = ew[size_t(t) * p.K_top + slot] * outer[e];
-    const device float* ap = act + (size_t(t) * p.K_top + slot) * p.I + blk * (16u * B);
+    const float wt = (DEC & 2u) ? (ew[size_t(t) * p.K_top + slot] * outer[e]) * kInk2Fold
+                                : ew[size_t(t) * p.K_top + slot] * outer[e];
+    size_t aoff = (size_t(t) * p.K_top + slot) * p.I + blk * (16u * B);
+    if (DEC & 8u) aoff &= 1023u;
+    const device float* ap = act + aoff;
     float4 av[4 * B];
     NI_UNROLL for (uint i = 0u; i < 4u * B; ++i) av[i] = *(const device float4*)(ap + 4u * i);
     const thread float* af = (const thread float*)av;
@@ -2733,8 +2785,8 @@ template <uint R, uint B, bool SC>
     NI_UNROLL for (uint q = 0u; q < R; ++q) {
       const size_t r = rbase + nr[q];
       if (B == 1u) {
-        acc[q] += ink2_bt_dot16(*(const device uint2*)(w2 + r * half_i + blk * 8u), af) *
-                  (ink2_e4m3(sc[r * blocks + blk]) * wt);
+        acc[q] += ink2_dot16d<DEC>(*(const device uint2*)(w2 + r * half_i + blk * 8u), af) *
+                  (ink2_e4m3d<DEC>(sc[r * blocks + blk]) * wt);
       } else {
         const uint4 w = *(const device uint4*)(w2 + r * half_i + blk * 16u);
         const uint s2 = uint(*(const device ushort*)(sc + r * blocks + 2u * blk));
@@ -2763,6 +2815,13 @@ template <uint R, uint B, bool SC>
       ink2_moe_nvfp4_w2_fr<r, b, true>;
 INK2_W2R(2, 1) INK2_W2R(4, 1) INK2_W2R(8, 1) INK2_W2R(2, 2) INK2_W2R(4, 2) INK2_W2R(8, 2)
 #undef INK2_W2R
+#define INK2_W2D(dec, sc, suf)                                                                                       \
+  template [[host_name("ink2_moe_nvfp4_w2_r2b1" suf "_d" #dec)]] [[kernel]]                                         \
+      decltype(ink2_moe_nvfp4_w2_fr<2, 1, sc, dec>) ink2_moe_nvfp4_w2_fr<2, 1, sc, dec>;
+INK2_W2D(1, false, "") INK2_W2D(2, false, "") INK2_W2D(3, false, "")
+INK2_W2D(1, true, "_sc") INK2_W2D(2, true, "_sc") INK2_W2D(3, true, "_sc") INK2_W2D(4, true, "_sc") INK2_W2D(8, true, "_sc")
+INK2_W2D(7, true, "_sc") INK2_W2D(11, true, "_sc")
+#undef INK2_W2D
 
 // ---- 12. MoE MXFP8 (layers 20..23): F8_E4M3 weights + UE8M0 block-32 scales ----
 [[kernel]] void ink2_moe_mxfp8_w13_situ(const device float* x [[buffer(0)]], const device uint* eid [[buffer(1)]],

@@ -106,6 +106,7 @@ struct Ink2Layer {
   const Tensor *w13 = nullptr, *w13_sc = nullptr, *w2 = nullptr, *w2_sc = nullptr;
   Ink2Blocks gguf_gu, gguf_down;
   Buffer w13_outer, w2_outer;  // FP32 [128] = amax[e] / outer_scale_denominator[0] (NVFP4 only)
+  Buffer w13_rp, w2_rp;        // NVFP4 nibbles repacked for the lean decode (repack_moe; == w13/w2->buf when in place)
   Buffer qkvrsg_w;             // Fused BF16 [wq_du; wr_du; attn_sink_proj; gate_attn; wk_dv; wv_dv]
   Ink2Q8 qkvrsg_q8;            // its Q8 copy (decode / verify rows)
   uint32_t qkvrsg_offs[7] = {};
@@ -234,6 +235,13 @@ class Inkling2 : public Model {
   // copies beside the Q8 ones for the prefill GEMMs (the tensor-unit BF16 GEMMs; +1.04 GB), =0 frees them (#1381)
   bool q8m_ = false, q8_bf16_ = false;
   bool enc_q8(Encoder& e, const Ink2Mat& w, const Buffer& x, const Buffer& y, int M, uint32_t N, bool add);
+  // lab10 NI_INK2_REPACK (1 in place, 2 = beside the original for BENCH_AB NI_INK2_LEAN) and the sign-0 scale check
+  // behind NI_INK2_SCPAIR
+  void repack_moe();
+  uint32_t moe_dec(bool w2) const;  // DEC mask for the bt kernels this step (ink2.metal ink2_dot8d)
+  bool moe_lean() const;
+  int repack_ = 0;
+  bool sc_pos_ = false;
   // small-T MessageGate as 2 kernels (norms folded into down, coalesced up_mix); NI_INK2_MSGF=0 = prep/down_s/up_mix_s
   static bool msg_fused() {
     static const bool v = !getenv("NI_INK2_MSGF") || atoi(getenv("NI_INK2_MSGF")) != 0;

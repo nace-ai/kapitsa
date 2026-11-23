@@ -15,6 +15,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
@@ -853,11 +854,94 @@ void Inkling2::load() {
       }
     }
   }
+  repack_moe();
   Gpu::get().make_resident(ws_.buffers());
   alloc_buffers();
   Gpu::get().make_resident(owned_bufs_);
   logi("loaded %s: Inkling-2-Mini (24 layers / 48 visits, vocab %d%s), %.2f GB text weights in %.0f ms",
        path_.c_str(), cfg_.vocab, q8_dense_ ? ", Q8 dense" : "", (ws_.total_bytes() + q8_bytes) / 1e9, now_ms() - t0);
+}
+
+namespace {
+// lab10: per 16-bit half, nibble 0 -> sign 15 / eem 9-11, 1 -> 12 / 6-8, 2 -> 13 / 3-5, 3 -> 14 / 0-2 (ink2_dot8d DEC 1;
+// inkling/lab10/repack_check.cpp: identical half bits to ink2_bt_dot8 for all 2^32 words; ink2t_unrp inverts it)
+inline uint16_t ink2_repack16(uint16_t v) {
+  const uint32_t q0 = v & 15u, q1 = (v >> 4) & 15u, q2 = (v >> 8) & 15u, q3 = v >> 12u;
+  return uint16_t(((q0 & 8u) << 12) | ((q0 & 7u) << 9) | ((q1 & 8u) << 9) | ((q1 & 7u) << 6) | ((q2 & 8u) << 10) |
+                  ((q2 & 7u) << 3) | ((q3 & 8u) << 11) | (q3 & 7u));
+}
+template <class F>
+void ink2_par(size_t n, const F& f) {  // f(begin, end) over 8 threads
+  std::vector<std::thread> th;
+  const size_t step = (n + 7) / 8;
+  for (size_t b = 0; b < n; b += step) th.emplace_back([&f, b, step, n] { f(b, std::min(n, b + step)); });
+  for (auto& t : th) t.join();
+}
+int ink2_env(const char* name, int dflt) { return getenv(name) ? atoi(getenv(name)) : dflt; }
+}  // namespace
+
+void Inkling2::repack_moe() {
+  static const char* ab = getenv("BENCH_AB");
+  repack_ = ink2_env("NI_INK2_REPACK", 0);
+  const bool want_sc = false;
+  const bool bt = ink2_env("NI_INK2_MOEBT", 1) != 0 && cfg_.hidden % 256 == 0 && cfg_.moe_I % 16 == 0 && cfg_.moe_I >= 512;
+  if (repack_ && !bt) {
+    fprintf(stderr, "[kapitsa] NI_INK2_REPACK needs the bt MoE kernels (NI_INK2_MOEBT, H %% 256, I %% 16): off\n");
+    repack_ = 0;
+  }
+  if (!repack_ && !want_sc) return;
+  size_t bytes = 0, bad_sc = 0;
+  for (Ink2Layer& L : layers_) {
+    if (L.is_mxfp8 || !L.w13) continue;
+    for (int k = 0; k < 2 && want_sc; ++k) {  // E4M3 block scales: DEC 2 drops the sign term
+      const Tensor* t = k ? L.w2_sc : L.w13_sc;
+      const uint8_t* b = t->buf.as<uint8_t>();
+      std::atomic<size_t> nb{0};
+      ink2_par(size_t(t->numel()), [&](size_t i0, size_t i1) {
+        size_t c = 0;
+        for (size_t i = i0; i < i1; ++i) c += b[i] >> 7;
+        nb += c;
+      });
+      bad_sc += nb;
+    }
+    if (!repack_) continue;
+    for (int k = 0; k < 2; ++k) {
+      const Tensor* t = k ? L.w2 : L.w13;
+      const size_t n = size_t(t->numel()) / 2;  // 16-bit halves
+      Buffer dst = t->buf;
+      if (repack_ == 2) {
+        dst = Gpu::get().alloc(n * 2, k ? "ink2_w2_rp" : "ink2_w13_rp");
+        owned_bufs_.push_back(dst);
+        bytes += n * 2;
+      }
+      const uint16_t* src = t->buf.as<uint16_t>();
+      uint16_t* d = dst.as<uint16_t>();
+      ink2_par(n, [&](size_t i0, size_t i1) {
+        for (size_t i = i0; i < i1; ++i) d[i] = ink2_repack16(src[i]);
+      });
+      (k ? L.w2_rp : L.w13_rp) = dst;
+    }
+  }
+  sc_pos_ = want_sc && bad_sc == 0;
+  if (want_sc && !sc_pos_)
+    fprintf(stderr, "[kapitsa] NI_INK2_SCPAIR: %zu NVFP4 block scales have the sign bit set: off\n", bad_sc);
+  fprintf(stderr, "[kapitsa] ink2 MoE repack %d (%.2f GB extra), scale pair %s\n", repack_, bytes / 1e9,
+          sc_pos_ ? "ok" : "off");
+}
+
+// lean: repacked weights this step (NI_INK2_REPACK=1 always; =2 per NI_INK2_LEAN, default 1, BENCH_AB-able)
+bool Inkling2::moe_lean() const {
+  static const int lean_env = ink2_env("NI_INK2_LEAN", 1);
+  return repack_ == 1 || (repack_ == 2 && ink2_ab("NI_INK2_LEAN", lean_env) != 0);
+}
+
+// DEC mask for this step: 1 lean (repacked), 2 scale pair (NI_INK2_SCPAIR, sign-0 scales checked), probes
+// NI_INK2_LITE (BENCH_AB only; wrong math): 1 / 2 w13 decode-lite / x-lite, 4 / 8 w2 decode-lite / act-lite
+uint32_t Inkling2::moe_dec(bool w2) const {
+  static const int lean_mask = ink2_env("NI_INK2_LEANMASK", 3);  // (debug: 1 w13 only, 2 w2 only; needs REPACK=2)
+  const int lite = ink2_ab("NI_INK2_LITE", 0) >> (w2 ? 2 : 0);
+  return (moe_lean() && (lean_mask >> (w2 ? 1 : 0) & 1) ? 1u : 0u) |
+         (lite & 1 ? 4u : 0u) | (lite & 2 ? 8u : 0u);
 }
 
 bool Inkling2::enc_q8(Encoder& e, const Ink2Mat& q, const Buffer& x, const Buffer& y, int M, uint32_t N, bool add) {
@@ -2264,9 +2348,10 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         const uint32_t w13_s_stride = L.is_mxfp8 ? (2 * I * (H / 32)) : (2 * I * (H / 16));
         {
           const Ink2tGemmP gp{P, 2 * I, H, H, 2 * I, 0u, w13_q_stride, w13_s_stride, uint32_t(cfg_.top_k)};
-          e.use(base_pipe((L.is_mxfp8 ? "ink2_t_mxfp8_moe_w13" : "ink2_t_nvfp4_moe_w13") + ms));
+          const bool rp = !L.is_mxfp8 && moe_lean();
+          e.use(base_pipe((L.is_mxfp8 ? "ink2_t_mxfp8_moe_w13" : "ink2_t_nvfp4_moe_w13") + ms + (rp ? "_rp" : "")));
           e.buf(0, x_mlp_);
-          e.buf(1, L.w13->buf);
+          e.buf(1, rp ? L.w13_rp : L.w13->buf);
           e.buf(2, L.w13_sc->buf);
           e.buf(3, moe_tmp_);
           e.val(4, gp);
@@ -2288,9 +2373,10 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         const uint32_t w2_s_stride = L.is_mxfp8 ? (H * (I / 32)) : (H * (I / 16));
         {
           const Ink2tGemmP gp{P, H, I, I, H, 0u, w2_q_stride, w2_s_stride, uint32_t(cfg_.top_k)};
-          e.use(base_pipe((L.is_mxfp8 ? "ink2_t_mxfp8_moe_w2" : "ink2_t_nvfp4_moe_w2") + ms));
+          const bool rp = !L.is_mxfp8 && moe_lean();
+          e.use(base_pipe((L.is_mxfp8 ? "ink2_t_mxfp8_moe_w2" : "ink2_t_nvfp4_moe_w2") + ms + (rp ? "_rp" : "")));
           e.buf(0, moe_act_h_);
-          e.buf(1, L.w2->buf);
+          e.buf(1, rp ? L.w2_rp : L.w2->buf);
           e.buf(2, L.w2_sc->buf);
           e.buf(3, moe_tmp_);
           e.val(4, gp);
@@ -2315,10 +2401,12 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
           // NI_INK2_MOEBT=0: the per-slot LUT kernels (bit-decoded wide kernels: lab4, -2.5 ms/token at 8k)
           static const bool moebt = !getenv("NI_INK2_MOEBT") || atoi(getenv("NI_INK2_MOEBT")) != 0;
           const bool bt = moebt && H % 256 == 0 && cfg_.moe_I % 16 == 0 && cfg_.moe_I >= 512;
-          e.use(ink2_pipe(bt ? "ink2_moe_nvfp4_w13_q4" : moe_lut() ? "ink2_moe_nvfp4_w13_situ_l" : "ink2_moe_nvfp4_w13_situ"));
+          const uint32_t dec13 = bt ? moe_dec(false) : 0u, dec2 = bt ? moe_dec(true) : 0u;
+          const std::string d13 = dec13 ? "_d" + std::to_string(dec13) : "", d2 = dec2 ? "_d" + std::to_string(dec2) : "";
+          e.use(ink2_pipe(bt ? "ink2_moe_nvfp4_w13_q4" + d13 : moe_lut() ? "ink2_moe_nvfp4_w13_situ_l" : "ink2_moe_nvfp4_w13_situ"));
           e.buf(0, x_mlp_);
           e.buf(1, eid_);
-          e.buf(2, L.w13->buf);
+          e.buf(2, dec13 & 1u ? L.w13_rp : L.w13->buf);
           e.buf(3, L.w13_sc->buf);
           e.buf(4, L.w13_outer);
           e.buf(5, moe_act_);
@@ -2339,12 +2427,12 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
           const bool wr2 = wr || mlp_sc_fused;
           const uint32_t w2rows = wr2 ? w2r : 2u;
           e.use(ink2_pipe(wr2 ? "ink2_moe_nvfp4_w2_r" + std::to_string(w2r) + "b" + std::to_string(w2b) +
-                                    (mlp_sc_fused ? "_sc" : "")
-                          : bt ? "ink2_moe_nvfp4_w2_f2" : moe_lut() ? "ink2_moe_nvfp4_w2_acc_l" : "ink2_moe_nvfp4_w2_acc"));
+                                    (mlp_sc_fused ? "_sc" : "") + d2
+                          : bt ? "ink2_moe_nvfp4_w2_f2" + d2 : moe_lut() ? "ink2_moe_nvfp4_w2_acc_l" : "ink2_moe_nvfp4_w2_acc"));
           e.buf(0, moe_act_);
           e.buf(1, eid_);
           e.buf(2, ew_);
-          e.buf(3, L.w2->buf);
+          e.buf(3, dec2 & 1u ? L.w2_rp : L.w2->buf);
           e.buf(4, L.w2_sc->buf);
           e.buf(5, L.w2_outer);
           e.buf(6, moe_out_);
