@@ -1,6 +1,7 @@
 # Concatenates src/kernels/common.h + src/kernels/inkling2/*.metal into one C++ string literal:
 # Inkling-2 kernels compiled once lazily via Gpu::compile_extra("Ink2", kInk2KernelSource).
 file(READ ${SRC_DIR}/common.h COMMON)
+file(READ ${SRC_DIR}/inkling_kv.h INKLING_KV)
 file(READ ${SRC_DIR}/inkling2/gguf_blocks.h GGUF_BLOCKS)
 file(READ ${SRC_DIR}/../gguf/iq_grids.h IQ_GRIDS)
 set(IQ2 "")
@@ -17,7 +18,7 @@ if(NOT IQ3)
   message(FATAL_ERROR "Inkling2: IQ3_XXS codebook not found")
 endif()
 string(REPLACE "inline constexpr uint32_t" "constant uint" IQ3 "${IQ3}")
-set(ALL "${COMMON}\nnamespace ink2_gguf {\n${IQ2}\n${IQ3}\n}\n${GGUF_BLOCKS}\n")
+set(ALL "${COMMON}\n${INKLING_KV}\nnamespace ink2_gguf {\n${IQ2}\n${IQ3}\n}\n${GGUF_BLOCKS}\n")
 file(GLOB METALS ${SRC_DIR}/inkling2/*.metal)
 list(SORT METALS)
 foreach(m ${METALS})

@@ -1,5 +1,4 @@
 #include "model/inkling2.h"
-#include "engine/device_profile.h"
 
 #include "engine/device_profile.h"
 #include "engine/profile.h"
@@ -36,6 +35,14 @@ using json = nlohmann::json;
 namespace {
 
 constexpr uint32_t kMaxAttnChunks = 64;
+
+Ink2KvFormat first_use_cached_process_global_kv_format() {
+  static const Ink2KvFormat format = [] {
+    const char* v = getenv("NI_INK2_GLOBAL_KV8");
+    return v && !strcmp(v, "1") ? Ink2KvFormat::I8 : Ink2KvFormat::F16;
+  }();
+  return format;
+}
 
 size_t visit_conv_floats(const Ink2Config& c) {
   const size_t kvd = size_t(c.hkv) * size_t(c.head_dim);
@@ -145,18 +152,24 @@ struct Ink2SconvDynP {
 struct Ink2QkvrP {
   uint32_t T, Hq, Hkv, D, d_rel, pos0, kv_cap, is_swa, scale_f32;
   float qk_clip, r_clip, v_eps, log_floor, log_alpha;
+  uint32_t kv_format;
 };
+static_assert(sizeof(Ink2QkvrP) == 60 && offsetof(Ink2QkvrP, kv_format) == 56);
 struct Ink2RelP {
   uint32_t T, Hq, d_rel, extent, proj_f32;
 };
 struct Ink2AttnDecP {
   uint32_t pos, kv_cap, Hq, Hkv, D, rel_extent, is_swa, swa, chunk, nchunks;
   float scale;
+  uint32_t kv_format;
 };
+static_assert(sizeof(Ink2AttnDecP) == 48 && offsetof(Ink2AttnDecP, kv_format) == 44);
 struct Ink2AttnPfP {
   uint32_t T, pos0, kv_cap, Hq, Hkv, D, rel_extent, is_swa, swa;
   float scale;
+  uint32_t kv_format;
 };
+static_assert(sizeof(Ink2AttnPfP) == 44 && offsetof(Ink2AttnPfP, kv_format) == 40);
 struct Ink2RouteP {
   uint32_t T, E, K, bias_f32;
   float route_scale;
@@ -329,7 +342,7 @@ Ink2Config Inkling2::read_config(const std::string& dir) {
     cfg_error("%s: Inkling-2 requires mlp_gate_softcap 4 and mlp_up_softcap 25", dir.c_str());
 
   if (c.hidden <= 0 || c.hidden > 2304 || c.hidden % 128 != 0 || c.num_layers < 2 || c.vocab <= 0 ||
-      c.vocab > c.vocab_padded || c.head_dim != 128 || c.hq <= 0 || c.hkv <= 0 || c.hq % c.hkv != 0 ||
+      c.vocab > c.vocab_padded || c.head_dim != INK2_KV_HEAD_DIM || c.hq <= 0 || c.hkv <= 0 || c.hq % c.hkv != 0 ||
       c.d_rel <= 0 || c.d_rel > 128 || c.d_rel % 4 != 0 || c.rel_extent <= 0 || c.swa <= 0 ||
       c.n_experts != 128 || c.top_k < 1 || c.top_k > 8 || c.moe_I <= 0 || c.moe_I % 32 != 0 ||
       c.gate_rank != 64 || c.block_sz <= 0 || (c.num_layers + c.block_sz - 1) / c.block_sz > 4 ||
@@ -385,12 +398,11 @@ Ink2Config Inkling2::read_config(const std::string& dir) {
   return c;
 }
 
-size_t Inkling2::kv_per_pos(const Ink2Config& c) {
+size_t Inkling2::kv_per_pos(const Ink2Config& c, Ink2KvFormat global_format) {
   int n_global = 0;
   for (int ip : c.schedule)
     if (!c.is_local[size_t(ip)]) ++n_global;
-  // 2 (K, V) * hkv * head_dim * sizeof(half)
-  return size_t(n_global) * 2 * size_t(c.hkv) * size_t(c.head_dim) * 2;
+  return size_t(n_global) * 2 * size_t(c.hkv) * ink2_kv_row_bytes(global_format);
 }
 
 size_t Inkling2::conv_bytes_per_seq(const Ink2Config& c) {
@@ -402,7 +414,7 @@ size_t Inkling2::ring_bytes_per_seq(const Ink2Config& c, int tmax) {
   for (int ip : c.schedule)
     if (c.is_local[size_t(ip)]) ++n_swa;
   const int rcap = (c.swa + std::max(1, tmax) + 15) / 16 * 16;
-  return size_t(n_swa) * 2 * size_t(rcap) * size_t(c.hkv) * size_t(c.head_dim) * 2;
+  return size_t(n_swa) * 2 * size_t(rcap) * size_t(c.hkv) * ink2_kv_row_bytes(Ink2KvFormat::F16);
 }
 
 static bool ink2_tensor_pf_want() {
@@ -414,6 +426,7 @@ static bool ink2_tensor_pf_want() {
 }
 
 MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
+  const Ink2KvFormat global_format = first_use_cached_process_global_kv_format();
   const Ink2Config c = read_config(dir);
   const int chunk = prefill_chunk > 0 ? prefill_chunk : 512;
   const size_t T = size_t(std::max(8, chunk));
@@ -437,7 +450,7 @@ MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
   const auto model_config = json_file(dir + "/config.json");
   const bool gguf = model_config->contains("gguf_file");
   m.weights = gguf ? model_config->at("gguf_tensor_bytes").get<size_t>() + (16u << 20) : safetensors_llm_bytes(dir);
-  m.kv_per_pos = kv_per_pos(c);
+  m.kv_per_pos = kv_per_pos(c, global_format);
   m.slot_state = 3 * (ring_bytes_per_seq(c, chunk) + conv_bytes_per_seq(c));
   m.activations = T * per_row + fixed + moe_tmp_bytes + (16u << 20);
   m.hidden = c.hidden;
@@ -447,7 +460,8 @@ MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
   return m;
 }
 
-Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
+Inkling2::Inkling2(const std::string& path, int prefill_chunk)
+    : global_kv_format_(first_use_cached_process_global_kv_format()) {
   path_ = path;
   while (path_.size() > 1 && path_.back() == '/') path_.pop_back();
   if (!is_model(path_)) fatal("%s: not an Inkling-2 checkpoint folder", path.c_str());
@@ -741,6 +755,10 @@ void Inkling2::load() {
   Gpu::get().make_resident(owned_bufs_);
   logi("loaded %s: Inkling-2-Mini (24 layers / 48 visits, vocab %d%s), %.2f GB text weights in %.0f ms",
        path_.c_str(), cfg_.vocab, q8_dense_ ? ", Q8 dense" : "", (ws_.total_bytes() + q8_bytes) / 1e9, now_ms() - t0);
+  fprintf(stderr, "inkling2: experimental global KV=%s head_row=%zu B token_row=%zu B K+V=%zu B/pos; "
+                  "SWA=FP16 head_row=%zu B (NI_INK2_GLOBAL_KV8=%u)\n",
+          global_kv_format_ == Ink2KvFormat::I8 ? "I8" : "FP16", ink2_kv_row_bytes(global_kv_format_),
+          kv_grow_unit(), kv_bytes_per_pos(), ink2_kv_row_bytes(Ink2KvFormat::F16), uint32_t(global_kv_format_));
 }
 
 void Inkling2::alloc_buffers() {
@@ -827,7 +845,7 @@ bool Inkling2::ensure_rings(Seq& s) {
     // Rings may be allocated alongside first linear KV capacity inside reserve(); if all visits were SWA they are handled below.
   }
   Gpu& g = Gpu::get();
-  const size_t row = size_t(cfg_.hkv) * size_t(cfg_.head_dim) * 2;
+  const size_t row = size_t(cfg_.hkv) * ink2_kv_row_bytes(Ink2KvFormat::F16);
   const size_t nv = cfg_.schedule.size();
   size_t need = 0;
   for (size_t v = 0; v < nv; ++v)
@@ -849,7 +867,7 @@ bool Inkling2::ensure_rings(Seq& s) {
 }
 
 size_t Inkling2::kv_grow_unit() const {
-  return size_t(cfg_.hkv) * size_t(cfg_.head_dim) * 2u;
+  return size_t(cfg_.hkv) * ink2_kv_row_bytes(global_kv_format_);
 }
 
 size_t Inkling2::kv_grow_held(const Seq& s) const {
@@ -860,12 +878,13 @@ bool Inkling2::reserve(Seq& s, int need) {
   if (need <= s.cap) return ensure_rings(s);
   if (need > s.limit) return false;
   Gpu& g = Gpu::get();
-  const size_t per = kv_per_pos(cfg_);
+  const size_t per = kv_bytes_per_pos();
   const size_t row = kv_grow_unit();
+  const size_t local_row = size_t(cfg_.hkv) * ink2_kv_row_bytes(Ink2KvFormat::F16);
   const size_t nv = cfg_.schedule.size();
   size_t rings = 0;
   for (size_t v = 0; v < nv; ++v)
-    if (cfg_.is_local[size_t(cfg_.schedule[v])] && !s.kc[v]) rings += 2 * row * size_t(ring_rows_);
+    if (cfg_.is_local[size_t(cfg_.schedule[v])] && !s.kc[v]) rings += 2 * local_row * size_t(ring_rows_);
   const size_t alloc = g.allocated_bytes();
   const size_t room = !mem_budget_ ? SIZE_MAX : (mem_budget_ > alloc + rings ? mem_budget_ - alloc - rings : 0);
   const kvgrow::Plan p = kvgrow::plan(s.cap, need, s.limit, per, row, room);
@@ -1428,6 +1447,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
 
     // Q/K/R clipping + V norm + log scaling + KV cache write
     const uint32_t kv_cap = L.is_swa ? uint32_t(ring_rows_) : uint32_t(s.cap);
+    const uint32_t kv_format = uint32_t(L.is_swa ? Ink2KvFormat::F16 : global_kv_format_);
     {
       const Ink2QkvrP qp{uint32_t(T),
                          uint32_t(cfg_.hq),
@@ -1442,7 +1462,8 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
                          cfg_.rel_clip,
                          cfg_.rms_eps,
                          cfg_.log_floor,
-                         cfg_.log_alpha};
+                         cfg_.log_alpha,
+                         kv_format};
       e.use(ink2_pipe("ink2_qkvr_prep"));
       e.buf(0, q_);
       e.buf(1, k_);
@@ -1494,7 +1515,8 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
                              uint32_t(cfg_.swa),
                              chunk,
                              nchunks,
-                             attn_scale};
+                             attn_scale,
+                             kv_format};
       e.use(ink2_pipe("ink2_attn_decode"));
       e.buf(0, q_);
       e.buf(1, s.kc[v_idx]);
@@ -1525,7 +1547,8 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
                             uint32_t(cfg_.rel_extent),
                             L.is_swa ? 1u : 0u,
                             uint32_t(cfg_.swa),
-                            attn_scale};
+                            attn_scale,
+                            kv_format};
       static const bool qat_env = !getenv("NI_INK2_ATTN_T") || atoi(getenv("NI_INK2_ATTN_T")) != 0;
       static const bool qat_small = getenv("MTL_SHADER_VALIDATION") && atoi(getenv("MTL_SHADER_VALIDATION")) != 0;
       const bool use_qat = qat_env && tensor_pf_ && T >= 16 && cfg_.head_dim == 128 && cfg_.hq == cfg_.hkv * 3;

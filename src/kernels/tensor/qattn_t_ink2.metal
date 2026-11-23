@@ -1,4 +1,5 @@
 #include "common.h"
+#include "inkling_kv.h"
 #include <metal_tensor>
 #include <MetalPerformancePrimitives/MetalPerformancePrimitives.h>
 using namespace mpp::tensor_ops;
@@ -7,7 +8,6 @@ using namespace mpp::tensor_ops;
 //
 // Mirrors qattn_t_flint.metal (16x16 register tiles, nhf_mma from nh_attn_t.metal, qa_load_kv from qattn_t.metal;
 // filename sorts after both) for Inkling-2's attention geometry: D = 128, G = Hq / Hkv = 3 (24 query / 8 KV heads),
-// [kv_cap, Hkv, D] half KV cache (ring buffer when is_swa != 0), per-(token, head) float sinks, learned relative
 // position bias rb [T, Hq, rel_extent], and sigmoid output gate [T, Hq, D] -> float out [T, Hq, D].
 // Each simdgroup takes 16 consecutive tokens of 1 query head; a threadgroup of NB * 3 simdgroups takes 16 * NB tokens
 // across all 3 query heads of 1 KV head, reusing each BK-key K/V tile 16 * NB * 3 times.
@@ -16,14 +16,23 @@ using namespace mpp::tensor_ops;
 struct Ink2AttnTP {  // = Ink2AttnPfP (inkling2/ink2.metal)
   uint T, pos0, kv_cap, Hq, Hkv, D, rel_extent, is_swa, swa;
   float scale;
+  uint kv_format;
 };
+
+NI_INLINE uint4 ink2t_kv8_load8(const device half* cache, size_t row, uint d) {
+  const device char* src = (const device char*)cache + row * INK2_KV_I8_BYTES;
+  const float scale = *(const device float*)(src + INK2_KV_SCALE_OFFSET);
+  const half4 lo = half4(float4(*(const device char4*)(src + d)) * scale);
+  const half4 hi = half4(float4(*(const device char4*)(src + d + 4u)) * scale);
+  return uint4(as_type<uint2>(lo), as_type<uint2>(hi));
+}
 
 template <int NB, int BK, int LD>
 NI_INLINE void qattn_ink2_impl(const device float* q, const device half* kc, const device half* vc,
                                const device float* rb, const device float* sinks, const device float* gate,
                                device float* out, constant Ink2AttnTP& p, uint2 tg, uint sg, ushort lane,
                                threadgroup half* kt, threadgroup half* vt) {
-  constexpr int D = 128, G = 3, NS = NB * G, KT = BK / 16, T_TG = 16 * NB;
+  constexpr int D = INK2_KV_HEAD_DIM, G = 3, NS = NB * G, KT = BK / 16, T_TG = 16 * NB;
   const uint ntg = (p.T + T_TG - 1) / T_TG;
   const uint kvh = tg.y, tgt0 = (ntg - 1 - tg.x) * T_TG;
   const uint tb = sg / G, gh = sg % G;
@@ -78,9 +87,15 @@ NI_INLINE void qattn_ink2_impl(const device float* q, const device half* kc, con
       uint4 kv4 = uint4(0), vv4 = uint4(0);
       if (key >= kfirst && key < kend) {
         const uint slot = p.is_swa ? (key % p.kv_cap) : key;
-        const size_t at = (size_t(slot) * p.Hkv + kvh) * D + c;
-        kv4 = *(const device uint4*)(kc + at);
-        vv4 = *(const device uint4*)(vc + at);
+        const size_t row = size_t(slot) * p.Hkv + kvh;
+        if (p.kv_format == 1u) {
+          kv4 = ink2t_kv8_load8(kc, row, c);
+          vv4 = ink2t_kv8_load8(vc, row, c);
+        } else {
+          const size_t at = row * D + c;
+          kv4 = *(const device uint4*)(kc + at);
+          vv4 = *(const device uint4*)(vc + at);
+        }
       }
       *(threadgroup uint4*)(kt + r * LD + c) = kv4;
       *(threadgroup uint4*)(vt + r * LD + c) = vv4;

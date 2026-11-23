@@ -2,13 +2,14 @@
 # kernels on Metal 4's tensor_ops (the M5's GPU matrix units), a library of their own compiled as Metal 4 on a GPU that
 # has them (Gpu::compile_extra with metal4).
 file(READ ${SRC_DIR}/common.h COMMON)
+file(READ ${SRC_DIR}/inkling_kv.h INKLING_KV)
 # (+ the IQ2_XXS grid and decode helpers, nh_x2t.metal's)
 file(READ ${SRC_DIR}/iq.h IQ)
 # (+ the Nemotron-H routing helpers the verify's fused router pass shares with that library)
 file(READ ${SRC_DIR}/nemotron/nh_route.h ROUTE)
 # (+ the int8 KV row helpers qattn_t.metal reads)
 file(READ ${SRC_DIR}/kv_int8.h KVQ)
-set(ALL "${COMMON}\n${IQ}\n\n// ---- nemotron/nh_route.h ----\n${ROUTE}\n\n// ---- kv_int8.h ----\n${KVQ}\n")
+set(ALL "${COMMON}\n${INKLING_KV}\n${IQ}\n\n// ---- nemotron/nh_route.h ----\n${ROUTE}\n\n// ---- kv_int8.h ----\n${KVQ}\n")
 file(GLOB METALS ${SRC_DIR}/tensor/*.metal)
 list(SORT METALS)
 foreach(m ${METALS})

@@ -1,4 +1,5 @@
 #include "common.h"
+#include "inkling_kv.h"
 
 // Inkling-2-Mini (thinkingmachines/Inkling-2-Mini, model_type inkling2_loop) Metal kernels.
 // Decode, router GEMMs (exact_f32), norms, attention, and MoE kernels run in FP32 matching the PyTorch
@@ -740,9 +741,33 @@ struct Ink2SconvDynP {
 }
 
 // ---- 7. Q/K/V/R Clip + V Norm + Tau + KV Cache Write ----
+NI_INLINE void ink2_kv_store(device half* cache, size_t row, uint d, uint D, half value, uint format,
+                              threadgroup float* scratch) {
+  if (format == 1u) {
+    const float amax = tg_max(abs(float(value)), scratch, d, D);
+    const float scale = amax == 0.0f ? 1.0f : amax / 127.0f;
+    device char* dst = (device char*)cache + row * INK2_KV_I8_BYTES;
+    dst[d] = char(clamp(rint(float(value) / scale), -127.0f, 127.0f));
+    if (d == 0u) *(device float*)(dst + INK2_KV_SCALE_OFFSET) = scale;
+    if (d < INK2_KV_PADDING_BYTES) dst[INK2_KV_PADDING_OFFSET + d] = 0;
+  } else {
+    cache[row * D + d] = value;
+  }
+}
+
+NI_INLINE half4 ink2_kv_load4(const device half* cache, size_t row, uint d, uint D, uint format) {
+  if (format == 1u) {
+    const device char* src = (const device char*)cache + row * INK2_KV_I8_BYTES;
+    const float scale = *(const device float*)(src + INK2_KV_SCALE_OFFSET);
+    return half4(float4(*(const device char4*)(src + d)) * scale);
+  }
+  return *(const device half4*)(cache + row * D + d);
+}
+
 struct Ink2QkvrP {
   uint T, Hq, Hkv, D, d_rel, pos0, kv_cap, is_swa, scale_f32;
   float qk_clip, r_clip, v_eps, log_floor, log_alpha;
+  uint kv_format;
 };
 
 [[kernel]] void ink2_qkvr_prep(device float* q [[buffer(0)]], const device float* k [[buffer(1)]],
@@ -774,7 +799,7 @@ struct Ink2QkvrP {
     const float val = k[(size_t(t) * p.Hkv + h) * p.D + tid];
     const float ss = tg_sum(val * val, scratch, tid, p.D);
     const float mult = min(1.0f, p.qk_clip / (metal::precise::sqrt(ss) + 1e-6f));
-    kc[(size_t(slot) * p.Hkv + h) * p.D + tid] = half(val * mult);
+    ink2_kv_store(kc, size_t(slot) * p.Hkv + h, tid, p.D, half(val * mult), p.kv_format, scratch);
     return;
   }
   rem -= p.Hkv;
@@ -783,7 +808,7 @@ struct Ink2QkvrP {
     const float val = v[(size_t(t) * p.Hkv + h) * p.D + tid];
     const float ss = tg_sum(val * val, scratch, tid, p.D);
     const float inv = metal::precise::rsqrt(ss / float(p.D) + p.v_eps);
-    vc[(size_t(slot) * p.Hkv + h) * p.D + tid] = half(val * inv);
+    ink2_kv_store(vc, size_t(slot) * p.Hkv + h, tid, p.D, half(val * inv), p.kv_format, scratch);
     return;
   }
   const uint h = rem - p.Hkv;
@@ -874,6 +899,7 @@ struct Ink2RelP {
 struct Ink2AttnDecP {
   uint pos, kv_cap, Hq, Hkv, D, rel_extent, is_swa, swa, chunk, nchunks;
   float scale;
+  uint kv_format;
 };
 
 [[kernel]] void ink2_attn_decode(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
@@ -897,12 +923,12 @@ struct Ink2AttnDecP {
   float4 ow = float4(0.0f);
   for (uint kp = c0 + sg; kp < c1; kp += 4) {
     const uint slot = p.is_swa ? (kp % p.kv_cap) : kp;
-    const size_t koff = (size_t(slot) * p.Hkv + hkv) * p.D + d0;
-    const float4 kv = float4(*(const device half4*)(kc + koff));
+    const size_t krow = size_t(slot) * p.Hkv + hkv;
+    const float4 kv = float4(ink2_kv_load4(kc, krow, d0, p.D, p.kv_format));
     float sc = simd_sum(dot(qv, kv)) * p.scale;
     const uint dist = p.pos - kp;
     if (dist < p.rel_extent) sc += rb[size_t(h) * p.rel_extent + dist];
-    const float4 vv = float4(*(const device half4*)(vc + koff));
+    const float4 vv = float4(ink2_kv_load4(vc, krow, d0, p.D, p.kv_format));
     if (lw == 0.0f) {
       mw = sc; lw = 1.0f; ow = vv;
     } else {
@@ -976,6 +1002,7 @@ struct Ink2AttnDecP {
 struct Ink2AttnPfP {
   uint T, pos0, kv_cap, Hq, Hkv, D, rel_extent, is_swa, swa;
   float scale;
+  uint kv_format;
 };
 
 [[kernel]] void ink2_attn_prefill(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
@@ -999,12 +1026,12 @@ struct Ink2AttnPfP {
   float4 ow = float4(0.0f);
   for (uint kp = c0 + sg; kp <= qpos; kp += 4) {
     const uint slot = p.is_swa ? (kp % p.kv_cap) : kp;
-    const size_t koff = (size_t(slot) * p.Hkv + hkv) * p.D + d0;
-    const float4 kv = float4(*(const device half4*)(kc + koff));
+    const size_t krow = size_t(slot) * p.Hkv + hkv;
+    const float4 kv = float4(ink2_kv_load4(kc, krow, d0, p.D, p.kv_format));
     float sc = simd_sum(dot(qv, kv)) * p.scale;
     const uint dist = qpos - kp;
     if (dist < p.rel_extent) sc += rbh[dist];
-    const float4 vv = float4(*(const device half4*)(vc + koff));
+    const float4 vv = float4(ink2_kv_load4(vc, krow, d0, p.D, p.kv_format));
     if (lw == 0.0f) {
       mw = sc; lw = 1.0f; ow = vv;
     } else {

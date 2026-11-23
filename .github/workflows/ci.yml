@@ -364,6 +364,11 @@ jobs:
         run: |
           cmake --build build -j"$(sysctl -n hw.ncpu)" --target nh_quant_q8_test
           build/nh_quant_q8_test
+      - name: inkling_kv_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: |
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target inkling_kv_test
+          build/inkling_kv_test
       - name: systemone_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/systemone_test

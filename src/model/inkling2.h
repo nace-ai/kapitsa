@@ -6,6 +6,7 @@
 // Vision tower (model.visual.*) is skipped in Stage 1.
 #pragma once
 
+#include "kernels/inkling_kv.h"
 #include "loader/safetensors.h"
 #include "model/model.h"
 
@@ -18,6 +19,17 @@
 
 namespace ni {
 
+enum class Ink2KvFormat : uint32_t { F16 = 0, I8 = 1 };
+
+constexpr size_t ink2_kv_row_bytes(Ink2KvFormat format) {
+  return format == Ink2KvFormat::I8 ? INK2_KV_I8_BYTES : INK2_KV_F16_BYTES;
+}
+static_assert(ink2_kv_row_bytes(Ink2KvFormat::I8) == 144);
+static_assert(ink2_kv_row_bytes(Ink2KvFormat::F16) == 256);
+static_assert(INK2_KV_HEAD_DIM == 128 && INK2_KV_SCALE_OFFSET == 128);
+static_assert(INK2_KV_PADDING_OFFSET == 132 && INK2_KV_PADDING_BYTES == 12);
+static_assert(sizeof(float) == 4);
+
 struct Ink2Config {
   int hidden = 2304;
   int num_layers = 24;
@@ -25,7 +37,7 @@ struct Ink2Config {
   int vocab = 200058;  // unpadded_vocab_size (logits sliced/evaluated over [0, vocab))
   int hq = 24;
   int hkv = 8;
-  int head_dim = 128;
+  int head_dim = INK2_KV_HEAD_DIM;
   int d_rel = 16;
   int rel_extent = 1024;
   int swa = 1024;
@@ -104,11 +116,12 @@ class Inkling2 : public Model {
   static bool is_model(const std::string& dir);
   static Ink2Config read_config(const std::string& dir);
   static MemPlan plan(const std::string& dir, int prefill_chunk = 512);
-  static size_t kv_per_pos(const Ink2Config& c);
+  static size_t kv_per_pos(const Ink2Config& c, Ink2KvFormat global_format);
   static size_t conv_bytes_per_seq(const Ink2Config& c);
   static size_t ring_bytes_per_seq(const Ink2Config& c, int tmax);
 
   const Ink2Config& config() const { return cfg_; }
+  Ink2KvFormat global_kv_format() const { return global_kv_format_; }
   int vocab() const override { return cfg_.vocab; }
   const std::vector<int>& eos_ids() const override { return cfg_.eos; }
   int prefill_chunk() const override { return tmax_; }
@@ -120,7 +133,7 @@ class Inkling2 : public Model {
   bool reserve(Seq& s, int need) override;
   size_t kv_grow_held(const Seq& s) const override;
   void drop_kv(Seq& s) override;
-  size_t kv_bytes_per_pos() const override { return kv_per_pos(cfg_); }
+  size_t kv_bytes_per_pos() const override { return kv_per_pos(cfg_, global_kv_format_); }
   void reset(Seq& s) override;
   Checkpoint new_checkpoint() override;
   void save(Encoder& e, const Seq& s, Checkpoint& c, int pos) override;
@@ -157,6 +170,7 @@ class Inkling2 : public Model {
   void enc_sample(Encoder& e, Seq& s, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
                   uint32_t step);
 
+  const Ink2KvFormat global_kv_format_;
   std::string path_;
   Ink2Config cfg_;
   WeightStore ws_;

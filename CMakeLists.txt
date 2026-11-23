@@ -86,6 +86,7 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -DOUT=${NI_INK2_EMBED} -DSRC_DIR=${CMAKE_SOURCE_DIR}/src/kernels
           -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_inkling2.cmake
   DEPENDS ${NI_INK2_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/src/gguf/iq_grids.h
+          ${CMAKE_SOURCE_DIR}/src/kernels/inkling_kv.h
           ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_inkling2.cmake
   COMMENT "Embedding the Inkling-2 Metal kernels")
 
@@ -97,7 +98,7 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -DOUT=${NI_TENSOR_EMBED} -DSRC_DIR=${CMAKE_SOURCE_DIR}/src/kernels
           -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_tensor.cmake
   DEPENDS ${NI_TENSOR_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/src/kernels/nemotron/nh_route.h
-          ${CMAKE_SOURCE_DIR}/src/kernels/iq.h ${CMAKE_SOURCE_DIR}/src/kernels/kv_int8.h
+          ${CMAKE_SOURCE_DIR}/src/kernels/iq.h ${CMAKE_SOURCE_DIR}/src/kernels/kv_int8.h ${CMAKE_SOURCE_DIR}/src/kernels/inkling_kv.h
           ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_tensor.cmake
   COMMENT "Embedding the Metal 4 tensor kernels")
 
@@ -179,6 +180,12 @@ add_executable(flint_kv_test tests/flint_kv_test.cpp)
 target_include_directories(flint_kv_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_test(NAME flint_kv_test COMMAND flint_kv_test)
 set_tests_properties(flint_kv_test PROPERTIES TIMEOUT 30)
+
+add_executable(inkling_kv_test tests/inkling_kv_test.cpp)
+target_include_directories(inkling_kv_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_options(inkling_kv_test PRIVATE -frounding-math -ffp-contract=off)
+add_test(NAME inkling_kv_test COMMAND inkling_kv_test)
+set_tests_properties(inkling_kv_test PROPERTIES TIMEOUT 30)
 
 add_executable(token_suppression_test tests/token_suppression_test.cpp)
 target_include_directories(token_suppression_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
