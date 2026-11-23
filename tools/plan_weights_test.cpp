@@ -5,6 +5,11 @@
 // weights are written). Needs no GPU and loads no model.
 //   plan_weights_test [--keep]
 #include "hub/hub.h"
+#include <nlohmann/json.hpp>
+
+namespace ni::hub::detail {
+nlohmann::ordered_json catalog_gguf_metadata(const nlohmann::ordered_json& imported, const GgufFile& g);
+}
 
 #include <fcntl.h>
 #include <mach-o/dyld.h>
@@ -156,6 +161,28 @@ static void check_native_plan() {
   std::printf("Native plan presence: %d failure(s)\n", failures - before);
 }
 
+static void check_catalog_gguf_metadata() {
+  using J = nlohmann::ordered_json;
+  const int before = failures;
+  const hub::GgufFile catalog{"pinned.gguf", "catalog-digest", 4096};
+  const J sources = J::array({{{"path", "original.gguf"}, {"size", 4096}}});
+  const J conversions{{"Q4_K", 2}};
+  for (const bool retained : {false, true}) {
+    J imported{{"gguf", {{"files", sources}, {"conversions", conversions}, {"importer_field", "preserve"}}}};
+    if (retained) imported["gguf"]["retained"] = true;
+    const J metadata = hub::detail::catalog_gguf_metadata(imported, catalog);
+    check(metadata.value("retained", false) == retained, "catalog keeps the importer's retained status");
+    check(metadata.contains("files") && metadata["files"] == sources, "catalog keeps the importer's GGUF sources");
+    check(metadata.contains("importer_field") && metadata["importer_field"] == "preserve",
+          "catalog keeps other importer GGUF metadata");
+    check(metadata.at("conversions") == conversions, "catalog keeps converted GGUF conversion counts");
+    check(metadata.at("path") == catalog.path && metadata.at("sha256") == catalog.sha256 &&
+              metadata.at("size") == catalog.size,
+          "catalog adds its pinned GGUF provenance");
+  }
+  std::printf("Catalog GGUF metadata: %d failure(s)\n", failures - before);
+}
+
 static void check_gguf_plan() {
   std::string dir = (fs::temp_directory_path() / "kapitsa-gguf-plan-XXXXXX").string();
   if (!mkdtemp(dir.data())) {
@@ -186,6 +213,10 @@ static void check_gguf_plan() {
   const std::string complete = retained + listed;
   write_file(manifest, complete);
   check(hub::plan_has_model(dir), "a completed retained-GGUF import has its model");
+  auto catalog_manifest = nlohmann::ordered_json::parse(complete);
+  catalog_manifest["gguf"] = hub::detail::catalog_gguf_metadata(catalog_manifest, {"pinned.gguf", "catalog-digest", 67108864});
+  write_file(manifest, catalog_manifest.dump());
+  check(hub::plan_has_model(dir), "catalog provenance preserves a completed retained-GGUF plan's model");
   write_file(dir + "/config.json", "{\"model_type\":\"inkling2_loop\",\"gguf_file\":\"other.gguf\"}");
   check(!hub::plan_has_model(dir), "the configured GGUF must be listed in the completed manifest");
   write_file(dir + "/config.json", config);
@@ -206,6 +237,7 @@ int main(int argc, char** argv) {
   keep = argc > 1 && std::string(argv[1]) == "--keep";
   check_gguf_plan();
   check_native_plan();
+  check_catalog_gguf_metadata();
   // the CLI beside this test's own binary (build/plan_weights_test -> build/kapitsa)
   char exe[4096] = {0};
   uint32_t size = sizeof exe;
