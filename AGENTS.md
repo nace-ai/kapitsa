@@ -35,6 +35,8 @@ across requests still has to say where the state lives and how to reset it.
   "bit for bit" or "the same outputs" for something you did not run.
 - Do not load a model or touch the GPU unless the task says you may. A run takes the machine's GPU for minutes and
   other people's measurements are on it.
+- Before binding an architecture-specific measurement or cap run, trace the runner's loader factory to that architecture.
+  On 2026-11-23, the ni_run/Inkling2 near-miss selected load_qwen, which cannot load Inkling2; the engine selects it separately.
 - `.dsh/skills/verify-kapitsa` drives the CLI and server and keeps evidence; its `vk checks` reads the diff
   against `origin/main` and says whether a PR needs a GPU run and on which models.
 
