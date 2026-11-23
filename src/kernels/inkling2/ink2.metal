@@ -2629,3 +2629,158 @@ NI_INLINE float ink2_q8_dot16(uint4 v, const device float4* xp) {
       simdgroup_barrier(mem_flags::mem_threadgroup);
     }
 }
+
+// ---- Prefill attention on simdgroup_matrix 8x8 (lab5, NI_INK2_FA; MLX steel_attention-style, fp32 fragments) ----
+// One threadgroup = NT tokens x the G = 3 query heads of one KV head (3 * NT / 8 simdgroups of 8 rows), K/V tiles of
+// BK keys staged row-major in threadgroup memory and shared by all of them; Q (pre-scaled by scale * log2 e, rounded to
+// half like the tensor kernels) stays in registers; S and P stay fp32 (the tensor kernel rounds P to half). Sinks,
+// rel bias, SWA ring and sigmoid output gate as qattn_ink2. Heaviest (last) token blocks are scheduled first.
+// attnbench 500 @ 40K global: 53.7 ms vs 81.0 (qattn_ink2_s6k32p_l1tn), 4096 @ 40K 431 vs 637, SWA 4096 12.3 vs 20.5.
+// grid: (ceil(T / NT), Hkv) x 3 * NT * 4 threads.
+template <int NT, int BK>
+NI_INLINE void ink2_fa_impl(const device float* q, const device half* kc, const device half* vc,
+                            const device float* rb, const device float* sinks, const device float* gate,
+                            device float* out, constant Ink2AttnPfP& p, uint2 tg, uint sg, ushort lane,
+                            threadgroup half* ks, threadgroup half* vs) {
+  constexpr int D = 128, G = 3, SPH = NT / 8, NS = G * SPH, NTH = NS * 32, LD = D + 8;
+  const uint ntg = (p.T + NT - 1) / NT;
+  const uint kvh = tg.y, tgt0 = (ntg - 1 - tg.x) * NT;
+  const uint hd = kvh * G + sg / SPH;
+  const uint t0 = tgt0 + (sg % SPH) * 8;
+  const bool live = t0 < p.T;
+  const uint tid = sg * 32 + lane;
+  const short qid = lane / 4;
+  const short fm = (qid & 4) + ((lane / 2) % 4);  // simdgroup_matrix 8x8 lane layout: row fm, cols fn, fn + 1
+  const short fn = (qid & 2) * 2 + (lane % 2) * 2;
+  const uint tq = t0 + fm, tqc = min(tq, p.T - 1);
+  const uint lim = p.pos0 + tqc;
+  const uint lo = (p.is_swa && lim + 1 > p.swa) ? lim + 1 - p.swa : 0u;
+  const device float* rbh = rb + (size_t(tqc) * p.Hq + hd) * p.rel_extent;
+  const uint kend = p.pos0 + min(tgt0 + NT, p.T);
+  const uint kfirst = (p.is_swa && p.pos0 + tgt0 + 1 > p.swa) ? p.pos0 + tgt0 + 1 - p.swa : 0u;
+  const uint sfirst = p.pos0 + min(t0, p.T - 1), slast = p.pos0 + min(t0 + 7, p.T - 1);
+  const uint slo = (p.is_swa && slast + 1 > p.swa) ? slast + 1 - p.swa : 0u;
+  const uint sflo = (p.is_swa && sfirst + 1 > p.swa) ? sfirst + 1 - p.swa : 0u;
+
+  const float qscale = p.scale * M_LOG2E_F;
+  simdgroup_matrix<float, 8, 8> qm[D / 8], o[D / 8];
+  {
+    const device float* qr = q + (size_t(tqc) * p.Hq + hd) * D + fn;
+    NI_UNROLL
+    for (short dd = 0; dd < D / 8; ++dd) {
+      const float2 x = *(const device float2*)(qr + dd * 8) * qscale;
+      qm[dd].thread_elements()[0] = float(half(x.x));
+      qm[dd].thread_elements()[1] = float(half(x.y));
+      o[dd] = make_filled_simdgroup_matrix<float, 8, 8>(0.0f);
+    }
+  }
+  float m = sinks[size_t(tqc) * p.Hq + hd] * M_LOG2E_F, l = 1.0f;
+
+  for (uint k0 = kfirst / BK * BK; k0 < kend; k0 += BK) {
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint i = tid; i < BK * (D / 8); i += NTH) {
+      const uint r = i / (D / 8), c = (i % (D / 8)) * 8, key = k0 + r;
+      uint4 kv4 = uint4(0), vv4 = uint4(0);
+      if (key >= kfirst && key < kend) {
+        const uint slot = p.is_swa ? (key % p.kv_cap) : key;
+        const size_t at = (size_t(slot) * p.Hkv + kvh) * D + c;
+        kv4 = *(const device uint4*)(kc + at);
+        vv4 = *(const device uint4*)(vc + at);
+      }
+      *(threadgroup uint4*)(ks + r * LD + c) = kv4;
+      *(threadgroup uint4*)(vs + r * LD + c) = vv4;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (!live || k0 > slast || k0 + BK <= sflo) continue;
+
+    simdgroup_matrix<float, 8, 8> s[BK / 8];
+    NI_UNROLL
+    for (short f = 0; f < BK / 8; ++f) s[f] = make_filled_simdgroup_matrix<float, 8, 8>(0.0f);
+    NI_UNROLL
+    for (short dd = 0; dd < D / 8; ++dd)
+      NI_UNROLL
+      for (short f = 0; f < BK / 8; ++f) {
+        simdgroup_matrix<float, 8, 8> km;  // K^T fragment: rows = dims dd * 8 + fm, cols = keys f * 8 + fn + j
+        km.thread_elements()[0] = float(ks[(f * 8 + fn) * LD + dd * 8 + fm]);
+        km.thread_elements()[1] = float(ks[(f * 8 + fn + 1) * LD + dd * 8 + fm]);
+        simdgroup_multiply_accumulate(s[f], qm[dd], km, s[f]);
+      }
+
+    const bool edge = k0 + BK - 1 > sfirst || k0 < slo;
+    const bool near_rb = p.rel_extent > 0 && (k0 + BK + p.rel_extent > sfirst);
+    float mx = -1e30f;
+    NI_UNROLL
+    for (short f = 0; f < BK / 8; ++f)
+      NI_UNROLL
+      for (short j = 0; j < 2; ++j) {
+        float v = s[f].thread_elements()[j];
+        const uint key = k0 + f * 8 + fn + j;
+        if (edge && (key > lim || key < lo)) {
+          v = -1e30f;
+        } else if (near_rb) {
+          const uint dist = lim - key;
+          if (dist < p.rel_extent) v += rbh[dist] * M_LOG2E_F;
+        }
+        s[f].thread_elements()[j] = v;
+        mx = max(mx, v);
+      }
+    mx = max(mx, simd_shuffle_xor(mx, ushort(1)));
+    mx = max(mx, simd_shuffle_xor(mx, ushort(8)));
+    const float mn = max(m, mx);
+    const float corr = exp2(m - mn);
+    m = mn;
+    float ps = 0.0f;
+    NI_UNROLL
+    for (short f = 0; f < BK / 8; ++f)
+      NI_UNROLL
+      for (short j = 0; j < 2; ++j) {
+        const float v = s[f].thread_elements()[j];
+        const float pv = v <= -1e29f ? 0.0f : exp2(v - mn);
+        s[f].thread_elements()[j] = pv;
+        ps += pv;
+      }
+    ps += simd_shuffle_xor(ps, ushort(1));
+    ps += simd_shuffle_xor(ps, ushort(8));
+    l = l * corr + ps;
+    if (!simd_all(corr == 1.0f)) {
+      NI_UNROLL
+      for (short dd = 0; dd < D / 8; ++dd) {
+        o[dd].thread_elements()[0] *= corr;
+        o[dd].thread_elements()[1] *= corr;
+      }
+    }
+    NI_UNROLL
+    for (short f = 0; f < BK / 8; ++f)
+      NI_UNROLL
+      for (short dd = 0; dd < D / 8; ++dd) {
+        simdgroup_matrix<float, 8, 8> vm;
+        const half2 v2 = *(const threadgroup half2*)(vs + (f * 8 + fm) * LD + dd * 8 + fn);
+        vm.thread_elements()[0] = float(v2.x);
+        vm.thread_elements()[1] = float(v2.y);
+        simdgroup_multiply_accumulate(o[dd], s[f], vm, o[dd]);
+      }
+  }
+  if (!live || tq >= p.T) return;
+  const float inv = 1.0f / l;
+  const size_t base = (size_t(tq) * p.Hq + hd) * D + fn;
+  NI_UNROLL
+  for (short dd = 0; dd < D / 8; ++dd) {
+    const float2 r = float2(o[dd].thread_elements()[0], o[dd].thread_elements()[1]) * inv;
+    const float2 g2 = *(const device float2*)(gate + base + dd * 8);
+    const float2 sig = float2(1.0f) / (float2(1.0f) + float2(metal::precise::exp(-g2.x), metal::precise::exp(-g2.y)));
+    *(device float2*)(out + base + dd * 8) = r * sig;
+  }
+}
+
+#define INK2_FA(NAME, NT, BK)                                                                                           \
+  [[kernel, max_total_threads_per_threadgroup(12 * (NT))]] void NAME(                                                  \
+      const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]],   \
+      const device float* rb [[buffer(3)]], const device float* sinks [[buffer(4)]],                                   \
+      const device float* gate [[buffer(5)]], device float* out [[buffer(6)]], constant Ink2AttnPfP& p [[buffer(7)]],  \
+      uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],                           \
+      uint lane [[thread_index_in_simdgroup]]) {                                                                       \
+    threadgroup half ks[(BK) * 136], vs[(BK) * 136];                                                                   \
+    ink2_fa_impl<NT, BK>(q, kc, vc, rb, sinks, gate, out, p, tg, sg, ushort(lane), ks, vs);                            \
+  }
+INK2_FA(ink2_fa_t16k32, 16, 32)
+INK2_FA(ink2_fa_t16k16, 16, 16)

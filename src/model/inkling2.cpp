@@ -93,6 +93,11 @@ struct Ink2Grouped {
   }
 };
 
+int ink2_fa_nt() {
+  static const int v = getenv("NI_INK2_FA") ? atoi(getenv("NI_INK2_FA")) : 16;
+  return v;
+}
+
 void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
   if (const char* v = getenv("NI_PREWARM"); v && !strcmp(v, "0")) return;
   static const char* const kInk2Names[] = {
@@ -103,7 +108,7 @@ void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
       "ink2_attn_decode",      "ink2_attn_decode_reduce", "ink2_attn_decode_g3", "ink2_attn_decode_g3_fx", "ink2_attn_decode_g3kw", "ink2_attn_res1", "ink2_msg_gate_mix","ink2_attn_prefill",     "ink2_moe_route",
       "ink2_moe_nvfp4_w13_situ","ink2_moe_nvfp4_w2_acc", "ink2_moe_nvfp4_w13_q4", "ink2_moe_nvfp4_w2_f2", "ink2_moe_mxfp8_w13_situ","ink2_moe_mxfp8_w2_acc", "ink2_moe_mxfp8_w13_situ_v", "ink2_moe_mxfp8_w2_acc_v",
       "ink2_softcap",           "ink2_moe_bucket",       "ink2_moe_situ_half",
-      "ink2_moe_combine",
+      "ink2_moe_combine",       "ink2_fa_t16k32",        "ink2_fa_t16k16",
   };
   for (const char* n : kInk2Names) (void)ink2_pipe(n);
   if (tensor_pf) {
@@ -1836,6 +1841,19 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         e.buf(5, att_out_);
         e.val(6, vp);
         e.dispatch(uint32_t(cfg_.hq), uint32_t(T), 1, 32);
+      } else if (use_qat && ink2_fa_nt()) {
+        // simdgroup_matrix flash attention (lab5): 1.5x the tensor kernel at long context (attnbench 500 @ 40K global
+        // 53.7 vs 81.0 ms); NI_INK2_FA=0 = qattn_ink2 below, NI_INK2_FA=16 (default) / 1616 = BK 32 / 16 keys
+        e.use(ink2_pipe(ink2_fa_nt() == 1616 ? "ink2_fa_t16k16" : "ink2_fa_t16k32"));
+        e.buf(0, q_);
+        e.buf(1, s.kc[v_idx]);
+        e.buf(2, s.vc[v_idx]);
+        e.buf(3, rb_);
+        e.buf(4, sinks_);
+        e.buf(5, gate_attn_);
+        e.buf(6, att_out_);
+        e.val(7, apf);
+        e.dispatch((uint32_t(T) + 15) / 16, uint32_t(cfg_.hkv), 1, 192);
       } else if (use_qat) {
         const uint32_t qat_tok = qat_small ? 16u : 32u;
         // Cooperative-tensor lane layout: Apple10+ (written for M5) vs the simdgroup_matrix layout of older GPUs (M1;
