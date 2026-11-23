@@ -47,6 +47,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 using namespace ni;
@@ -3157,10 +3158,9 @@ void chat_template_format_unit() {
   rmdir(dir.c_str());
 }
 
-// OutputParser's CallFormat::Hy4 on a byte-level vocabulary with Hy4-flash's tags as added (non-special) tokens, as
-// its tokenizer has them: the list of calls, GLM's markup with :opensource tags, typed values, text when tools are off,
-// a malformed call and a call cut by max_tokens returned as the text written.
-void hy4_parser_unit() {
+// GLM and Hy4 output parsing on a byte-level vocabulary: issue 1400's malformed calls, typed values, and Hy4's
+// :opensource tags as added (non-special) tokens. No model folder needed.
+void glm_hy4_parser_unit() {
   nlohmann::json vocab = nlohmann::json::object(), added = nlohmann::json::array();
   for (int b = 0, n = 0; b < 256; ++b) {
     const bool keep = (b >= '!' && b <= '~') || (b >= 0xA1 && b <= 0xAC) || (b >= 0xAE && b <= 0xFF);
@@ -3170,7 +3170,8 @@ void hy4_parser_unit() {
   int id = 256;
   for (const char* t : {"<think:opensource>", "</think:opensource>", "<tool_call:opensource>", "</tool_call:opensource>",
                         "<tool_calls:opensource>", "</tool_calls:opensource>", "<arg_key:opensource>",
-                        "</arg_key:opensource>", "<arg_value:opensource>", "</arg_value:opensource>"})
+                        "</arg_key:opensource>", "<arg_value:opensource>", "</arg_value:opensource>",
+                        "<think>", "</think>", "<tool_call>", "</tool_call>"})
     added.push_back({{"id", id++}, {"content", t}, {"special", false}});
   char path[] = "/tmp/api_test_hy4tok.XXXXXX";
   const int fd = mkstemp(path);
@@ -3198,21 +3199,82 @@ void hy4_parser_unit() {
   struct Out {
     std::string content, reasoning;
     std::vector<ToolCall> calls;
+    std::vector<ChatDelta> deltas;
   };
-  const auto run = [&](const std::string& text, bool parse_tools, bool ended = true) {
-    OutputParser p(tok, tok.find("<think:opensource>"), tok.find("</think:opensource>"),
-                   tok.find("<tool_call:opensource>"), tok.find("</tool_call:opensource>"), false, parse_tools, tools,
-                   false, false, {}, CallFormat::Hy4);
+  const auto run = [&](const std::string& text, bool parse_tools, bool ended = true,
+                       CallFormat fmt = CallFormat::Hy4) {
+    const std::string sfx = fmt == CallFormat::Hy4 ? ":opensource" : "";
+    OutputParser p(tok, tok.find("<think" + sfx + ">"), tok.find("</think" + sfx + ">"),
+                   tok.find("<tool_call" + sfx + ">"), tok.find("</tool_call" + sfx + ">"), false, parse_tools, tools,
+                   false, false, {}, fmt);
     Out o;
     const auto add = [&](const ChatDelta& d) {
       o.content += d.content;
       o.reasoning += d.reasoning;
       for (auto& c : d.tool_calls) o.calls.push_back(c);
+      o.deltas.push_back(d);
     };
     for (int i : tok.encode(text)) add(p.push(i));
     add(p.finish(ended));
     return o;
   };
+  for (const auto& [label, text, name, args] :
+       std::vector<std::tuple<std::string, std::string, std::string, ojson>>{
+           {"form A", "<tool_call>write<arg_key><arg_key>content</arg_key><arg_value># Handoff ...\nnext line\n"
+                      "</arg_value><arg_key>path</arg_key><arg_value>.handoff.md</arg_value></tool_call>",
+            "write", {{"content", "# Handoff ...\nnext line\n"}, {"path", ".handoff.md"}}},
+           {"form B", "<tool_call>edit<arg_key>path</arg_key><arg_value>{worktree}/scripts/test_x.py</arg_value>"
+                      "<arg_key>oldString</arg_key><arg_value>...</arg_value><arg_key>newString</arg_key>"
+                      "<arg_value>...</arg_value><arg_key>oldString_is_replace</arg_key><arg_key>path</arg_key>"
+                      "<arg_value>{worktree}/scripts/test_x.py</arg_value></tool_call>",
+            "edit", {{"path", "{worktree}/scripts/test_x.py"}, {"oldString", "..."}, {"newString", "..."}}},
+            {"trailing missing value", "<tool_call>read_file<arg_key>path</arg_key><arg_value>a.txt</arg_value>"
+                                       "<arg_key>start_line</arg_key> \n</tool_call>",
+             "read_file", {{"path", "a.txt"}}},
+            {"only missing value", "<tool_call>read_file<arg_key>path</arg_key></tool_call>",
+             "read_file", ojson::object()},
+            {"missing duplicate value", "<tool_call>read_file<arg_key>path</arg_key><arg_value>a.txt</arg_value>"
+                                        "<arg_key>path</arg_key></tool_call>",
+             "read_file", {{"path", "a.txt"}}}}) {
+    for (CallFormat fmt : {CallFormat::Glm, CallFormat::Hy4}) {
+      std::string input = text;
+      if (fmt == CallFormat::Hy4) {
+        for (size_t pos = 0; (pos = input.find('>', pos)) != std::string::npos; pos += 12)
+          input.insert(pos, ":opensource");
+      }
+      const std::string tag = std::string(fmt == CallFormat::Glm ? "glm" : "hy4") + " parser: issue 1400 " + label;
+      const Out parsed = run(input, true, true, fmt);
+      check(parsed.content.empty() && parsed.reasoning.empty() && parsed.calls.size() == 1 &&
+                parsed.calls[0].name == name && ojson::parse(parsed.calls[0].arguments) == args,
+            tag, parsed.content);
+      const auto res = finished(parsed.deltas, 1);
+      const auto calls = chat_tool_calls(res.tool_calls, 0, false);
+      check(calls.size() == 1 && calls[0]["function"]["name"] == name &&
+                ojson::parse(calls[0]["function"]["arguments"].get<std::string>()) == args,
+            tag + " chat reply");
+      ChatCompletionsStream cw("chat", "m", 1);
+      std::string wire = cw.begin(res);
+      for (const auto& d : parsed.deltas) wire += cw.delta(d);
+      wire += cw.end(res);
+      const size_t done = wire.find("data: [DONE]");
+      std::string content, reason;
+      ojson streamed = ojson::array();
+      for (const auto& e : parse_sse(wire.substr(0, done))) {
+        const auto& choice = e.data["choices"][0];
+        const auto& delta = choice["delta"];
+        if (delta.contains("content")) content += delta["content"].get<std::string>();
+        if (delta.contains("tool_calls")) for (auto c : delta["tool_calls"]) {
+          c.erase("index");
+          streamed.push_back(std::move(c));
+        }
+        if (choice["finish_reason"].is_string()) reason = choice["finish_reason"];
+      }
+      check(done != std::string::npos && content.empty() && streamed == calls && reason == "tool_calls",
+            tag + " chat stream");
+      const Out off = run(input, false, true, fmt);
+      check(off.calls.empty() && off.content == input, tag + " tools off keeps text", off.content);
+    }
+  }
   const std::string two =
       "<tool_calls:opensource><tool_call:opensource>read_file<arg_key:opensource>path</arg_key:opensource>"
       "<arg_value:opensource>src/main.py</arg_value:opensource><arg_key:opensource>start_line</arg_key:opensource>"
@@ -3843,7 +3905,7 @@ int main(int argc, char** argv) {
   hy4_plan_unit();
   inkling2_plan_unit();
   a4_arena_unit();
-  hy4_parser_unit();
+  glm_hy4_parser_unit();
   stop_filter_unit();
   anthropic_mapping();
   responses_mapping();
