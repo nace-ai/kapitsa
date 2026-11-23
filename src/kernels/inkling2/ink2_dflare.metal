@@ -407,6 +407,66 @@ struct DflFoldP {
   }
 }
 
+// Same fold when the target's unembed is packed to Q8_0 (fast profile): dequantize its rows on the fly.
+[[kernel]] void dflare_fold_mm_q8_from_q8(const device uchar* uq [[buffer(0)]], const device half* us [[buffer(1)]],
+                                          const device bfloat* hout_w [[buffer(2)]], device uchar* fold_q [[buffer(3)]],
+                                          device half* fold_s [[buffer(4)]], constant DflFoldP& p [[buffer(5)]],
+                                          uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                                          uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float xs[32][36];
+  threadgroup float ws[32][36];
+  const uint blk = tg.x;
+  const uint r0 = blk * 32u;
+  const uint v0 = tg.y * 32u;
+  const uint sgm = sg >> 1;
+  const uint sgn = sg & 1u;
+  const uint ublks = p.H / 32u;
+
+  simdgroup_float8x8 acc[2][2];
+  for (uint i = 0; i < 2; ++i)
+    for (uint j = 0; j < 2; ++j) acc[i][j] = simdgroup_float8x8(0.0f);
+
+  for (uint k0 = 0; k0 < p.H; k0 += 32u) {
+    const uint ub = k0 >> 5;
+    for (uint idx = tid; idx < 1024u; idx += 128u) {
+      const uint r = idx >> 5, c = idx & 31u;
+      const uint v = v0 + r;
+      if (v < p.V && k0 + c < p.H) {
+        const float sc = float(us[size_t(v) * ublks + ub]);
+        xs[r][c] = float(as_type<char>(uq[size_t(v) * p.H + (k0 + c)])) * sc;
+      } else {
+        xs[r][c] = 0.0f;
+      }
+      ws[r][c] = (k0 + r < p.H && r0 + c < p.R) ? float(hout_w[size_t(k0 + r) * p.R + (r0 + c)]) : 0.0f;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint kk = 0; kk < 32u; kk += 8u) {
+      simdgroup_float8x8 a[2], b[2];
+      for (uint i = 0; i < 2; ++i) simdgroup_load(a[i], &xs[sgm * 16 + i * 8][kk], 36);
+      for (uint j = 0; j < 2; ++j) simdgroup_load(b[j], &ws[kk][sgn * 16 + j * 8], 36);
+      for (uint i = 0; i < 2; ++i)
+        for (uint j = 0; j < 2; ++j) simdgroup_multiply_accumulate(acc[i][j], a[i], b[j], acc[i][j]);
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+  for (uint i = 0; i < 2; ++i)
+    for (uint j = 0; j < 2; ++j) simdgroup_store(acc[i][j], &xs[sgm * 16 + i * 8][sgn * 16 + j * 8], 36);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  const uint nblk = p.R / 32u;
+  for (uint i = 0; i < 8u; ++i) {
+    const uint r = sg * 8u + i;
+    const uint v = v0 + r;
+    if (v >= p.V) continue;
+    const float val = xs[r][lane];
+    const float amax = simd_max(fabs(val));
+    const float d = amax / 127.0f;
+    const float id = d > 0.0f ? (1.0f / d) : 0.0f;
+    fold_q[size_t(v) * p.R + r0 + lane] = uchar(char(clamp(int(rint(val * id)), -127, 127)));
+    if (lane == 0) fold_s[size_t(v) * nblk + blk] = half(d);
+  }
+}
+
 struct DflFoldPickP {
   uint V, R, step, tok_out_idx;
 };

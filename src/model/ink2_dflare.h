@@ -22,6 +22,7 @@ class Ink2DFlare {
   static constexpr int kCandK = 32;
 
   static bool is_available(const std::string& dir);
+  static bool can_fold(const Inkling2& target);
   Ink2DFlare(Inkling2& target, const std::string& dir);
   ~Ink2DFlare();
 

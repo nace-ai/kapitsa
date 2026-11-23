@@ -653,7 +653,9 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
 
   // Inkling-2-Mini bundled DFlare/DSpark drafter (mtp.safetensors): enabled by default when present unless --spec 0
   // or NI_INK2_SPEC=0. Adaptive depth (2..7) by default; --spec K or NI_INK2_SPEC=K fixes the depth.
-  if (ink2_ && spec_asked != 0 && Ink2DFlare::is_available(opts_.model_dir)) {
+  if (ink2_ && spec_asked != 0 && Ink2DFlare::is_available(opts_.model_dir) && !Ink2DFlare::can_fold(*ink2_))
+    logi("DFlare drafter: off (this model's unembed is neither BF16 nor Q8_0, which the drafter's fold reads)");
+  if (ink2_ && spec_asked != 0 && Ink2DFlare::is_available(opts_.model_dir) && Ink2DFlare::can_fold(*ink2_)) {
     const char* v = getenv("NI_INK2_SPEC");
     const bool env_set = v && *v;
     const int env_k = env_set ? atoi(v) : -1;
