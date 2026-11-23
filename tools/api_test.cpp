@@ -3322,6 +3322,72 @@ void hy4_plan_unit() {
   }
 }
 
+void inkling2_plan_unit() {
+  char t1[] = "/tmp/api_test_ink2plan.XXXXXX", t2[] = "/tmp/api_test_ink2full.XXXXXX";
+  if (!mkdtemp(t1) || !mkdtemp(t2)) {
+    check(false, "inkling2 plan: mkdtemp");
+    return;
+  }
+  const std::string plan = t1, full = t2;
+  const nlohmann::json cfg = {
+      {"model_type", "inkling2_loop"},
+      {"text_config",
+       {{"model_type", "inkling2_loop_text"},
+        {"hidden_size", 2048},
+        {"num_hidden_layers", 24},
+        {"vocab_size", 201024},
+        {"unpadded_vocab_size", 200058},
+        {"num_attention_heads", 16},
+        {"num_key_value_heads", 2},
+        {"head_dim", 128},
+        {"d_rel", 16},
+        {"rel_extent", 1024},
+        {"sliding_window_size", 1024},
+        {"n_layers_per_attn_res_block", 6},
+        {"n_routed_experts", 128},
+        {"num_experts_per_tok", 8},
+        {"intermediate_size", 1152},
+        {"local_layer_ids", {0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22}},
+        {"loop_config", {{"core_start", 6}, {"core_end", 18}, {"num_passes", 3}, {"gate_rank", 64}}}}}};
+  // model.llm.* weights count; model.visual.* and companion mtp.* are ignored by Inkling2::plan (text-only)
+  const size_t llm_bytes = 4096;
+  nlohmann::json main_h = nlohmann::json::object();
+  main_h["model.llm.embed_tokens.weight"] = {{"dtype", "BF16"}, {"shape", {2048}}, {"data_offsets", {0, llm_bytes}}};
+  main_h["model.visual.patch_embed.weight"] = {
+      {"dtype", "BF16"}, {"shape", {1024}}, {"data_offsets", {llm_bytes, llm_bytes + 2048}}};
+  nlohmann::json mtp_h = nlohmann::json::object();
+  mtp_h["fuse_weight"] = {{"dtype", "BF16"}, {"shape", {1024}}, {"data_offsets", {0, 2048}}};
+  auto write_sf = [&](const std::string& path, const nlohmann::json& h, size_t data_bytes, bool write_data) {
+    const std::string hs = h.dump();
+    const uint64_t len = hs.size();
+    FILE* o = fopen(path.c_str(), "wb");
+    if (!o) return;
+    fwrite(&len, 8, 1, o);
+    fwrite(hs.data(), 1, hs.size(), o);
+    if (write_data && data_bytes > 0) {
+      const std::vector<char> zero(data_bytes, 0);
+      fwrite(zero.data(), 1, zero.size(), o);
+    }
+    fclose(o);
+  };
+  for (const std::string& d : {plan, full}) {
+    write_sf(d + "/model-00001-of-00001.safetensors", main_h, llm_bytes + 2048, d == full);
+    write_sf(d + "/mtp.safetensors", mtp_h, 2048, d == full);
+    if (FILE* o = fopen((d + "/config.json").c_str(), "w")) fputs(cfg.dump().c_str(), o), fclose(o);
+  }
+  const MemPlan a = Inkling2::plan(plan, 512), b = Inkling2::plan(full, 512);
+  check(a.weights == llm_bytes && a.weights == b.weights && a.kv_per_pos == b.kv_per_pos &&
+            a.slot_state == b.slot_state && a.activations == b.activations,
+        "inkling2 plan: a header-only plan folder plans identically to a downloaded folder",
+        std::to_string(a.weights) + " vs " + std::to_string(b.weights));
+  for (const std::string& d : {plan, full}) {
+    unlink((d + "/model-00001-of-00001.safetensors").c_str());
+    unlink((d + "/mtp.safetensors").c_str());
+    unlink((d + "/config.json").c_str());
+    rmdir(d.c_str());
+  }
+}
+
 void inkling2_unit() {
   // 1. render_inkling2_chat() exact parity against Jinja2 chat_template.jinja renderings
   {
@@ -3749,6 +3815,7 @@ void inkling2_unit() {
 
 int main(int argc, char** argv) {
   hy4_plan_unit();
+  inkling2_plan_unit();
   a4_arena_unit();
   hy4_parser_unit();
   stop_filter_unit();

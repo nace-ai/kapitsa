@@ -618,6 +618,25 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
             .companions = {},
             .download_gb = 133.83},
        }},
+      // Thinking Machines Lab's Inkling-2-Mini (inkling2_loop, 26.4B MoE / 3.4B active / 5.4B looped, 1M context,
+      // text only while vision stays uncoded): the official NVFP4 (L0-19) / MXFP8 (L20-23) / BF16-dense checkpoint as
+      // it is, with no companion drafter wired (mtp.safetensors rides along in the repo). download_gb: every file of
+      // the revision except .gitattributes, 20,191,641,763 B (20.19 GB).
+      {.name = "inkling-2-mini",
+       .aliases = {"inkling2", "ink2"},
+       .title = "Inkling-2-Mini",
+       .about = "Thinking Machines Lab's 26.4B-A3.4B looped MoE (NVFP4/MXFP8, 1M context, text only)",
+       .brief = "Thinking Machines looped MoE, 26.4B-A3.4B",
+       .default_variant = "nvfp4",
+       .fallbacks = {},
+       .variants = {
+           {.name = "nvfp4",
+            .quant = "NVFP4 (L0-19) + MXFP8 (L20-23) + BF16 dense (official)",
+            .repo = "thinkingmachines/Inkling-2-Mini",
+            .revision = "b85c3cfa615fc413cc9af3379f491b963f3b586a",
+            .companions = {},
+            .download_gb = 20.19},
+       }},
   };
   static const std::vector<CatalogModel> legacy = [] {
     auto models = c;
