@@ -89,7 +89,7 @@ checkpoint that no catalog entry names, and is refused. A folder or revision the
 | `flint` | `recursive-flint`, `flint-40b` | Recursive Flint 40B-A2.5B: mixture of 256 experts, 2.5B active, sliding-window and full attention; a coding model that reasons before it answers; text only; 32 GB Macs and up | 22.6 GB | `4bit` (default), `16gb` (where `4bit` does not fit: 2-bit experts, 11.9 GB; [GGUF files](#gguf-files)) |
 | `ornith-1.5-35b-a3b` | `ornith`, `ornith-35b` | Ornith-1.5-35B-A3B: a Qwen3.5 mixture of 256 experts continued-pretrained for tool use and agent work, 3B active, 256K context, reasons by default; drafts with its own DFlash2 model; text only; 32 GB Macs and up | 20.6 GB | `4bit` |
 | `clover-35b-a3b` | `clover`, `clover-35b` | DiffuSpace Clover-35B-A3B-Preview: Qwen3.6-35B-A3B tuned into a block-diffusion model, mixture of 256 experts, 3B active; decodes with the 35B's draft model ([how](#other-models)); text only; 32 GB Macs and up | 20.6 GB | `4bit` |
-| `inkling-2-mini` | `inkling2`, `ink2` | Thinking Machines Lab's Inkling-2-Mini: 26.4B-A3.4B looped MoE (5.4B looped), 1M context, NVFP4/MXFP8; text only; 32 GB Macs and up | 20.2 GB | `nvfp4` |
+| `inkling-2-mini` | `inkling2`, `ink2` | Thinking Machines Lab's Inkling-2-Mini: 26.4B-A3.4B looped MoE (5.4B looped), 1M context, NVFP4/MXFP8; images at their own resolution; 32 GB Macs and up | 20.2 GB | `nvfp4` |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
 27B (the 27B's is Nace AI's retrain with a 16-row block, [nace-ai/Qwen3.8-27B-DFlash2-Kapitsa](https://huggingface.co/nace-ai/Qwen3.8-27B-DFlash2-Kapitsa)), an MTP head and z-lab's DFlash draft model for the 4B and 9B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL, its DSpark draft model for Lightning, the 35B's DFlash2
@@ -303,8 +303,7 @@ reference at Hy4's shape (`tools/a4moe_check.cpp`) but have not run the whole mo
 
 Thinking Machines' [Inkling-2-Mini](https://huggingface.co/thinkingmachines/Inkling-2-Mini) (`inkling2_loop`,
 `inkling2_loop_text`) is the catalog's `inkling2` (`kapitsa serve --model inkling2`, which downloads
-`thinkingmachines/Inkling-2-Mini`, 20.2 GB; a local checkpoint folder works too),
-text only (its vision tower is skipped): 24 unique transformer and MoE layers evaluated over a 48-visit loop
+`thinkingmachines/Inkling-2-Mini`, 20.2 GB; a local checkpoint folder works too): 24 unique transformer and MoE layers evaluated over a 48-visit loop
 (`[0..5, 6..17, 6..17, 6..17, 18..23]`), with AttnRes over block boundaries, low-rank MessageGate cross-pass
 controllers, static and dynamic short convolutions, SWA and global sink attention with relative position bias, and
 128-expert top-8 SiTU MoE (NVFP4 in layers 0–19, MXFP8 in layers 20–23), unpadded vocab 200,058 of 201,024, O200k
@@ -1020,11 +1019,11 @@ tools and MCP servers work as usual:
 
 Every catalog model except `nemotron-3.5-lightning`, `nemotron-labs-dory1.0-4b`, `nemotron-3-nano-4b`,
 `nemotron-nano-9b-v2`, `flint`, `clover-35b-a3b` and `ornith-1.5-35b-a3b` (text-only models) reads images:
-`qwen3.5-4b`, `qwen3.5-9b`, `qwen3.6-35b-a3b`, `qwen3.8-27b`, `qwen3.8-flash-next`, `nemotron-3.5-bolt` and
-`nemotron-3.5-super-vl`. The 35B's
+`qwen3.5-4b`, `qwen3.5-9b`, `qwen3.6-35b-a3b`, `qwen3.8-27b`, `qwen3.8-flash-next`, `nemotron-3.5-bolt`,
+`nemotron-3.5-super-vl` and `inkling-2-mini`. The 35B's
 2-bit `16gb` build carries no vision tower and reads text only. Their vision towers come with the download and
 load with the first image: about 0.67 GB of GPU memory for the 4B's, 0.9 GB for the 9B's, the 35B's, the 27B's and
-Flash-Next's (bf16 in every precision), 1.7 GB for Bolt's and for Super-VL's. On a model
+Flash-Next's (bf16 in every precision), 1.7 GB for Bolt's and for Super-VL's, 0.67 GB for Inkling-2-Mini's. On a model
 without one, such as Lightning, Dory or a text-only conversion, each image becomes a short
 note in the prompt, so agents that attach screenshots keep working.
 
@@ -1038,7 +1037,9 @@ note in the prompt, so agents that attach screenshots keep working.
   30 s per download (`NI_IMAGE_MAX_MB`, `NI_IMAGE_TIMEOUT_S`). Formats: what macOS's ImageIO decodes (PNG, JPEG, WebP,
   GIF, HEIC, TIFF, BMP). Video is not supported (a 400 error).
 - Size: images over 1.2 million pixels (Bolt and Super-VL: 1.4 million) are scaled down to about that; a 2880x1800 screenshot becomes
-  1376x864. `--image-max-pixels N` sets the cap, `0` lifts it to the model's own limit.
+  1376x864. `--image-max-pixels N` sets the cap, `0` lifts it to the model's own limit. Inkling-2-Mini reads an image
+  at its own resolution, one token per 40x40 pixels (a 1280x800 screenshot: 640 tokens; its processor has no limit of
+  its own, so `0` keeps every image whole, at 1600 pixels per token of prompt).
 - Tokens: an image costs prompt tokens by its size (a 1280x800 screenshot: 1000 tokens), in `usage` and `count_tokens`.
 - Cache: the same image sent again (an agent's screenshot every turn) reuses the cached prompt, and the embeddings of
   recent images are kept (`NI_IMAGE_CACHE_MB`, default 256).
