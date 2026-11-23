@@ -448,6 +448,7 @@ Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
   cfg_ = read_config(path_);
   tmax_ = std::max(8, prefill_chunk > 0 ? prefill_chunk : 512);
   ring_rows_ = (cfg_.swa + tmax_ + 15) / 16 * 16;
+  prefix_cache_ = env_on("NI_PREFIX_CKPT");
   q8_dense_ = profile_switch("NI_INK2_Q8", default_on(Knob::kInk2Q8Fast, {}),
                              "Inkling-2-Mini Q8-packed dense projections and unembed (NI_INK2_Q8)");
   ink2::compile_kernels();
@@ -457,6 +458,10 @@ Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
       tensor_pf_ = Gpu::get().pipeline("ink2_t_bf16_m64", false).pso != nullptr;
     }
   }
+  const char* attn = getenv("NI_INK2_ATTN_T");
+  const char* validation = getenv("MTL_SHADER_VALIDATION");
+  if (tensor_pf_ && cfg_.head_dim == 128 && cfg_.hq == cfg_.hkv * 3 && (!attn || atoi(attn) != 0))
+    prefill_attention_ = validation && atoi(validation) != 0 ? PrefillAttention::Tensor16 : PrefillAttention::Tensor32;
   prewarm_pipelines(tensor_pf_, q8_dense_);
   load();
 }
@@ -966,6 +971,69 @@ void Inkling2::restore(Encoder& e, Seq& s, const Checkpoint& c) {
       if (v >= dsts.size() || !dsts[v] || dsts[v].size < src.size)
         fatal("inkling2: restore missing or undersized ring destination buffer for visit %zu (%s)", v, kv ? "v" : "k");
       enc_copy_buf(e, src, dsts[v], src.size);
+    }
+  }
+}
+
+bool Inkling2::copy_prefix(Encoder& e, const Seq& src, Seq& dst, int n) {
+  if (!prefix_cache_) return false;
+  if (n < 0 || n > src.cap || n > dst.cap) return false;
+  if (n == 0) return true;
+  const size_t bytes = size_t(n) * kv_grow_unit();
+  for (size_t v = 0; v < cfg_.schedule.size(); ++v) {
+    if (cfg_.is_local[size_t(cfg_.schedule[v])]) continue;
+    if (!src.kc[v] || !src.vc[v] || !dst.kc[v] || !dst.vc[v] || src.kc[v].size < bytes ||
+        src.vc[v].size < bytes || dst.kc[v].size < bytes || dst.vc[v].size < bytes)
+      return false;
+  }
+  // Local rings and convolution belong to the selected checkpoint, not the donor's current position.
+  for (size_t v = 0; v < cfg_.schedule.size(); ++v) {
+    if (cfg_.is_local[size_t(cfg_.schedule[v])]) continue;
+    enc_copy_buf(e, src.kc[v], dst.kc[v], bytes);
+    enc_copy_buf(e, src.vc[v], dst.vc[v], bytes);
+  }
+  return true;
+}
+
+std::string Inkling2::disk_format() const {
+  if (!prefix_cache_) return {};
+  return "inkling2-f16-v1:" + json{{"schedule", cfg_.schedule},
+                                  {"local", cfg_.is_local},
+                                  {"geometry", {{"hidden", cfg_.hidden}, {"hq", cfg_.hq}, {"hkv", cfg_.hkv},
+                                                {"head_dim", cfg_.head_dim}, {"d_rel", cfg_.d_rel},
+                                                {"rel_extent", cfg_.rel_extent}, {"swa", cfg_.swa},
+                                                {"block_sz", cfg_.block_sz}}},
+                                  {"global", "token/head/dim;K,V;f16"},
+                                  {"row_bytes", kv_grow_unit()},
+                                  {"ring", "position-mod-ring/head/dim;K,V;f16"},
+                                  {"ring_rows", ring_rows_},
+                                  {"tmax", tmax_},
+                                  {"conv", "visit/K,V,attention,MLP/history3/channel;f32"},
+                                  {"conv_bytes", conv_bytes_per_seq(cfg_)},
+                                  {"profile", profile() == Profile::kFast ? "fast" : "precise"},
+                                  {"q8_dense", q8_dense_},
+                                  {"tensor_pf", tensor_pf_},
+                                  {"attention_tile", int(prefill_attention_)}}.dump();
+}
+
+void Inkling2::disk_rows(const Seq& s, bool /*mtp*/, std::vector<KvRows>& out) const {
+  for (size_t v = 0; v < cfg_.schedule.size(); ++v) {
+    if (cfg_.is_local[size_t(cfg_.schedule[v])]) continue;
+    out.push_back({s.kc[v], 1, kv_grow_unit()});
+    out.push_back({s.vc[v], 1, kv_grow_unit()});
+  }
+}
+
+void Inkling2::disk_state(const Seq& s, const Checkpoint* c, std::vector<Buffer>& out) const {
+  const auto& conv = c ? c->conv : s.conv;
+  out.push_back(conv.empty() ? Buffer{} : conv[0]);
+  for (size_t v = 0; v < cfg_.schedule.size(); ++v) {
+    if (!cfg_.is_local[size_t(cfg_.schedule[v])]) continue;
+    for (size_t kv = 0; kv < 2; ++kv) {
+      if (c)
+        out.push_back(2 * v + kv < c->rec.size() ? c->rec[2 * v + kv] : Buffer{});
+      else
+        out.push_back(kv ? s.vc[v] : s.kc[v]);
     }
   }
 }
@@ -1501,11 +1569,9 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
                             L.is_swa ? 1u : 0u,
                             uint32_t(cfg_.swa),
                             attn_scale};
-      static const bool qat_env = !getenv("NI_INK2_ATTN_T") || atoi(getenv("NI_INK2_ATTN_T")) != 0;
-      static const bool qat_small = getenv("MTL_SHADER_VALIDATION") && atoi(getenv("MTL_SHADER_VALIDATION")) != 0;
-      const bool use_qat = qat_env && tensor_pf_ && T >= 16 && cfg_.head_dim == 128 && cfg_.hq == cfg_.hkv * 3;
-      if (use_qat) {
-        const uint32_t qat_tok = qat_small ? 16u : 32u;
+      if (prefill_attention_ != PrefillAttention::Scalar && T >= 16) {
+        const uint32_t qat_tok = uint32_t(prefill_attention_);
+        const bool qat_small = prefill_attention_ == PrefillAttention::Tensor16;
         e.use(base_pipe(qat_small ? "qattn_ink2_s3k16" : "qattn_ink2_s6k32p"));
         e.buf(0, q_);
         e.buf(1, s.kc[v_idx]);

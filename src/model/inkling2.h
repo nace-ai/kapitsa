@@ -117,6 +117,10 @@ class Inkling2 : public Model {
   Checkpoint new_checkpoint() override;
   void save(Encoder& e, const Seq& s, Checkpoint& c, int pos) override;
   void restore(Encoder& e, Seq& s, const Checkpoint& c) override;
+  bool copy_prefix(Encoder& e, const Seq& src, Seq& dst, int n) override;
+  std::string disk_format() const override;
+  void disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const override;
+  void disk_state(const Seq& s, const Checkpoint* c, std::vector<Buffer>& out) const override;
 
   void encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample = true) override;
   void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
@@ -165,6 +169,9 @@ class Inkling2 : public Model {
   size_t mem_budget_ = 0;
   bool tensor_pf_ = false;
   bool q8_dense_ = false;
+  bool prefix_cache_ = false;
+  enum class PrefillAttention { Scalar = 0, Tensor16 = 16, Tensor32 = 32 };
+  PrefillAttention prefill_attention_ = PrefillAttention::Scalar;
 
   // Reusable activations sized for `tmax_` rows
   Buffer x_, x_pre_, inp_sa_, ffn_inp_, h_norm_;

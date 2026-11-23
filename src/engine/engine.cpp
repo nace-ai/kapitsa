@@ -3869,6 +3869,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   const auto& eos = stop_ids_;
   double t1 = now_ms();
   int gen = 0;
+  static const char* trace_path = getenv("NI_TRACE_TOKENS") && *getenv("NI_TRACE_TOKENS") ? getenv("NI_TRACE_TOKENS")
+                                                                                         : nullptr;
+  std::vector<int> handled_tokens;
   StopFilter stop_filter(r.stop);
   std::string finish;
   // structured output: </think> ends a speculative loop running the reasoning (g_in_spec), whose drafts and verify
@@ -3893,6 +3896,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       return false;
     }
     ++gen;
+    if (trace_path) handled_tokens.push_back(t);
     if (live) live->tokens.store(gen, std::memory_order_relaxed);
     if (std::find(eos.begin(), eos.end(), t) != eos.end()) {
       finish = "stop";
@@ -3953,8 +3957,6 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   };
   // NI_TRACE_TOKENS=<file> (tests: batched against single-stream outputs): each speculative cycle's tokens and the
   // margin between the two largest logits of the row that chose each, one JSON line per request at its end
-  static const char* trace_path = getenv("NI_TRACE_TOKENS") && *getenv("NI_TRACE_TOKENS") ? getenv("NI_TRACE_TOKENS")
-                                                                                         : nullptr;
   std::vector<int> tr_tok;
   std::vector<float> tr_margin;
   const std::function<void(const float*, int, const int*)> trace_fn = [&](const float* rows, int m, const int* toks) {
@@ -4953,7 +4955,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     uint64_t h = 1469598103934665603ull;
     for (int t : prompt) h = (h ^ uint64_t(uint32_t(t))) * 1099511628211ull;
     nlohmann::json j{{"prompt_hash", std::to_string(h)}, {"prompt_tokens", n}, {"temperature", r.temperature},
-                     {"first", s.tokens()[n]}, {"tokens", tr_tok}, {"margins", tr_margin}, {"batched", res.batched}};
+                     {"first", s.tokens()[n]}, {"tokens", tr_tok}, {"margins", tr_margin}, {"batched", res.batched},
+                     {"handled_tokens", handled_tokens}};
     static std::mutex mu;
     std::lock_guard<std::mutex> lk(mu);
     if (FILE* f = fopen(trace_path, "a")) {
