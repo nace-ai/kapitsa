@@ -4224,14 +4224,15 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       active.clear();
       for (int i = 0; i < V; ++i)
         if (row[i] >= cutoff) active.emplace_back(i, row[i]);
+      auto cand_better = [](const auto& a, const auto& b) {
+        return a.second != b.second ? a.second > b.second : a.first < b.first;
+      };
       if (sp.top_k > 0 && int(active.size()) > sp.top_k) {
-        std::nth_element(active.begin(), active.begin() + sp.top_k, active.end(),
-                         [](const auto& a, const auto& b) { return a.second > b.second; });
+        std::nth_element(active.begin(), active.begin() + sp.top_k, active.end(), cand_better);
         active.resize(size_t(sp.top_k));
       }
-      if (sp.top_p > 0.0f && sp.top_p < 1.0f && active.size() > 1) {
-        std::sort(active.begin(), active.end(),
-                  [](const auto& a, const auto& b) { return a.second > b.second; });
+      if (sp.top_p >= 0.0f && sp.top_p < 1.0f && active.size() > 1) {
+        std::sort(active.begin(), active.end(), cand_better);
         double utot = 0.0;
         for (const auto& kv : active) utot += std::exp(kv.second - mx);
         double cum = 0.0;
