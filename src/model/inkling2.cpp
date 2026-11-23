@@ -413,6 +413,17 @@ static bool ink2_tensor_pf_want() {
   return false;
 }
 
+bool Inkling2::fast_profile_available() {
+  if (profile() != Profile::kPrecise) return false;
+  auto unset = [](const char* env) {
+    const char* v = std::getenv(env);
+    return v == nullptr || *v == '\0';
+  };
+  if (unset("NI_INK2_TENSOR") && __builtin_available(macOS 26.0, *) && default_on(Knob::kInk2TensorPf, ModelFacts{}))
+    return true;
+  return unset("NI_INK2_Q8") && default_on(Knob::kInk2Q8Fast, ModelFacts{});
+}
+
 MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
   const Ink2Config c = read_config(dir);
   const int chunk = prefill_chunk > 0 ? prefill_chunk : 512;

@@ -102,6 +102,9 @@ class Inkling2 : public Model {
   ~Inkling2() override;
 
   static bool is_model(const std::string& dir);
+  // True when the precise profile runs with a fast-profile member that would be on here (its env switch unset): the engine
+  // ready line then names `--profile fast`. False under the fast profile, and when the member is off on this Mac.
+  static bool fast_profile_available();
   static Ink2Config read_config(const std::string& dir);
   static MemPlan plan(const std::string& dir, int prefill_chunk = 512);
   static size_t kv_per_pos(const Ink2Config& c);
