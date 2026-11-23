@@ -60,6 +60,8 @@ not ask for abstractions, interfaces or configuration the change does not need.
   numerics change that is presented as verified without evidence.
 - Whether a PR needed a GPU run, and on which models: `.dsh/skills/verify-kapitsa`'s `vk checks` reads the diff
   against `origin/main` and says so. Flag a GPU-tier PR that claims outputs or speed without the runs it lists.
+- Before binding an architecture-specific measurement or cap run, trace the runner's loader factory to that architecture.
+  On 2026-11-23, the ni_run/Inkling2 near-miss selected load_qwen, which cannot load Inkling2; the engine selects it separately.
 - More than one unrelated change in a PR (speed change plus refactor plus docs rewrite): say it should be split.
 
 ## New features: on by default for the whole class, no exceptions
