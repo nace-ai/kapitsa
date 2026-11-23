@@ -78,6 +78,9 @@ not ask for abstractions, interfaces or configuration the change does not need.
   the default belongs on for the class in this PR.
 - Flag a default narrowed to the setup the author measured (an exact chip name, core count, RAM size or one model) unless
   the PR cites a win of at least 10% on that target that is slower or broken on the wider class.
+  A per-chip-class default needs a shown mechanism, backed by a profile or kernel-cost measurement, that explains
+  why the change is faster on that class and not others. Without a shown mechanism, the change must be faster on two
+  measured devices and default on for all Macs, or it does not merge.
 - Flag a new inline `apple_family()`, `apple10()`, `m4_base()`, chip-name or core-count check outside
   `src/engine/device_profile.cpp`. `python3 tests/test_profile_gates.py` fails when that count grows.
 - The fast profile counts (docs/profiles.md): a feature that moves outputs past the floor's gate may be on by default
