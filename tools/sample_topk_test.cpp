@@ -120,6 +120,7 @@ struct Case {
   int min_distinct; // distinct ids the draws must reach (0: no check)
   float slope = 0.02f;  // logit of rank r: -slope * r
 };
+constexpr Case kBisectionCase{"top_k 2000, flat (bisection)", 2000, 0.89f, 1.0f, 0, false, 800, 0.002f};
 
 struct Gpu1 {
   Gpu& g = Gpu::get();
@@ -298,6 +299,20 @@ void run_case(Gpu1& G, const Case& c, uint32_t V, int draws, bool two_pass) {
 }
 
 int cpu_checks() {
+  std::vector<float> fixture(size_t(kBisectionCase.top_k));
+  for (int r = 0; r < kBisectionCase.top_k; ++r) fixture[size_t(r)] = -kBisectionCase.slope * float(r);
+  int kept = 0;
+  law(fixture, kBisectionCase.top_k, kBisectionCase.top_p, kBisectionCase.temp, &kept);
+  double total = 0, cut = 0, last = 0;
+  for (int r = 0; r < kBisectionCase.top_k; ++r) {
+    const double w = std::exp(double(fixture[size_t(r)]));
+    total += w;
+    if (r < kept) cut += w;
+    if (r == kept - 1) last = w;
+  }
+  check(std::min(cut / total - kBisectionCase.top_p, kBisectionCase.top_p - (cut - last) / total) >
+            512 * std::numeric_limits<float>::epsilon(),
+        "bisection fixture's top-p cut is separated from float reduction ambiguity");
   printf("[cpu] routing (sampler.h, kTopkMax %d)\n", kTopkMax);
   auto sp = [](float t, int k) {
     SamplingParams s;
@@ -420,7 +435,7 @@ int main(int argc, char** argv) {
       {"top_k 65 (sample_full)", 65, 1.0f, 1.0f, 0, false, 65},
       {"top_k 0, masked and NaN ids", 0, 0.95f, 0.6f, 0, true, 0},
       {"top_k 0, top_p 0.95, flat (prefix past the 1024 list)", 0, 0.95f, 1.0f, 0, false, 1000, 0.002f},
-      {"top_k 2000, top_p 0.9, flat (bisection)", 2000, 0.9f, 1.0f, 0, false, 800, 0.002f},
+      kBisectionCase,
       {"top_k 1024, tie at the cut", 1024, 1.0f, 1.0f, 8, false, 0, 0.002f},
       {"top_k 20 at sample_full's list", 20, 0.95f, 0.8f, 0, false, 0},
   };
