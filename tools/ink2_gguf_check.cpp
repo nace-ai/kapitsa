@@ -64,32 +64,42 @@ static int run_checks(ni::Gpu& gpu, std::vector<ni::Buffer>& owned) {
     }
     std::printf("IQ3_XXS Metal: 768 trained values bitwise match pinned llama.cpp through basis-vector GEMM\n");
   }
-  {
-    constexpr unsigned K = 768, N = 11, rb = 3 * 74;
+  for (unsigned type : {17u, 22u}) {
+    constexpr unsigned K = 768, N = 11;
+    const unsigned bytes = ink2_gguf::block_bytes(type), rb = 3 * bytes;
     auto w = buffer(N * rb), x = buffer(size_t(K) * K * 4), y = buffer(K * N * 4);
     std::memset(x.ptr(), 0, x.size);
     for (unsigned k = 0; k < K; ++k) x.as<float>()[size_t(k) * K + k] = 1;
     std::vector<float> ref(K * N);
     for (unsigned row = 0; row < N; ++row) {
-      for (unsigned block = 0; block < 3; ++block)
-        ink2_iq2_cases::fill_xs(w.as<uint8_t>() + row * rb + block * 74, 0x1400, row * 96 + block * 32);
-      ink2_iq2_cases::decode_xs(w.as<uint8_t>() + row * rb, ref.data() + row * K, 3);
+      for (unsigned block = 0; block < 3; ++block) {
+        auto* b = w.as<uint8_t>() + row * rb + block * bytes;
+        constexpr uint16_t halves[] = {0x3555, 0xb555, 0x0401};
+        if (type == 17) ink2_iq2_cases::fill_xs(b, halves[block], row * 96 + block * 32);
+        else ink2_iq2_cases::fill_s(b, halves[block], row * 96 + block * 32);
+        for (unsigned group = 0; group < 8; ++group) {
+          const unsigned low = (row * 5 + block * 3 + group) & 15u;
+          b[(type == 17 ? 66 : 74) + group] = uint8_t(low | (((low + 7) & 15u) << 4));
+        }
+      }
+      if (type == 17) ink2_iq2_cases::decode_xs(w.as<uint8_t>() + row * rb, ref.data() + row * K, 3);
+      else ink2_iq2_cases::decode_s(w.as<uint8_t>() + row * rb, ref.data() + row * K, 3);
     }
-    const MmP p{K, N, K, 17, rb, 0};
+    const MmP p{K, N, K, type, rb, 0};
     { auto e = gpu.begin(); e->use(ni::ink2::pipeline("ink2_gguf_mm"));
       e->buf(0, x); e->buf(1, w); e->buf(2, y); e->val(3, p); e->dispatch((N + 3) / 4, K, 1, 128); e->commit_and_wait(); }
     for (unsigned k = 0; k < K; ++k) for (unsigned row = 0; row < N; ++row) {
       const float got = y.as<float>()[k * N + row], want = ref[row * K + k];
       if (std::bit_cast<uint32_t>(got) != std::bit_cast<uint32_t>(want)) {
-        std::fprintf(stderr, "pinned IQ2_XS Metal row=%u k=%u: Metal=%a llama=%a\n", row, k, got, want);
+        std::fprintf(stderr, "pinned IQ2 type=%u Metal row=%u k=%u: Metal=%a llama=%a\n", type, row, k, got, want);
         return 1;
       }
       ++checked;
     }
-    std::printf("IQ2_XS Metal: 8448 values bitwise match pinned llama.cpp through basis-vector GEMM\n");
+    std::printf("IQ2 type=%u Metal: 8448 values bitwise match pinned llama.cpp through basis-vector GEMM\n", type);
   }
-  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 16u, 17u, 18u, 20u, 23u}) {
-    const unsigned K = ink2_gguf::block_values(type) == 32 ? 1152 : (type == 17 ? 2304 : (type == 18 ? 768 : 256)), M = 3, N = 7;
+  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 16u, 17u, 18u, 20u, 22u, 23u}) {
+    const unsigned K = ink2_gguf::block_values(type) == 32 ? 1152 : ((type == 17 || type == 22) ? 2304 : (type == 18 ? 768 : 256)), M = 3, N = 7;
     const unsigned rb = K / ink2_gguf::block_values(type) * ink2_gguf::block_bytes(type);
     auto w = data(type, K, N), x = buffer(M * K * 4), y = buffer(M * N * 4);
     for (unsigned k = 0; k < M * K; ++k) x.as<float>()[k] = float(int(rng() % 101) - 50) / 100;

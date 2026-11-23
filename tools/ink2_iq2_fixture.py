@@ -23,13 +23,14 @@ def generate(llama_root):
         ("uint8_t", "kmask_iq2xs", 8),
         ("uint8_t", "ksigns_iq2xs", 128),
         ("uint64_t", "iq2xs_grid", 512),
+        ("uint64_t", "iq2s_grid", 1024),
     ]:
         match = re.search(rf"GGML_TABLE_BEGIN\({dtype}, {name}, {count}\)\n(.*?)GGML_TABLE_END\(\)", common, re.S)
         if not match:
             raise ValueError(f"Missing pinned table: {name}")
         tables.append(f"inline constexpr {dtype} {name}[{count}] = {{\n{match[1]}}};\n")
     decoders = []
-    for name in ["iq2_xs"]:
+    for name in ["iq2_xs", "iq2_s"]:
         match = re.search(rf"void dequantize_row_{name}\(.*?\n}}\n", quants, re.S)
         if not match:
             raise ValueError(f"Missing pinned decoder: {name}")
@@ -42,6 +43,8 @@ def generate(llama_root):
         "inline constexpr int QK_K = 256;\n"
         "struct block_iq2_xs { uint16_t d; uint16_t qs[32]; uint8_t scales[8]; };\n"
         "static_assert(sizeof(block_iq2_xs) == 74);\n"
+        "struct block_iq2_s { uint16_t d; uint8_t qs[64]; uint8_t qh[8]; uint8_t scales[8]; };\n"
+        "static_assert(sizeof(block_iq2_s) == 82);\n"
         "inline float from_half(uint16_t h) { _Float16 f; std::memcpy(&f, &h, 2); return float(f); }\n"
         "#define GGML_RESTRICT\n#define GGML_FP16_TO_FP32(h) from_half(h)\n"
         + "\n".join(tables) + "\n" + "\n".join(decoders)
