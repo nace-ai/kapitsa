@@ -1114,6 +1114,51 @@ template [[host_name("ink2_q8_mv1r2")]] [[kernel]] decltype(ink2_q8_mv1r<2>) ink
 
 #undef INK2_Q8
 
+// lab8 (NI_INK2_CAPFOLD): the one-row Q8 matvec (R = 4, ink2_q8_mvm1's sums) with ink2_softcap on its outputs
+// (unembed): one stage less per token
+template <uint R>
+NI_INLINE void ink2_q8_mv1_cap_impl(const device float* x, const device uchar* wq, const device half* ws, uint N,
+                                    uint K, device float* y, float cap, float inv_cap, uint tg, uint sg, uint lane) {
+  const uint n0 = (tg * 4u + sg) * R;
+  if (n0 >= N) return;
+  const uint mc = min(R, N - n0);
+  const uint nb = K / 32u;
+  float acc[R][1];
+  for (uint q = 0u; q < R; ++q) acc[q][0] = 0.0f;
+  for (uint k = lane * 8u; k < K; k += 256u) {
+    float4 wa[R], wb[R];
+    NI_UNROLL for (uint q = 0u; q < R; ++q) {
+      const uint r = n0 + min(q, mc - 1u);
+      const uint2 v = *(const device uint2*)(wq + size_t(r) * K + k);
+      const float s = float(ws[size_t(r) * nb + k / 32u]);
+      wa[q] = float4(as_type<char4>(v.x)) * s;
+      wb[q] = float4(as_type<char4>(v.y)) * s;
+    }
+    const float4 xa = *(const device float4*)(x + k);
+    const float4 xb = *(const device float4*)(x + k + 4u);
+    NI_UNROLL for (uint q = 0u; q < R; ++q) acc[q][0] += dot(xa, wa[q]) + dot(xb, wb[q]);
+  }
+  float sv[R];
+  NI_UNROLL for (uint q = 0u; q < R; ++q) sv[q] = simd_sum(acc[q][0]);
+  if (lane == 0u) {
+    device float* dst = y + n0;
+    for (uint q = 0u; q < mc; ++q) {
+      dst[q] = sv[q];
+      dst[q] = cap * metal::precise::tanh(dst[q] * inv_cap);
+    }
+  }
+}
+struct Ink2CapP {
+  uint N, K;
+  float cap, inv_cap;
+};
+[[kernel]] void ink2_q8_mv1_cap(const device float* x [[buffer(0)]], const device uchar* wq [[buffer(1)]],
+                                const device half* ws [[buffer(2)]], device float* y [[buffer(3)]],
+                                constant Ink2CapP& p [[buffer(4)]], uint tg [[threadgroup_position_in_grid]],
+                                uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  ink2_q8_mv1_cap_impl<4>(x, wq, ws, p.N, p.K, y, p.cap, p.inv_cap, tg, sg, lane);
+}
+
 [[kernel]] void ink2_bf16_mv8(const device float* x [[buffer(0)]], const device bfloat* w [[buffer(1)]],
                               device float* y [[buffer(2)]], constant Ink2MmP& p [[buffer(3)]],
                               uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
@@ -1535,6 +1580,79 @@ struct Ink2RelP {
   uint T, Hq, d_rel, extent, proj_f32;
 };
 
+// lab8 (NI_INK2_RBFOLD): ink2_qkvr_prep whose r heads run as J = ceil(extent / D) threadgroups each: every one clips
+// the head's r (the same sums) into threadgroup memory and computes D columns of its rel bias row (ink2_rel_bias's
+// loop, one column per thread). r is not written back (rel bias is its only reader). One stage less per visit, same
+// values as the two kernels. (One threadgroup per head doing all 1024 columns: +2.5 ms/token, latency-bound.)
+[[kernel]] void ink2_qkvr_prep_rb(device float* q [[buffer(0)]], const device float* k [[buffer(1)]],
+                                  const device float* v [[buffer(2)]], device float* r [[buffer(3)]],
+                                  const device void* q_scale [[buffer(4)]], const device void* r_scale [[buffer(5)]],
+                                  device half* kc [[buffer(6)]], device half* vc [[buffer(7)]],
+                                  constant Ink2QkvrP& p [[buffer(8)]], const device void* rel_proj [[buffer(9)]],
+                                  device float* rb [[buffer(10)]], constant Ink2RelP& rp [[buffer(11)]],
+                                  uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]]) {
+  threadgroup float scratch[32];
+  threadgroup float rs[128];
+  const uint kind_h = tg.x, t = tg.y;
+  const uint pos = p.pos0 + t;
+  const uint slot = p.is_swa ? (pos % p.kv_cap) : pos;
+  const float tau = p.is_swa ? 1.0f : (1.0f + p.log_alpha * metal::precise::log(max(1.0f, float(pos + 1) / p.log_floor)));
+
+  if (kind_h < p.Hq) {
+    const uint h = kind_h;
+    const size_t off = (size_t(t) * p.Hq + h) * p.D + tid;
+    const size_t soff = size_t(h) * p.D + tid;
+    const float sc = p.scale_f32 ? ((const device float*)q_scale)[soff] : float(((const device bfloat*)q_scale)[soff]);
+    const float val = q[off] * sc;
+    const float ss = tg_sum(val * val, scratch, tid, p.D);
+    const float mult = min(1.0f, p.qk_clip / (metal::precise::sqrt(ss) + 1e-6f)) * tau;
+    q[off] = val * mult;
+    return;
+  }
+  uint rem = kind_h - p.Hq;
+  if (rem < p.Hkv) {
+    const uint h = rem;
+    const float val = k[(size_t(t) * p.Hkv + h) * p.D + tid];
+    const float ss = tg_sum(val * val, scratch, tid, p.D);
+    const float mult = min(1.0f, p.qk_clip / (metal::precise::sqrt(ss) + 1e-6f));
+    kc[(size_t(slot) * p.Hkv + h) * p.D + tid] = half(val * mult);
+    return;
+  }
+  rem -= p.Hkv;
+  if (rem < p.Hkv) {
+    const uint h = rem;
+    const float val = v[(size_t(t) * p.Hkv + h) * p.D + tid];
+    const float ss = tg_sum(val * val, scratch, tid, p.D);
+    const float inv = metal::precise::rsqrt(ss / float(p.D) + p.v_eps);
+    vc[(size_t(slot) * p.Hkv + h) * p.D + tid] = half(val * inv);
+    return;
+  }
+  const uint J = (rp.extent + p.D - 1u) / p.D;
+  const uint h = (rem - p.Hkv) / J, col = ((rem - p.Hkv) % J) * p.D + tid;
+  const size_t off = (size_t(t) * p.Hq + h) * p.d_rel + tid;
+  const size_t soff = size_t(h) * p.d_rel + tid;
+  float val = 0.0f;
+  if (tid < p.d_rel) {
+    const float sc = p.scale_f32 ? ((const device float*)r_scale)[soff] : float(((const device bfloat*)r_scale)[soff]);
+    val = r[off] * sc;
+  }
+  const float ss = tg_sum(val * val, scratch, tid, p.D);
+  if (tid < p.d_rel) {
+    const float mult = min(1.0f, p.r_clip / (metal::precise::sqrt(ss) + 1e-6f)) * tau;
+    rs[tid] = val * mult;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (col < rp.extent) {
+    float acc = 0.0f;
+    for (uint d = 0; d < rp.d_rel; ++d) {
+      const size_t pidx = size_t(d) * rp.extent + col;
+      const float pv = rp.proj_f32 ? ((const device float*)rel_proj)[pidx] : float(((const device bfloat*)rel_proj)[pidx]);
+      acc += rs[d] * pv;
+    }
+    rb[(size_t(t) * rp.Hq + h) * rp.extent + col] = acc;
+  }
+}
+
 [[kernel]] void ink2_rel_bias(const device float* r [[buffer(0)]], const device void* rel_proj [[buffer(1)]],
                               device float* rb [[buffer(2)]], constant Ink2RelP& p [[buffer(3)]],
                               uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]]) {
@@ -1778,7 +1896,7 @@ INK2_DEC_G3(ink2_attn_decode_g3_k6fx, 6, true)
 // dims for the 3 query heads (q in threadgroup memory, 16-byte K loads; no simd_sum per (key, head)); for PV lanes
 // take 4 dims and the weights are shuffled from the key's lane. Same partials as ink2_attn_decode_g3.
 // decbench 84K global: g3_fx 1.60 -> 1.20 ms a visit (raw K+V read 0.93); 40K 0.80 -> 0.59.
-template <uint VB>
+template <uint VB, bool AT = false>
 NI_INLINE void ink2_attn_decode_g3kw_impl(const device float* q, const device half* kc, const device half* vc,
                                         const device float* rb, device float* pm, device float* pl, device float* po,
                                         constant Ink2AttnDecP& p, uint2 tg, uint sg, uint lane, uint tid,
@@ -1858,8 +1976,22 @@ NI_INLINE void ink2_attn_decode_g3kw_impl(const device float* q, const device ha
       }
     }
     const size_t out_idx = size_t(h0 + g) * p.nchunks + cid;
-    if (lane == 0) { pm[out_idx] = mm; pl[out_idx] = ll; }
-    *(device float4*)(po + out_idx * p.D + d0) = oo;
+    if (AT) {  // (g3kw_r: through device atomics, for the last threadgroup's reduce)
+      device atomic_uint* am = (device atomic_uint*)pm;
+      device atomic_uint* al = (device atomic_uint*)pl;
+      device atomic_uint* ao = (device atomic_uint*)(po + out_idx * p.D + d0);
+      if (lane == 0) {
+        atomic_store_explicit(am + out_idx, as_type<uint>(mm), memory_order_relaxed);
+        atomic_store_explicit(al + out_idx, as_type<uint>(ll), memory_order_relaxed);
+      }
+      atomic_store_explicit(ao + 0, as_type<uint>(oo.x), memory_order_relaxed);
+      atomic_store_explicit(ao + 1, as_type<uint>(oo.y), memory_order_relaxed);
+      atomic_store_explicit(ao + 2, as_type<uint>(oo.z), memory_order_relaxed);
+      atomic_store_explicit(ao + 3, as_type<uint>(oo.w), memory_order_relaxed);
+    } else {
+      if (lane == 0) { pm[out_idx] = mm; pl[out_idx] = ll; }
+      *(device float4*)(po + out_idx * p.D + d0) = oo;
+    }
   }
 }
 #define INK2_DEC_G3KW(NAME, VB)                                                                                         \
@@ -1874,6 +2006,82 @@ NI_INLINE void ink2_attn_decode_g3kw_impl(const device float* q, const device ha
     ink2_attn_decode_g3kw_impl<VB>(q, kc, vc, rb, pm, pl, po, p, tg, sg, lane, tid, tgb, qs);                          \
   }
 INK2_DEC_G3KW(ink2_attn_decode_g3kw, 4)
+
+#if __METAL_VERSION__ >= 320
+// (the partials of the other threadgroups read through device atomics: plain loads in the last threadgroup read stale
+// values on the M1 Max although behind the arrival fences)
+NI_INLINE void ink2_attn_reduce_par(const device float* pm, const device float* pl, const device float* po,
+                                    float sink, const device float* gate, device float* out, size_t base, uint nchunks,
+                                    uint D, uint lane, threadgroup float* wsh);
+NI_INLINE float ink2_ld_at(const device float* a) {
+  return as_type<float>(atomic_load_explicit((device atomic_uint*)a, memory_order_relaxed));
+}
+NI_INLINE void ink2_attn_reduce_par_at(const device float* pm, const device float* pl, const device float* po,
+                                       float sink, const device float* gate, device float* out, size_t base,
+                                       uint nchunks, uint D, uint lane, threadgroup float* wsh) {
+  const uint d0 = lane * 4;
+  float mloc = -INFINITY;
+  for (uint c = lane; c < nchunks; c += 32u)
+    if (ink2_ld_at(pl + base + c) != 0.0f) mloc = max(mloc, ink2_ld_at(pm + base + c));
+  const float mx = max(simd_max(mloc), sink);
+  float lloc = 0.0f;
+  for (uint c = lane; c < nchunks; c += 32u) {
+    const float l2 = ink2_ld_at(pl + base + c);
+    const float w = l2 != 0.0f ? metal::precise::exp(ink2_ld_at(pm + base + c) - mx) : 0.0f;
+    wsh[c] = w;
+    lloc += w * l2;
+  }
+  const float ll = simd_sum(lloc) + metal::precise::exp(sink - mx);
+  simdgroup_barrier(mem_flags::mem_threadgroup);
+  float4 oo = float4(0.0f);
+  for (uint c = 0; c < nchunks; ++c) {
+    const device float* pc = po + (base + c) * D + d0;
+    oo += wsh[c] * float4(ink2_ld_at(pc), ink2_ld_at(pc + 1), ink2_ld_at(pc + 2), ink2_ld_at(pc + 3));
+  }
+  const float4 g4 = *(const device float4*)(gate + d0);
+  const float4 sig = float4(1.0f) / (float4(1.0f) + float4(metal::precise::exp(-g4.x), metal::precise::exp(-g4.y),
+                                                           metal::precise::exp(-g4.z), metal::precise::exp(-g4.w)));
+  *(device float4*)(out + d0) = (oo / ll) * sig;
+}
+// lab8 (NI_INK2_REDLAST): ink2_attn_decode_g3kw whose last threadgroup to finish a KV head (Nemotron-H's arrival
+// order, flint_arrive) runs ink2_attn_decode_reduce_p for the head's 3 query heads, one simdgroup each (the reduce's
+// lane mapping, so the same sums): one stage less per visit. cnt[hkv] returns to 0 for the next dispatch.
+template <bool READ_AT>
+[[kernel]] void ink2_attn_decode_g3kw_r(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
+                                        const device half* vc [[buffer(2)]], const device float* rb [[buffer(3)]],
+                                        device float* pm [[buffer(4)]], device float* pl [[buffer(5)]],
+                                        device float* po [[buffer(6)]], constant Ink2AttnDecP& p [[buffer(7)]],
+                                        const device float* sinks [[buffer(8)]], const device float* gate [[buffer(9)]],
+                                        device float* out [[buffer(10)]], device atomic_uint* cnt [[buffer(11)]],
+                                        uint2 tg [[threadgroup_position_in_grid]],
+                                        uint sg [[simdgroup_index_in_threadgroup]],
+                                        uint lane [[thread_index_in_simdgroup]], uint tid [[thread_index_in_threadgroup]]) {
+  threadgroup float tgb[24 + 12 * 128];
+  threadgroup float4 qs[3 * 32];
+  threadgroup uint last;
+  ink2_attn_decode_g3kw_impl<4, true>(q, kc, vc, rb, pm, pl, po, p, tg, sg, lane, tid, tgb, qs);
+  threadgroup_barrier(mem_flags::mem_device);
+  if (tid == 0) {
+    atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+    last = atomic_fetch_add_explicit(cnt + tg.x, 1u, memory_order_relaxed) == p.nchunks - 1u ? 1u : 0u;
+    atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup | mem_flags::mem_device);
+  if (last == 0u) return;
+  if (sg < 3u) {
+    const uint h = tg.x * 3u + sg;
+    if (READ_AT)
+      ink2_attn_reduce_par_at(pm, pl, po, sinks[h], gate + size_t(h) * p.D, out + size_t(h) * p.D,
+                              size_t(h) * p.nchunks, p.nchunks, p.D, lane, tgb + sg * 128u);
+    else
+      ink2_attn_reduce_par(pm, pl, po, sinks[h], gate + size_t(h) * p.D, out + size_t(h) * p.D, size_t(h) * p.nchunks,
+                           p.nchunks, p.D, lane, tgb + sg * 128u);
+  }
+  if (tid == 0) atomic_store_explicit(cnt + tg.x, 0u, memory_order_relaxed);
+}
+template [[host_name("ink2_attn_decode_g3kw_r")]] [[kernel]] decltype(ink2_attn_decode_g3kw_r<true>) ink2_attn_decode_g3kw_r<true>;
+template [[host_name("ink2_attn_decode_g3kw_r0")]] [[kernel]] decltype(ink2_attn_decode_g3kw_r<false>) ink2_attn_decode_g3kw_r<false>;
+#endif
 
 // ink2_attn_decode_g3 with a transpose-reduce: per 8-key block a lane holds the 24 partial (head, key) dots of its 4
 // dims; 5 halving shuffle steps (31 shuffles, not 24 simd_sums) leave lane L = 8 g + j with head g's score of key j,

@@ -213,6 +213,10 @@ struct Ink2SoftcapP {
   uint32_t n;
   float cap, inv_cap;
 };
+struct Ink2CapP {
+  uint32_t N, K;
+  float cap, inv_cap;
+};
 struct Ink2BucketP {
   uint32_t P, E, BM;
 };
@@ -915,6 +919,8 @@ void Inkling2::alloc_buffers() {
   part_m_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * kMaxVerify * 4, "ink2_part_m");
   part_l_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * kMaxVerify * 4, "ink2_part_l");
   part_o_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * kMaxVerify * size_t(cfg_.head_dim) * 4, "ink2_part_o");
+  attn_cnt_ = alloc(size_t(kMaxVerify) * size_t(cfg_.hkv) * 4, "ink2_attn_cnt");
+  memset(attn_cnt_.base + attn_cnt_.offset, 0, attn_cnt_.size);
   h_mlp_ = alloc(T * H * 4, "ink2_h_mlp");
   x_mlp_ = alloc(T * H * 4, "ink2_x_mlp");
   rlog_ = alloc(T * size_t(cfg_.n_experts) * 4, "ink2_rlog");
@@ -1892,6 +1898,13 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     // Q/K/R clipping + V norm + log scaling + KV cache write
     const uint32_t kv_cap = L.is_swa ? uint32_t(ring_rows_) : uint32_t(s.cap);
     const size_t rrow = size_t(cfg_.hq) * size_t(cfg_.d_rel) * 4;
+    // NI_INK2_RBFOLD (lab8, default 1): the decode-size rel bias (ink2_rel_bias rows, T < 8) in qkvr_prep's r heads
+    static const int rbfold_env = getenv("NI_INK2_RBFOLD") ? atoi(getenv("NI_INK2_RBFOLD")) : 1;
+    const bool rb_pf = cfg_.d_rel == 16 && T >= 8;
+    const bool rbfold = ink2_ab("NI_INK2_RBFOLD", rbfold_env) != 0 && !rb_pf && cfg_.d_rel <= cfg_.head_dim;
+    const Ink2RelP rbp{Tg, uint32_t(cfg_.hq), uint32_t(cfg_.d_rel), uint32_t(cfg_.rel_extent),
+                       L.rel_proj->dtype == DType::F32 ? 1u : 0u};
+    const size_t rbrow = size_t(cfg_.hq) * size_t(cfg_.rel_extent) * 4;
     if (gconc) e.group_begin();
     for (int gi = 0; gi < ng; ++gi) {
       const uint32_t g_cap = L.is_swa ? uint32_t(ring_rows_) : uint32_t(gseq(gi).cap);
@@ -1909,7 +1922,12 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
                          cfg_.rms_eps,
                          cfg_.log_floor,
                          cfg_.log_alpha};
-      e.use(ink2_pipe("ink2_qkvr_prep"));
+      e.use(ink2_pipe(rbfold ? "ink2_qkvr_prep_rb" : "ink2_qkvr_prep"));
+      if (rbfold) {
+        e.buf(9, L.rel_proj->buf);
+        e.buf(10, rv(rb_, rbrow, gi));
+        e.val(11, rbp);
+      }
       e.buf(0, rv(q_, QD * 4, gi));
       e.buf(1, rv(k_, KVD * 4, gi));
       e.buf(2, rv(v_, KVD * 4, gi));
@@ -1919,12 +1937,13 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       e.buf(6, gseq(gi).kc[v_idx]);
       e.buf(7, gseq(gi).vc[v_idx]);
       e.val(8, qp);
-      e.dispatch(uint32_t(2 * cfg_.hq + 2 * cfg_.hkv), Tg, 1, uint32_t(cfg_.head_dim));
+      const uint32_t rj = rbfold ? (uint32_t(cfg_.rel_extent) + uint32_t(cfg_.head_dim) - 1) / uint32_t(cfg_.head_dim) : 1u;
+      e.dispatch(uint32_t(cfg_.hq) * (1 + rj) + uint32_t(2 * cfg_.hkv), Tg, 1, uint32_t(cfg_.head_dim));
     }
     if (gconc) e.group_end();
 
     // Rel bias [T, Hq, rel_extent]
-    {
+    if (!rbfold) {
       const Ink2RelP rp{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.d_rel), uint32_t(cfg_.rel_extent),
                         L.rel_proj->dtype == DType::F32 ? 1u : 0u};
       if (cfg_.d_rel == 16 && T >= 8) {
@@ -1950,6 +1969,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       // (multi rows: one decode attention per sequence, each into its own partials; then the reduces)
       const size_t pm = size_t(cfg_.hq) * kMaxAttnChunks * 4, rbr = size_t(cfg_.hq) * size_t(cfg_.rel_extent) * 4;
       std::vector<Ink2AttnDecP> adps;
+      bool redlast = false;
       if (gconc) e.group_begin();
       for (int gi = 0; gi < ng; ++gi) {
       const int pos0 = gpos(gi);
@@ -1977,8 +1997,20 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       const bool g3 = dec_g && cfg_.hq == 3 * cfg_.hkv && cfg_.head_dim == 128;
       // NI_INK2_DEC_G: 1 GQA kernel with fast::exp (decbench 40K: 1.83 -> 0.80 ms a global visit), 2 the
       // same with precise::exp (1.37 ms), 0 the per-head kernel; 3 (default, round 3) keys across lanes (0.59 ms)
-      e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : kw ? "ink2_attn_decode_g3kw"
+      // NI_INK2_REDLAST=1 (lab8, default 0): the split-K reduce by the last threadgroup of each KV head (g3kw_r; exact,
+      // 48 stages less, but its partials must go through device atomics on the M1 Max: no gain, +0.03 ms +-0.1)
+      static const int redlast_env = getenv("NI_INK2_REDLAST") ? atoi(getenv("NI_INK2_REDLAST")) : 0;
+      static const bool red_p0 = !getenv("NI_INK2_REDP") || atoi(getenv("NI_INK2_REDP")) != 0;
+      const int redlast_v = ink2_ab("NI_INK2_REDLAST", redlast_env);  // (2: plain loads in the reduce; probe)
+      redlast = redlast_v != 0 && g3 && kw && red_p0;
+      e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : kw ? (redlast ? (redlast_v == 2 ? "ink2_attn_decode_g3kw_r0" : "ink2_attn_decode_g3kw_r") : "ink2_attn_decode_g3kw")
                                                                                                : "ink2_attn_decode_g3_fx"));
+      if (redlast) {
+        e.buf(8, rv(sinks_, size_t(cfg_.hq) * 4, gi));
+        e.buf(9, rv(gate_attn_, QD * 4, gi));
+        e.buf(10, rv(att_out_, QD * 4, gi));
+        e.buf(11, attn_cnt_.view(size_t(gi) * size_t(cfg_.hkv) * 4, size_t(cfg_.hkv) * 4));
+      }
       e.buf(0, rv(q_, QD * 4, gi));
       e.buf(1, gseq(gi).kc[v_idx]);
       e.buf(2, gseq(gi).vc[v_idx]);
@@ -1991,7 +2023,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       adps.push_back(adp);
       }
       if (gconc) e.group_end(), e.group_begin();
-      for (int gi = 0; gi < ng; ++gi) {
+      for (int gi = 0; gi < ng && !redlast; ++gi) {
       const Ink2AttnDecP& adp = adps[size_t(gi)];
 
       static const bool red_p = !getenv("NI_INK2_REDP") || atoi(getenv("NI_INK2_REDP")) != 0;
@@ -2423,6 +2455,22 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
   const Buffer& dst = out_logits ? *out_logits : logits_;
   const int rows_out = need_all_logits ? T : 1;
   const Buffer h_in = need_all_logits ? h_norm_ : h_norm_.view(size_t(T - 1) * H * 4, size_t(H) * 4);
+  // NI_INK2_CAPFOLD (lab8, default 1): one row, Q8 unembed: the softcap in the matvec's epilogue (ink2_q8_mv1_cap)
+  static const int capfold_env = getenv("NI_INK2_CAPFOLD") ? atoi(getenv("NI_INK2_CAPFOLD")) : 1;
+  static const uint32_t r1n = getenv("NI_INK2_Q8R_MAXN") ? uint32_t(atoi(getenv("NI_INK2_Q8R_MAXN"))) : 4096u;
+  const Ink2Mat& uq = unembed_;
+  const bool capfold = ink2_ab("NI_INK2_CAPFOLD", capfold_env) != 0 && rows_out == 1 && (q8m_ && uq.is_q8() && uq.K % 256 == 0) && V > r1n;
+  if (capfold) {
+    const Ink2CapP cp{V, uq.K, cfg_.logit_softcap, 1.0f / cfg_.logit_softcap};
+    e.use(ink2_pipe("ink2_q8_mv1_cap"));
+    e.buf(0, h_in);
+    e.buf(1, uq.q);
+    e.buf(2, uq.s);
+    e.buf(3, dst);
+    e.val(4, cp);
+    e.dispatch((V + 15) / 16, 1, 1, 128);
+    return;
+  }
   enc_mm(e, unembed_, h_in, dst, rows_out, V, false);
   {
     const Ink2SoftcapP sp{uint32_t(rows_out) * V, cfg_.logit_softcap, 1.0f / cfg_.logit_softcap};
