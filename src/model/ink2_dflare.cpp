@@ -350,6 +350,13 @@ void Ink2DFlare::reset(Ink2DFlareSeq& ds) {
   if (ds.rows_f) memset(ds.rows_f.ptr(), 0, ds.rows_f.size);
 }
 
+void Ink2DFlare::rewind(Ink2DFlareSeq& ds, int n_back) {
+  // The ring holds positions [end - ctx_len, end); rows at or after the new end are never read again before
+  // the next commit overwrites them, so only the count changes. rows_f is rewritten by that commit's last row.
+  ds.ctx_len = std::max(0, ds.ctx_len - std::max(0, n_back));
+  if (ds.ctx_len == 0) reset(ds);
+}
+
 void Ink2DFlare::enc_q8(Encoder& e, const Q8Mat& w, const Buffer& x, const Buffer& y, int M, bool add) {
   const DflQ8P p{uint32_t(M), w.N, w.K, add ? 1u : 0u};
   e.use(dfl_pipe("dflare_q8_mm"));

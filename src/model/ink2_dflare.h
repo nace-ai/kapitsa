@@ -32,6 +32,9 @@ class Ink2DFlare {
 
   std::unique_ptr<Ink2DFlareSeq> new_seq();
   void reset(Ink2DFlareSeq& ds);
+  // Drop the newest `n_back` committed positions (a prompt that reuses the slot's cached prefix up to an earlier
+  // position): the ring keeps the rows before it, which were projected from the same tokens at the same positions.
+  void rewind(Ink2DFlareSeq& ds, int n_back);
 
   // Commit `n_rows` target taps ([4, taps_stride_rows, H] float) starting at sequence position `pos0`.
   // `taps_stride_rows` defaults to `n_rows` when 0 (pass the verify batch size T when committing a prefix).
