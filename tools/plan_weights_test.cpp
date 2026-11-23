@@ -101,8 +101,55 @@ static bool says_planned(const std::string& report, const std::string& name) {
          report.find("/" + name + ": not downloaded: planned from its headers") != std::string::npos;
 }
 
+static void check_gguf_plan() {
+  std::string dir = (fs::temp_directory_path() / "kapitsa-gguf-plan-XXXXXX").string();
+  if (!mkdtemp(dir.data())) {
+    check(false, "create a GGUF plan fixture");
+    return;
+  }
+  const fs::path root = dir;
+  fs::create_directories(root / ".kapitsa");
+  const std::string config = "{\"model_type\":\"inkling2_loop\",\"gguf_file\":\"model.gguf\"}";
+  write_file(dir + "/config.json", config);
+  sparse_file(dir + "/model.gguf", 64ull << 20);
+  check(!hub::plan_has_model(dir), "a full-sized sparse GGUF without a manifest is only a plan");
+
+  const std::string files = "\"files\":[{\"path\":\"config.json\",\"size\":" + std::to_string(config.size());
+  const std::string retained = "{\"gguf\":{\"retained\":true},";
+  const std::string manifest = dir + "/.kapitsa/manifest.json";
+  write_file(manifest, retained + files + "}]}");
+  check(!hub::plan_has_model(dir), "a metadata-only manifest does not certify retained GGUF weights");
+  const std::string listed = files + "},{\"path\":\"model.gguf\",\"size\":67108864}]}";
+  write_file(manifest, "{" + listed);
+  check(!hub::plan_has_model(dir), "a listed sparse GGUF without the retained marker is only a plan");
+  write_file(manifest, "{\"gguf\":{\"retained\":false}," + listed);
+  check(!hub::plan_has_model(dir), "a false retained marker does not certify GGUF weights");
+  sparse_file(dir + "/model.gguf", 0);
+  write_file(manifest, retained + files + "},{\"path\":\"model.gguf\",\"size\":0}]}");
+  check(!hub::plan_has_model(dir), "a retained marker cannot certify an empty GGUF");
+  sparse_file(dir + "/model.gguf", 64ull << 20);
+  const std::string complete = retained + listed;
+  write_file(manifest, complete);
+  check(hub::plan_has_model(dir), "a completed retained-GGUF import has its model");
+  write_file(dir + "/config.json", "{\"model_type\":\"inkling2_loop\",\"gguf_file\":\"other.gguf\"}");
+  check(!hub::plan_has_model(dir), "the configured GGUF must be listed in the completed manifest");
+  write_file(dir + "/config.json", config);
+  sparse_file(dir + "/model.gguf", (64ull << 20) - 1);
+  check(!hub::plan_has_model(dir), "a shortened retained GGUF does not complete its manifest");
+  fs::remove(root / "model.gguf");
+  check(!hub::plan_has_model(dir), "a missing retained GGUF does not complete its manifest");
+  sparse_file(dir + "/model.gguf", 64ull << 20);
+  fs::remove(root / "config.json");
+  check(!hub::plan_has_model(dir), "a retained GGUF without its listed metadata is incomplete");
+  write_file(manifest, "{");
+  check(!hub::plan_has_model(dir), "a malformed retained-GGUF manifest is incomplete");
+  if (!keep) fs::remove_all(root);
+  std::printf("GGUF plan presence: %d failure(s)\n", failures);
+}
+
 int main(int argc, char** argv) {
   keep = argc > 1 && std::string(argv[1]) == "--keep";
+  check_gguf_plan();
   // the CLI beside this test's own binary (build/plan_weights_test -> build/kapitsa)
   char exe[4096] = {0};
   uint32_t size = sizeof exe;
@@ -127,7 +174,7 @@ int main(int argc, char** argv) {
   }
   if (config.empty() || index.empty() || index_shards(index).empty()) {
     std::printf("SKIP: no downloaded catalog model to make a plan of (its config.json and index are the fixture)\n");
-    return 0;
+    return failures ? 1 : 0;
   }
   const std::string root = (fs::temp_directory_path() / ("k1187-plans-" + std::to_string(::getpid()))).string();
   fs::remove_all(root);
