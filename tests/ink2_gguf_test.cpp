@@ -3,6 +3,8 @@
 #include "gguf/quant.h"
 #include "kernels/inkling2/gguf_blocks.h"
 #include "fixtures/ink2_iq3_reference.h"
+#include "../tools/gguf_iq2_xs_test.h"
+#include "fixtures/ink2_iq2_cases.h"
 
 #include <bit>
 #include <cmath>
@@ -28,7 +30,43 @@ static bool check_iq3(const unsigned char* bytes, size_t count, size_t& checked)
   return true;
 }
 
+static bool parser_fixture(uint32_t type, uint64_t columns, size_t payload, bool expect) {
+  std::vector<uint8_t> bytes{'G', 'G', 'U', 'F'};
+  auto put = [&](auto value) {
+    const auto* p = reinterpret_cast<const uint8_t*>(&value);
+    bytes.insert(bytes.end(), p, p + sizeof(value));
+  };
+  put(uint32_t(3)); put(uint64_t(1)); put(uint64_t(0));
+  put(uint64_t(1)); bytes.push_back('x'); put(uint32_t(2));
+  put(columns); put(uint64_t(2)); put(type); put(uint64_t(0));
+  const size_t data = (bytes.size() + 31) / 32 * 32;
+  bytes.resize(data + payload);
+  FILE* tmp = std::tmpfile();
+  if (!tmp) return false;
+  bool ok = false;
+  if (std::fwrite(bytes.data(), 1, bytes.size(), tmp) == bytes.size() && std::fflush(tmp) == 0) {
+    try {
+      ni::gguf::File file("/dev/fd/" + std::to_string(fileno(tmp)));
+      const auto* tensor = file.find("x");
+      ok = expect && tensor && tensor->bytes == payload && tensor->row_bytes() == payload / 2;
+    } catch (const std::exception&) {
+      ok = !expect;
+    }
+  }
+  std::fclose(tmp);
+  if (!ok) std::fprintf(stderr, "GGUF parser type=%u columns=%llu payload=%zu expect=%d\n",
+                        type, static_cast<unsigned long long>(columns), payload, expect);
+  return ok;
+}
+
 int main() {
+  for (uint32_t type : {16u, 17u}) {
+    uint32_t n = 0, bytes = 0;
+    if (!ni::gguf::type_block(type, &n, &bytes) ||
+        !parser_fixture(type, n, bytes * 2, true) ||
+        !parser_fixture(type, n - 1, bytes * 2, false) ||
+        !parser_fixture(type, n, bytes * 2 - 1, false)) return 1;
+  }
   if (ink2_gguf::block_values(18) != 256 || ink2_gguf::block_bytes(18) != 98) {
     std::fprintf(stderr, "IQ3_XXS layout: expected 256 values in 98 bytes\n");
     return 1;
@@ -57,7 +95,7 @@ int main() {
   }
   std::printf("IQ3_XXS: %zu CPU scalar/bulk values bitwise match pinned llama.cpp, including 768 trained values\n", iq3_checked);
   size_t checked = 0;
-  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 16u, 18u, 20u, 23u}) {
+  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 16u, 17u, 18u, 20u, 23u}) {
     const unsigned n = ink2_gguf::block_values(type), bytes = ink2_gguf::block_bytes(type);
     for (int trial = 0; trial < 1000; ++trial) {
       std::vector<unsigned char> b(bytes * 3);
@@ -80,6 +118,45 @@ int main() {
       }
     }
   }
+  const size_t oracle_start = checked;
+  for (uint16_t half : {0u, 0x8000u, 1u, 0x8001u, 0x3c00u, 0xbc00u, 0x7bffu, 0xfbffu}) {
+    for (unsigned pattern = 0; pattern < 512; ++pattern) {
+      std::vector<uint8_t> row(9 * 74);
+      std::vector<uint32_t> want(2304);
+      for (unsigned block = 0; block < 9; ++block)
+        iq2_xs_test::fixture(row.data() + block * 74, half, pattern + block, want.data() + block * 256);
+      for (unsigned k = 0; k < want.size(); ++k) {
+        if (std::bit_cast<uint32_t>(ink2_gguf::value(row.data(), 17, k)) != want[k]) {
+          std::fprintf(stderr, "IQ2_XS oracle half=%04x pattern=%u k=%u\n", half, pattern, k);
+          return 1;
+        }
+        ++checked;
+      }
+    }
+  }
+  std::printf("IQ2_XS: %zu integer-oracle reads across 2304-value rows match\n", checked - oracle_start);
+  size_t iq2_checked = 0;
+  std::vector<uint8_t> iq2_storage(1 + 3 * 74);
+  uint8_t* iq2_bytes = iq2_storage.data() + 1;
+  std::vector<float> iq2_ref(3 * 256), iq2_bulk(3 * 256);
+  for (unsigned half = 0; half < 65536; ++half) {
+    if ((half & 0x7c00u) == 0x7c00u) continue;
+    for (unsigned block = 0; block < 3; ++block)
+      ink2_iq2_cases::fill_xs(iq2_bytes + block * 74, uint16_t(half), half + block * 131);
+    ink2_iq2_cases::decode_xs(iq2_bytes, iq2_ref.data(), 3);
+    ni::gguf::dequantize(17, iq2_bytes, iq2_bulk.data(), iq2_bulk.size());
+    for (unsigned k = 0; k < iq2_ref.size(); ++k) {
+      const float got = ink2_gguf::value(iq2_bytes, 17, k);
+      if (std::bit_cast<uint32_t>(got) != std::bit_cast<uint32_t>(iq2_ref[k]) ||
+          std::bit_cast<uint32_t>(iq2_bulk[k]) != std::bit_cast<uint32_t>(iq2_ref[k])) {
+        std::fprintf(stderr, "pinned IQ2_XS half=%04x k=%u: read=%a bulk=%a llama=%a\n",
+                     half, k, got, iq2_bulk[k], iq2_ref[k]);
+        return 1;
+      }
+      ++iq2_checked;
+    }
+  }
+  std::printf("IQ2_XS: %zu CPU scalar/bulk values bitwise match pinned llama.cpp\n", iq2_checked);
   for (unsigned K : {64u, 1152u, 2304u}) {
     for (int trial = 0; trial < 100; ++trial) {
       std::vector<uint8_t> raw(K / 64 * 36), q(K / 2), scales(K / 16);
