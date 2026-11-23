@@ -125,6 +125,9 @@ struct Ink2MsgGateP {
   uint32_t T, H, R, w_f32;
   float eps;
 };
+struct Ink2GgufMmP { uint32_t M, N, K, type, row_bytes, add; };
+struct Ink2GgufMoeP { uint32_t T, H, I, top, type, row_bytes; };
+struct Ink2GgufEmbedP { uint32_t T, H, tok_off, V, norm_f32; float eps; };
 struct Ink2MmP {
   uint32_t M, N, K, x_ld, y_ld, w_f32, add;
 };
@@ -431,13 +434,16 @@ MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
                                       2 * P * 4 + (P / 16 + size_t(c.n_experts) + 2) * 16 + 16)
                                    : 0;
   MemPlan m;
-  m.weights = safetensors_llm_bytes(dir);
+  const auto model_config = json_file(dir + "/config.json");
+  const bool gguf = model_config->contains("gguf_file");
+  m.weights = gguf ? model_config->at("gguf_tensor_bytes").get<size_t>() + (16u << 20) : safetensors_llm_bytes(dir);
   m.kv_per_pos = kv_per_pos(c);
   m.slot_state = 3 * (ring_bytes_per_seq(c, chunk) + conv_bytes_per_seq(c));
   m.activations = T * per_row + fixed + moe_tmp_bytes + (16u << 20);
   m.hidden = c.hidden;
   m.layers = int(c.schedule.size());
-  m.formats = "NVFP4 (L0-19) + MXFP8 (L20-23) + BF16 dense (text-only)";
+  m.formats = gguf ? "mixed GGUF blocks + native NVFP4 (text-only)"
+                   : "NVFP4 (L0-19) + MXFP8 (L20-23) + BF16 dense (text-only)";
   return m;
 }
 
@@ -467,6 +473,10 @@ Inkling2::~Inkling2() {
 }
 
 void Inkling2::load() {
+  if (json_file(path_ + "/config.json")->contains("gguf_file")) {
+    load_gguf();
+    return;
+  }
   const double t0 = now_ms();
   auto is_q8_target = [&](const std::string& n) -> bool {
     if (!q8_dense_) return false;
@@ -1039,6 +1049,14 @@ void Inkling2::enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer
 
 void Inkling2::enc_mm(Encoder& e, const Ink2Mat& w, const Buffer& x, const Buffer& y, int M, uint32_t N_limit,
                       bool add, bool exact_f32) {
+  if (w.gguf.data) {
+    const uint32_t N = N_limit ? N_limit : w.N;
+    const Ink2GgufMmP p{uint32_t(M), N, w.K, w.gguf.type, w.gguf.row_bytes, add ? 1u : 0u};
+    e.use(ink2_pipe("ink2_gguf_mm"));
+    e.buf(0, x); e.buf(1, w.gguf.data); e.buf(2, y); e.val(3, p);
+    e.dispatch((N + 3) / 4, uint32_t(M), 1, 128);
+    return;
+  }
   if (!w.is_q8()) {
     enc_mm(e, *w.raw, x, y, M, N_limit, add, exact_f32);
     return;
@@ -1183,7 +1201,14 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
   const float sconv_static_scale = 1.0f / std::sqrt(5.0f);
 
   // Embed + norm -> x_
-  {
+  if (gguf_embed_.is_q8()) {
+    const Ink2GgufEmbedP ep{uint32_t(T), H, uint32_t(pos0), gguf_embed_.N,
+                           embed_norm_->dtype == DType::F32 ? 1u : 0u, cfg_.rms_eps};
+    e.use(ink2_pipe("ink2_gguf_embed"));
+    e.buf(0, s.tok); e.buf(1, gguf_embed_.q); e.buf(2, gguf_embed_.s);
+    e.buf(3, embed_norm_->buf); e.buf(4, x_); e.val(5, ep);
+    e.dispatch(uint32_t(T), 1, 1, 512);
+  } else {
     const Ink2EmbedP ep{uint32_t(T), H, uint32_t(pos0), uint32_t(embed_->shape[0]), cfg_.rms_eps};
     e.use(ink2_pipe("ink2_embed_norm"));
     e.buf(0, s.tok);
@@ -1579,7 +1604,19 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       e.dispatch(uint32_t(T), 1, 1, 32);
     }
     {
-      if (tensor_pf_ && T > 32) {
+      if (L.gguf_gu.data) {
+        const Ink2GgufMoeP gu{uint32_t(T), H, uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k),
+                              L.gguf_gu.type, L.gguf_gu.row_bytes};
+        e.use(ink2_pipe("ink2_gguf_gu"));
+        e.buf(0, x_mlp_); e.buf(1, eid_); e.buf(2, L.gguf_gu.data); e.buf(3, moe_act_); e.val(4, gu);
+        e.dispatch((gu.I + 3) / 4, gu.top, uint32_t(T), 128);
+        const Ink2GgufMoeP dn{uint32_t(T), H, uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k),
+                              L.gguf_down.type, L.gguf_down.row_bytes};
+        e.use(ink2_pipe("ink2_gguf_down"));
+        e.buf(0, moe_act_); e.buf(1, eid_); e.buf(2, ew_); e.buf(3, L.gguf_down.data);
+        e.buf(4, moe_out_); e.val(5, dn);
+        e.dispatch((H + 3) / 4, uint32_t(T), 1, 128);
+      } else if (tensor_pf_ && T > 32) {
         const uint32_t P = uint32_t(T) * uint32_t(cfg_.top_k);
         const uint32_t E = uint32_t(cfg_.n_experts);
         const uint32_t I = uint32_t(cfg_.moe_I);
