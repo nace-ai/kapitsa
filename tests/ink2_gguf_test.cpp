@@ -2,6 +2,7 @@
 #include "model/inkling2_gguf.h"
 #include "gguf/quant.h"
 #include "kernels/inkling2/gguf_blocks.h"
+#include "fixtures/ink2_iq3_reference.h"
 
 #include <bit>
 #include <cmath>
@@ -9,10 +10,54 @@
 #include <random>
 #include <vector>
 
+static bool check_iq3(const unsigned char* bytes, size_t count, size_t& checked) {
+  std::vector<ink2_iq3_reference::block_iq3_xxs> blocks(count);
+  std::memcpy(blocks.data(), bytes, count * 98);
+  std::vector<float> ref(count * 256), bulk(count * 256);
+  ink2_iq3_reference::dequantize_row_iq3_xxs(blocks.data(), ref.data(), ref.size());
+  ni::gguf::dequantize(ni::gguf::kIQ3_XXS, bytes, bulk.data(), bulk.size());
+  for (unsigned k = 0; k < ref.size(); ++k) {
+    const float got = ink2_gguf::value(bytes, ni::gguf::kIQ3_XXS, k);
+    if (std::bit_cast<uint32_t>(got) != std::bit_cast<uint32_t>(ref[k]) ||
+        std::bit_cast<uint32_t>(bulk[k]) != std::bit_cast<uint32_t>(ref[k])) {
+      std::fprintf(stderr, "pinned IQ3_XXS k=%u: read=%a bulk=%a llama=%a\n", k, got, bulk[k], ref[k]);
+      return false;
+    }
+    ++checked;
+  }
+  return true;
+}
+
 int main() {
+  if (ink2_gguf::block_values(18) != 256 || ink2_gguf::block_bytes(18) != 98) {
+    std::fprintf(stderr, "IQ3_XXS layout: expected 256 values in 98 bytes\n");
+    return 1;
+  }
   std::mt19937 rng(754);
+  size_t iq3_checked = 0;
+  if (!check_iq3(ink2_iq3_reference::trained_blocks, 3, iq3_checked)) return 1;
+  // Offset the input by one byte: no assumption that a GGUF row is naturally aligned.
+  std::vector<unsigned char> storage(1 + 3 * 98);
+  auto* blocks = storage.data() + 1;
+  for (unsigned trial = 0; trial < 65536; ++trial) {
+    if ((trial & 0x7c00u) == 0x7c00u) continue;  // Every finite half pattern, including signed zero.
+    for (unsigned i = 0; i < 3 * 98; ++i) blocks[i] = static_cast<unsigned char>(rng());
+    for (unsigned block = 0; block < 3; ++block) {
+      const uint16_t h = uint16_t(trial);
+      std::memcpy(blocks + block * 98, &h, 2);
+      // Every codebook index, sign encoding and scale nibble occurs in every packed position.
+      for (unsigned i = 0; i < 64; ++i) blocks[block * 98 + 2 + i] = uint8_t(trial + i * 73 + block * 97);
+      for (unsigned group = 0; group < 8; ++group) {
+        uint32_t aux = ((trial + group * 7 + block * 3) & 15u) << 28;
+        for (unsigned pair = 0; pair < 4; ++pair) aux |= ((trial / 16 + pair * 23 + group * 17) & 127u) << (7 * pair);
+        std::memcpy(blocks + block * 98 + 66 + group * 4, &aux, 4);
+      }
+    }
+    if (!check_iq3(blocks, 3, iq3_checked)) return 1;
+  }
+  std::printf("IQ3_XXS: %zu CPU scalar/bulk values bitwise match pinned llama.cpp, including 768 trained values\n", iq3_checked);
   size_t checked = 0;
-  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 16u, 20u, 23u}) {
+  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 16u, 18u, 20u, 23u}) {
     const unsigned n = ink2_gguf::block_values(type), bytes = ink2_gguf::block_bytes(type);
     for (int trial = 0; trial < 1000; ++trial) {
       std::vector<unsigned char> b(bytes * 3);
