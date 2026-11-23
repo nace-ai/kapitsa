@@ -694,6 +694,36 @@ struct Ink2MmP {
   }
 }
 
+// ink2_mv_sk over M = 2..8 rows (x / y rows at x_ld / y_ld): the weight row read once, each row's sum in the order
+// of ink2_mv_sk (same lane split, simd_sum, part order), so every row is bit-identical to its one-row result
+template <uint M>
+[[kernel]] void ink2_mv_sk_m(const device float* x [[buffer(0)]], const device void* w [[buffer(1)]],
+                             device float* y [[buffer(2)]], constant Ink2MmP& p [[buffer(3)]],
+                             uint n [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                             uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float part[4][M];
+  const size_t woff = size_t(n) * p.K;
+  float a[M];
+  for (uint m = 0u; m < M; ++m) a[m] = 0.0f;
+  for (uint k = tid * 4u; k < p.K; k += 512u) {
+    const float4 wv = p.w_f32 ? *(const device float4*)((const device float*)w + woff + k)
+                              : ink2_bf16x4(*(const device uint2*)((const device bfloat*)w + woff + k));
+    for (uint m = 0u; m < M; ++m) a[m] += dot(*(const device float4*)(x + size_t(m) * p.x_ld + k), wv);
+  }
+  for (uint m = 0u; m < M; ++m) {
+    const float t = simd_sum(a[m]);
+    if (lane == 0u) part[sg][m] = t;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid < M) {
+    const float v = (part[0][tid] + part[1][tid]) + (part[2][tid] + part[3][tid]);
+    device float* dst = y + size_t(tid) * p.y_ld + n;
+    *dst = p.add ? *dst + v : v;
+  }
+}
+#define INK2_SKM(m) template [[host_name("ink2_mv_sk_m" #m)]] [[kernel]] decltype(ink2_mv_sk_m<m>) ink2_mv_sk_m<m>;
+INK2_SKM(2) INK2_SKM(3) INK2_SKM(4) INK2_SKM(5) INK2_SKM(6) INK2_SKM(7) INK2_SKM(8)
+
 [[kernel]] void ink2_bf16_mv4(const device float* x [[buffer(0)]], const device void* w [[buffer(1)]],
                               device float* y [[buffer(2)]], constant Ink2MmP& p [[buffer(3)]],
                               uint tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],

@@ -1154,6 +1154,19 @@ void Inkling2::enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer
     e.dispatch(N, 1, 1, 128);
     return;
   }
+  // 2..8 rows of the same small-N matvecs (2-slot decode / verify rows; lab6): ink2_mv_sk_m<M>, each row bit-identical
+  // to its one-row ink2_mv_sk result (8k 2-slot: 64 BF16 calls 2.68 ms as bf16_mvm2). NI_INK2_MVSKM=0: the old path
+  static const bool skm = !getenv("NI_INK2_MVSKM") || atoi(getenv("NI_INK2_MVSKM")) != 0;
+  if (skm && M >= 2 && M <= 8 && N <= sk_max && (K & 3u) == 0u && (w.dtype == DType::BF16 || w.dtype == DType::F32)) {
+    const Ink2MmP p{uint32_t(M), N, K, K, N, w.dtype == DType::F32 ? 1u : 0u, add ? 1u : 0u};
+    e.use(ink2_pipe("ink2_mv_sk_m" + std::to_string(M)));
+    e.buf(0, x);
+    e.buf(1, w.buf);
+    e.buf(2, y);
+    e.val(3, p);
+    e.dispatch(N, 1, 1, 128);
+    return;
+  }
   if (M <= mv_rows() || exact_f32) {
     for (int m0 = 0; m0 < M; m0 += 8) {
       const uint32_t mc = uint32_t(std::min(8, M - m0));
