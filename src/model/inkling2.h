@@ -173,6 +173,11 @@ class Inkling2 : public Model {
   void enc_norm(Encoder& e, const Buffer& x, const Tensor* w, const Buffer& out, int T, uint32_t dim);
   void enc_attn_res(Encoder& e, const Buffer* const* states, int M, const void* query_ptr, bool q_f32, uint32_t Q,
                     const Buffer& out, int T);
+  // enc_attn_res + nn RMSNorms of its outputs in one kernel (src[j] = output query, w[j] weight, nout[j]); false = not
+  // applicable (NI_INK2_NFOLD=0, shapes), caller encodes the two stages
+  bool enc_attn_res_norm(Encoder& e, const Buffer* const* states, int M, const void* query_ptr, bool q_f32, uint32_t Q,
+                         const Buffer& out, int T, int nn, const uint32_t* src, const Tensor* const* w,
+                         const Buffer* const* nout);
   void enc_msg_gate(Encoder& e, const Ink2Ctrl& c, const Buffer& h, const Buffer& m, const Buffer& out, int T);
   void enc_msg_gate3(Encoder& e, const Ink2Layer& L, const Buffer* const* in_ptrs, const Buffer& m0, const Buffer& m1,
                      const Buffer& m2, int T);
