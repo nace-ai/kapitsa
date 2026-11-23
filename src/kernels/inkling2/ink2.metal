@@ -886,28 +886,28 @@ INK2_MVM6(2) INK2_MVM6(3) INK2_MVM6(4) INK2_MVM6(5) INK2_MVM6(6) INK2_MVM6(7) IN
 // ---- 5b. Q8_0 dense matvec (load-time packed int8 [N, K] + half scales [N, K/32]; NI_INK2_Q8) ----
 // M (1..8) compile-time rows, 4 weight rows per simdgroup, 8 int8 per lane per step (256 k per step; K % 256 == 0).
 // MULTI: output rows split over up to 6 destinations (the fused [wq; wr; sink; gate; wk; wv] projection).
-template <uint M, bool MULTI>
+template <uint M, bool MULTI, uint R = 4>
 NI_INLINE void ink2_q8_mvm_impl(const device float* x, const device uchar* wq, const device half* ws, uint N, uint K,
                                 uint x_ld, uint add, device float* y, uint y_ld, device float* const thread* bases,
                                 constant uint* offs, uint n_segs, uint tg, uint sg, uint lane) {
-  const uint n0 = (tg * 4u + sg) * 4u;
+  const uint n0 = (tg * 4u + sg) * R;
   if (n0 >= N) return;
-  uint mc = min(4u, N - n0);
+  uint mc = min(R, N - n0);
   device float* dst0 = y + n0;
   uint ld = y_ld;
   if (MULTI) {
     uint seg = 0u;
     while (seg + 1u < n_segs && n0 >= offs[seg + 1u]) ++seg;
-    mc = min(4u, offs[seg + 1u] - n0);
+    mc = min(R, offs[seg + 1u] - n0);
     dst0 = bases[seg] + (n0 - offs[seg]);
     ld = offs[seg + 1u] - offs[seg];
   }
   const uint nb = K / 32u;
-  float acc[4][M];
-  for (uint q = 0u; q < 4u; ++q) NI_UNROLL for (uint m = 0u; m < M; ++m) acc[q][m] = 0.0f;
+  float acc[R][M];
+  for (uint q = 0u; q < R; ++q) NI_UNROLL for (uint m = 0u; m < M; ++m) acc[q][m] = 0.0f;
   for (uint k = lane * 8u; k < K; k += 256u) {
-    float4 wa[4], wb[4];
-    NI_UNROLL for (uint q = 0u; q < 4u; ++q) {
+    float4 wa[R], wb[R];
+    NI_UNROLL for (uint q = 0u; q < R; ++q) {
       const uint r = n0 + min(q, mc - 1u);
       const uint2 v = *(const device uint2*)(wq + size_t(r) * K + k);
       const float s = float(ws[size_t(r) * nb + k / 32u]);
@@ -917,12 +917,12 @@ NI_INLINE void ink2_q8_mvm_impl(const device float* x, const device uchar* wq, c
     NI_UNROLL for (uint m = 0u; m < M; ++m) {
       const float4 xa = *(const device float4*)(x + size_t(m) * x_ld + k);
       const float4 xb = *(const device float4*)(x + size_t(m) * x_ld + k + 4u);
-      NI_UNROLL for (uint q = 0u; q < 4u; ++q) acc[q][m] += dot(xa, wa[q]) + dot(xb, wb[q]);
+      NI_UNROLL for (uint q = 0u; q < R; ++q) acc[q][m] += dot(xa, wa[q]) + dot(xb, wb[q]);
     }
   }
   NI_UNROLL for (uint m = 0u; m < M; ++m) {
-    float sv[4];
-    NI_UNROLL for (uint q = 0u; q < 4u; ++q) sv[q] = simd_sum(acc[q][m]);
+    float sv[R];
+    NI_UNROLL for (uint q = 0u; q < R; ++q) sv[q] = simd_sum(acc[q][m]);
     if (lane == 0u) {
       device float* dst = dst0 + size_t(m) * ld;
       for (uint q = 0u; q < mc; ++q) dst[q] = add ? (dst[q] + sv[q]) : sv[q];
@@ -958,6 +958,18 @@ template <uint M>
   template [[host_name("ink2_q8_mvm" #m)]] [[kernel]] decltype(ink2_q8_mvm<m>) ink2_q8_mvm<m>;              \
   template [[host_name("ink2_q8_mvm_multi6_" #m)]] [[kernel]] decltype(ink2_q8_mvm_multi6<m>) ink2_q8_mvm_multi6<m>;
 INK2_Q8(1) INK2_Q8(2) INK2_Q8(3) INK2_Q8(4) INK2_Q8(5) INK2_Q8(6) INK2_Q8(7) INK2_Q8(8)
+
+// One row (M = 1), R weight rows per simdgroup (R = 1, 2): more threadgroups for the small-N matvecs (N = 1024 / 2304:
+// 64 / 144 threadgroups at R = 4 on 32 cores)
+template <uint R>
+[[kernel]] void ink2_q8_mv1r(const device float* x [[buffer(0)]], const device uchar* wq [[buffer(1)]],
+                             const device half* ws [[buffer(2)]], device float* y [[buffer(3)]],
+                             constant Ink2Q8P& p [[buffer(4)]], uint tg [[threadgroup_position_in_grid]],
+                             uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  ink2_q8_mvm_impl<1, false, R>(x, wq, ws, p.N, p.K, p.x_ld, p.add, y, p.y_ld, nullptr, p.offs, 0u, tg, sg, lane);
+}
+template [[host_name("ink2_q8_mv1r1")]] [[kernel]] decltype(ink2_q8_mv1r<1>) ink2_q8_mv1r<1>;
+template [[host_name("ink2_q8_mv1r2")]] [[kernel]] decltype(ink2_q8_mv1r<2>) ink2_q8_mv1r<2>;
 #undef INK2_Q8
 
 [[kernel]] void ink2_bf16_mv8(const device float* x [[buffer(0)]], const device bfloat* w [[buffer(1)]],

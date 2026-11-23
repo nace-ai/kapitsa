@@ -838,13 +838,18 @@ void Inkling2::load() {
 bool Inkling2::enc_q8(Encoder& e, const Ink2Mat& q, const Buffer& x, const Buffer& y, int M, uint32_t N, bool add) {
   if (!q8m_ || !q.is_q8() || q.K % 256 != 0 || M < 1 || M > 8) return false;
   const Ink2Q8P p{uint32_t(M), N, q.K, q.K, N, add ? 1u : 0u, 0u, {}};
-  e.use(ink2_pipe("ink2_q8_mvm" + std::to_string(M)));
+  // NI_INK2_Q8R=R (default 2; 4 = off, 1): R weight rows per simdgroup for one-row matvecs with N <= NI_INK2_Q8R_MAXN
+  // (8k decode: 24.30 -> 24.07 ms/step GPU at R = 2, R = 1 worse; same per-row sums, bit-identical)
+  static const uint32_t r1 = getenv("NI_INK2_Q8R") ? uint32_t(atoi(getenv("NI_INK2_Q8R"))) : 2u;
+  static const uint32_t r1n = getenv("NI_INK2_Q8R_MAXN") ? uint32_t(atoi(getenv("NI_INK2_Q8R_MAXN"))) : 4096u;
+  const uint32_t R = (M == 1 && N <= r1n && (r1 == 1u || r1 == 2u)) ? r1 : 4u;
+  e.use(ink2_pipe(R == 4u ? "ink2_q8_mvm" + std::to_string(M) : "ink2_q8_mv1r" + std::to_string(R)));
   e.buf(0, x);
   e.buf(1, q.q);
   e.buf(2, q.s);
   e.buf(3, y);
   e.val(4, p);
-  e.dispatch((N + 15) / 16, 1, 1, 128);
+  e.dispatch((N + 4 * R - 1) / (4 * R), 1, 1, 128);
   return true;
 }
 
