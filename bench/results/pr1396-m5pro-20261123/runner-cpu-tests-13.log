@@ -1,0 +1,18 @@
+test_decode_excludes_first_prefill_token (test_run_ab.RunnerTests.test_decode_excludes_first_prefill_token) ... ok
+test_exact_prompt_fit_and_explicit_thinking (test_run_ab.RunnerTests.test_exact_prompt_fit_and_explicit_thinking) ... ok
+test_fail_closed_response_fields (test_run_ab.RunnerTests.test_fail_closed_response_fields) ... ok
+test_gate_requires_all_arms_hashes_and_two_percent (test_run_ab.RunnerTests.test_gate_requires_all_arms_hashes_and_two_percent) ... ok
+test_guard_terminates_owned_server_and_aborts (test_run_ab.RunnerTests.test_guard_terminates_owned_server_and_aborts) ... ok
+test_manifest_never_starts_server (test_run_ab.RunnerTests.test_manifest_never_starts_server) ... ok
+test_port_probe_allows_time_wait (test_run_ab.RunnerTests.test_port_probe_allows_time_wait) ... ok
+test_port_probe_rejects_active_listener (test_run_ab.RunnerTests.test_port_probe_rejects_active_listener) ... ok
+test_save_never_overwrites_evidence (test_run_ab.RunnerTests.test_save_never_overwrites_evidence) ... ok
+test_schedule_is_abab_per_actual_length (test_run_ab.RunnerTests.test_schedule_is_abab_per_actual_length) ... ok
+test_snapshot_uses_percentage_not_strict_free_ram (test_run_ab.RunnerTests.test_snapshot_uses_percentage_not_strict_free_ram) ... ok
+test_swap_growth_aborts (test_run_ab.RunnerTests.test_swap_growth_aborts) ... ok
+test_thinking_changes_canonical_hash (test_run_ab.RunnerTests.test_thinking_changes_canonical_hash) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.005s
+
+OK

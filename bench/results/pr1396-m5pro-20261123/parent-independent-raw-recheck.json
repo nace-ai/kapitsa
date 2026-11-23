@@ -1,0 +1,76 @@
+{
+  "groups": {
+    "4096": {
+      "rows": [
+        {
+          "arm": "A",
+          "repeat": 1,
+          "decode_tps": 39.21827142957474,
+          "text_sha256": "20f35afc847a08a7874d264070e7d5e75c65fb1db9643f857ea58e395d6d0818"
+        },
+        {
+          "arm": "B",
+          "repeat": 1,
+          "decode_tps": 39.35360394353261,
+          "text_sha256": "20f35afc847a08a7874d264070e7d5e75c65fb1db9643f857ea58e395d6d0818"
+        },
+        {
+          "arm": "A",
+          "repeat": 2,
+          "decode_tps": 39.38492232572651,
+          "text_sha256": "20f35afc847a08a7874d264070e7d5e75c65fb1db9643f857ea58e395d6d0818"
+        },
+        {
+          "arm": "B",
+          "repeat": 2,
+          "decode_tps": 39.603662597409695,
+          "text_sha256": "20f35afc847a08a7874d264070e7d5e75c65fb1db9643f857ea58e395d6d0818"
+        }
+      ],
+      "means": {
+        "A": 39.301596877650624,
+        "B": 39.47863327047115
+      },
+      "ratio": 1.004504559785997,
+      "raw_arithmetic_gate": true,
+      "hashes_match": true
+    },
+    "32768": {
+      "rows": [
+        {
+          "arm": "A",
+          "repeat": 1,
+          "decode_tps": 29.57073997470314,
+          "text_sha256": "bf9a56d068e036d11c317b76f2983303fafa9f5542314b26917a3c06d02aea5b"
+        },
+        {
+          "arm": "B",
+          "repeat": 1,
+          "decode_tps": 30.268030535845394,
+          "text_sha256": "bf9a56d068e036d11c317b76f2983303fafa9f5542314b26917a3c06d02aea5b"
+        },
+        {
+          "arm": "A",
+          "repeat": 2,
+          "decode_tps": 31.28259977740968,
+          "text_sha256": "bf9a56d068e036d11c317b76f2983303fafa9f5542314b26917a3c06d02aea5b"
+        },
+        {
+          "arm": "B",
+          "repeat": 2,
+          "decode_tps": 31.219395779353754,
+          "text_sha256": "bf9a56d068e036d11c317b76f2983303fafa9f5542314b26917a3c06d02aea5b"
+        }
+      ],
+      "means": {
+        "A": 30.42666987605641,
+        "B": 30.743713157599572
+      },
+      "ratio": 1.0104199139384837,
+      "raw_arithmetic_gate": true,
+      "hashes_match": true
+    }
+  },
+  "all_raw_arithmetic_gates_pass": true,
+  "timing_admissibility": "NOT_ESTABLISHED: runner omitted required foreignCPU/load and host-startup guards; do not grant GO from these speeds"
+}

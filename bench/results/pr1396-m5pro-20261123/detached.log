@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+PermissionError: [Errno 1] Operation not permitted: '/tmp/kapitsa-gpu.lock'
+[detach] exit 1

@@ -1,0 +1,18 @@
+warning: cannot make its folder: this server has no control socket
+[kapitsa] profile fast: Inkling-2-Mini prefill GEMMs on the matrix units (NI_INK2_TENSOR) (NI_INK2_TENSOR=0 or KAPITSA_PROFILE=precise turns it off)
+[kapitsa] profile fast: Inkling-2-Mini Q8-packed dense projections and unembed (NI_INK2_Q8) (NI_INK2_Q8=0 or KAPITSA_PROFILE=precise turns it off)
+[kapitsa] compiled kernels in 3921 ms
+[kapitsa] compiled the Ink2 kernels in 104 ms
+[kapitsa] profile fast: Inkling-2-Mini prefill GEMMs on the matrix units (NI_INK2_TENSOR) (NI_INK2_TENSOR=0 or KAPITSA_PROFILE=precise turns it off)
+[kapitsa] compiled the tensor kernels in 1720 ms
+[kapitsa] read 16.67 GB of weights in 1263 ms (13.2 GB/s)
+[kapitsa] loaded /Users/alisheramantay/Documents/nace/kapitsa-evidence/pr1396-m5pro-20261123T0925Z/native-model: Inkling-2-Mini (24 layers / 48 visits, vocab 200058, Q8 dense), 17.85 GB text weights in 1798 ms
+[kapitsa] tokenizer: 199998 tokens, 424413 merges, 60 added, split=o200k (268 ms)
+[kapitsa] GPU: Apple M5 Pro, 20 cores
+[kapitsa] memory: 18.14 GB allocated (model, buffers, 1 slot's state), budget 38.6 GB (recommended working set 40.2 GB): KV room 20.45 GB = 624193 tokens (32 KB per token), one conversation up to 65536 of 65536 tokens
+[kapitsa] drafter: none (this model takes no block drafter)
+[kapitsa] engine ready: native-model, context 65536, 1 slots, plain decoding, KFlash (none)
+[kapitsa] listening on http://127.0.0.1:18758
+Ready: chat at http://127.0.0.1:18758, API at http://127.0.0.1:18758/v1 (model "native-model"). Ctrl+C stops.
+[kapitsa] chat: prompt 29 (cached 0) in 269 ms (+15.6 ms template/tokenize; last chunk: encoded by 2.1 ms, GPU start +1.8 ms, GPU 264.6 ms, wake +0.1 ms), 32 tokens in 748 ms (41.5 tok/s), length, thinking: high, KFlash (none): 31 cycles, 31 rows, 0 drafts accepted
+[kapitsa] chat: prompt 4096 (cached 0) in 5844 ms (+4.3 ms template/tokenize; last chunk: encoded by 4363.6 ms, GPU start +735.4 ms, GPU 745.3 ms, wake +0.1 ms), 256 tokens in 6480 ms (39.4 tok/s), length, thinking: high, KFlash (none): 255 cycles, 255 rows, 0 drafts accepted

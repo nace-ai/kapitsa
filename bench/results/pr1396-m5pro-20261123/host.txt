@@ -1,0 +1,72 @@
+$ hostname
+MacBook-Pro-2.local
+
+exit=0
+$ sysctl -n hw.model
+Mac17,8
+
+exit=0
+$ sysctl -n machdep.cpu.brand_string
+Apple M5 Pro
+
+exit=0
+$ sysctl hw.memsize vm.swapusage
+hw.memsize: 51539607552
+vm.swapusage: total = 1024.00M  used = 245.44M  free = 778.56M  (encrypted)
+
+exit=0
+$ sw_vers
+ProductName:		macOS
+ProductVersion:		26.5.2
+BuildVersion:		25F84
+
+exit=0
+$ pmset -g batt
+Now drawing from 'AC Power'
+ -InternalBattery-0 (id=23330915)	100%; charged; 0:00 remaining present: true
+
+exit=0
+$ pmset -g custom
+Battery Power:
+ Sleep On Power Button 1
+ powermode            2
+ standby              1
+ ttyskeepawake        1
+ hibernatemode        3
+ powernap             1
+ hibernatefile        /var/vm/sleepimage
+ displaysleep         60
+ womp                 0
+ networkoversleep     0
+ sleep                1
+ lessbright           1
+ tcpkeepalive         1
+ disksleep            10
+AC Power:
+ Sleep On Power Button 1
+ powermode            2
+ standby              1
+ ttyskeepawake        1
+ hibernatemode        3
+ powernap             1
+ hibernatefile        /var/vm/sleepimage
+ displaysleep         180
+ womp                 1
+ networkoversleep     0
+ sleep                1
+ tcpkeepalive         1
+ disksleep            10
+
+exit=0
+$ df -h /Users/alisheramantay/Documents/nace/kapitsa-evidence/pr1396-m5pro-20261123T0925Z
+Filesystem      Size    Used   Avail Capacity iused ifree %iused  Mounted on
+/dev/disk3s5   926Gi   771Gi   117Gi    87%     21M  1.2G    2%   /System/Volumes/Data
+
+exit=0
+$ xcrun clang++ --version
+Apple clang version 21.0.0 (clang-2100.1.1.101)
+Target: arm64-apple-darwin25.5.0
+Thread model: posix
+InstalledDir: /Applications/Xcode-26.6.0.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin
+
+exit=0

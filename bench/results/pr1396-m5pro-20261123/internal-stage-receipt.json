@@ -1,0 +1,53 @@
+{
+  "source": "/Volumes/Extreme Pro/downloads/rl1368-inkling2-mini",
+  "destination": "/Users/alisheramantay/Documents/nace/kapitsa-evidence/pr1396-m5pro-20261123T0925Z/native-model",
+  "started_at": 1795425889.287647,
+  "available_before": 130225491968,
+  "copy_bytes": 19555778609,
+  "floor_bytes": 107688755200,
+  "files": {
+    "config.json": {
+      "bytes": 2722,
+      "sha256": "a7a349601f0984c4abf999c480ef775d8567d21f5f84b4e8a3e035b44f288dc2"
+    },
+    "generation_config.json": {
+      "bytes": 98,
+      "sha256": "a08737c07a65a8fdf69f7cf086576210e5aad4b241437090b26d7b0c4f7905f7"
+    },
+    "hf_quant_config.json": {
+      "bytes": 67924,
+      "sha256": "7c656207d3ce37879c7be209a036b0dde43bf01f78159bff06880b868ed57143"
+    },
+    "model-00001-of-00001.safetensors": {
+      "bytes": 19526019168,
+      "sha256": "65e60f51aa1284d4fb022584908c315270334d991828bb774af60584523539d1"
+    },
+    "model.safetensors.index.json": {
+      "bytes": 109300,
+      "sha256": "c1631065b7b00787993522dddc66a68b3abee869192977fb3dcb796e63bc5838"
+    },
+    "processor_config.json": {
+      "bytes": 461,
+      "sha256": "d7350adce18c8be4b607f261c8f0f7eabbf720bb7aaf648a43d4f8372bbacc2d"
+    },
+    "special_tokens_map.json": {
+      "bytes": 529,
+      "sha256": "c16f44b3594563d82743ddb0417a2be1bfe3e2000dfad2da4b8f32554593e1a0"
+    },
+    "tokenizer.json": {
+      "bytes": 26178678,
+      "sha256": "7f332727f9a3f093dd452a39cc978e6757627e5dad1b0673aa4e75174f236dd6"
+    },
+    "tokenizer_config.json": {
+      "bytes": 13235,
+      "sha256": "bf09342d285139fd37ce10c70878af1d52cb390e9901e10248654293a80ee636"
+    },
+    "tiktoken/tokenizer.model": {
+      "bytes": 3386494,
+      "sha256": "f170372dd655728909228220d77cf6b8104a59f38a91262a7d2c4027906ec0d8"
+    }
+  },
+  "completed": true,
+  "finished_at": 1795425919.097582,
+  "available_after": 110719926272
+}

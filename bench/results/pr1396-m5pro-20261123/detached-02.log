@@ -1,0 +1,11 @@
+Independent flock probe confirms exclusive outer lock held.
+{"arm": "A", "error": "OSError: [Errno 48] Address already in use", "label": "4096-A1", "prompt_tokens": 4096, "repeat": 1, "status": "error"}
+{"arm": "B", "error": "OSError: [Errno 48] Address already in use", "label": "4096-B1", "prompt_tokens": 4096, "repeat": 1, "status": "error"}
+{"arm": "A", "error": "OSError: [Errno 48] Address already in use", "label": "4096-A2", "prompt_tokens": 4096, "repeat": 2, "status": "error"}
+{"arm": "B", "error": "OSError: [Errno 48] Address already in use", "label": "4096-B2", "prompt_tokens": 4096, "repeat": 2, "status": "error"}
+{"arm": "A", "error": "OSError: [Errno 48] Address already in use", "label": "32768-A1", "prompt_tokens": 32768, "repeat": 1, "status": "error"}
+{"arm": "B", "error": "OSError: [Errno 48] Address already in use", "label": "32768-B1", "prompt_tokens": 32768, "repeat": 1, "status": "error"}
+{"arm": "A", "error": "OSError: [Errno 48] Address already in use", "label": "32768-A2", "prompt_tokens": 32768, "repeat": 2, "status": "error"}
+{"arm": "B", "error": "OSError: [Errno 48] Address already in use", "label": "32768-B2", "prompt_tokens": 32768, "repeat": 2, "status": "error"}
+{"cleanup": {"checked_at": 1795426398.103452, "runner_returncode": 1, "private_port_probe_returncode": 1, "private_port_probe": "", "no_private_listener": true, "internal_available_GiB": 115.21286392211914}}
+[detach] exit 1

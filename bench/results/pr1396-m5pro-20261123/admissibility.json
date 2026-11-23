@@ -1,0 +1,35 @@
+{
+  "pr": 1396,
+  "head": "8eb6db9b44940f26d693d913c92f09e89d340229",
+  "main": "37f6f2fb1cd89541cc04019e63b5790332b87037",
+  "completed_legs": 8,
+  "raw_text_check": "PASS",
+  "raw_arithmetic_gate": "PASS",
+  "timing_admissibility": "NOT_ESTABLISHED",
+  "technical_go": false,
+  "merge_attempted": false,
+  "unobserved_required_conditions": [
+    "start/end load for each measured leg",
+    "foreign-process CPU monitoring during each leg",
+    "DSH host startup-age admission and interval checks"
+  ],
+  "additional_source_only_harness_defects": [
+    "deadline uses detached-group stop including outer lockf rather than workload-only shutdown with cleanup under lock",
+    "encoded free-memory threshold is 3% rather than the standing 40% start / 10% runtime thresholds",
+    "cleanup omits the memory-recovery check before lock release"
+  ],
+  "observations": {
+    "saved_resource_snapshots": 92,
+    "minimum_observed_free_memory_percent": 44,
+    "observed_swap_growth_gib": 0,
+    "all_snapshots_ac_power": true,
+    "all_snapshots_ac_power_mode": 2,
+    "all_snapshots_pressure_level": 1,
+    "terminal_exit_code": 0,
+    "deadline_stop_exercised": false,
+    "private_listener_after_cleanup": false
+  },
+  "qualification": "Missing isolation observations do not prove actual contention. Source-only guard/deadline defects do not establish that these observed legs crossed a memory limit, orphaned a server or released the lock early.",
+  "no_automatic_rerun": true,
+  "future_timing_run_requires_corrected_harness_and_new_booking": true
+}
