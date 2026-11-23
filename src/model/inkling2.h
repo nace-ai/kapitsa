@@ -110,6 +110,7 @@ class Inkling2 : public Model {
   void set_mem_budget(size_t bytes) override { mem_budget_ = bytes; }
   std::unique_ptr<Seq> new_seq(int limit, int initial = -1) override;
   bool reserve(Seq& s, int need) override;
+  size_t kv_grow_held(const Seq& s) const override;
   void drop_kv(Seq& s) override;
   size_t kv_bytes_per_pos() const override { return kv_per_pos(cfg_); }
   void reset(Seq& s) override;
@@ -131,6 +132,7 @@ class Inkling2 : public Model {
   void load();
   void alloc_buffers();
   bool ensure_rings(Seq& s);
+  size_t kv_grow_unit() const;
   void enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits, const Buffer* out_logits, bool need_all_logits,
                    const Buffer* diag_rows = nullptr);
   void enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer& y, int M, uint32_t N_limit = 0, bool add = false,

@@ -1512,8 +1512,9 @@ int ni::server::run_service(Options o) {
     std::string say;
     if (context_req == kContextMax) {
       if (limit <= 0)
-        return fail(ref.name + " does not state the context it was trained for (max_position_embeddings in its "
-                    "config.json), so --context max has no size here: give it in tokens (--context 128k).", 2);
+        return fail(ref.name + " does not state the context it was trained for (max_position_embeddings or "
+                    "model_max_length in its config.json), so --context max has no size here: give it in tokens "
+                    "(--context 128k).", 2);
       opt.context = limit;
     } else if (context_req > 0) {
       opt.context = context_req;

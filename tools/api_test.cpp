@@ -3811,6 +3811,32 @@ void inkling2_unit() {
       rmdir(dir.c_str());
     }
   }
+
+  // 4. model_context_limit(): max_position_embeddings takes precedence; falls back to model_max_length
+  {
+    char dir_tmpl[] = "/tmp/api_test_ctxlim.XXXXXX";
+    if (mkdtemp(dir_tmpl)) {
+      const std::string dir = dir_tmpl;
+      auto write_cfg = [&](const nlohmann::json& j) {
+        if (FILE* f = fopen((dir + "/config.json").c_str(), "w")) fputs(j.dump().c_str(), f), fclose(f);
+      };
+      write_cfg({{"text_config", {{"model_max_length", 1048576}}}});
+      check(model_context_limit(dir) == 1048576, "model_context_limit reads text_config.model_max_length");
+
+      write_cfg({{"model_max_length", 65536}});
+      check(model_context_limit(dir) == 65536, "model_context_limit reads top-level model_max_length");
+
+      write_cfg({{"llm_config", {{"model_max_length", 262144}}}});
+      check(model_context_limit(dir) == 262144, "model_context_limit reads llm_config.model_max_length");
+
+      write_cfg({{"text_config", {{"max_position_embeddings", 131072}, {"model_max_length", 1048576}}}});
+      check(model_context_limit(dir) == 131072,
+            "model_context_limit prefers max_position_embeddings over model_max_length");
+
+      unlink((dir + "/config.json").c_str());
+      rmdir(dir.c_str());
+    }
+  }
 }
 
 int main(int argc, char** argv) {

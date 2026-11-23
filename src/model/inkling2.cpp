@@ -5,6 +5,7 @@
 #include "engine/profile.h"
 #include "model/inkling2_kernels.h"
 #include "model/kparams.h"
+#include "model/kv_grow.h"
 #include "model/quant_q8.h"
 #include "model/sampler.h"
 #include "util/bf16.h"
@@ -837,23 +838,30 @@ bool Inkling2::ensure_rings(Seq& s) {
   return true;
 }
 
+size_t Inkling2::kv_grow_unit() const {
+  return size_t(cfg_.hkv) * size_t(cfg_.head_dim) * 2u;
+}
+
+size_t Inkling2::kv_grow_held(const Seq& s) const {
+  return kvgrow::held(s.cap, kv_bytes_per_pos(), kv_grow_unit());
+}
+
 bool Inkling2::reserve(Seq& s, int need) {
   if (need <= s.cap) return ensure_rings(s);
   if (need > s.limit) return false;
   Gpu& g = Gpu::get();
   const size_t per = kv_per_pos(cfg_);
-  const size_t row = size_t(cfg_.hkv) * size_t(cfg_.head_dim) * 2;
-  auto round_up = [](int v, int m) { return (v + m - 1) / m * m; };
-  const size_t rings = s.kc[0] ? 0 : ring_bytes_per_seq(cfg_, tmax_);
-  auto fits = [&](int c) {
-    const size_t copy = std::min(size_t(256) << 20, size_t(s.cap) * per);
-    return !mem_budget_ || g.allocated_bytes() + size_t(c - s.cap) * per + copy + rings <= mem_budget_;
-  };
-  int target = std::min(s.limit, round_up(std::max(need, s.cap + s.cap / 4), 1024));
-  if (!fits(target)) target = std::min(s.limit, round_up(need, 256));
-  if (!fits(target)) return false;
-
+  const size_t row = kv_grow_unit();
   const size_t nv = cfg_.schedule.size();
+  size_t rings = 0;
+  for (size_t v = 0; v < nv; ++v)
+    if (cfg_.is_local[size_t(cfg_.schedule[v])] && !s.kc[v]) rings += 2 * row * size_t(ring_rows_);
+  const size_t alloc = g.allocated_bytes();
+  const size_t room = !mem_budget_ ? SIZE_MAX : (mem_budget_ > alloc + rings ? mem_budget_ - alloc - rings : 0);
+  const kvgrow::Plan p = kvgrow::plan(s.cap, need, s.limit, per, row, room);
+  if (!p.target) return false;
+  const int target = p.target;
+
   const size_t nb = row * size_t(target);
   const int old = s.cap;
   std::vector<Buffer> olds, news;
@@ -869,9 +877,8 @@ bool Inkling2::reserve(Seq& s, int need) {
   for (size_t v = 0; v < nv; ++v) {
     if (cfg_.is_local[size_t(cfg_.schedule[v])]) continue;
     for (Buffer* b : {&s.kc[v], &s.vc[v]}) {
-      if (batch && batch + nb > (size_t(256) << 20)) flush();
+      if (batch && batch + nb > p.batch) flush();
       Buffer nbuf = g.alloc(nb, "ink2_kv_global");
-      memset(nbuf.ptr(), 0, nbuf.size);
       if (old > 0 && *b) {
         if (!e) e = g.begin();
         enc_copy_buf(*e, *b, nbuf, size_t(old) * row);
