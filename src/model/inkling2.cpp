@@ -407,6 +407,13 @@ size_t Inkling2::ring_bytes_per_seq(const Ink2Config& c, int tmax) {
   return size_t(n_swa) * 2 * size_t(rcap) * size_t(c.hkv) * size_t(c.head_dim) * 2;
 }
 
+// Rows of attention scratch the decode/verify partials need: 8 with the Metal 4 multi-row verify attention
+// (NI_INK2_VATTN_T, on by default; 0 turns it off), else the single decode row.
+static uint32_t ink2_part_rows() {
+  static const bool on = !getenv("NI_INK2_VATTN_T") || atoi(getenv("NI_INK2_VATTN_T")) != 0;
+  return on ? 8u : 1u;
+}
+
 static bool ink2_tensor_pf_want() {
   if (__builtin_available(macOS 26.0, *)) {
     const bool here = default_on(Knob::kInk2TensorPf, ModelFacts{});
@@ -428,7 +435,7 @@ MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
                          size_t(c.n_experts) * 4 + 2 * size_t(c.top_k) * 4 + size_t(c.top_k) * size_t(c.moe_I) * 4;
   const size_t fixed = size_t(c.core_end - c.core_start) * 4 * H * 4 +
                        size_t(c.num_layers) * 2 * size_t(c.n_experts) * 4 +
-                       8 * size_t(c.hq) * kMaxAttnChunks * (2 + size_t(c.head_dim)) * 4 + V * 4 +
+                       ink2_part_rows() * size_t(c.hq) * kMaxAttnChunks * (2 + size_t(c.head_dim)) * 4 + V * 4 +
                        2 * (V / 2048 + 2) * 64 * 4 + 2 * 64 * 4;
   const size_t P = T * size_t(c.top_k);
   const size_t moe_tmp_bytes = ink2_tensor_pf_want()
@@ -460,7 +467,7 @@ Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
                              "Inkling-2-Mini Q8-packed dense projections and unembed (NI_INK2_Q8)");
   ink2::compile_kernels();
   const bool want_tensor_pf = ink2_tensor_pf_want();
-  const bool want_vattn_t = !getenv("NI_INK2_VATTN_T") || atoi(getenv("NI_INK2_VATTN_T")) != 0;
+  const bool want_vattn_t = ink2_part_rows() == 8u;
   if (want_tensor_pf || want_vattn_t) {
     if (__builtin_available(macOS 26.0, *)) {
       Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
@@ -783,9 +790,9 @@ void Inkling2::alloc_buffers() {
   a_out_ = alloc(T * H * 4, "ink2_a_out");
   dyn_ = alloc(T * 4 * size_t(cfg_.hkv) * 4, "ink2_dyn");
   rb_ = alloc(T * size_t(cfg_.hq) * size_t(cfg_.rel_extent) * 4, "ink2_rb");
-  part_m_ = alloc(8 * size_t(cfg_.hq) * kMaxAttnChunks * 4, "ink2_part_m");
-  part_l_ = alloc(8 * size_t(cfg_.hq) * kMaxAttnChunks * 4, "ink2_part_l");
-  part_o_ = alloc(8 * size_t(cfg_.hq) * kMaxAttnChunks * size_t(cfg_.head_dim) * 4, "ink2_part_o");
+  part_m_ = alloc(ink2_part_rows() * size_t(cfg_.hq) * kMaxAttnChunks * 4, "ink2_part_m");
+  part_l_ = alloc(ink2_part_rows() * size_t(cfg_.hq) * kMaxAttnChunks * 4, "ink2_part_l");
+  part_o_ = alloc(ink2_part_rows() * size_t(cfg_.hq) * kMaxAttnChunks * size_t(cfg_.head_dim) * 4, "ink2_part_o");
   h_mlp_ = alloc(T * H * 4, "ink2_h_mlp");
   x_mlp_ = alloc(T * H * 4, "ink2_x_mlp");
   rlog_ = alloc(T * size_t(cfg_.n_experts) * 4, "ink2_rlog");
