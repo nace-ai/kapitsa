@@ -36,6 +36,7 @@
 namespace ni {
 class Hy4Flash;
 class Inkling2;
+class Ink2Draft;
 }
 
 namespace ni::splash {
@@ -705,6 +706,10 @@ class Engine {
   Hy4Flash* hy4_ = nullptr;  // model_ when it is Hy4-flash
   Clover* clover_ = nullptr;  // model_ when it is Clover (block diffusion; q35_ too)
   Inkling2* ink2_ = nullptr;  // model_ when it is Inkling-2-Mini (inkling2_loop)
+  std::unique_ptr<Ink2Draft> ink_draft_;
+  int ink_depth_ = 0;
+  size_t ink_empty_seq_bytes_ = 0;
+  Buffer ink_captures_, ink_committed_, ink_logits_, ink_samples_;
   int flint_ngram_ = 0;      // Flint: prompt-lookup drafts per cycle (0: plain decoding)
   // Flint: self-drafts per cycle at long contexts (Flint::encode_draft; 0: none), their full-attention layers' window,
   // and the shortest prompt that takes them

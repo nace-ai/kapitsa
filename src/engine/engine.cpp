@@ -10,6 +10,8 @@
 #include "model/flint_kv.h"
 #include "model/hy4_flash.h"
 #include "model/inkling2.h"
+#include "model/ink2_accept.h"
+#include "model/ink2_draft.h"
 #include "model/kv_grow.h"
 #include "model/qwen4_config.h"
 #include "model/token_suppression.h"
@@ -26,6 +28,9 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cmath>
+#include <exception>
+#include <span>
 #include <climits>
 #include <cstring>
 #include <deque>
@@ -33,6 +38,7 @@
 #include <mutex>
 #include <regex>
 #include <fstream>
+#include <initializer_list>
 #include <random>
 #include <sstream>
 #include <stdexcept>
@@ -41,6 +47,22 @@
 #include <typeinfo>
 
 namespace ni {
+
+static bool ink_has_room(size_t budget, std::initializer_list<size_t> allocations) {
+  const size_t used = Gpu::get().allocated_bytes();
+  size_t left = budget > used ? budget - used : 0;
+  for (size_t bytes : allocations) {
+    if (bytes > left) return false;
+    left -= bytes;
+  }
+  return true;
+}
+
+static bool ink_greedy_supported(const ChatRequest& r, const Seq& s, const GrammarMatcher* gm, const ThinkControl& tc) {
+  return std::isfinite(r.temperature) && r.temperature == 0 && r.presence_penalty == 0 &&
+         r.frequency_penalty == 0 && r.repetition_penalty == 1 && r.min_p == 0 && !r.ignore_eos &&
+         !gm && !tc.on() && !s.suppression && s.mask_rows == 0 && !s.mask_event && !s.embeds;
+}
 
 static std::string read_file(const std::string& p) {
   std::ifstream f(p);
@@ -697,6 +719,32 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   slot_pos_ = std::make_unique<std::atomic<int>[]>(slots_.size());
   slot_cap_ = std::make_unique<std::atomic<int>[]>(slots_.size());
   for (const Slot& s : slots_) note_kv(s);
+  if (ink2_ && spec_asked > 0) {
+    const Ink2DraftMemory plan = Ink2Draft::memory_plan(opts_.model_dir);
+    const size_t captures = size_t(4) * std::max(8, ink2_->prefill_chunk()) * ink2_->config().hidden * sizeof(float);
+    const size_t committed = size_t(4) * 8 * ink2_->config().hidden * sizeof(float);
+    const size_t logits = size_t(8) * ink2_->vocab() * sizeof(float), picks = size_t(8) * sizeof(int);
+    Gpu& gpu = Gpu::get();
+    const size_t max_buffer = gpu.max_buffer_length();
+    if (plan.shared_bytes == 0) {
+      logi("KFlash: Inkling MTP weights absent; plain decoding");
+    } else if (captures > max_buffer || committed > max_buffer || logits > max_buffer || picks > max_buffer ||
+               !ink_has_room(budget_, {plan.shared_bytes, plan.empty_seq_bytes, captures, committed, logits, picks})) {
+      logi("KFlash: Inkling drafter exceeds the remaining memory budget; plain decoding");
+    } else {
+      const size_t before = gpu.allocated_bytes();
+      ink_draft_ = std::make_unique<Ink2Draft>(opts_.model_dir, ink2_->draft_embedding(), ink2_->draft_embed_norm(),
+                                            ink2_->draft_unembed());
+      ink_captures_ = gpu.alloc(captures, "ink_engine_captures");
+      ink_committed_ = gpu.alloc(committed, "ink_engine_committed");
+      ink_logits_ = gpu.alloc(logits, "ink_engine_logits");
+      ink_samples_ = gpu.alloc(picks, "ink_engine_samples");
+      ink_empty_seq_bytes_ = plan.empty_seq_bytes;
+      ink_depth_ = std::min(spec_asked, 7);
+      weights_bytes_ += gpu.allocated_bytes() - before;
+      logi("KFlash: Inkling draft prototype explicitly enabled, up to %d proposals on cold greedy requests", ink_depth_);
+    }
+  }
   for (const TurnCheckpoint& c : slots_[0].ckpts) {
     for (const Buffer& b : c.conv) ckpt_bytes_ += b.size;
     for (const Buffer& b : c.rec) ckpt_bytes_ += b.size;
@@ -740,7 +788,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     kf_lookup_k_ = std::max(nh_ngram_, flint_ngram_);
     logi("KFlash: prompt-lookup budget on (extra row %.2f steps)", kf_row_cost_);
   }
-  const std::string mode = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
+  const std::string mode = ink_draft_ ? "Inkling drafting available for cold greedy requests"
+                         : lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
                          : flint_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(flint_ngram_) +
                                                   " drafts per cycle" +
                                                   (flint_self_ > 0 ? ", else " + std::to_string(flint_self_) +
@@ -777,7 +826,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     f.unbound = lp.dflash_unbound;
     f.unbound_missing = lp.dflash_unbound_missing;
     f.mtp_depth = spec_ ? opts_.spec_depth : 0;
-    f.self_drafts = flint_ngram_ > 0 && flint_self_ > 0                ? "prompt lookup and Flint self-drafts"
+    f.self_drafts = ink_draft_                                         ? "Inkling native drafts"
+                     : flint_ngram_ > 0 && flint_self_ > 0                ? "prompt lookup and Flint self-drafts"
                     : flint_self_ > 0                                 ? "Flint self-drafts at long prompts"
                     : flint_ngram_ > 0 || nh_ngram_ > 0               ? "prompt lookup"
                     : dory_spec_ > 0 && dory_spec_kind() == "ngram" ? "prompt lookup"
@@ -799,7 +849,15 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   disk_start();  // the SSD prefix cache (engine_disk.cpp): its files open in the background
 }
 
-Engine::~Engine() { save_disk_cache(); }
+Engine::~Engine() {
+  save_disk_cache();
+  if (ink_draft_) {
+    Gpu& g = Gpu::get();
+    g.drain();
+    ink_draft_.reset();
+    for (Buffer* b : {&ink_captures_, &ink_committed_, &ink_logits_, &ink_samples_}) g.release(*b);
+  }
+}
 
 // The proposal source KFlash takes rows from: a drafter model, the MTP head, prompt lookup, Dory's drafts, or none (a
 // cycle of 1 row: plain decoding). Empty with the wrapper off (NI_KFLASH=0 / NI_KFLASH_WRAP=0).
@@ -3417,6 +3475,37 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   }
   double t0 = now_ms();
   const int C = prefill_chunk_for(n - start);
+  struct InkRequest {
+    Engine& en;
+    Slot& slot;
+    std::unique_ptr<Ink2DraftSeq> seq;
+    bool started = false;
+    int exceptions = std::uncaught_exceptions();
+    InkRequest(Engine& e, Slot& s) : en(e), slot(s) {}
+    ~InkRequest() noexcept {
+      if (!started) return;
+      Gpu::get().drain();
+      seq.reset();
+      if (std::uncaught_exceptions() <= exceptions) return;
+      if (auto* r = Gpu::PipelineRecovery::current(); r && r->failed) en.fail_generation();
+      try {
+        en.drop_slot(slot);
+      } catch (...) {
+        en.fail_generation();
+      }
+    }
+  } ink_request{*this, slot};
+  if (ink_draft_ && start == 0 && r.max_tokens > 1 && ink_greedy_supported(r, s, gm.get(), tc) &&
+      ink_has_room(budget_, {ink_empty_seq_bytes_})) {
+    ink_request.started = true;
+    ink_request.seq = ink_draft_->new_seq();
+  }
+  auto ink_disable = [&] {
+    g.drain();
+    ink_request.seq.reset();
+    if (live) live->spec.store(0, std::memory_order_relaxed);
+    logi("KFlash: Inkling speculative decoding exceeds the remaining memory budget; continuing with plain decoding");
+  };
   int p = start;
   int last_chunk_row = 0;
   int saved_ckpt = -1;  // the checkpoint this prefill saves (DFlash2: its ring snapshot follows the prompt commit)
@@ -3744,7 +3833,15 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       }
       vpf_rows(n);
     } else {
-      model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n && !clover_diffusion, snap, snap ? snap_at - p : 0);
+      if (ink_request.seq &&
+          !ink_has_room(budget_, {ink_draft_->observe_allocation_bytes(*ink_request.seq, T)})) ink_disable();
+      if (ink_request.seq) {
+        const Buffer captures = ink_captures_.view(0, size_t(4) * T * ink2_->config().hidden * sizeof(float));
+        ink2_->encode_prefill_captured(*e, s, p, T, sp, 0, p + T == n, captures);
+        ink_draft_->observe(*e, *ink_request.seq, captures, T, p);
+      } else {
+        model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n && !clover_diffusion, snap, snap ? snap_at - p : 0);
+      }
     }
     // MTP history: pairs (hidden_i, token_{i+1}) for prompt rows whose next token is known
     const bool defer = !vpf && spec_ && mtp_defer && !split && p + T == n;
@@ -4078,8 +4175,104 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       tc_unhandled = tc_break;  // (handed over: that step's sample, tokens[pos + 1], is the constrained loop's to handle)
     }
   };
+  struct InkStats {
+    int cycles = 0, proposed = 0, accepted = 0, outputs = 0;
+  } ink_stats;
   int clover_blocks = 0;  // Clover's block diffusion: blocks written (req_cycles: its denoising passes)
-  if (clover_own && gm) {
+  if (ink_request.seq) {
+    slot.decoding = false;
+    int P = n;  // committed inputs end here; tokens[P] is the pending output anchor
+    bool go = handle(s.tokens()[P]);
+    while (go) {
+      if (P + 2 >= s.limit) {
+        finish = "length";
+        res.context_full = true;
+        break;
+      }
+      if (ink_request.seq) {
+        const int q = std::min({ink_depth_, r.max_tokens - gen - 1, s.limit - P - 3});
+        const int rows = q + 1;
+        const int want = P + rows + 1;  // verify inputs and the new pending output anchor
+        if (want > s.cap) {
+          if (!model_->reserve(s, want)) ink_disable();
+          note_kv(slot);
+        }
+        if (ink_request.seq &&
+            !ink_has_room(budget_, {ink2_->verify_allocation_bytes(),
+                                    ink_draft_->observe_allocation_bytes(*ink_request.seq, rows)})) ink_disable();
+        if (ink_request.seq) {
+          std::vector<int> draft;
+          if (q > 0) draft = ink_draft_->propose(*ink_request.seq, s.tokens()[P], q);
+          if (draft.size() != size_t(q) ||
+              std::any_of(draft.begin(), draft.end(), [&](int t) { return t < 0 || t >= ink2_->vocab(); }))
+            throw std::runtime_error("Inkling drafter returned invalid proposals");
+          std::copy(draft.begin(), draft.end(), s.tokens() + P + 1);
+          const size_t row_bytes = size_t(ink2_->config().hidden) * sizeof(float);
+          const Buffer captures = ink_captures_.view(0, size_t(4) * rows * row_bytes);
+          const Buffer logits = ink_logits_.view(0, size_t(rows) * ink2_->vocab() * sizeof(float));
+          auto verify = g.begin_grouped();
+          auto ticket = ink2_->encode_verify_rows(*verify, s, P, rows, captures, logits);
+          ink2_->encode_greedy_rows(*verify, s, logits, rows, ink_samples_);
+          verify->commit_and_wait();
+          const std::span<const int> picks(ink_samples_.as<int>(), size_t(rows));
+          if (std::any_of(picks.begin(), picks.end(), [&](int t) { return t < 0 || t >= ink2_->vocab(); }))
+            throw std::runtime_error("Inkling verifier returned invalid samples");
+          const Ink2Choice choice = ink2_choose(draft, picks);
+          if (!kfw.source.empty() && q > 0) kfw.source = "Inkling";
+          if (live) live->spec.store(q > 0 ? 1 : 0, std::memory_order_relaxed);
+          kf_rows = rows;
+          const int before = gen;
+          for (int j = 0; j < choice.size(); ++j) {
+            s.tokens()[P + j + 1] = choice.tokens[size_t(j)];
+            if (!handle(choice.tokens[size_t(j)])) {
+              go = false;
+              break;
+            }
+          }
+          const int kept = gen - before;
+          auto commit = g.begin_grouped();
+          ink2_->commit_verify_prefix(*commit, s, std::move(ticket), kept);
+          if (kept > 0) {
+            for (int tap = 0; tap < 4; ++tap)
+              std::memcpy(static_cast<uint8_t*>(ink_committed_.ptr()) + size_t(tap) * kept * row_bytes,
+                          static_cast<uint8_t*>(captures.ptr()) + size_t(tap) * rows * row_bytes,
+                          size_t(kept) * row_bytes);
+            const Buffer committed = ink_committed_.view(0, size_t(4) * kept * row_bytes);
+            ink_draft_->observe(*commit, *ink_request.seq, committed, kept, P);
+          }
+          commit->commit_and_wait();
+          P += kept;
+          ++ink_stats.cycles;
+          ink_stats.proposed += q;
+          ink_stats.accepted += std::min(choice.accepted, kept);
+          ink_stats.outputs += kept;
+          if (q > 0) {
+            ++spec_cycles_;
+            spec_accepted_ += std::min(choice.accepted, kept);
+          }
+          cycle_done(kept);
+          if (go && contended()) yield_turn(res);
+          continue;
+        }
+      }
+      // A memory refusal abandons only draft history. The pending anchor is not handled twice.
+      if (P + 2 > s.cap && !grow_kv(P + 2, [] {})) {
+        finish = "length";
+        res.context_full = true;
+        break;
+      }
+      auto step = g.begin_grouped();
+      model_->encode_step(*step, s, P, sp, uint32_t(P), true);
+      step->commit_and_wait();
+      ++P;
+      const int before = gen;
+      go = handle(s.tokens()[P]);
+      kf_rows = kfw.plan(0);
+      cycle_done(gen - before);
+      if (go && contended()) yield_turn(res);
+    }
+    fed_until = P;
+  } else if (clover_own && gm) {
     finish = "error";
     res.error = "structured output is not supported with Clover";
   } else if (full_steps && !g_direct && !tc_direct) {
@@ -5009,6 +5202,9 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
        "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s%s%s%s%s", n, start, res.prefill_ms,
        tok_ms, t_enc, lat_start, gpu_last, lat_wake, gen, res.decode_ms,
        gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0, finish.c_str(), th, cyc, conc, lp);
+  if (ink_stats.cycles > 0)
+    logi("KFlash: Inkling %d verify cycles, %d proposals, %d accepted, %d counted output tokens",
+         ink_stats.cycles, ink_stats.proposed, ink_stats.accepted, ink_stats.outputs);
   if (!store_prompt.empty()) logi("expert store: %s; %s", store_prompt.c_str(), store_note(model_.get(), "decode", gen).c_str());
   return res;
 }
