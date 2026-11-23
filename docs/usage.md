@@ -89,11 +89,12 @@ checkpoint that no catalog entry names, and is refused. A folder or revision the
 | `flint` | `recursive-flint`, `flint-40b` | Recursive Flint 40B-A2.5B: mixture of 256 experts, 2.5B active, sliding-window and full attention; a coding model that reasons before it answers; text only; 32 GB Macs and up | 22.6 GB | `4bit` (default), `16gb` (where `4bit` does not fit: 2-bit experts, 11.9 GB; [GGUF files](#gguf-files)) |
 | `ornith-1.5-35b-a3b` | `ornith`, `ornith-35b` | Ornith-1.5-35B-A3B: a Qwen3.5 mixture of 256 experts continued-pretrained for tool use and agent work, 3B active, 256K context, reasons by default; drafts with its own DFlash2 model; text only; 32 GB Macs and up | 20.6 GB | `4bit` |
 | `clover-35b-a3b` | `clover`, `clover-35b` | DiffuSpace Clover-35B-A3B-Preview: Qwen3.6-35B-A3B tuned into a block-diffusion model, mixture of 256 experts, 3B active; decodes with the 35B's draft model ([how](#other-models)); text only; 32 GB Macs and up | 20.6 GB | `4bit` |
+| `inkling-2-mini` | `inkling2`, `ink2` | Thinking Machines Lab's Inkling-2-Mini: 26.4B-A3.4B looped MoE (5.4B looped), 1M context, NVFP4/MXFP8; text only; 32 GB Macs and up | 20.2 GB | `nvfp4` |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
 27B (the 27B's is Nace AI's retrain with a 16-row block, [nace-ai/Qwen3.8-27B-DFlash2-Kapitsa](https://huggingface.co/nace-ai/Qwen3.8-27B-DFlash2-Kapitsa)), an MTP head and z-lab's DFlash draft model for the 4B and 9B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL, its DSpark draft model for Lightning, the 35B's DFlash2
 draft model for Clover, jzinno's DFlash2 draft model for Ornith (its pack has no usable MTP head); Flash-Next's
-repo holds its MTP head. Dory and Flint have none: they decode without one, as does the 35B's `16gb` (its GGUF has no
+repo holds its MTP head. Dory, Flint and Inkling-2-Mini have none: they decode without one, as does the 35B's `16gb` (its GGUF has no
 MTP head, and a draft model would not fit beside it).
 
 Flash-Next's `4bit` is Nace AI's quantization of Qwen's bf16 release
@@ -301,7 +302,8 @@ at 16K ([results](../bench/results/2026-11-20-m5-max-hy4/README.md)). The other 
 reference at Hy4's shape (`tools/a4moe_check.cpp`) but have not run the whole model.
 
 Thinking Machines' [Inkling-2-Mini](https://huggingface.co/thinkingmachines/Inkling-2-Mini) (`inkling2_loop`,
-`inkling2_loop_text`) runs from a local checkpoint folder while Nace's catalog pack is published (`kapitsa serve --model DIR`),
+`inkling2_loop_text`) is the catalog's `inkling2` (`kapitsa serve --model inkling2`, which downloads
+`thinkingmachines/Inkling-2-Mini`, 20.2 GB; a local checkpoint folder works too),
 text only (its vision tower is skipped): 24 unique transformer and MoE layers evaluated over a 48-visit loop
 (`[0..5, 6..17, 6..17, 6..17, 18..23]`), with AttnRes over block boundaries, low-rank MessageGate cross-pass
 controllers, static and dynamic short convolutions, SWA and global sink attention with relative position bias, and
