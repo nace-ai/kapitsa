@@ -26,7 +26,7 @@ static int run_checks(ni::Gpu& gpu, std::vector<ni::Buffer>& owned) {
     for (size_t i = 0; i < b.size; ++i) b.as<uint8_t>()[i] = uint8_t(rng());
     for (size_t off = 0; off < b.size; off += bb) {
       const size_t s = off + (type == 14 ? 208 : 0);
-      b.as<uint8_t>()[s] = 0; b.as<uint8_t>()[s + 1] = 0x14;
+      b.as<uint8_t>()[s] = 0; b.as<uint8_t>()[s + 1] = (off / bb) % 2 ? 0x94 : 0x14;
       if (type == 12 || type == 13) { b.as<uint8_t>()[s + 2] = 0; b.as<uint8_t>()[s + 3] = 0x10; }
     }
     return b;
@@ -39,7 +39,7 @@ static int run_checks(ni::Gpu& gpu, std::vector<ni::Buffer>& owned) {
     ++checked;
     return true;
   };
-  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 16u, 20u, 23u}) {
+  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 16u, 17u, 20u, 23u}) {
     const unsigned K = ink2_gguf::block_values(type) == 32 ? 1152 : 256, M = 3, N = 7;
     const unsigned rb = K / ink2_gguf::block_values(type) * ink2_gguf::block_bytes(type);
     auto w = data(type, K, N), x = buffer(M * K * 4), y = buffer(M * N * 4);

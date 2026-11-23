@@ -2,6 +2,7 @@
 #include "model/inkling2_gguf.h"
 #include "gguf/quant.h"
 #include "kernels/inkling2/gguf_blocks.h"
+#include "../tools/gguf_iq2_xs_test.h"
 
 #include <bit>
 #include <cmath>
@@ -9,18 +10,57 @@
 #include <random>
 #include <vector>
 
+static bool parser_fixture(uint32_t type, uint64_t columns, size_t payload, bool expect) {
+  std::vector<uint8_t> bytes{'G', 'G', 'U', 'F'};
+  auto put = [&](auto value) {
+    const auto* p = reinterpret_cast<const uint8_t*>(&value);
+    bytes.insert(bytes.end(), p, p + sizeof(value));
+  };
+  put(uint32_t(3)); put(uint64_t(1)); put(uint64_t(0));
+  put(uint64_t(1)); bytes.push_back('x'); put(uint32_t(2));
+  put(columns); put(uint64_t(2)); put(type); put(uint64_t(0));
+  const size_t data = (bytes.size() + 31) / 32 * 32;
+  bytes.resize(data + payload);
+  FILE* tmp = std::tmpfile();
+  if (!tmp) return false;
+  bool ok = false;
+  if (std::fwrite(bytes.data(), 1, bytes.size(), tmp) == bytes.size() && std::fflush(tmp) == 0) {
+    try {
+      ni::gguf::File file("/dev/fd/" + std::to_string(fileno(tmp)));
+      const auto* tensor = file.find("x");
+      ok = expect && tensor && tensor->bytes == payload && tensor->row_bytes() == payload / 2;
+    } catch (const std::exception&) {
+      ok = !expect;
+    }
+  }
+  std::fclose(tmp);
+  if (!ok) std::fprintf(stderr, "GGUF parser type=%u columns=%llu payload=%zu expect=%d\n",
+                        type, static_cast<unsigned long long>(columns), payload, expect);
+  return ok;
+}
+
 int main() {
+  for (uint32_t type : {16u, 17u}) {
+    uint32_t n = 0, bytes = 0;
+    if (!ni::gguf::type_block(type, &n, &bytes) ||
+        !parser_fixture(type, n, bytes * 2, true) ||
+        !parser_fixture(type, n - 1, bytes * 2, false) ||
+        !parser_fixture(type, n, bytes * 2 - 1, false)) return 1;
+  }
   std::mt19937 rng(754);
   size_t checked = 0;
-  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 16u, 20u, 23u}) {
+  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 16u, 17u, 20u, 23u}) {
     const unsigned n = ink2_gguf::block_values(type), bytes = ink2_gguf::block_bytes(type);
+    uint32_t ref_n = 0, ref_bytes = 0;
+    if (!ni::gguf::type_block(type, &ref_n, &ref_bytes) || n != ref_n || bytes != ref_bytes ||
+        !ni::gguf::can_dequantize(type)) return 1;
     for (int trial = 0; trial < 1000; ++trial) {
       std::vector<unsigned char> b(bytes * 3);
       for (auto& v : b) v = static_cast<unsigned char>(rng());
       // Finite, nonzero half scales; exercise arbitrary bitplanes, signs, subscales and adjacent blocks.
       for (unsigned block = 0; block < 3; ++block) {
         const unsigned off = block * bytes + (type == 14 ? 208 : 0);
-        b[off + 1] = static_cast<unsigned char>(0x08 + rng() % 0x68);
+        b[off + 1] = static_cast<unsigned char>((0x08 + rng() % 0x68) | ((trial % 2) << 7));
         if (type == 12 || type == 13) b[off + 3] = static_cast<unsigned char>(0x08 + rng() % 0x68);
       }
       std::vector<float> ref(n * 3);
@@ -35,6 +75,24 @@ int main() {
       }
     }
   }
+  const size_t oracle_start = checked;
+  for (uint16_t half : {0u, 0x8000u, 1u, 0x8001u, 0x3c00u, 0xbc00u, 0x7bffu, 0xfbffu}) {
+    for (unsigned pattern = 0; pattern < 512; ++pattern) {
+      std::vector<uint8_t> row(9 * 74);
+      std::vector<uint32_t> want(2304);
+      for (unsigned block = 0; block < 9; ++block)
+        iq2_xs_test::fixture(row.data() + block * 74, half, pattern + block, want.data() + block * 256);
+      for (unsigned k = 0; k < want.size(); ++k) {
+        if (std::bit_cast<uint32_t>(ink2_gguf::value(row.data(), 17, k)) != want[k]) {
+          std::fprintf(stderr, "IQ2_XS oracle half=%04x pattern=%u k=%u\n", half, pattern, k);
+          return 1;
+        }
+        ++checked;
+      }
+    }
+  }
+  std::printf("IQ2_XS: %zu integer-oracle reads across 2304-value rows, signed/zero scales, grids, nibbles and parity match\n",
+              checked - oracle_start);
   for (unsigned K : {64u, 1152u, 2304u}) {
     for (int trial = 0; trial < 100; ++trial) {
       std::vector<uint8_t> raw(K / 64 * 36), q(K / 2), scales(K / 16);
