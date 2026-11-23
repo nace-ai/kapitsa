@@ -60,7 +60,7 @@ static bool parser_fixture(uint32_t type, uint64_t columns, size_t payload, bool
 }
 
 int main() {
-  for (uint32_t type : {16u, 17u}) {
+  for (uint32_t type : {16u, 17u, 22u}) {
     uint32_t n = 0, bytes = 0;
     if (!ni::gguf::type_block(type, &n, &bytes) ||
         !parser_fixture(type, n, bytes * 2, true) ||
@@ -95,7 +95,7 @@ int main() {
   }
   std::printf("IQ3_XXS: %zu CPU scalar/bulk values bitwise match pinned llama.cpp, including 768 trained values\n", iq3_checked);
   size_t checked = 0;
-  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 16u, 17u, 18u, 20u, 23u}) {
+  for (unsigned type : {6u, 8u, 12u, 13u, 14u, 16u, 17u, 18u, 20u, 22u, 23u}) {
     const unsigned n = ink2_gguf::block_values(type), bytes = ink2_gguf::block_bytes(type);
     for (int trial = 0; trial < 1000; ++trial) {
       std::vector<unsigned char> b(bytes * 3);
@@ -135,28 +135,36 @@ int main() {
     }
   }
   std::printf("IQ2_XS: %zu integer-oracle reads across 2304-value rows match\n", checked - oracle_start);
-  size_t iq2_checked = 0;
-  std::vector<uint8_t> iq2_storage(1 + 3 * 74);
-  uint8_t* iq2_bytes = iq2_storage.data() + 1;
-  std::vector<float> iq2_ref(3 * 256), iq2_bulk(3 * 256);
-  for (unsigned half = 0; half < 65536; ++half) {
-    if ((half & 0x7c00u) == 0x7c00u) continue;
-    for (unsigned block = 0; block < 3; ++block)
-      ink2_iq2_cases::fill_xs(iq2_bytes + block * 74, uint16_t(half), half + block * 131);
-    ink2_iq2_cases::decode_xs(iq2_bytes, iq2_ref.data(), 3);
-    ni::gguf::dequantize(17, iq2_bytes, iq2_bulk.data(), iq2_bulk.size());
-    for (unsigned k = 0; k < iq2_ref.size(); ++k) {
-      const float got = ink2_gguf::value(iq2_bytes, 17, k);
-      if (std::bit_cast<uint32_t>(got) != std::bit_cast<uint32_t>(iq2_ref[k]) ||
-          std::bit_cast<uint32_t>(iq2_bulk[k]) != std::bit_cast<uint32_t>(iq2_ref[k])) {
-        std::fprintf(stderr, "pinned IQ2_XS half=%04x k=%u: read=%a bulk=%a llama=%a\n",
-                     half, k, got, iq2_bulk[k], iq2_ref[k]);
-        return 1;
+  for (unsigned type : {17u, 22u}) {
+    const unsigned bytes = ink2_gguf::block_bytes(type);
+    if (ink2_gguf::block_values(type) != 256 || bytes != (type == 17 ? 74 : 82)) return 1;
+    size_t iq2_checked = 0;
+    std::vector<uint8_t> iq2_storage(1 + 3 * bytes);
+    uint8_t* iq2_bytes = iq2_storage.data() + 1;
+    std::vector<float> iq2_ref(3 * 256), iq2_bulk(3 * 256);
+    for (unsigned half = 0; half < 65536; ++half) {
+      if ((half & 0x7c00u) == 0x7c00u) continue;
+      for (unsigned block = 0; block < 3; ++block) {
+        auto* b = iq2_bytes + block * bytes;
+        if (type == 17) ink2_iq2_cases::fill_xs(b, uint16_t(half), half + block * 131);
+        else ink2_iq2_cases::fill_s(b, uint16_t(half), half + block * 131);
       }
-      ++iq2_checked;
+      if (type == 17) ink2_iq2_cases::decode_xs(iq2_bytes, iq2_ref.data(), 3);
+      else ink2_iq2_cases::decode_s(iq2_bytes, iq2_ref.data(), 3);
+      ni::gguf::dequantize(type, iq2_bytes, iq2_bulk.data(), iq2_bulk.size());
+      for (unsigned k = 0; k < iq2_ref.size(); ++k) {
+        const float got = ink2_gguf::value(iq2_bytes, type, k);
+        if (std::bit_cast<uint32_t>(got) != std::bit_cast<uint32_t>(iq2_ref[k]) ||
+            std::bit_cast<uint32_t>(iq2_bulk[k]) != std::bit_cast<uint32_t>(iq2_ref[k])) {
+          std::fprintf(stderr, "pinned IQ2 type=%u half=%04x k=%u: read=%a bulk=%a llama=%a\n",
+                       type, half, k, got, iq2_bulk[k], iq2_ref[k]);
+          return 1;
+        }
+        ++iq2_checked;
+      }
     }
+    std::printf("IQ2 type=%u: %zu CPU scalar/bulk values bitwise match pinned llama.cpp\n", type, iq2_checked);
   }
-  std::printf("IQ2_XS: %zu CPU scalar/bulk values bitwise match pinned llama.cpp\n", iq2_checked);
   for (unsigned K : {64u, 1152u, 2304u}) {
     for (int trial = 0; trial < 100; ++trial) {
       std::vector<uint8_t> raw(K / 64 * 36), q(K / 2), scales(K / 16);
