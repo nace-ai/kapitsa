@@ -1905,7 +1905,7 @@ void Inkling2::encode_conv_rollback(Encoder& e, Seq& s, int keep_idx, int total_
 }
 
 void Inkling2::enc_unembed(Encoder& e, const Buffer& h, const Buffer& out_logits, int rows) {
-  enc_mm(e, *unembed_, h, out_logits, rows, uint32_t(cfg_.vocab), false);
+  enc_mm(e, unembed_, h, out_logits, rows, uint32_t(cfg_.vocab), false);
 }
 
 void Inkling2::encode_logits_rows(Encoder& e, Seq& s, int pos0, int T, const Buffer& out) {

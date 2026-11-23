@@ -142,7 +142,7 @@ class Inkling2 : public Model {
   void enc_unembed(Encoder& e, const Buffer& h, const Buffer& out_logits, int rows);
   const Tensor& embed_tensor() const { return *embed_; }
   const Tensor& embed_norm_tensor() const { return *embed_norm_; }
-  const Tensor& unembed_tensor() const { return *unembed_; }
+  const Ink2Mat& unembed_mat() const { return unembed_; }
 
   // Diagnostic helpers (tools/ink2_check)
   float* logits() { return logits_.as<float>(); }
