@@ -1,9 +1,9 @@
 // Thinking Machines Inkling-2-Mini (thinkingmachines/Inkling-2-Mini, model_type "inkling2_loop"):
-// Stage 1 text engine (24 unique transformer+MoE layers evaluated across a 48-visit recurrent loop schedule
+// Text+Vision engine (24 unique transformer+MoE layers evaluated across a 48-visit recurrent loop schedule
 // [0..5, 6..17, 6..17, 6..17, 18..23], 200,058 unpadded vocab out of 201,024 padded, AttRes across blocks +
 // cross-pass MessageGate controllers + static/dynamic short convolutions + SWA/global sink attention with
-// relative position bias + 128-expert top-8 SiTU MoE in NVFP4 L0-19 and MXFP8 L20-23 + final logit softcap 30).
-// Vision tower (model.visual.*) is skipped in Stage 1.
+// relative position bias + 128-expert top-8 SiTU MoE in NVFP4 L0-19 and MXFP8 L20-23 + final logit softcap 30,
+// plus lazy-loaded Ink2ViT vision tower in src/vision/ink2_vit.cpp).
 #pragma once
 
 #include "loader/safetensors.h"

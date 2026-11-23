@@ -459,3 +459,115 @@ struct RadioShuffleParams {
     yr[k] = half(float(w[k]) * (v * r));
   }
 }
+
+// ==== the Inkling-2 ViT (thinkingmachines/Inkling-2) ====
+
+// Patch rows from RGB image: bottom-right padded to (ceil(H / 40) * 40, ceil(W / 40) * 40) with lut index 256 (-1.0
+// pre-rescale), ordered by 2x2 merge block (br, bc, mr, mc), k = (py * patch + px) * 3 + c, zero-padded to K_pad.
+struct Ink2VitPatchParams {
+  uint src_w, src_h;
+  uint cols;
+  uint patch, merge;
+  uint K0, K_pad;
+};
+[[kernel]] void ink2_vit_patchify(const device uchar* rgb [[buffer(0)]], const device float* lut [[buffer(1)]],
+                                  device half* X [[buffer(2)]], constant Ink2VitPatchParams& p [[buffer(3)]],
+                                  uint2 gid [[thread_position_in_grid]]) {
+  const uint k = gid.x, r = gid.y;
+  if (k >= p.K_pad) return;
+  device half* row = X + size_t(r) * p.K_pad;
+  if (k >= p.K0) {
+    row[k] = half(0.0h);
+    return;
+  }
+  const uint mm = p.merge * p.merge, b = r / mm;
+  const uint prow = (b / p.cols) * p.merge + (r % mm) / p.merge;
+  const uint pcol = (b % p.cols) * p.merge + (r % mm) % p.merge;
+  const uint c = k % 3u, px = (k / 3u) % p.patch, py = k / (3u * p.patch);
+  const uint gy = prow * p.patch + py, gx = pcol * p.patch + px;
+  const uint idx = (gy < p.src_h && gx < p.src_w) ? uint(rgb[(size_t(gy) * p.src_w + gx) * 3u + c]) : 256u;
+  row[k] = half(lut[c * 257u + idx]);
+}
+
+// Row 0 = class_embedding + cls_position_embedding; rows 1..N = patch_embedding + bilinearly interpolated 2D pos_embed
+// (align_corners = false, border clamp).
+struct Ink2VitEmbedParams {
+  uint NP, D;
+  uint ph, pw;
+  uint cols, side, merge;
+};
+[[kernel]] void ink2_vit_embed(device float* x [[buffer(0)]], const device bfloat* pos [[buffer(1)]],
+                               const device bfloat* cls_embed [[buffer(2)]],
+                               const device bfloat* cls_pos [[buffer(3)]],
+                               constant Ink2VitEmbedParams& p [[buffer(4)]],
+                               uint2 gid [[thread_position_in_grid]]) {
+  const uint i = gid.x, row = gid.y;
+  if (i >= p.D || row >= p.NP) return;
+  if (row == 0) {
+    x[i] = float(cls_embed[i]) + float(cls_pos[i]);
+    return;
+  }
+  const uint r = row - 1u, mm = p.merge * p.merge, b = r / mm;
+  const uint prow = (b / p.cols) * p.merge + (r % mm) / p.merge;
+  const uint pcol = (b % p.cols) * p.merge + (r % mm) % p.merge;
+  const float sy = metal::clamp((float(prow) + 0.5f) * float(p.side) / float(p.ph) - 0.5f, 0.0f, float(p.side - 1u));
+  const float sx = metal::clamp((float(pcol) + 0.5f) * float(p.side) / float(p.pw) - 0.5f, 0.0f, float(p.side - 1u));
+  const uint h0 = uint(sy), h1 = metal::min(h0 + 1u, p.side - 1u);
+  const uint w0 = uint(sx), w1 = metal::min(w0 + 1u, p.side - 1u);
+  const float lh = sy - float(h0), lw = sx - float(w0);
+  const float e = (1.0f - lh) * ((1.0f - lw) * float(pos[(h0 * p.side + w0) * p.D + i]) +
+                                 lw * float(pos[(h0 * p.side + w1) * p.D + i])) +
+                  lh * ((1.0f - lw) * float(pos[(h1 * p.side + w0) * p.D + i]) +
+                        lw * float(pos[(h1 * p.side + w1) * p.D + i]));
+  x[size_t(row) * p.D + i] += e;
+}
+
+// 2D Axial RoPE for Inkling-2 ViT: CLS row 0 is unrotated; patch rows use 1-indexed (pos_h, pos_w) with width pairs
+// first (k < HD/4) and height pairs second (k >= HD/4), interleaved pairwise on channels (2k, 2k+1).
+struct Ink2VitRopeParams {
+  uint rows, r0, NP, heads, HD, cols, merge;
+};
+[[kernel]] void ink2_vit_qkv_rope(const device float* y [[buffer(0)]], const device bfloat* bias [[buffer(1)]],
+                                  const device float* inv_freq [[buffer(2)]], device half* Q [[buffer(3)]],
+                                  device half* K [[buffer(4)]], device half* V [[buffer(5)]],
+                                  constant Ink2VitRopeParams& p [[buffer(6)]], uint gid [[thread_position_in_grid]]) {
+  const uint half_d = p.HD / 2u, quarter = p.HD / 4u;
+  const uint k = gid % half_d, h = (gid / half_d) % p.heads, rr = gid / (half_d * p.heads);
+  if (rr >= p.rows) return;
+  const uint r = p.r0 + rr;
+  float cs = 1.0f, sn = 0.0f;
+  if (r > 0) {
+    const uint pr = r - 1u, mm = p.merge * p.merge, b = pr / mm;
+    const uint prow = (b / p.cols) * p.merge + (pr % mm) / p.merge;
+    const uint pcol = (b % p.cols) * p.merge + (pr % mm) % p.merge;
+    const float ang = float(k < quarter ? (pcol + 1u) : (prow + 1u)) * inv_freq[k % quarter];
+    cs = metal::precise::cos(ang);
+    sn = metal::precise::sin(ang);
+  }
+  const uint W = p.heads * p.HD;
+  const device float* yr = y + size_t(rr) * 3u * W;
+  const uint c0 = h * p.HD + 2u * k, c1 = c0 + 1u;
+  const size_t o0 = (size_t(h) * p.NP + r) * p.HD + 2u * k;
+  for (uint m = 0; m < 2u; ++m) {
+    const float a = yr[m * W + c0] + float(bias[m * W + c0]);
+    const float b2 = yr[m * W + c1] + float(bias[m * W + c1]);
+    device half* dst = m == 0u ? Q : K;
+    dst[o0] = half(a * cs - b2 * sn);
+    dst[o0 + 1u] = half(b2 * cs + a * sn);
+  }
+  V[o0] = half(yr[2u * W + c0] + float(bias[2u * W + c0]));
+  V[o0 + 1u] = half(yr[2u * W + c1] + float(bias[2u * W + c1]));
+}
+
+// Residual update with bias and LayerScale gamma: x[r, c] += gamma[c] * (y[r, c] + bias[c]).
+struct VitLsResParams {
+  uint rows, D;
+};
+[[kernel]] void vit_layerscale_res(device float* x [[buffer(0)]], const device float* y [[buffer(1)]],
+                                   const device bfloat* bias [[buffer(2)]], const device bfloat* gamma [[buffer(3)]],
+                                   constant VitLsResParams& p [[buffer(4)]], uint2 gid [[thread_position_in_grid]]) {
+  const uint c = gid.x, r = gid.y;
+  if (c >= p.D || r >= p.rows) return;
+  const size_t idx = size_t(r) * p.D + c;
+  x[idx] += float(gamma[c]) * (y[idx] + float(bias[c]));
+}

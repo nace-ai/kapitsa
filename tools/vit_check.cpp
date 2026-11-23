@@ -22,6 +22,7 @@
 #include "model/qwen35.h"
 #include "util/bf16.h"
 #include "util/log.h"
+#include "vision/ink2_vit.h"
 #include "vision/qwen_vit.h"
 #include "vision/radio_vit.h"
 
@@ -214,6 +215,105 @@ static int kernel_checks() {
     printf("%s vit_ln_f32 vs a CPU LayerNorm: max error %.2e, rows outside %s\n", lok ? "ok  " : "FAIL", err,
            untouched ? "untouched" : "CHANGED");
     fails += !lok;
+  }
+  // 5. ink2_vit_qkv_rope (1-indexed merge-block (pos_h, pos_w) with width pairs first, pairwise interleaved, CLS at 0,0)
+  //    and vit_layerscale_res (x += gamma * (y + bias)) vs CPU double reference
+  {
+    const uint32_t cols = 2, merge = 2, heads = 4, HD = 64, N = 2 * cols * merge * merge, NP = 1 + N;
+    const uint32_t W = heads * HD;
+    const float theta = 10000.0f;
+    Buffer y = g.alloc(size_t(NP) * 3 * W * 4), b = g.alloc(3 * W * 2), inv = g.alloc((HD / 4) * 4);
+    Buffer Q = g.alloc(size_t(heads) * NP * HD * 2), K = g.alloc(size_t(heads) * NP * HD * 2),
+           V = g.alloc(size_t(heads) * NP * HD * 2);
+    for (uint32_t i = 0; i < NP * 3 * W; ++i) y.as<float>()[i] = nd(rng);
+    for (uint32_t i = 0; i < 3 * W; ++i) b.as<uint16_t>()[i] = f32_to_bf16(0.25f * nd(rng));
+    for (uint32_t k = 0; k < HD / 4; ++k) inv.as<float>()[k] = 1.0f / std::pow(theta, float(2 * k) / float(HD / 2));
+    const struct {
+      uint32_t rows, r0, NP, heads, HD, cols, merge;
+    } rp{NP, 0, NP, heads, HD, cols, merge};
+    {
+      auto e = g.begin();
+      e->use(vit_pipe("ink2_vit_qkv_rope"));
+      e->buf(0, y);
+      e->buf(1, b);
+      e->buf(2, inv);
+      e->buf(3, Q);
+      e->buf(4, K);
+      e->buf(5, V);
+      e->val(6, rp);
+      e->dispatch((NP * heads * (HD / 2) + 255u) / 256u, 1, 1, 256);
+      e->commit_and_wait();
+    }
+    double rerr = 0;
+    for (uint32_t r = 0; r < NP; ++r) {
+      uint32_t pos_h = 0, pos_w = 0;
+      if (r > 0) {
+        const uint32_t pr = r - 1u, mm = merge * merge, blk = pr / mm;
+        pos_h = (blk / cols) * merge + (pr % mm) / merge + 1u;
+        pos_w = (blk % cols) * merge + (pr % mm) % merge + 1u;
+      }
+      for (uint32_t h = 0; h < heads; ++h) {
+        for (uint32_t k = 0; k < HD / 2; ++k) {
+          const double invf = 1.0 / std::pow(double(theta), double(2 * (k % (HD / 4))) / double(HD / 2));
+          const double ang = r == 0 ? 0.0 : double(k < HD / 4 ? pos_w : pos_h) * invf;
+          const double cs = std::cos(ang), sn = std::sin(ang);
+          const uint32_t c0 = h * HD + 2 * k, c1 = c0 + 1;
+          const size_t o = (size_t(h) * NP + r) * HD + 2 * k;
+          for (int m = 0; m < 2; ++m) {
+            const double x0 = y.as<float>()[size_t(r) * 3 * W + m * W + c0] + bf16_to_f32(b.as<uint16_t>()[m * W + c0]);
+            const double x1 = y.as<float>()[size_t(r) * 3 * W + m * W + c1] + bf16_to_f32(b.as<uint16_t>()[m * W + c1]);
+            const double w0 = x0 * cs - x1 * sn, w1 = x1 * cs + x0 * sn;
+            const _Float16* dst = (m == 0 ? Q : K).as<_Float16>();
+            rerr = std::max(rerr, std::abs(double(float(dst[o])) - w0) / std::max(1.0, std::abs(w0)));
+            rerr = std::max(rerr, std::abs(double(float(dst[o + 1])) - w1) / std::max(1.0, std::abs(w1)));
+          }
+          const double v0 = y.as<float>()[size_t(r) * 3 * W + 2 * W + c0] + bf16_to_f32(b.as<uint16_t>()[2 * W + c0]);
+          const double v1 = y.as<float>()[size_t(r) * 3 * W + 2 * W + c1] + bf16_to_f32(b.as<uint16_t>()[2 * W + c1]);
+          rerr = std::max(rerr, std::abs(double(float(V.as<_Float16>()[o])) - v0) / std::max(1.0, std::abs(v0)));
+          rerr = std::max(rerr, std::abs(double(float(V.as<_Float16>()[o + 1])) - v1) / std::max(1.0, std::abs(v1)));
+        }
+      }
+    }
+    const bool rok = rerr < 2e-3;
+    printf("%s ink2_vit_qkv_rope vs CPU 2D axial pairwise RoPE: max rel error %.2e\n", rok ? "ok  " : "FAIL", rerr);
+    fails += !rok;
+
+    const uint32_t Rl = 7, Dl = 128;
+    Buffer xl = g.alloc(size_t(Rl) * Dl * 4), yl = g.alloc(size_t(Rl) * Dl * 4);
+    Buffer bl = g.alloc(Dl * 2), gl = g.alloc(Dl * 2);
+    for (uint32_t i = 0; i < Rl * Dl; ++i) xl.as<float>()[i] = nd(rng), yl.as<float>()[i] = nd(rng);
+    for (uint32_t i = 0; i < Dl; ++i) {
+      bl.as<uint16_t>()[i] = f32_to_bf16(0.3f * nd(rng));
+      gl.as<uint16_t>()[i] = f32_to_bf16(0.1f * nd(rng));
+    }
+    const std::vector<float> xorig(xl.as<float>(), xl.as<float>() + Rl * Dl);
+    const struct {
+      uint32_t rows, D;
+    } lsp{Rl, Dl};
+    {
+      auto e = g.begin();
+      e->use(vit_pipe("vit_layerscale_res"));
+      e->buf(0, xl);
+      e->buf(1, yl);
+      e->buf(2, bl);
+      e->buf(3, gl);
+      e->val(4, lsp);
+      e->dispatch((Dl + 255u) / 256u, Rl, 1, 256);
+      e->commit_and_wait();
+    }
+    double lserr = 0;
+    for (uint32_t r = 0; r < Rl; ++r) {
+      for (uint32_t c = 0; c < Dl; ++c) {
+        const size_t idx = size_t(r) * Dl + c;
+        const double want = double(xorig[idx]) +
+                            double(bf16_to_f32(gl.as<uint16_t>()[c])) *
+                                (double(yl.as<float>()[idx]) + double(bf16_to_f32(bl.as<uint16_t>()[c])));
+        lserr = std::max(lserr, std::abs(double(xl.as<float>()[idx]) - want));
+      }
+    }
+    const bool lsok = lserr < 1e-5;
+    printf("%s vit_layerscale_res vs CPU: max error %.2e\n", lsok ? "ok  " : "FAIL", lserr);
+    fails += !lsok;
   }
   return fails ? 1 : 0;
 }

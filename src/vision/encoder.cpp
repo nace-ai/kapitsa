@@ -1,6 +1,7 @@
 // The parts of image input every model shares (see encoder.h).
 #include "vision/encoder.h"
 #include "util/log.h"
+#include "vision/ink2_vit.h"
 #include "vision/qwen_vit.h"
 #include "vision/radio_vit.h"
 
@@ -22,6 +23,11 @@ std::unique_ptr<ImageEncoder> open_encoder(const std::string& dir, long max_pixe
     // patches = pixels / 256, within the processor's 1024 to 13312
     rc.max_pixels = max_pixels == kModelDefaultPixels ? kRadioDefaultMaxPixels : std::max(0L, max_pixels);
     return std::make_unique<RadioViT>(dir, rc);
+  }
+  Ink2ViTConfig ic;
+  if (Ink2ViT::supports(dir, &ic)) {
+    ic.max_pixels = max_pixels == kModelDefaultPixels ? kInk2DefaultMaxPixels : std::max(0L, max_pixels);
+    return std::make_unique<Ink2ViT>(dir, ic);
   }
   // other models' encoders go here, each behind ImageEncoder, with the model's prefill calling enc_embed_runs
   return nullptr;

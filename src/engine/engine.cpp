@@ -712,9 +712,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
        "KV room %.2f GB = %zu tokens (%.0f KB per token), one conversation up to %d of %d tokens",
        used / 1e9, std::max(1, opts_.slots), opts_.slots > 1 ? "slots'" : "slot's", budget_ / 1e9,
        g.recommended_working_set() / 1e9, room / 1e9, room / per, per / 1024.0, context_fit_, opts_.context);
-  // images: the model's vision tower, loaded on the first image that needs encoding (skipped on Inkling-2 Stage 1)
-  if (!ink2_)
-    if (auto enc = vision::open_encoder(opts_.model_dir, opts_.image_max_pixels)) {
+  // images: the model's vision tower, loaded on the first image that needs encoding
+  if (auto enc = vision::open_encoder(opts_.model_dir, opts_.image_max_pixels)) {
     const std::string m0 = enc->image_start(), m1 = enc->image_end();
     const int i0 = m0.empty() ? -2 : tok_.find(m0), i1 = m1.empty() ? -2 : tok_.find(m1);
     if (i0 >= 0) img_pre_ = {i0};
