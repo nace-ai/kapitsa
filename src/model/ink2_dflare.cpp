@@ -4,6 +4,7 @@
 #include "model/nemotron_h.h"
 #include "util/bf16.h"
 #include "util/json_file.h"
+#include "hub/hub.h"
 #include "util/log.h"
 
 #include <nlohmann/json.hpp>
@@ -12,6 +13,9 @@
 #include <cmath>
 #include <cstring>
 #include <filesystem>
+#include <format>
+#include <fstream>
+#include <functional>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
@@ -348,6 +352,63 @@ std::unique_ptr<Ink2DFlareSeq> Ink2DFlare::new_seq() {
 void Ink2DFlare::reset(Ink2DFlareSeq& ds) {
   ds.ctx_len = 0;
   if (ds.rows_f) memset(ds.rows_f.ptr(), 0, ds.rows_f.size);
+}
+
+void Ink2DFlare::calibrate(const Buffer& pf_taps, const Buffer& vf_taps, const Buffer& vf_logits) {
+  std::string key = "ink2-dflare-" + dir_.substr(dir_.find_last_of('/') + 1) +
+                    (tg_.unembed_mat().is_q8() ? "-q8-" : "-bf16-") + Gpu::get().name();
+  for (char& ch : key)
+    if (!isalnum(static_cast<unsigned char>(ch)) && ch != '-') ch = '_';
+  const std::string path = hub::home_dir() + "/kflash/" + key + ".json", build = KAPITSA_GIT;
+  const char* how = "cached";
+  try {
+    std::ifstream f(path);
+    const json j = f ? json::parse(f) : json::object();
+    const auto r = j.value("ratio", std::vector<float>());
+    if (j.value("build", "") != build || r.size() != size_t(kMaxDrafts + 1)) throw std::runtime_error("stale");
+    std::copy(r.begin(), r.end(), ratio_);
+  } catch (...) {
+    how = "measured";
+    Gpu& g = Gpu::get();
+    auto s = tg_.new_seq(512, 512);
+    auto ds = new_seq();
+    const SamplingParams sp;  // greedy
+    constexpr int N = 128;
+    for (int i = 0; i <= N; ++i) s->tokens()[i] = 1000 + (i * 37) % 4096;
+    auto e = g.begin();
+    tg_.encode_prefill_taps(*e, *s, 0, N, sp, 0, true, &pf_taps);
+    encode_commit(*e, *ds, pf_taps, N, 0, N);
+    e->commit_and_wait();
+    auto median = [&](int reps, const std::function<void(Encoder&)>& f) {
+      std::vector<double> t;
+      for (int i = 0; i < reps + 2; ++i) {
+        const double t0 = now_ms();
+        auto ec = g.begin();
+        f(*ec);
+        ec->commit_and_wait();
+        if (i >= 2) t.push_back(now_ms() - t0);
+      }
+      std::sort(t.begin(), t.end());
+      return t[t.size() / 2];
+    };
+    const double step = median(7, [&](Encoder& en) { tg_.encode_step_taps(en, *s, N, sp, 0, true, &vf_taps); });
+    for (int d = 1; d <= kMaxDrafts; ++d)
+      ratio_[d] = float(std::round(16.0 * median(5, [&](Encoder& en) {
+                          encode_draft(en, *s, *ds, N, d);
+                          tg_.encode_verify(en, *s, N, d + 1, vf_logits, &vf_taps, true);
+                        }) / step) / 16.0);
+    ratio_[0] = 1.0f;
+    tg_.drop_kv(*s);
+    for (Buffer& b : ds->kc) g.release(b);
+    for (Buffer& b : ds->vc) g.release(b);
+    g.release(ds->rows_f);
+    std::error_code ec;
+    std::filesystem::create_directories(hub::home_dir() + "/kflash", ec);
+    std::ofstream(path) << json{{"build", build}, {"ratio", std::vector<float>(ratio_, ratio_ + kMaxDrafts + 1)}};
+  }
+  std::string t;
+  for (int d = 1; d <= kMaxDrafts; ++d) t += std::format(" {:.2f}", ratio_[d]);
+  logi("DFlare: a draft cycle costs%s plain steps at depth 1..%d (%s, %s)", t.c_str(), kMaxDrafts, how, path.c_str());
 }
 
 void Ink2DFlare::enc_q8(Encoder& e, const Q8Mat& w, const Buffer& x, const Buffer& y, int M, bool add) {

@@ -671,6 +671,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       ink2_pf_taps_ = g.alloc(4 * pf_rows * H * 4, "ink2_pf_taps");
       ink2_vf_taps_ = g.alloc(4 * size_t(Inkling2::kMaxVerify) * H * 4, "ink2_vf_taps");
       ink2_vf_logits_ = g.alloc(size_t(Inkling2::kMaxVerify) * V * 4, "ink2_vf_logits");
+      if (ink2_spec_auto_) ink2_dfl_->calibrate(ink2_pf_taps_, ink2_vf_taps_, ink2_vf_logits_);
     }
   }
 
@@ -4288,7 +4289,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     int P = n;
     bool go = handle(s.tokens()[n]);
     int cur_d = ink2_spec_auto_ ? std::min(2, ink2_spec_) : ink2_spec_;
-    int zero_streak = 0, plain_rem = 0;
+    // Cost-priced backoff (adaptive depth): while the tokens a cycle emits (a running mean) stay below what a cycle of
+    // this depth costs in plain steps (Ink2DFlare::cost_ratio, fixed per process), decode 16 plain steps, then draft
+    // again at depth 2. Both inputs depend only on the text and the cached table, so a request decodes the same way.
+    int plain_rem = 0, spec_cycles = 0;
+    double tok_mean = 0.0;
     int pending_commit = 0, pending_pos = 0, pending_stride = 0, pending_rb = -1;
     // Flush pending rollback + tap commit before yielding the GPU turn, growing KV, or leaving the loop so another
     // concurrent slot can never overwrite shared conv_snap_ / ink2_vf_taps_ buffers in between.
@@ -4399,17 +4404,13 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       pending_stride = d + 1;
       P += m;
       if (ink2_spec_auto_) {
-        if (a == 0) {
-          ++zero_streak;
+        tok_mean = spec_cycles++ > 0 ? 0.75 * tok_mean + 0.25 * m : m;
+        if (a == d) cur_d = std::min(ink2_spec_, cur_d + 2);
+        else cur_d = std::clamp(a + 1, 2, ink2_spec_);
+        if (spec_cycles >= 4 && tok_mean < ink2_dfl_->cost_ratio(d)) {
+          plain_rem = 16;
+          spec_cycles = 0;
           cur_d = std::min(2, ink2_spec_);
-          if (zero_streak >= 2) {
-            plain_rem = 6;
-            zero_streak = 0;
-          }
-        } else {
-          zero_streak = 0;
-          if (a == d) cur_d = std::min(ink2_spec_, cur_d + 2);
-          else cur_d = std::clamp(a + 1, 2, ink2_spec_);
         }
       }
       if (go && contended()) {

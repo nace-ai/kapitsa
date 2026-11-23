@@ -31,6 +31,11 @@ class Ink2DFlare {
   int ctx_cap() const { return ctx_cap_; }
 
   std::unique_ptr<Ink2DFlareSeq> new_seq();
+  // A draft cycle's cost over a plain decode step's (depth 1..kMaxDrafts): measured once on a scratch sequence (median
+  // ms, rounded to 1/16) and cached in KAPITSA_HOME/kflash by model, unembed packing, chip and build, so it is fixed for
+  // the process and across restarts. The engine backs off to plain steps while its tokens per cycle stay below it.
+  void calibrate(const Buffer& pf_taps, const Buffer& vf_taps, const Buffer& vf_logits);
+  float cost_ratio(int depth) const { return ratio_[std::clamp(depth, 1, kMaxDrafts)]; }
   void reset(Ink2DFlareSeq& ds);
 
   // Commit `n_rows` target taps ([4, taps_stride_rows, H] float) starting at sequence position `pos0`.
@@ -65,6 +70,7 @@ class Ink2DFlare {
   std::string dir_;
   int H_ = 2304, NL_ = 3, hq_ = 24, hkv_ = 8, D_ = 128, I_ = 9216;
   int block_size_ = 8, ctx_cap_ = 1023, rank_ = 256;
+  float ratio_[kMaxDrafts + 1] = {};
   float eps_ = 1e-6f, theta_ = 1000000.0f;
   float alpha_[4][4] = {};  // softmax(fuse_weight)
 
