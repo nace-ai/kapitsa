@@ -28,7 +28,10 @@ static bool check_iq3(const unsigned char* bytes, size_t count, size_t& checked)
   return true;
 }
 
+bool check_mixed_gguf();
+
 int main() {
+  if (!check_mixed_gguf()) return 1;
   if (ink2_gguf::block_values(18) != 256 || ink2_gguf::block_bytes(18) != 98) {
     std::fprintf(stderr, "IQ3_XXS layout: expected 256 values in 98 bytes\n");
     return 1;

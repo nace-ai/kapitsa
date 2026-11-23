@@ -142,37 +142,34 @@ void Inkling2::load_gguf() {
     }
     L.router_w = small(p + "ffn_gate_inp.weight", {H, E});
     L.router_bias = small(p + "exp_probs_b.bias", {E});
-    const auto& gu = require(p + "ffn_gate_up_exps.weight", {H, 2 * I, E});
-    const auto& dn = require(p + "ffn_down_exps.weight", {I, H, E});
-    if (gu.type == gguf::kNVFP4 && dn.type == gguf::kNVFP4) {
-      auto native = [&](const gguf::Tensor& t, bool gate_up, const Tensor** q, const Tensor** sc) {
-        const size_t K = t.ne[0], R = t.ne[1], rows = R * E;
-        Buffer qb = alloc(rows * K / 2), sb = alloc(rows * K / 16);
-        std::vector<uint8_t> buf(256 * t.row_bytes());
-        for (size_t r = 0; r < rows; r += 256) {
-          const size_t nr = std::min<size_t>(256, rows - r);
-          f.read(t, r * t.row_bytes(), buf.data(), nr * t.row_bytes());
-          for (size_t j = 0; j < nr; ++j) {
-            const size_t src_row = r + j, expert = src_row / R, local = src_row % R;
-            const size_t dst = expert * R + (gate_up ? ink2::native_gu_row(local, I) : local);
-            ink2::unpack_nvfp4_row(buf.data() + j * t.row_bytes(), K, qb.as<uint8_t>() + dst * K / 2,
-                                  sb.as<uint8_t>() + dst * K / 16);
-          }
+    const auto experts = ink2::read_expert_sources(f, p, H, I, E);
+    auto projection = [&](const ink2::ExpertSource& source, bool gate_up, const Tensor** q, const Tensor** sc,
+                          Buffer& outer, Ink2Blocks& retained) {
+      const auto& t = *source.weight;
+      if (!source.native_nvfp4()) {
+        retained = blocks(t);
+        return;
+      }
+      const size_t K = t.ne[0], R = t.ne[1], rows = R * E;
+      Buffer qb = alloc(rows * K / 2), sb = alloc(rows * K / 16);
+      std::vector<uint8_t> buf(256 * t.row_bytes());
+      for (size_t r = 0; r < rows; r += 256) {
+        const size_t nr = std::min<size_t>(256, rows - r);
+        f.read(t, r * t.row_bytes(), buf.data(), nr * t.row_bytes());
+        for (size_t j = 0; j < nr; ++j) {
+          const size_t src_row = r + j, expert = src_row / R, local = src_row % R;
+          const size_t dst = expert * R + (gate_up ? ink2::native_gu_row(local, I) : local);
+          ink2::unpack_nvfp4_row(buf.data() + j * t.row_bytes(), K, qb.as<uint8_t>() + dst * K / 2,
+                                sb.as<uint8_t>() + dst * K / 16);
         }
-        *q = tensor(qb, DType::U8, {int64_t(E), int64_t(R), int64_t(K / 2)});
-        *sc = tensor(sb, DType::F8E4M3, {int64_t(E), int64_t(R), int64_t(K / 16)});
-      };
-      native(gu, true, &L.w13, &L.w13_sc);
-      native(dn, false, &L.w2, &L.w2_sc);
-      const auto* gu_scale = small(p + "ffn_gate_up_exps.scale", {E});
-      const auto* dn_scale = small(p + "ffn_down_exps.scale", {E});
-      if (gu_scale->dtype != DType::F32 || dn_scale->dtype != DType::F32)
-        throw gguf::Error("Inkling2 native outer scales must be F32");
-      L.w13_outer = gu_scale->buf;
-      L.w2_outer = dn_scale->buf;
-    } else {
-      L.gguf_gu = blocks(gu); L.gguf_down = blocks(dn);
-    }
+      }
+      *q = tensor(qb, DType::U8, {int64_t(E), int64_t(R), int64_t(K / 2)});
+      *sc = tensor(sb, DType::F8E4M3, {int64_t(E), int64_t(R), int64_t(K / 16)});
+      outer = alloc(E * sizeof(float));
+      std::memcpy(outer.ptr(), source.outer.data(), E * sizeof(float));
+    };
+    projection(experts.gu, true, &L.w13, &L.w13_sc, L.w13_outer, L.gguf_gu);
+    projection(experts.down, false, &L.w2, &L.w2_sc, L.w2_outer, L.gguf_down);
   }
   size_t weight_bytes = 0;
   for (const auto& b : owned_bufs_) weight_bytes += b.size;

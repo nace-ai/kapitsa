@@ -145,7 +145,7 @@ target_compile_definitions(ink2_check PRIVATE INK2_GOLDEN_PATH="${CMAKE_SOURCE_D
 
 
 find_package(Threads REQUIRED)
-add_executable(ink2_gguf_test tests/ink2_gguf_test.cpp src/gguf/quant.cpp src/gguf/gguf.cpp)
+add_executable(ink2_gguf_test tests/ink2_gguf_test.cpp tests/ink2_mixed_gguf_test.cpp src/gguf/quant.cpp src/gguf/gguf.cpp)
 target_include_directories(ink2_gguf_test PRIVATE src third_party)
 add_test(NAME ink2_gguf_test COMMAND ink2_gguf_test)
 add_executable(gemm_slices_test tests/gemm_slices_test.cpp)  # src/model/gemm_slices.h: row slices of a GEMM
