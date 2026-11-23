@@ -108,12 +108,12 @@ void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
       "ink2_attn_decode",      "ink2_attn_decode_reduce", "ink2_attn_decode_g3", "ink2_attn_decode_g3_fx", "ink2_attn_decode_g3kw", "ink2_attn_res1", "ink2_msg_gate_mix","ink2_attn_prefill",     "ink2_moe_route",
       "ink2_moe_nvfp4_w13_situ","ink2_moe_nvfp4_w2_acc", "ink2_moe_nvfp4_w13_q4", "ink2_moe_nvfp4_w2_f2", "ink2_moe_mxfp8_w13_situ","ink2_moe_mxfp8_w2_acc", "ink2_moe_mxfp8_w13_situ_v", "ink2_moe_mxfp8_w2_acc_v",
       "ink2_softcap",           "ink2_moe_bucket",       "ink2_moe_situ_half",
-      "ink2_moe_combine",       "ink2_fa_t16k32",        "ink2_fa_t16k16",
+      "ink2_moe_combine",       "ink2_fa_t16k32",        "ink2_fa_t16k16",        "ink2_sum_parts",
   };
   for (const char* n : kInk2Names) (void)ink2_pipe(n);
   if (tensor_pf) {
     static const char* const kTensorNames[] = {
-        "ink2_t_bf16_m64",
+        "ink2_t_bf16_m64",          "ink2_t_bf16_sk_m64",
         "ink2_t_nvfp4_moe_w13_m16", "ink2_t_nvfp4_moe_w13_m32", "ink2_t_nvfp4_moe_w13_m64",
         "ink2_t_nvfp4_moe_w2_m16",  "ink2_t_nvfp4_moe_w2_m32",  "ink2_t_nvfp4_moe_w2_m64",
         "ink2_t_mxfp8_moe_w13_m16", "ink2_t_mxfp8_moe_w13_m32", "ink2_t_mxfp8_moe_w13_m64",
@@ -1190,6 +1190,26 @@ void Inkling2::enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer
       }
     }
   } else if (tensor_pf_ && w.dtype == DType::BF16 && K % 32 == 0) {
+    // Split-K for small N (lab5): N <= 64 ran (M / 64) threadgroups through all of K (msg gate down [64, 4608] at
+    // M = 500: 0.97 ms); NI_INK2_SK = splits (default 8, 0 = off). Partials in moe_tmp_ (free outside the MoE).
+    static const uint32_t sk = getenv("NI_INK2_SK") ? uint32_t(atoi(getenv("NI_INK2_SK"))) : 8u;
+    if (sk > 1 && N <= 64 && K >= 1024 && K % (sk * 32) == 0 && M >= 64 && !e.in_group() &&
+        size_t(sk) * M * N * 4 <= moe_tmp_.size) {
+      const Ink2tGemmP p{uint32_t(M), N, K, K, N, 0u, K / sk, 0u, 0u};
+      e.use(base_pipe("ink2_t_bf16_sk_m64"));
+      e.buf(0, x);
+      e.buf(1, w.buf);
+      e.buf(3, moe_tmp_);
+      e.val(4, p);
+      e.dispatch((N + 63) / 64, (uint32_t(M) + 63) / 64, sk, 128);
+      const struct { uint32_t n, S, add; } sp{uint32_t(M) * N, sk, add ? 1u : 0u};
+      e.use(ink2_pipe("ink2_sum_parts"));
+      e.buf(0, moe_tmp_);
+      e.buf(1, y);
+      e.val(2, sp);
+      e.dispatch((sp.n + 255) / 256, 1, 1, 256);
+      return;
+    }
     const Ink2tGemmP p{uint32_t(M), N, K, K, N, add ? 1u : 0u, 0u, 0u, 0u};
     e.use(base_pipe("ink2_t_bf16_m64"));
     e.buf(0, x);
@@ -1604,9 +1624,11 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       enc_mm(e, L.wk_dv, kn, pf_sconv_kv ? moe_out_ : k_, T);
       enc_mm(e, L.wv_dv, vn, pf_sconv_kv ? h_mlp_ : v_, T);
       enc_mm(e, L.wr_du, n0_, r_, T);
-      enc_mm(e, *L.attn_sink_proj, n0_, sinks_, T);
+      static const bool sk_sinks = !getenv("NI_INK2_SK") || atoi(getenv("NI_INK2_SK")) > 1;
+      if (!sk_sinks) enc_mm(e, *L.attn_sink_proj, n0_, sinks_, T);
       enc_mm(e, L.gate_attn, n0_, gate_attn_, T);
       e.group_end();
+      if (sk_sinks) enc_mm(e, *L.attn_sink_proj, n0_, sinks_, T);  // (outside the group: split-K)
     }
 
     // K / V short convolutions

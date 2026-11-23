@@ -2784,3 +2784,15 @@ NI_INLINE void ink2_fa_impl(const device float* q, const device half* kc, const 
   }
 INK2_FA(ink2_fa_t16k32, 16, 32)
 INK2_FA(ink2_fa_t16k16, 16, 16)
+
+// y[i] (+)= sum over z < S of part[z * n + i], in order (split-K GEMM partials, ink2_t_bf16_sk_m64)
+struct Ink2SumPartsP {
+  uint n, S, add;
+};
+[[kernel]] void ink2_sum_parts(const device float* part [[buffer(0)]], device float* y [[buffer(1)]],
+                               constant Ink2SumPartsP& p [[buffer(2)]], uint i [[thread_position_in_grid]]) {
+  if (i >= p.n) return;
+  float a = part[i];
+  for (uint z = 1; z < p.S; ++z) a += part[size_t(z) * p.n + i];
+  y[i] = p.add ? y[i] + a : a;
+}

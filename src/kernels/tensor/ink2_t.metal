@@ -95,7 +95,8 @@ NI_INLINE void ink2t_dec(const Ink2tRaw r, threadgroup half* dst) {
 template <int FMT, int MODE, int MR, int BN, int BK, int GNF = 0>
 NI_INLINE void ink2t_tile(const device void* X, const device uchar* q, const device uchar* s, device float* Y,
                           constant Ink2tGemmP& p, const device uint* sorted, uint m0, uint M, uint n0, float gs,
-                          uint tid, uint sg, threadgroup half* xs, threadgroup half* ws) {
+                          uint tid, uint sg, threadgroup half* xs, threadgroup half* ws, uint kb = 0, uint klen = 0,
+                          size_t yoff = 0) {
   constexpr int GN = GNF ? GNF : MR >= 64 ? 2 : 4, SM = MR / (4 / GN), SN = BN / GN;
   const uint sm = sg / GN, sn = sg % GN;
   constexpr auto desc =
@@ -166,13 +167,13 @@ NI_INLINE void ink2t_tile(const device void* X, const device uchar* q, const dev
     for (int i = 0; i < WP; ++i) ink2t_dec<FMT>(wv[i], ws + b * BN * BK + wr[i] * BK + wk[i]);
   };
 
-  load(0);
+  load(kb);
   store(0);
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  const uint steps = p.K / BK;
+  const uint steps = (klen ? klen : p.K) / BK;
   for (uint st = 0; st < steps; ++st) {
     const bool more = st + 1 < steps;
-    if (more) load((st + 1) * BK);
+    if (more) load(kb + (st + 1) * BK);
     if (st & 1) op.run(tX1, tW1, acc);
     else op.run(tX0, tW0, acc);
     if (more) store((st + 1) & 1);
@@ -187,7 +188,7 @@ NI_INLINE void ink2t_tile(const device void* X, const device uchar* q, const dev
     if (m >= M || n >= p.N) continue;
     const uint yrow = MODE == 2 ? sorted[m] : m;
     const float v = acc[i] * gs;
-    const size_t o = size_t(yrow) * p.y_ld + n;
+    const size_t o = yoff + size_t(yrow) * p.y_ld + n;
     if (MODE == 0 && p.add) Y[o] += v;
     else Y[o] = v;
   }
@@ -236,3 +237,16 @@ INK2T_GEMM(ink2_t_mxfp8_moe_w13_m64, 2, 1, 64, 64, 32)
 INK2T_GEMM(ink2_t_mxfp8_moe_w2_m16, 2, 2, 16, 64, 32)
 INK2T_GEMM(ink2_t_mxfp8_moe_w2_m32, 2, 2, 32, 64, 32)
 INK2T_GEMM(ink2_t_mxfp8_moe_w2_m64, 2, 2, 64, 64, 32)
+
+// Split-K dense GEMM (lab5, small N at prefill: [64, 4608] MessageGate down, N = 24 sinks, N = 32 k/v_proj ran 8 TGs for
+// ~0.5-1 ms): threadgroup z takes K range [z * q_estride, +q_estride) and writes partial z of Y ([z][M][y_ld]);
+// ink2_sum_parts adds the partials in order. grid: (ceil(N / 64), ceil(M / 64), splits) x 128.
+[[kernel, max_total_threads_per_threadgroup(128)]] void ink2_t_bf16_sk_m64(
+    const device void* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]], device float* Y [[buffer(3)]],
+    constant Ink2tGemmP& p [[buffer(4)]], uint3 tg [[threadgroup_position_in_grid]],
+    uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]]) {
+  threadgroup half xs[2 * 64 * 32];
+  threadgroup half ws[2 * 64 * 32];
+  ink2t_tile<0, 0, 64, 64, 32>(X, Wq, Wq, Y, p, nullptr, tg.y * 64, p.M, tg.x * 64, 1.0f, tid, sg, xs, ws,
+                               tg.z * p.q_estride, p.q_estride, size_t(tg.z) * p.M * p.y_ld);
+}

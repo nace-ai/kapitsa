@@ -209,6 +209,7 @@ class Encoder {
   // reads what another writes) and may overlap on the GPU. No effect on other encoders.
   void group_begin() { in_group_ = true; group_first_ = true; }
   void group_end() { in_group_ = false; }
+  bool in_group() const { return in_group_; }
   bool grouped() const { return auto_barrier_; }
   // Turns what follows in this command buffer into a grouped encoder's dispatches (on: concurrent, a barrier before
   // each dispatch outside a group, as begin_grouped()) or a plain encoder's (off: serial). The open compute encoder
