@@ -613,6 +613,7 @@ jobs:
           need metal3.2 && check nh      embed_kernels_nh.cmake    metal3.2
           need metal3.2 && check dory    embed_kernels_dory.cmake  metal3.2
           need metal3.2 && check flint   embed_kernels_flint.cmake metal3.2
+          need metal3.2 && check ink2    embed_kernels_inkling2.cmake metal3.2
           # The tensor library is Metal 4, and a macOS 15 runner has no Metal 4 compiler - the driver on such a Mac
           # does not build it either, so this is a skip on this image, not a pass. On a runner that has Metal 4 it is
           # compiled like the rest, which is how a typo there gets caught instead of shipped.
