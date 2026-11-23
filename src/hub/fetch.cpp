@@ -1168,6 +1168,17 @@ bool keep_file(const std::string& p) {  // files of a generic repo worth fetchin
 
 // ---------------------------------------------------------------- public
 
+namespace detail {
+ojson catalog_gguf_metadata(const ojson& imported, const GgufFile& g) {
+  ojson metadata = imported.value("gguf", ojson::object());
+  metadata["path"] = g.path;
+  metadata["sha256"] = g.sha256;
+  metadata["size"] = g.size;
+  if (!metadata.contains("conversions")) metadata["conversions"] = ojson::object();
+  return metadata;
+}
+}  // namespace detail
+
 std::string sha256_file(const std::string& path) {
   std::string s;
   if (!hash_file(path, &s, nullptr)) throw Error("Can't read " + tilde(path) + ".");
@@ -1208,9 +1219,7 @@ bool plan_is_current(const std::string& dir) {
   return !read_text(dir + "/.complete").empty();  // a plan of a Hugging Face repo, or a folder of its own: complete
 }
 
-// The files a plan lists that hold a model: its shards (one, or "N-of-M"), its MTP head, or model.safetensors whole.
-// a name that ends in .safetensors: "model.safetensors" and its shards, and not the model.safetensors.index.json
-// beside them, which lists the shards and is a header's size
+// Language weights, including MLX's separately sharded language model. A vision tower or MTP head alone is not a model.
 static const std::regex kWeightsFile(R"((^|/)((model(-language-model)?-)?\d+-of-\d+|model|weights)\.safetensors$)");
 // Bigger than any header in the catalog (a shard's is a few hundred KB, the MTP head's a few KB): the height of a header.
 static constexpr uint64_t kHeaderBytes = 1024 * 1024;
@@ -1229,6 +1238,16 @@ bool plan_has_model(const std::string& dir) {
     if (!e.is_regular_file() || !std::regex_search(f, kWeightsFile)) continue;
     uint64_t size = 0;
     if (file_size(dir + "/" + f, size) && size >= kHeaderBytes) return true;
+  }
+  // GGUF planning uses a full-logical-size sparse input containing only its header. Only a completed retained import
+  // certifies the configured payload: its marker, listed size and every other listed file must agree.
+  try {
+    const json m = json::parse(read_text(manifest_path(dir)));
+    if (!m.at("gguf").value("retained", false)) return false;
+    const std::string payload = json::parse(read_text(dir + "/config.json")).at("gguf_file").get<std::string>();
+    for (const auto& f : m.at("files"))
+      if (f.at("path").get<std::string>() == payload && f.at("size").get<uint64_t>() > 0) return is_complete(dir);
+  } catch (const std::exception&) {
   }
   return false;
 }
@@ -1586,16 +1605,14 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     } catch (const std::exception& e) {
       throw Error("The import of " + g.path + " failed: " + e.what());
     }
-    ojson conv = ojson::object();
     try {
       const ojson im = ojson::parse(read_text(manifest_path(ref.dir)));
       mfiles = im.at("files");
       total = im.at("total_bytes").get<uint64_t>();
-      if (im.contains("gguf") && im["gguf"].contains("conversions")) conv = im["gguf"]["conversions"];
+      m["gguf"] = detail::catalog_gguf_metadata(im, g);
     } catch (const std::exception&) {
       throw Error("The import of " + g.path + " left no manifest in " + tilde(ref.dir) + ". Please report this.");
     }
-    m["gguf"] = ojson{{"path", g.path}, {"sha256", g.sha256}, {"size", g.size}, {"conversions", conv}};
   }
   m["files"] = mfiles;
   m["companions"] = mcomp;
