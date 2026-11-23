@@ -13,6 +13,7 @@
 namespace ink2_gguf {
 #ifndef __METAL_VERSION__
 using ni::gguf::iq::kIq2xxs;
+using ni::gguf::iq::kIq2xs;
 using ni::gguf::iq::kIq3xxs;
 #endif
 INK2_CONSTANT int levels[16] = {-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113};
@@ -36,6 +37,7 @@ inline unsigned block_bytes(unsigned type) {
     case 13: return 176;
     case 14: return 210;
     case 16: return 66;
+    case 17: return 74;
     case 18: return 98;
     case 20: return 18;
     case 23: return 136;
@@ -90,6 +92,19 @@ inline float value(const INK2_DEVICE unsigned char* row, unsigned type, unsigned
       signs |= (parity & 1u) << 7;
       const unsigned magnitude = unsigned((kIq2xxs[b[2 + 8 * group + lane]] >> (8 * j)) & 255u);
       const float d = f16(b) * (0.5f + float(aux >> 28)) * 0.25f;
+      return d * float((signs & (1u << j)) ? -int(magnitude) : int(magnitude));
+    }
+    case 17: {
+      const unsigned group = i / 32, lane = (i % 32) / 8, j = i % 8;
+      const unsigned entry = u16(b + 2 + 2 * (4 * group + lane));
+      unsigned signs = entry >> 9;
+      unsigned parity = signs ^ (signs >> 4);
+      parity ^= parity >> 2;
+      parity ^= parity >> 1;
+      signs |= (parity & 1u) << 7;
+      const unsigned magnitude = unsigned((kIq2xs[entry & 511u] >> (8 * j)) & 255u);
+      const unsigned scale = (b[66 + group] >> (4 * (lane / 2))) & 15u;
+      const float d = f16(b) * (0.5f + float(scale)) * 0.25f;
       return d * float((signs & (1u << j)) ? -int(magnitude) : int(magnitude));
     }
     case 18: {
