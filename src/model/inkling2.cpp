@@ -1271,7 +1271,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       if (v_idx == 5) tslot = 0;
       else if (v_idx == 23) tslot = 1;
       else if (v_idx == 41) tslot = 2;
-      if (tslot >= 0) enc_copy_buf(e, x_, taps_out->view(size_t(tslot) * row_bytes, row_bytes), row_bytes);
+      if (tslot >= 0) enc_copy_buf(e, *cur_x, taps_out->view(size_t(tslot) * row_bytes, row_bytes), row_bytes);
     }
 
     const bool has_msgs = have_prev && ip < cfg_.core_end;
