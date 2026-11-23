@@ -79,7 +79,7 @@ add_custom_command(
   COMMENT "Embedding the Hy4-flash Metal kernels")
 
 # Inkling-2 kernels: compiled only when an Inkling-2 model loads (src/model/inkling2_kernels.h).
-file(GLOB NI_INK2_KERNELS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/kernels/inkling2/*.metal)
+file(GLOB NI_INK2_KERNELS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/kernels/inkling2/*.metal ${CMAKE_SOURCE_DIR}/src/kernels/inkling2/*.h)
 set(NI_INK2_EMBED ${CMAKE_BINARY_DIR}/generated/ink2_kernels_embed.cpp)
 add_custom_command(
   OUTPUT ${NI_INK2_EMBED}
@@ -145,6 +145,9 @@ target_compile_definitions(ink2_check PRIVATE INK2_GOLDEN_PATH="${CMAKE_SOURCE_D
 
 
 find_package(Threads REQUIRED)
+add_executable(ink2_gguf_test tests/ink2_gguf_test.cpp src/gguf/quant.cpp src/gguf/gguf.cpp)
+target_include_directories(ink2_gguf_test PRIVATE src third_party)
+add_test(NAME ink2_gguf_test COMMAND ink2_gguf_test)
 add_executable(gemm_slices_test tests/gemm_slices_test.cpp)  # src/model/gemm_slices.h: row slices of a GEMM
 target_include_directories(gemm_slices_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(kv_grow_test tests/kv_grow_test.cpp)  # src/model/kv_grow.h: how far a KV cache grows in the budget

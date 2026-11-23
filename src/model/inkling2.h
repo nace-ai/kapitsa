@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <string>
 #include <vector>
@@ -54,9 +55,15 @@ struct Ink2Ctrl {
   const Tensor* gain = nullptr;    // [2304, 64]
 };
 
+struct Ink2Blocks {
+  Buffer data;
+  uint32_t type = 0, row_bytes = 0;
+};
+
 struct Ink2Mat {
   const Tensor* raw = nullptr;  // BF16 or F32 when not Q8-packed
   Buffer q, s;                  // Q8_0: int8 [N, K], half [N, K/32]
+  Ink2Blocks gguf;
   uint32_t N = 0, K = 0;
   bool is_q8() const { return bool(q); }
 };
@@ -83,6 +90,7 @@ struct Ink2Layer {
   // MoE
   const Tensor *router_w = nullptr, *router_bias = nullptr;
   const Tensor *w13 = nullptr, *w13_sc = nullptr, *w2 = nullptr, *w2_sc = nullptr;
+  Ink2Blocks gguf_gu, gguf_down;
   Buffer w13_outer, w2_outer;  // FP32 [128] = amax[e] / outer_scale_denominator[0] (NVFP4 only)
   Buffer qkvrsg_w;             // Fused BF16 [wq_du; wr_du; attn_sink_proj; gate_attn; wk_dv; wv_dv]
   uint32_t qkvrsg_offs[7] = {};
@@ -129,6 +137,7 @@ class Inkling2 : public Model {
 
  private:
   void load();
+  void load_gguf();
   void alloc_buffers();
   bool ensure_rings(Seq& s);
   void enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits, const Buffer* out_logits, bool need_all_logits,
@@ -151,7 +160,8 @@ class Inkling2 : public Model {
   WeightStore ws_;
   std::vector<Ink2Layer> layers_;
   const Tensor *embed_ = nullptr, *embed_norm_ = nullptr, *final_norm_ = nullptr;
-  Ink2Mat unembed_;
+  Ink2Mat unembed_, gguf_embed_;
+  std::deque<Tensor> gguf_tensors_;
   std::vector<const Tensor*> attn_queries_;  // [23] (layers 1..23 -> idx 0..22)
   std::vector<const Tensor*> mlp_queries_;   // [24] (layers 0..23)
   const Tensor* output_query_ = nullptr;
