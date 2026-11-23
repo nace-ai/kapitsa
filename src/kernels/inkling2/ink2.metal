@@ -1896,9 +1896,14 @@ INK2_DEC_G3(ink2_attn_decode_g3_k6fx, 6, true)
 // dims for the 3 query heads (q in threadgroup memory, 16-byte K loads; no simd_sum per (key, head)); for PV lanes
 // take 4 dims and the weights are shuffled from the key's lane. Same partials as ink2_attn_decode_g3.
 // decbench 84K global: g3_fx 1.60 -> 1.20 ms a visit (raw K+V read 0.93); 40K 0.80 -> 0.59.
-template <uint VB, bool AT = false>
+NI_INLINE void ink2_st4(device float* a, float4 v) { *(device float4*)a = v; }
+#if __METAL_VERSION__ >= 320
+NI_INLINE void ink2_st4(device coherent(device) float* a, float4 v) { *(device coherent(device) float4*)a = v; }
+#endif
+// (PT: the partials' pointer type; lab11 REDLAST 3 passes device coherent(device) float*)
+template <uint VB, bool AT = false, typename PT = device float*>
 NI_INLINE void ink2_attn_decode_g3kw_impl(const device float* q, const device half* kc, const device half* vc,
-                                        const device float* rb, device float* pm, device float* pl, device float* po,
+                                        const device float* rb, PT pm, PT pl, PT po,
                                         constant Ink2AttnDecP& p, uint2 tg, uint sg, uint lane, uint tid,
                                         threadgroup float* tgb, threadgroup float4* qs) {
   constexpr uint G = 3;
@@ -1976,7 +1981,7 @@ NI_INLINE void ink2_attn_decode_g3kw_impl(const device float* q, const device ha
       }
     }
     const size_t out_idx = size_t(h0 + g) * p.nchunks + cid;
-    if (AT) {  // (g3kw_r: through device atomics, for the last threadgroup's reduce)
+    if constexpr (AT) {  // (g3kw_r: through device atomics, for the last threadgroup's reduce)
       device atomic_uint* am = (device atomic_uint*)pm;
       device atomic_uint* al = (device atomic_uint*)pl;
       device atomic_uint* ao = (device atomic_uint*)(po + out_idx * p.D + d0);
@@ -1990,7 +1995,7 @@ NI_INLINE void ink2_attn_decode_g3kw_impl(const device float* q, const device ha
       atomic_store_explicit(ao + 3, as_type<uint>(oo.w), memory_order_relaxed);
     } else {
       if (lane == 0) { pm[out_idx] = mm; pl[out_idx] = ll; }
-      *(device float4*)(po + out_idx * p.D + d0) = oo;
+      ink2_st4(po + out_idx * p.D + d0, oo);
     }
   }
 }
@@ -2081,6 +2086,65 @@ template <bool READ_AT>
 }
 template [[host_name("ink2_attn_decode_g3kw_r")]] [[kernel]] decltype(ink2_attn_decode_g3kw_r<true>) ink2_attn_decode_g3kw_r<true>;
 template [[host_name("ink2_attn_decode_g3kw_r0")]] [[kernel]] decltype(ink2_attn_decode_g3kw_r<false>) ink2_attn_decode_g3kw_r<false>;
+// lab11 (NI_INK2_REDLAST=3): the same last-threadgroup reduce with the partials as device coherent(device) memory and
+// thread_scope_device fences on both sides of the arrival count (the consult's pattern; lab11/coh stress test: only
+// coherent + fences passes, 0 bad of 10^5 runs also under GPU load; plain / coherent only / fence only fail): plain
+// float4 stores and loads, ink2_attn_reduce_par's sums verbatim.
+NI_INLINE void ink2_attn_reduce_par_c(device coherent(device) float* pm, device coherent(device) float* pl,
+                                      device coherent(device) float* po, float sink, const device float* gate,
+                                      device float* out, size_t base, uint nchunks, uint D, uint lane,
+                                      threadgroup float* wsh) {
+  const uint d0 = lane * 4;
+  float mloc = -INFINITY;
+  for (uint c = lane; c < nchunks; c += 32u)
+    if (pl[base + c] != 0.0f) mloc = max(mloc, pm[base + c]);
+  const float mx = max(simd_max(mloc), sink);
+  float lloc = 0.0f;
+  for (uint c = lane; c < nchunks; c += 32u) {
+    const float l2 = pl[base + c];
+    const float w = l2 != 0.0f ? metal::precise::exp(pm[base + c] - mx) : 0.0f;
+    wsh[c] = w;
+    lloc += w * l2;
+  }
+  const float ll = simd_sum(lloc) + metal::precise::exp(sink - mx);
+  simdgroup_barrier(mem_flags::mem_threadgroup);
+  float4 oo = float4(0.0f);
+  for (uint c = 0; c < nchunks; ++c) oo += wsh[c] * *(device coherent(device) float4*)(po + (base + c) * D + d0);
+  const float4 g4 = *(const device float4*)(gate + d0);
+  const float4 sig = float4(1.0f) / (float4(1.0f) + float4(metal::precise::exp(-g4.x), metal::precise::exp(-g4.y),
+                                                           metal::precise::exp(-g4.z), metal::precise::exp(-g4.w)));
+  *(device float4*)(out + d0) = (oo / ll) * sig;
+}
+[[kernel]] void ink2_attn_decode_g3kw_rc(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
+                                         const device half* vc [[buffer(2)]], const device float* rb [[buffer(3)]],
+                                         device coherent(device) float* pm [[buffer(4)]],
+                                         device coherent(device) float* pl [[buffer(5)]],
+                                         device coherent(device) float* po [[buffer(6)]],
+                                         constant Ink2AttnDecP& p [[buffer(7)]], const device float* sinks [[buffer(8)]],
+                                         const device float* gate [[buffer(9)]], device float* out [[buffer(10)]],
+                                         device atomic_uint* cnt [[buffer(11)]], uint2 tg [[threadgroup_position_in_grid]],
+                                         uint sg [[simdgroup_index_in_threadgroup]],
+                                         uint lane [[thread_index_in_simdgroup]], uint tid [[thread_index_in_threadgroup]]) {
+  threadgroup float tgb[24 + 12 * 128];
+  threadgroup float4 qs[3 * 32];
+  threadgroup uint last;
+  ink2_attn_decode_g3kw_impl<4, false, device coherent(device) float*>(q, kc, vc, rb, pm, pl, po, p, tg, sg, lane, tid,
+                                                                       tgb, qs);
+  atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);  // every writer
+  threadgroup_barrier(mem_flags::mem_device | mem_flags::mem_threadgroup);
+  if (tid == 0) {
+    last = atomic_fetch_add_explicit(cnt + tg.x, 1u, memory_order_relaxed) == p.nchunks - 1u ? 1u : 0u;
+    if (last) atomic_store_explicit(cnt + tg.x, 0u, memory_order_relaxed);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (last == 0u) return;
+  atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+  if (sg < 3u) {
+    const uint h = tg.x * 3u + sg;
+    ink2_attn_reduce_par_c(pm, pl, po, sinks[h], gate + size_t(h) * p.D, out + size_t(h) * p.D, size_t(h) * p.nchunks,
+                           p.nchunks, p.D, lane, tgb + sg * 128u);
+  }
+}
 #endif
 
 // ink2_attn_decode_g3 with a transpose-reduce: per 8-key block a lane holds the 24 partial (head, key) dots of its 4

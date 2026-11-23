@@ -2086,9 +2086,10 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       // 48 stages less, but its partials must go through device atomics on the M1 Max: no gain, +0.03 ms +-0.1)
       static const int redlast_env = getenv("NI_INK2_REDLAST") ? atoi(getenv("NI_INK2_REDLAST")) : 0;
       static const bool red_p0 = !getenv("NI_INK2_REDP") || atoi(getenv("NI_INK2_REDP")) != 0;
-      const int redlast_v = ink2_ab("NI_INK2_REDLAST", redlast_env);  // (2: plain loads in the reduce; probe)
+      // (2: plain loads in the reduce; probe. 3 (lab11): coherent(device) partials + device-scope fences, plain stores)
+      const int redlast_v = ink2_ab("NI_INK2_REDLAST", redlast_env);
       redlast = redlast_v != 0 && g3 && kw && red_p0;
-      e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : kw ? (redlast ? (redlast_v == 2 ? "ink2_attn_decode_g3kw_r0" : "ink2_attn_decode_g3kw_r") : "ink2_attn_decode_g3kw")
+      e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : kw ? (redlast ? (redlast_v == 3 ? "ink2_attn_decode_g3kw_rc" : redlast_v == 2 ? "ink2_attn_decode_g3kw_r0" : "ink2_attn_decode_g3kw_r") : "ink2_attn_decode_g3kw")
                                                                                                : "ink2_attn_decode_g3_fx"));
       if (redlast) {
         e.buf(8, rv(sinks_, size_t(cfg_.hq) * 4, gi));
