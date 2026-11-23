@@ -26,13 +26,22 @@ namespace hub = ni::hub;
 extern char** environ;
 
 static int failures = 0;
+static int passes = 0;
+static int skips = 0;
 static bool keep = false;
 
 static void check(bool c, const std::string& what) {
   if (!c) {
     ++failures;
     std::printf("FAIL: %s\n", what.c_str());
+  } else {
+    ++passes;
   }
+}
+
+static int result() {
+  std::printf("plan weights: %d checks passed, %d failed, %d branches skipped\n", passes, failures, skips);
+  return failures ? 1 : 0;
 }
 
 static void write_file(const std::string& path, const std::string& text) {
@@ -101,8 +110,55 @@ static bool says_planned(const std::string& report, const std::string& name) {
          report.find("/" + name + ": not downloaded: planned from its headers") != std::string::npos;
 }
 
+static void check_native_plan() {
+  const int before = failures;
+  std::string dir = (fs::temp_directory_path() / "kapitsa-native-plan-XXXXXX").string();
+  if (!mkdtemp(dir.data())) {
+    check(false, "create a native plan fixture");
+    return;
+  }
+  const fs::path root = dir;
+  auto fixture = [&](const std::string& name) {
+    const std::string d = dir + "/" + name;
+    fs::create_directories(d);
+    write_file(d + "/config.json", "{}");
+    return d;
+  };
+  const std::string split = fixture("language-model");
+  write_file(split + "/model.safetensors.index.json",
+             "{\"weight_map\":{\"language_model.model.embed_tokens.weight\":"
+             "\"model-language-model-00001-of-00002.safetensors\",\"language_model.lm_head.weight\":"
+             "\"model-language-model-00002-of-00002.safetensors\",\"vision_tower.weight\":"
+             "\"model-vision-model-00001-of-00002.safetensors\"}}");
+  const std::string first = split + "/model-language-model-00001-of-00002.safetensors";
+  const std::string second = split + "/model-language-model-00002-of-00002.safetensors";
+  sparse_file(first, 256 << 10);
+  sparse_file(second, 256 << 10);
+  check(!hub::plan_has_model(split), "language-model shard headers alone have no model");
+  sparse_file(split + "/model-vision-model-00001-of-00002.safetensors", 3 << 20);
+  check(!hub::plan_has_model(split), "vision weights beside language-model headers have no language model");
+  sparse_file(second, 3 << 20);
+  check(hub::plan_has_model(split), "a later language-model shard holding weights has the model");
+  sparse_file(split + "/mtp.safetensors", 256 << 10);
+  check(hub::plan_has_model(split), "a language-model shard stays downloaded beside an MTP header");
+  const std::string mtp = fixture("mtp-only");
+  sparse_file(mtp + "/mtp.safetensors", 3 << 20);
+  check(!hub::plan_has_model(mtp), "an MTP head alone has no model");
+  for (const std::string name : {"model.safetensors", "weights.safetensors", "model-00001-of-00002.safetensors",
+                                 "00001-of-00002.safetensors"}) {
+    const std::string d = fixture(name);
+    sparse_file(d + "/" + name, 256 << 10);
+    check(!hub::plan_has_model(d), name + " header alone has no model");
+    sparse_file(d + "/" + name, 3 << 20);
+    check(hub::plan_has_model(d), name + " holding weights has the model");
+  }
+  if (!keep) fs::remove_all(root);
+  std::printf("Native plan presence: %d failure(s)\n", failures - before);
+}
+
 int main(int argc, char** argv) {
   keep = argc > 1 && std::string(argv[1]) == "--keep";
+  check_native_plan();
   // the CLI beside this test's own binary (build/plan_weights_test -> build/kapitsa)
   char exe[4096] = {0};
   uint32_t size = sizeof exe;
@@ -126,8 +182,9 @@ int main(int argc, char** argv) {
     }
   }
   if (config.empty() || index.empty() || index_shards(index).empty()) {
+    ++skips;
     std::printf("SKIP: no downloaded catalog model to make a plan of (its config.json and index are the fixture)\n");
-    return 0;
+    return result();
   }
   const std::string root = (fs::temp_directory_path() / ("k1187-plans-" + std::to_string(::getpid()))).string();
   fs::remove_all(root);
@@ -220,6 +277,7 @@ int main(int argc, char** argv) {
 
   // the doctor line, end to end
   if (!fs::exists(kapitsa_bin)) {
+    ++skips;
     std::printf("SKIP: the doctor line (%s is not built)\n", kapitsa_bin.c_str());
   } else {
     const std::string log = home + "/doctor.txt";
@@ -248,5 +306,5 @@ int main(int argc, char** argv) {
   if (keep) std::printf("kept %s\n", root.c_str());
   else fs::remove_all(root);
   if (failures == 0) std::printf("PASS: a plan has its model only when its weights are in it\n");
-  return failures == 0 ? 0 : 1;
+  return result();
 }
