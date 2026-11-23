@@ -101,6 +101,30 @@ class Inkling2 : public Model {
   explicit Inkling2(const std::string& path, int prefill_chunk = 512);
   ~Inkling2() override;
 
+  class VerifyTicket {
+   public:
+    VerifyTicket(const VerifyTicket&) = delete;
+    VerifyTicket& operator=(const VerifyTicket&) = delete;
+    VerifyTicket(VerifyTicket&& other) noexcept;
+    VerifyTicket& operator=(VerifyTicket&& other) noexcept;
+
+   private:
+    friend class Inkling2;
+    VerifyTicket(Inkling2* model, Seq* seq, int base, int rows, uint64_t generation)
+        : model_(model), seq_(seq), base_(base), rows_(rows), generation_(generation) {}
+    Inkling2* model_;
+    Seq* seq_;
+    int base_, rows_;
+    uint64_t generation_;
+  };
+
+  VerifyTicket encode_verify_rows(Encoder& e, Seq& s, int pos0, int T, const Buffer& captures, const Buffer& logits);
+  void commit_verify_prefix(Encoder& e, Seq& s, VerifyTicket&& ticket, int committed_inputs);
+  size_t verify_allocation_bytes() const;
+  void encode_prefill_captured(Encoder& e, Seq& s, int pos0, int rows, const SamplingParams& sp, uint32_t step,
+                               bool sample, const Buffer& captures);
+  void encode_greedy_rows(Encoder& e, Seq& s, const Buffer& logits, int rows, const Buffer& picks);
+
   static bool is_model(const std::string& dir);
   static Ink2Config read_config(const std::string& dir);
   static MemPlan plan(const std::string& dir, int prefill_chunk = 512);
@@ -135,15 +159,24 @@ class Inkling2 : public Model {
   Buffer logits_buf() const { return logits_; }
   void encode_logits_rows(Encoder& e, Seq& s, int pos0, int T, const Buffer& out);
   void encode_prefill_diag(Encoder& e, Seq& s, int pos0, int T, const Buffer& diag_rows);
+  const Tensor& draft_embedding() const { return *embed_; }
+  const Tensor& draft_embed_norm() const { return *embed_norm_; }
+  const Ink2Mat& draft_unembed() const { return unembed_; }
+  // Captures are FP32 [4, T, hidden], before visits 5/23/41 and after the final norm.
+  void encode_features_rows(Encoder& e, Seq& s, int pos0, int T, const Buffer& captures,
+                            const Buffer* logits = nullptr);
 
  private:
+  void enc_prefill(Encoder& e, Seq& s, int pos0, int rows, const SamplingParams& sp, uint32_t step, bool sample,
+                   const Buffer* captures);
   void load();
   void load_gguf();
   void alloc_buffers();
   bool ensure_rings(Seq& s);
   size_t kv_grow_unit() const;
   void enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits, const Buffer* out_logits, bool need_all_logits,
-                   const Buffer* diag_rows = nullptr);
+                   const Buffer* diag_rows = nullptr, const Buffer* captures = nullptr, const Buffer* raw = nullptr,
+                   int out_row = 0, int out_rows = 0);
   void enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer& y, int M, uint32_t N_limit = 0, bool add = false,
               bool exact_f32 = false);
   void enc_mm(Encoder& e, const Ink2Mat& w, const Buffer& x, const Buffer& y, int M, uint32_t N_limit = 0, bool add = false,
@@ -189,6 +222,8 @@ class Inkling2 : public Model {
   Buffer h_mlp_, x_mlp_, rlog_, eid_, ew_, moe_act_, moe_out_;
   Buffer moe_sorted_, moe_rank_, moe_tiles_, moe_ntiles_, moe_tmp_, moe_act_h_;
   Buffer logits_, cand_v_, cand_i_, sprob_, samp_;
+  Buffer verify_before_, verify_raw_;
+  uint64_t mutation_generation_ = 0;
 };
 
 }  // namespace ni

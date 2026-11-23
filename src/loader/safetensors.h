@@ -8,7 +8,9 @@
 #include "util/fd.h"
 
 #include <functional>
+#include <limits>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -30,9 +32,25 @@ struct Tensor {
   explicit operator bool() const { return bool(buf); }
 };
 
+inline size_t safetensors_packed_end(size_t offset, size_t bytes) {
+  constexpr size_t align = 256;
+  if (bytes > std::numeric_limits<size_t>::max() - (align - 1))
+    throw std::overflow_error("safetensors: tensor packing overflow");
+  const size_t padded = (bytes + align - 1) / align * align;
+  if (offset > std::numeric_limits<size_t>::max() - padded)
+    throw std::overflow_error("safetensors: file packing overflow");
+  return offset + padded;
+}
+
 class WeightStore {
  public:
   using Filter = std::function<bool(const std::string&)>;
+  struct FilePlan {
+    std::map<std::string, Tensor> tensors;
+    size_t bytes = 0;
+  };
+  // Headers only, no GPU access. Invalid or incomplete files throw.
+  static FilePlan plan_file(const std::string& path);
   // Loads every *.safetensors in `dir` (follows HF snapshot symlinks).
   // `files` limits which *.safetensors are read (by file name); `keep` filters tensors. Tensors `defer` accepts are
   // not read: they are listed with dtype and shape but no buffer, and read_deferred() fetches their bytes later (a

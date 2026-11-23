@@ -22,10 +22,12 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 
 namespace ni {
 
@@ -40,6 +42,17 @@ constexpr uint32_t kMaxAttnChunks = 64;
 size_t visit_conv_floats(const Ink2Config& c) {
   const size_t kvd = size_t(c.hkv) * size_t(c.head_dim);
   return 3 * (2 * kvd + 2 * size_t(c.hidden));  // conv_k, conv_v, conv_a, conv_m
+}
+
+struct VerifyTapeSizes {
+  size_t before, raw;
+  size_t total() const { return before + raw; }
+};
+VerifyTapeSizes verify_tape_sizes(const Ink2Config& cfg) {
+  const size_t before = Inkling2::conv_bytes_per_seq(cfg);
+  if (before / 3 > (std::numeric_limits<size_t>::max() - before) / 8)
+    throw std::overflow_error("inkling2: verify tape size overflow");
+  return {before, before / 3 * 8};
 }
 
 Pipeline ink2_pipe(const std::string& name) {
@@ -857,6 +870,7 @@ size_t Inkling2::kv_grow_held(const Seq& s) const {
 }
 
 bool Inkling2::reserve(Seq& s, int need) {
+  ++mutation_generation_;
   if (need <= s.cap) return ensure_rings(s);
   if (need > s.limit) return false;
   Gpu& g = Gpu::get();
@@ -906,6 +920,7 @@ bool Inkling2::reserve(Seq& s, int need) {
 }
 
 void Inkling2::drop_kv(Seq& s) {
+  ++mutation_generation_;
   Gpu& g = Gpu::get();
   for (auto* v : {&s.kc, &s.vc})
     for (Buffer& b : *v) {
@@ -916,6 +931,7 @@ void Inkling2::drop_kv(Seq& s) {
 }
 
 void Inkling2::reset(Seq& s) {
+  ++mutation_generation_;
   if (!s.conv.empty() && s.conv[0]) memset(s.conv[0].ptr(), 0, s.conv[0].size);
 }
 
@@ -953,6 +969,7 @@ void Inkling2::save(Encoder& e, const Seq& s, Checkpoint& c, int pos) {
 }
 
 void Inkling2::restore(Encoder& e, Seq& s, const Checkpoint& c) {
+  ++mutation_generation_;
   if (!c.conv.empty() && c.conv[0]) {
     if (s.conv.empty() || !s.conv[0] || s.conv[0].size < c.conv[0].size)
       fatal("inkling2: restore missing or undersized conv destination buffer");
@@ -1191,12 +1208,20 @@ void Inkling2::enc_msg_gate3(Encoder& e, const Ink2Layer& L, const Buffer* const
 }
 
 void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits, const Buffer* out_logits,
-                           bool need_all_logits, const Buffer* diag_rows) {
+                           bool need_all_logits, const Buffer* diag_rows, const Buffer* captures, const Buffer* raw,
+                           int out_row, int out_rows) {
+  ++mutation_generation_;
   Ink2Grouped gp(e, true);
   const uint32_t H = uint32_t(cfg_.hidden);
   const uint32_t QD = uint32_t(cfg_.hq) * uint32_t(cfg_.head_dim);
   const uint32_t KVD = uint32_t(cfg_.hkv) * uint32_t(cfg_.head_dim);
   const size_t row_bytes = size_t(T) * H * 4;
+  // `captures` and `raw` hold `tape_rows` rows; this pass writes its T rows from row `out_row` on (a verify row run
+  // as its own one-row pass writes row r of the verify's tape)
+  const int tape_rows = out_rows ? out_rows : T;
+  if (out_row < 0 || out_row > tape_rows - T) fatal("inkling2: forward rows %d+%d outside %d tape rows", out_row, T, tape_rows);
+  const size_t tape_bytes = size_t(tape_rows) * H * 4;
+  const size_t tape_h = size_t(out_row) * H * 4, tape_kv = size_t(out_row) * KVD * 4;
   const Buffer& conv = s.conv[0];
   const float sconv_static_scale = 1.0f / std::sqrt(5.0f);
 
@@ -1232,6 +1257,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     const int ip = cfg_.schedule[v_idx];
     const Ink2Layer& L = layers_[size_t(ip)];
     const size_t cbase = v_idx * visit_conv_floats(cfg_) * 4;
+    const size_t raw_base = v_idx * size_t(tape_rows) * (2 * size_t(KVD) + 2 * size_t(H)) * 4;
     const Buffer conv_k = conv.view(cbase + 0, 3 * KVD * 4);
     const Buffer conv_v = conv.view(cbase + 3 * KVD * 4, 3 * KVD * 4);
     const Buffer conv_a = conv.view(cbase + 6 * KVD * 4, 3 * H * 4);
@@ -1256,6 +1282,11 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         for (int b = 0; b < n_prelude_blocks; ++b) blocks_vec.push_back(&prelude_blocks_[b]);
         have_prev = true;
       }
+    }
+
+    if (captures) {
+      const int tap = v_idx == 5 ? 0 : v_idx == 23 ? 1 : v_idx == 41 ? 2 : -1;
+      if (tap >= 0) enc_copy_buf(e, *cur_x, captures->view(size_t(tap) * tape_bytes + tape_h, row_bytes), row_bytes);
     }
 
     const bool has_msgs = have_prev && ip < cfg_.core_end;
@@ -1347,6 +1378,14 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       enc_mm(e, L.wr_du, n0_, r_, T);
       enc_mm(e, *L.attn_sink_proj, n0_, sinks_, T);
       enc_mm(e, L.gate_attn, n0_, gate_attn_, T);
+      e.group_end();
+    }
+
+    if (raw) {
+      const size_t bytes = size_t(T) * KVD * 4, block = size_t(tape_rows) * KVD * 4;
+      e.group_begin();
+      enc_copy_buf(e, k_, raw->view(raw_base + tape_kv, bytes), bytes);
+      enc_copy_buf(e, v_, raw->view(raw_base + block + tape_kv, bytes), bytes);
       e.group_end();
     }
 
@@ -1557,6 +1596,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
 
     // wo_ud + attn_sconv (+ *cur_x residual on non-boundary layers -> ffn_inp_)
     enc_mm(e, L.wo_ud, att_out_, a_out_, T);
+    if (raw) enc_copy_buf(e, a_out_, raw->view(raw_base + 2 * size_t(tape_rows) * KVD * 4 + tape_h, row_bytes), row_bytes);
     const bool is_boundary = (ip % cfg_.block_sz == 0);
     const Ink2SconvStaticP asp{uint32_t(T), H, L.attn_sconv->dtype == DType::F32 ? 1u : 0u, is_boundary ? 0u : 1u,
                                sconv_static_scale};
@@ -1730,6 +1770,10 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       }
     }
 
+    if (raw)
+      enc_copy_buf(e, moe_out_, raw->view(raw_base + size_t(tape_rows) * (2 * size_t(KVD) + H) * 4 + tape_h, row_bytes),
+                   row_bytes);
+
     // mlp_sconv + residual add -> *alt_x, then swap(cur_x, alt_x)
     {
       const Ink2SconvStaticP msp{uint32_t(T), H, L.mlp_sconv->dtype == DType::F32 ? 1u : 0u, 1u, sconv_static_scale};
@@ -1765,7 +1809,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     if (T >= 256 && (v_idx & 7) == 7 && v_idx + 1 < cfg_.schedule.size()) e.split();
   }
 
-  if (!dump_logits && !need_all_logits) return;
+  if (!dump_logits && !need_all_logits && !captures) return;
 
   // Final AttnRes + RMSNorm
   {
@@ -1775,6 +1819,8 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
   }
   enc_norm(e, ar_out_, final_norm_, h_norm_, T, H);
   if (diag_rows) enc_copy_buf(e, h_norm_.view(size_t(T - 1) * H * 4, H * 4), diag_rows->view(7 * H * 4, H * 4), H * 4);
+  if (captures) enc_copy_buf(e, h_norm_, captures->view(3 * tape_bytes + tape_h, row_bytes), row_bytes);
+  if (!dump_logits && !need_all_logits) return;
 
   const uint32_t V = uint32_t(cfg_.vocab);
   const Buffer& dst = out_logits ? *out_logits : logits_;
@@ -1816,6 +1862,100 @@ void Inkling2::enc_sample(Encoder& e, Seq& s, const Buffer& lrow, const Buffer& 
   e.dispatch(1, 1, 1, 1024);
 }
 
+Inkling2::VerifyTicket::VerifyTicket(VerifyTicket&& other) noexcept
+    : VerifyTicket(other.model_, other.seq_, other.base_, other.rows_, other.generation_) {
+  other.model_ = nullptr;
+}
+
+Inkling2::VerifyTicket& Inkling2::VerifyTicket::operator=(VerifyTicket&& other) noexcept {
+  if (this != &other) {
+    model_ = std::exchange(other.model_, nullptr);
+    seq_ = other.seq_;
+    base_ = other.base_;
+    rows_ = other.rows_;
+    generation_ = other.generation_;
+  }
+  return *this;
+}
+
+size_t Inkling2::verify_allocation_bytes() const {
+  return verify_before_ ? 0 : verify_tape_sizes(cfg_).total();
+}
+
+Inkling2::VerifyTicket Inkling2::encode_verify_rows(Encoder& e, Seq& s, int pos0, int T, const Buffer& captures,
+                                                 const Buffer& logits) {
+  if (T < 1 || T > 8 || T > tmax_ || pos0 < 0 || pos0 > s.cap || T > s.cap - pos0)
+    fatal("inkling2: invalid verify rows pos=%d T=%d cap=%d", pos0, T, s.cap);
+  if (!captures || captures.size < 4 * size_t(T) * size_t(cfg_.hidden) * sizeof(float))
+    fatal("inkling2: verify capture output is too small");
+  if (!logits || logits.size < size_t(T) * size_t(cfg_.vocab) * sizeof(float))
+    fatal("inkling2: verify logits output is too small");
+  const auto tape = verify_tape_sizes(cfg_);
+  const size_t before_bytes = tape.before;
+  if (s.conv.empty() || !s.conv[0] || s.conv[0].size < before_bytes)
+    fatal("inkling2: verify missing convolution state");
+  if (!verify_before_) {
+    Gpu& g = Gpu::get();
+    if (tape.before > g.max_buffer_length() || tape.raw > g.max_buffer_length())
+      throw std::length_error("inkling2: verify tape exceeds maxBufferLength");
+    if (mem_budget_ && (tape.total() > mem_budget_ || g.allocated_bytes() > mem_budget_ - tape.total()))
+      fatal("inkling2: insufficient memory for verify tape");
+    verify_before_ = g.alloc(before_bytes, "ink2_verify_before");
+    verify_raw_ = g.alloc(tape.raw, "ink2_verify_raw");
+    owned_bufs_.push_back(verify_before_);
+    owned_bufs_.push_back(verify_raw_);
+    g.make_resident({verify_before_, verify_raw_});
+  }
+  enc_copy_buf(e, s.conv[0], verify_before_, before_bytes);
+  // Greedy speculative decoding must not change the output, so each verify row's logits must be bitwise the ones
+  // a decode step gives at that position. A T-row pass runs other kernels or code paths than the step: attention
+  // (ink2_attn_prefill's one pass over the keys against ink2_attn_decode's chunks and their reduce), the Q8
+  // projections and unembed (ink2_q8_mv against ink2_q8_mv1), the BF16 ones and the router (ink2_bf16_mv4's
+  // multi-row loop or ink2_bf16_mv8 against its one-row path), rel bias (ink2_rel_bias_pf from 8 rows), the fused
+  // qkvrsg projection's multi-row loop and the multi-row MessageGate threadgroups; the library builds with fast math,
+  // so another path need not round the same. So every row runs as the step's own one-row pass at pos0 + r, in order:
+  // its K/V, convolution history and tape row are written before the next row's pass reads them (a grouped encoder
+  // puts a barrier before every dispatch outside a group; a plain one starts a new encoder for each pass, and these
+  // buffers are hazard-tracked). NI_INK2_VERIFY_EXACT=0 keeps the T-row pass.
+  static const bool exact = [] {
+    const char* v = getenv("NI_INK2_VERIFY_EXACT");
+    return !(v && v[0] == '0' && v[1] == 0);
+  }();
+  if (exact) {
+    const size_t vocab_bytes = size_t(cfg_.vocab) * sizeof(float);
+    for (int r = 0; r < T; ++r) {
+      const Buffer row_logits = logits.view(size_t(r) * vocab_bytes, vocab_bytes);
+      enc_forward(e, s, pos0 + r, 1, true, &row_logits, false, nullptr, &captures, &verify_raw_, r, T);
+    }
+  } else {
+    enc_forward(e, s, pos0, T, true, &logits, true, nullptr, &captures, &verify_raw_);
+  }
+  return VerifyTicket(this, &s, pos0, T, mutation_generation_);
+}
+
+void Inkling2::commit_verify_prefix(Encoder& e, Seq& s, VerifyTicket&& ticket, int committed_inputs) {
+  if (ticket.model_ != this || ticket.seq_ != &s || ticket.generation_ != mutation_generation_)
+    fatal("inkling2: stale, consumed, or foreign verify ticket");
+  if (committed_inputs < 0 || committed_inputs > ticket.rows_ || ticket.base_ < 0 || ticket.base_ > s.cap ||
+      ticket.rows_ > s.cap - ticket.base_)
+    fatal("inkling2: invalid verify prefix %d of %d", committed_inputs, ticket.rows_);
+  ticket.model_ = nullptr;
+  ++mutation_generation_;
+  if (committed_inputs == ticket.rows_) return;
+  struct VerifyP {
+    uint32_t visits, kv, hidden, rows, keep;
+  };
+  const VerifyP p{uint32_t(cfg_.schedule.size()), uint32_t(cfg_.hkv * cfg_.head_dim), uint32_t(cfg_.hidden),
+                  uint32_t(ticket.rows_), uint32_t(committed_inputs)};
+  const uint32_t channels = p.visits * (2 * p.kv + 2 * p.hidden);
+  e.use(ink2_pipe("ink2_verify_commit"));
+  e.buf(0, verify_before_);
+  e.buf(1, verify_raw_);
+  e.buf(2, s.conv[0]);
+  e.val(3, p);
+  e.dispatch((channels + 255) / 256, 1, 1, 256);
+}
+
 void Inkling2::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample) {
   if (pos + 1 >= s.cap) fatal("context full (%d)", s.cap);
   enc_forward(e, s, pos, 1, sample, nullptr, false);
@@ -1826,20 +1966,58 @@ void Inkling2::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp
 
 void Inkling2::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
                               Checkpoint* snap, int) {
+  if (snap) fatal("inkling2: in-pass snapshots are not supported");
+  enc_prefill(e, s, pos0, T, sp, step, sample, nullptr);
+}
+
+void Inkling2::encode_prefill_captured(Encoder& e, Seq& s, int pos0, int rows, const SamplingParams& sp,
+                                      uint32_t step, bool sample, const Buffer& captures) {
+  if (rows < 1 || pos0 < 0 || pos0 >= s.cap || rows >= s.cap - pos0 || rows > tmax_)
+    fatal("inkling2: invalid captured prefill pos=%d rows=%d cap=%d chunk=%d", pos0, rows, s.cap, tmax_);
+  if (!captures || captures.size < 4 * size_t(rows) * size_t(cfg_.hidden) * sizeof(float))
+    fatal("inkling2: prefill capture output is too small");
+  enc_prefill(e, s, pos0, rows, sp, step, sample, &captures);
+}
+
+void Inkling2::enc_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
+                          const Buffer* captures) {
   if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
   if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
-  if (snap) fatal("inkling2: in-pass snapshots are not supported");
   if (s.embeds) fatal("inkling2: image inputs are not supported in Stage 1");
-  enc_forward(e, s, pos0, T, sample, nullptr, false);
+  enc_forward(e, s, pos0, T, sample, nullptr, false, nullptr, captures);
   if (!sample) return;
   enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);
   enc_sample(e, s, logits_, s.tok, pos0 + T, sp, step);
+}
+void Inkling2::encode_greedy_rows(Encoder& e, Seq& s, const Buffer& logits, int rows, const Buffer& picks) {
+  const size_t row_bytes = size_t(cfg_.vocab) * sizeof(float);
+  if (rows < 1 || rows > tmax_ || !logits || logits.size < size_t(rows) * row_bytes ||
+      !picks || picks.size < size_t(rows) * sizeof(int) || picks.mtl == s.tok.mtl ||
+      logits.mtl == s.tok.mtl || picks.mtl == logits.mtl)
+    fatal("inkling2: invalid greedy row buffers");
+  SamplingParams sp{};
+  sp.temperature = 0;
+  sp.top_k = 1;
+  sp.top_p = 1;
+  for (int row = 0; row < rows; ++row)
+    enc_sample(e, s, logits.view(size_t(row) * row_bytes, row_bytes), picks, row, sp, uint32_t(row));
 }
 
 void Inkling2::encode_logits_rows(Encoder& e, Seq& s, int pos0, int T, const Buffer& out) {
   if (T > tmax_) fatal("logits_rows chunk %d > %d", T, tmax_);
   if (pos0 + T > s.cap) fatal("context full (%d)", s.cap);
   enc_forward(e, s, pos0, T, true, &out, true);
+}
+
+void Inkling2::encode_features_rows(Encoder& e, Seq& s, int pos0, int T, const Buffer& captures,
+                                    const Buffer* logits) {
+  if (T < 1 || T > tmax_ || pos0 < 0 || pos0 > s.cap || T > s.cap - pos0)
+    fatal("inkling2: invalid feature rows pos=%d T=%d cap=%d chunk=%d", pos0, T, s.cap, tmax_);
+  const size_t capture_bytes = 4 * size_t(T) * size_t(cfg_.hidden) * sizeof(float);
+  if (!captures || captures.size < capture_bytes) fatal("inkling2: feature output is too small");
+  if (logits && (!*logits || logits->size < size_t(T) * size_t(cfg_.vocab) * sizeof(float)))
+    fatal("inkling2: feature logits output is too small");
+  enc_forward(e, s, pos0, T, logits != nullptr, logits, logits != nullptr, nullptr, &captures);
 }
 
 void Inkling2::encode_prefill_diag(Encoder& e, Seq& s, int pos0, int T, const Buffer& diag_rows) {

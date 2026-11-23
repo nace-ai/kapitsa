@@ -150,6 +150,35 @@ bool read_uncached(int fd, uint8_t* dst, size_t len, size_t off, Staging& st) {
 }
 } // namespace
 
+WeightStore::FilePlan WeightStore::plan_file(const std::string& path) {
+  FatalRecovery recover;
+  Fd fd(open(path.c_str(), O_RDONLY));
+  if (fd.get() < 0) throw std::runtime_error("safetensors: cannot open " + path);
+  uint64_t hlen = 0, fsize = 0;
+  const auto j = read_header(fd.get(), path, hlen, &fsize);
+  FilePlan plan;
+  std::vector<std::pair<size_t, size_t>> ranges;
+  for (const auto& [name, v] : j.items()) {
+    if (name == "__metadata__") continue;
+    Tensor t;
+    t.dtype = checked_dtype(v["dtype"].get<std::string>(), path, name);
+    t.shape = v["shape"].get<std::vector<int64_t>>();
+    const size_t b = v["data_offsets"][0].get<size_t>(), e = v["data_offsets"][1].get<size_t>();
+    if (e > fsize - 8 - hlen) throw std::runtime_error("safetensors: truncated tensor " + name);
+    plan.bytes = safetensors_packed_end(plan.bytes, e - b);
+    plan.tensors.emplace(name, std::move(t));
+    if (b != e) ranges.emplace_back(b, e);
+  }
+  std::sort(ranges.begin(), ranges.end());
+  size_t end = 0;
+  for (const auto& [b, e] : ranges) {
+    if (b != end) throw std::runtime_error("safetensors: overlapping or gapped tensor ranges");
+    end = e;
+  }
+  if (end != fsize - 8 - hlen) throw std::runtime_error("safetensors: unclaimed tensor data");
+  return plan;
+}
+
 void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Filter& file_filter, const Filter& defer) {
   std::unique_ptr<DIR, decltype(&closedir)> d(opendir(dir.c_str()), closedir);
   if (!d) fatal("cannot open model dir %s", dir.c_str());
@@ -163,7 +192,6 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
   std::sort(files.begin(), files.end());
   if (files.empty() && !file_filter) fatal("no .safetensors in %s", dir.c_str());
 
-  constexpr size_t kAlign = 256;
   std::vector<ReadJob> jobs;
   std::vector<Fd> fds;
   for (auto& path : files) {
@@ -199,7 +227,7 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
         continue;
       }
       it.dst = total;
-      total += (it.len + kAlign - 1) / kAlign * kAlign;
+      total = safetensors_packed_end(total, it.len);
       items.push_back(std::move(it));
     }
     if (items.empty()) {
