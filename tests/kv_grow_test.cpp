@@ -88,11 +88,35 @@ static void tight() {
     }
 }
 
+// Inkling-2-Mini 1M context: 9 global layers (8 trunk + 1 MTP) x K, V x 8 heads x 128 x fp16 = 36 KB/pos,
+// with each single buffer 2 KB/pos (2.0 GiB at 1,048,576 positions).
+static void inkling2_1m() {
+  constexpr size_t kInkPer = 36864;
+  constexpr size_t kInkUnit = 2048;
+  constexpr int kInkLimit = 1048576;
+  CHECK(kvgrow::held(524288, kInkPer, kInkUnit) == size_t(1) << 30);
+  CHECK(kvgrow::held(kInkLimit, kInkPer, kInkUnit) == size_t(2) << 30);
+
+  const kvgrow::Plan p0 = kvgrow::plan(0, kInkLimit, kInkLimit, kInkPer, kInkUnit, size_t(36) << 30);
+  CHECK(p0.target == kInkLimit);
+
+  const int mid = 524288;
+  const size_t need_mid = size_t(kInkLimit - mid) * kInkPer + kvgrow::held(mid, kInkPer, kInkUnit);
+  CHECK(kvgrow::plan(mid, kInkLimit, kInkLimit, kInkPer, kInkUnit, need_mid).target == kInkLimit);
+  CHECK(!kvgrow::plan(mid, kInkLimit, kInkLimit, kInkPer, kInkUnit, need_mid - 1).target);
+
+  const int hi = 900000;
+  const size_t need_hi = size_t(kInkLimit - hi) * kInkPer + kvgrow::held(hi, kInkPer, kInkUnit);
+  CHECK(kvgrow::plan(hi, kInkLimit, kInkLimit, kInkPer, kInkUnit, need_hi).target == kInkLimit);
+  CHECK(!kvgrow::plan(hi, kInkLimit, kInkLimit, kInkPer, kInkUnit, need_hi - 1).target);
+}
+
 int main() {
   issue_1300();
   growing_conversation();
   roomy();
   tight();
+  inkling2_1m();
   std::printf("kv_grow_test: ok\n");
   return 0;
 }

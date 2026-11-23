@@ -1369,11 +1369,13 @@ int model_context_limit(const std::string& model_dir) {
   if (!j.is_object()) return 0;
   // the language model's config where it has one of its own (the Qwen3.5 family: text_config; Bolt: llm_config)
   static const nlohmann::json none;
-  for (const char* k : {"text_config", "llm_config", ""}) {
-    const nlohmann::json& c = !*k ? j : j.contains(k) ? j[k] : none;
-    if (c.is_object() && c.contains("max_position_embeddings") && c["max_position_embeddings"].is_number_integer()) {
-      const long long n = c["max_position_embeddings"].get<long long>();
-      return n > 0 ? int(std::min<long long>(n, INT_MAX)) : 0;
+  for (const char* field : {"max_position_embeddings", "model_max_length"}) {
+    for (const char* k : {"text_config", "llm_config", ""}) {
+      const nlohmann::json& c = !*k ? j : j.contains(k) ? j[k] : none;
+      if (c.is_object() && c.contains(field) && c[field].is_number_integer()) {
+        const long long n = c[field].get<long long>();
+        return n > 0 ? int(std::min<long long>(n, INT_MAX)) : 0;
+      }
     }
   }
   return 0;
