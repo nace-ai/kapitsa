@@ -883,7 +883,7 @@ int ink2_env(const char* name, int dflt) { return getenv(name) ? atoi(getenv(nam
 void Inkling2::repack_moe() {
   static const char* ab = getenv("BENCH_AB");
   repack_ = ink2_env("NI_INK2_REPACK", 0);
-  const bool want_sc = false;
+  const bool want_sc = getenv("NI_INK2_SCPAIR") || (ab && strstr(ab, "NI_INK2_SCPAIR"));
   const bool bt = ink2_env("NI_INK2_MOEBT", 1) != 0 && cfg_.hidden % 256 == 0 && cfg_.moe_I % 16 == 0 && cfg_.moe_I >= 512;
   if (repack_ && !bt) {
     fprintf(stderr, "[kapitsa] NI_INK2_REPACK needs the bt MoE kernels (NI_INK2_MOEBT, H %% 256, I %% 16): off\n");
@@ -938,9 +938,10 @@ bool Inkling2::moe_lean() const {
 // DEC mask for this step: 1 lean (repacked), 2 scale pair (NI_INK2_SCPAIR, sign-0 scales checked), probes
 // NI_INK2_LITE (BENCH_AB only; wrong math): 1 / 2 w13 decode-lite / x-lite, 4 / 8 w2 decode-lite / act-lite
 uint32_t Inkling2::moe_dec(bool w2) const {
+  static const int scp_env = ink2_env("NI_INK2_SCPAIR", 0);
   static const int lean_mask = ink2_env("NI_INK2_LEANMASK", 3);  // (debug: 1 w13 only, 2 w2 only; needs REPACK=2)
   const int lite = ink2_ab("NI_INK2_LITE", 0) >> (w2 ? 2 : 0);
-  return (moe_lean() && (lean_mask >> (w2 ? 1 : 0) & 1) ? 1u : 0u) |
+  return (moe_lean() && (lean_mask >> (w2 ? 1 : 0) & 1) ? 1u : 0u) | (sc_pos_ && ink2_ab("NI_INK2_SCPAIR", scp_env) != 0 ? 2u : 0u) |
          (lite & 1 ? 4u : 0u) | (lite & 2 ? 8u : 0u);
 }
 
