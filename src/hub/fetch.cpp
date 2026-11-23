@@ -1168,6 +1168,17 @@ bool keep_file(const std::string& p) {  // files of a generic repo worth fetchin
 
 // ---------------------------------------------------------------- public
 
+namespace detail {
+ojson catalog_gguf_metadata(const ojson& imported, const GgufFile& g) {
+  ojson metadata = imported.value("gguf", ojson::object());
+  metadata["path"] = g.path;
+  metadata["sha256"] = g.sha256;
+  metadata["size"] = g.size;
+  if (!metadata.contains("conversions")) metadata["conversions"] = ojson::object();
+  return metadata;
+}
+}  // namespace detail
+
 std::string sha256_file(const std::string& path) {
   std::string s;
   if (!hash_file(path, &s, nullptr)) throw Error("Can't read " + tilde(path) + ".");
@@ -1594,16 +1605,14 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     } catch (const std::exception& e) {
       throw Error("The import of " + g.path + " failed: " + e.what());
     }
-    ojson conv = ojson::object();
     try {
       const ojson im = ojson::parse(read_text(manifest_path(ref.dir)));
       mfiles = im.at("files");
       total = im.at("total_bytes").get<uint64_t>();
-      if (im.contains("gguf") && im["gguf"].contains("conversions")) conv = im["gguf"]["conversions"];
+      m["gguf"] = detail::catalog_gguf_metadata(im, g);
     } catch (const std::exception&) {
       throw Error("The import of " + g.path + " left no manifest in " + tilde(ref.dir) + ". Please report this.");
     }
-    m["gguf"] = ojson{{"path", g.path}, {"sha256", g.sha256}, {"size", g.size}, {"conversions", conv}};
   }
   m["files"] = mfiles;
   m["companions"] = mcomp;
