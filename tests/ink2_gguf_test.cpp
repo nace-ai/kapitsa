@@ -59,7 +59,10 @@ static bool parser_fixture(uint32_t type, uint64_t columns, size_t payload, bool
   return ok;
 }
 
+bool check_mixed_gguf();
+
 int main() {
+  if (!check_mixed_gguf()) return 1;
   for (uint32_t type : {16u, 17u, 22u}) {
     uint32_t n = 0, bytes = 0;
     if (!ni::gguf::type_block(type, &n, &bytes) ||

@@ -2,7 +2,7 @@
 
 struct Ink2GgufMmP { uint M, N, K, type, row_bytes, add; };
 struct Ink2GgufMoeP { uint T, H, I, top, type, row_bytes; };
-struct Ink2GgufEmbedP { uint T, H, tok_off, V, norm_f32; float eps; };
+struct Ink2GgufEmbedP { uint T, H, tok_off, V, norm_f32; float eps; uint type, row_bytes; };
 
 [[kernel]] void ink2_gguf_mm(const device float* x [[buffer(0)]], const device uchar* w [[buffer(1)]],
                             device float* y [[buffer(2)]], constant Ink2GgufMmP& p [[buffer(3)]],
@@ -22,7 +22,8 @@ struct Ink2GgufEmbedP { uint T, H, tok_off, V, norm_f32; float eps; };
 
 [[kernel]] void ink2_gguf_gu(const device float* x [[buffer(0)]], const device uint* ids [[buffer(1)]],
                             const device uchar* w [[buffer(2)]], device float* act [[buffer(3)]],
-                            constant Ink2GgufMoeP& p [[buffer(4)]], uint3 tg [[threadgroup_position_in_grid]],
+                            const device float* outer [[buffer(4)]], constant Ink2GgufMoeP& p [[buffer(5)]],
+                            uint3 tg [[threadgroup_position_in_grid]],
                             uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
   const uint j = tg.x * 4 + sg, slot = tg.y, t = tg.z;
   if (j >= p.I || slot >= p.top || t >= p.T) return;
@@ -35,7 +36,7 @@ struct Ink2GgufEmbedP { uint T, H, tok_off, V, norm_f32; float eps; };
     g += v * ink2_gguf::value(gate, p.type, k);
     u += v * ink2_gguf::value(up, p.type, k);
   }
-  g = simd_sum(g); u = simd_sum(u);
+  g = simd_sum(g) * outer[expert]; u = simd_sum(u) * outer[expert];
   if (lane == 0)
     act[(size_t(t) * p.top + slot) * p.I + j] =
         (4.0f * metal::precise::tanh(g * 0.25f)) * (1.0f / (1.0f + metal::precise::exp(-g))) *
@@ -44,7 +45,8 @@ struct Ink2GgufEmbedP { uint T, H, tok_off, V, norm_f32; float eps; };
 
 [[kernel]] void ink2_gguf_down(const device float* act [[buffer(0)]], const device uint* ids [[buffer(1)]],
                               const device float* weights [[buffer(2)]], const device uchar* w [[buffer(3)]],
-                              device float* out [[buffer(4)]], constant Ink2GgufMoeP& p [[buffer(5)]],
+                              device float* out [[buffer(4)]], const device float* outer [[buffer(5)]],
+                              constant Ink2GgufMoeP& p [[buffer(6)]],
                               uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
                               uint lane [[thread_index_in_simdgroup]]) {
   const uint row = tg.x * 4 + sg, t = tg.y;
@@ -56,7 +58,7 @@ struct Ink2GgufEmbedP { uint T, H, tok_off, V, norm_f32; float eps; };
     const device float* a = act + (size_t(t) * p.top + slot) * p.I;
     float acc = 0.0f;
     for (uint k = lane; k < p.I; k += 32) acc += a[k] * ink2_gguf::value(wr, p.type, k);
-    total += weights[size_t(t) * p.top + slot] * simd_sum(acc);
+    total += weights[size_t(t) * p.top + slot] * (simd_sum(acc) * outer[expert]);
   }
   if (lane == 0) out[size_t(t) * p.H + row] = total;
 }
@@ -71,7 +73,9 @@ struct Ink2GgufEmbedP { uint T, H, tok_off, V, norm_f32; float eps; };
   const uint token = id >= 0 && uint(id) < p.V ? uint(id) : 0u;
   float sum = 0.0f;
   for (uint c = tid; c < p.H; c += nt) {
-    const float v = float(q[size_t(token) * p.H + c]) * float(scales[size_t(token) * (p.H / 32) + c / 32]);
+    const float v = p.row_bytes
+        ? ink2_gguf::value((const device uchar*)q + size_t(token) * p.row_bytes, p.type, c)
+        : float(q[size_t(token) * p.H + c]) * float(scales[size_t(token) * (p.H / 32) + c / 32]);
     out[size_t(t) * p.H + c] = v;
     sum += v * v;
   }

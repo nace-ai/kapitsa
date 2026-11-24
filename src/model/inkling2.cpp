@@ -127,7 +127,7 @@ struct Ink2MsgGateP {
 };
 struct Ink2GgufMmP { uint32_t M, N, K, type, row_bytes, add; };
 struct Ink2GgufMoeP { uint32_t T, H, I, top, type, row_bytes; };
-struct Ink2GgufEmbedP { uint32_t T, H, tok_off, V, norm_f32; float eps; };
+struct Ink2GgufEmbedP { uint32_t T, H, tok_off, V, norm_f32; float eps; uint32_t type, row_bytes; };
 struct Ink2MmP {
   uint32_t M, N, K, x_ld, y_ld, w_f32, add;
 };
@@ -1220,11 +1220,15 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
   const float sconv_static_scale = 1.0f / std::sqrt(5.0f);
 
   // Embed + norm -> x_
-  if (gguf_embed_.is_q8()) {
+  if (gguf_embed_.is_q8() || gguf_embed_.gguf.data) {
+    const auto& blocks = gguf_embed_.gguf;
     const Ink2GgufEmbedP ep{uint32_t(T), H, uint32_t(pos0), gguf_embed_.N,
-                           embed_norm_->dtype == DType::F32 ? 1u : 0u, cfg_.rms_eps};
+                           embed_norm_->dtype == DType::F32 ? 1u : 0u, cfg_.rms_eps,
+                           blocks.type, blocks.row_bytes};
     e.use(ink2_pipe("ink2_gguf_embed"));
-    e.buf(0, s.tok); e.buf(1, gguf_embed_.q); e.buf(2, gguf_embed_.s);
+    e.buf(0, s.tok);
+    e.buf(1, blocks.data ? blocks.data : gguf_embed_.q);
+    e.buf(2, blocks.data ? blocks.data : gguf_embed_.s);
     e.buf(3, embed_norm_->buf); e.buf(4, x_); e.val(5, ep);
     e.dispatch(uint32_t(T), 1, 1, 512);
   } else {
@@ -1623,18 +1627,34 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       e.dispatch(uint32_t(T), 1, 1, 32);
     }
     {
-      if (L.gguf_gu.data) {
-        const Ink2GgufMoeP gu{uint32_t(T), H, uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k),
-                              L.gguf_gu.type, L.gguf_gu.row_bytes};
-        e.use(ink2_pipe("ink2_gguf_gu"));
-        e.buf(0, x_mlp_); e.buf(1, eid_); e.buf(2, L.gguf_gu.data); e.buf(3, moe_act_); e.val(4, gu);
-        e.dispatch((gu.I + 3) / 4, gu.top, uint32_t(T), 128);
-        const Ink2GgufMoeP dn{uint32_t(T), H, uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k),
-                              L.gguf_down.type, L.gguf_down.row_bytes};
-        e.use(ink2_pipe("ink2_gguf_down"));
-        e.buf(0, moe_act_); e.buf(1, eid_); e.buf(2, ew_); e.buf(3, L.gguf_down.data);
-        e.buf(4, moe_out_); e.val(5, dn);
-        e.dispatch((H + 3) / 4, uint32_t(T), 1, 128);
+      if (L.gguf_gu.data || L.gguf_down.data) {
+        const Ink2MoeP mp{uint32_t(T), H, uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k)};
+        if (L.gguf_gu.data) {
+          const Ink2GgufMoeP gu{uint32_t(T), H, uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k),
+                                L.gguf_gu.type, L.gguf_gu.row_bytes};
+          e.use(ink2_pipe("ink2_gguf_gu"));
+          e.buf(0, x_mlp_); e.buf(1, eid_); e.buf(2, L.gguf_gu.data); e.buf(3, moe_act_);
+          e.buf(4, L.w13_outer); e.val(5, gu);
+          e.dispatch((gu.I + 3) / 4, gu.top, uint32_t(T), 128);
+        } else {
+          e.use(ink2_pipe("ink2_moe_nvfp4_w13_situ"));
+          e.buf(0, x_mlp_); e.buf(1, eid_); e.buf(2, L.w13->buf); e.buf(3, L.w13_sc->buf);
+          e.buf(4, L.w13_outer); e.buf(5, moe_act_); e.val(6, mp);
+          e.dispatch((mp.I + 15) / 16, mp.K_top, uint32_t(T), 128);
+        }
+        if (L.gguf_down.data) {
+          const Ink2GgufMoeP dn{uint32_t(T), H, uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k),
+                                L.gguf_down.type, L.gguf_down.row_bytes};
+          e.use(ink2_pipe("ink2_gguf_down"));
+          e.buf(0, moe_act_); e.buf(1, eid_); e.buf(2, ew_); e.buf(3, L.gguf_down.data);
+          e.buf(4, moe_out_); e.buf(5, L.w2_outer); e.val(6, dn);
+          e.dispatch((H + 3) / 4, uint32_t(T), 1, 128);
+        } else {
+          e.use(ink2_pipe("ink2_moe_nvfp4_w2_acc"));
+          e.buf(0, moe_act_); e.buf(1, eid_); e.buf(2, ew_); e.buf(3, L.w2->buf); e.buf(4, L.w2_sc->buf);
+          e.buf(5, L.w2_outer); e.buf(6, moe_out_); e.val(7, mp);
+          e.dispatch((H + 15) / 16, uint32_t(T), 1, 128);
+        }
       } else if (tensor_pf_ && T > 32) {
         const uint32_t P = uint32_t(T) * uint32_t(cfg_.top_k);
         const uint32_t E = uint32_t(cfg_.n_experts);

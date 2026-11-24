@@ -2,8 +2,47 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include "gguf/gguf.h"
+#include "kernels/inkling2/gguf_blocks.h"
+
+#include <vector>
 
 namespace ni::ink2 {
+struct ExpertSource {
+  const gguf::Tensor* weight;
+  std::vector<float> outer;
+  bool native_nvfp4() const { return weight->type == gguf::kNVFP4; }
+};
+struct ExpertSources { ExpertSource gu, down; };
+
+inline ExpertSources read_expert_sources(const gguf::File& file, const std::string& prefix,
+                                         size_t H, size_t I, size_t E) {
+  auto require = [&](const std::string& name, std::initializer_list<uint64_t> shape) -> const gguf::Tensor& {
+    const auto* t = file.find(name);
+    if (!t || t->ne != std::vector<uint64_t>(shape))
+      throw gguf::Error("Inkling2: missing or unexpected shape: " + name);
+    return *t;
+  };
+  const auto& gu = require(prefix + "ffn_gate_up_exps.weight", {H, 2 * I, E});
+  const auto& down = require(prefix + "ffn_down_exps.weight", {I, H, E});
+  auto read = [&](const gguf::Tensor& weight, const char* scale_name) {
+    ExpertSource source{&weight, {}};
+    if (source.native_nvfp4()) {
+      if (weight.ne[0] % 64) throw gguf::Error("Inkling2: unaligned NVFP4 row: " + weight.name);
+    } else if (!ink2_gguf::block_bytes(weight.type) || weight.ne[0] % ink2_gguf::block_values(weight.type)) {
+      throw gguf::Error("Inkling2: unsupported block type or row: " + weight.name);
+    }
+    if (source.native_nvfp4() || file.find(prefix + scale_name)) {
+      const auto& scale = require(prefix + scale_name, {E});
+      if (scale.type != gguf::kF32) throw gguf::Error("Inkling2 expert outer scales must be F32");
+      source.outer.resize(E);
+      file.read(scale, 0, source.outer.data(), E * sizeof(float));
+    }
+    return source;
+  };
+  return {read(gu, "ffn_gate_up_exps.scale"), read(down, "ffn_down_exps.scale")};
+}
+
 // GGUF gate rows precede up rows; native kernels consume gate/up pairs.
 inline size_t native_gu_row(size_t gguf_row, size_t intermediate) {
   return 2 * (gguf_row % intermediate) + gguf_row / intermediate;
