@@ -23,7 +23,8 @@
 //           a window's rows are whole passes. Nemotron-H: the 8-row chain verify. Dory: only with per-loop KV (--loop-kv per-loop), as
 //           the engine runs it. Qwen3.8-Flash-Next: the verify of its MTP cycle, default_spec_depth() + 1 = 3 rows
 //           (Engine's encode_verify(depth + 1) with every draft accepted; the drafts are the sequence's own tokens, so
-//           the MTP head itself does not run: the trunk's logits do not read it).
+//           the MTP head itself does not run: the trunk's logits do not read it). Inkling-2-Mini: DFlare's 8-row verify
+//           (Inkling2::encode_verify) with every draft accepted, its state advanced through the 8 rows.
 //   batch   --batch N windows decoding together (encode_verify_multi: one pass over every member's rows), R rows each
 //           per pass: by default the engine's numbers for N requests (Engine::batch_rows: 2 at once 4 rows each, 3 or
 //           4 at once 2 each; Nemotron-H 4 at once 1 each). Qwen and Nemotron-H (Flash-Next decodes one request
@@ -238,7 +239,7 @@ int main(int argc, char** argv) {
     LoopKv kv = LoopKv::last_loop;
     if (!loop_kv.empty() && !parse_loop_kv(loop_kv, &kv)) fatal("--loop-kv: last-loop or per-loop");
     const char* has = Qwen4Exp::is_model(dir) || Flint::is_model(dir) ? "step,verify"
-                      : Inkling2::is_model(dir)                       ? "step"
+                      : Inkling2::is_model(dir)                       ? "step,verify"
                       : Dory::is_model(dir) ? (kv == LoopKv::per_loop ? "step,verify" : "step")
                                             : "step,verify,batch";
     printf("%s\n", has);
@@ -354,8 +355,6 @@ int main(int argc, char** argv) {
     if (p == "batch" && ink2) fatal("Inkling2 decodes one request at a time: no batch path");
     if (p == "verify" && dory && dory->kv_mode() != LoopKv::per_loop)
       fatal("Dory verifies drafts only with per-loop KV (--loop-kv per-loop); with last-loop KV it decodes step by step");
-    if (p == "verify" && ink2)
-      fatal("Inkling2 verifies no drafts in this build; --paths step only");
   }
   // rows a window feeds on a path: its scored rows, up to whole passes
   // Flint: NI_FLINT_VERIFY_ROWS=R (2-8) verifies R rows a pass instead of 8 (which kernels a pass takes is
@@ -367,6 +366,9 @@ int main(int argc, char** argv) {
                     : fn ? std::clamp(spec >= 0 ? spec + 1 : fn->default_spec_depth() + 1, 1, Qwen35::kMaxVerify)
                     : tree ? tree_rows
                            : kVerifyRows;
+  // Inkling2's verify writes its rows' logits to a buffer of the caller's (the engine's ink2_vf_logits_)
+  Buffer ink2_vlog;
+  if (ink2) ink2_vlog = g.alloc(size_t(Inkling2::kMaxVerify) * size_t(V) * 4, "logit_dump_ink2_vlog");
   auto path_rows = [&](const std::string& p, const Window& w) {
     const int k = p == "verify" ? vrows : p == "batch" ? member_rows : 1;
     const int W = (w.W + k - 1) / k * k;
@@ -539,11 +541,14 @@ int main(int argc, char** argv) {
               nh->encode_verify(*e, s, P, kVerifyRows);
             } else if (fl) {
               fl->encode_verify(*e, s, P, vrows);
+            } else if (ink2) {  // DFlare's verify with every draft accepted: the state advances through all 8 rows
+              ink2->encode_verify(*e, s, P, vrows, ink2_vlog, nullptr, /*save_conv_snap=*/false);
             } else {
               dory->encode_verify(*e, s, P, kVerifyRows);
             }
             e->commit_and_wait();
-            for (int r = 0; r < vrows; ++r) put(o, w, i + r, logits() + size_t(r) * V);
+            const float* vl = ink2 ? ink2_vlog.as<float>() : logits();
+            for (int r = 0; r < vrows; ++r) put(o, w, i + r, vl + size_t(r) * V);
             if (q) {
               q->commit_rows(s, vrows);
               s.pend_tree = tree;  // a tree's next pass folds the accepted path (pend_path), as after kf_accept
