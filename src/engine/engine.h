@@ -191,6 +191,7 @@ struct DrafterFacts {
   bool unbound_missing = false;  // the name given is not on disk: reported as a name, never as a find
   int mtp_depth = 0;        // MTP speculative decoding's depth (0: off)
   std::string self_drafts;  // drafting without a drafter model: "prompt lookup", Dory's "1-loop drafts", ...
+  std::string off_why;      // a bundled drafter this Mac leaves off, and why (Inkling's DFlare cost gate)
 };
 struct DrafterUse {
   std::string kind;    // DFlash2, DFlash, LiLiCorr, DSpark, MTP or none
@@ -708,6 +709,7 @@ class Engine {
   Hy4Flash* hy4_ = nullptr;  // model_ when it is Hy4-flash
   Clover* clover_ = nullptr;  // model_ when it is Clover (block diffusion; q35_ too)
   Inkling2* ink2_ = nullptr;  // model_ when it is Inkling-2-Mini (inkling2_loop)
+  std::string ink2_off_why_;  // why the bundled DFlare drafter is off on this Mac ("": not off by its cost gate)
   std::unique_ptr<Ink2DFlare> ink2_dfl_;  // Inkling-2 bundled DFlare/DSpark drafter (mtp.safetensors)
   int ink2_spec_ = 0;                     // max DFlare drafts per cycle (0 = off, 1..7)
   bool ink2_spec_auto_ = false;           // adaptive depth when --spec is not explicitly set

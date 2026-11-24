@@ -676,6 +676,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       // it accepts on prose and reasoning (0.6 measured on an M6; MTPLX 0.63-0.65 on reasoning). Measured: 0.53 / +5.8%
       // on an M6 (fast), 0.44 / +13.2% on an M3 Pro (precise), 0.69 / -5.3% on that M3 Pro (fast), #1383.
       if (ink2_spec_auto_ && ink2_dfl_->break_even() > 0.65) {
+        ink2_off_why_ = std::format("DFlare off on this Mac: a draft cycle pays only above {:.2f} per-position acceptance, "
+                                    "--spec K turns it on", ink2_dfl_->break_even());
         logi("DFlare drafter: off (a draft cycle pays only above %.2f per-position acceptance on this Mac; --spec K turns it on)",
              ink2_dfl_->break_even());
         for (Buffer* b : {&ink2_pf_taps_, &ink2_vf_taps_, &ink2_vf_logits_}) g.release(*b);
@@ -816,6 +818,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     f.unbound = lp.dflash_unbound;
     f.unbound_missing = lp.dflash_unbound_missing;
     f.mtp_depth = spec_ ? opts_.spec_depth : 0;
+    f.off_why = ink2_off_why_;
     f.self_drafts = flint_ngram_ > 0 && flint_self_ > 0                ? "prompt lookup and Flint self-drafts"
                     : flint_self_ > 0                                 ? "Flint self-drafts at long prompts"
                     : flint_ngram_ > 0 || nh_ngram_ > 0               ? "prompt lookup"
@@ -1265,7 +1268,9 @@ DrafterUse drafter_use(const DrafterFacts& f) {
   }
   // no block drafter decodes: the first reason that applies
   bool said = false;  // a named drafter's own wording, which already says it is not used
-  if (!f.block_path && !f.unbound.empty()) {
+  if (!f.off_why.empty()) {
+    u.reason = f.off_why;
+  } else if (!f.block_path && !f.unbound.empty()) {
     const std::string name = base_name(f.unbound);
     if (f.unbound_missing) {
       // only a named path is stat()ed, so this is a name and not a find: nothing is reported as found, and nothing is

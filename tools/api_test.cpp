@@ -2480,6 +2480,12 @@ void drafter_report_unit() {
   f = q;
   check(line(f) == "drafter: MTP (no matching drafter found, MTP head drafts depth 2)", "none found: MTP", line(f));
   check(drafter_use(f).unused.empty(), "none found: nothing to warn about");
+  {  // a bundled drafter its cost gate leaves off says so, not "takes no block drafter"
+    DrafterFacts g;
+    g.model_dir = "/Users/me/models/Inkling-2-Mini";
+    g.off_why = "DFlare off on this Mac: a draft cycle pays only above 0.69 per-position acceptance, --spec K turns it on";
+    check(line(g) == "drafter: none (" + g.off_why + ")", "a drafter its cost gate leaves off", line(g));
+  }
   f.left_out = "/Users/me/models/Qwen3.8-27B/dflash2";
   DrafterUse u = drafter_use(f);
   // the constructor already logs the drafter left out with its GB and token count: the warning would repeat it
