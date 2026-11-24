@@ -373,7 +373,7 @@ void Ink2DFlare::calibrate(const Buffer& pf_taps, const Buffer& vf_taps, const B
     auto s = tg_.new_seq(512, 512);
     auto ds = new_seq();
     const SamplingParams sp;  // greedy
-    constexpr int N = 128;
+    const int N = std::min(128, tg_.prefill_chunk());  // within the target's prefill capacity (8 or more rows)
     for (int i = 0; i <= N; ++i) s->tokens()[i] = 1000 + (i * 37) % 4096;
     auto e = g.begin();
     tg_.encode_prefill_taps(*e, *s, 0, N, sp, 0, true, &pf_taps);
