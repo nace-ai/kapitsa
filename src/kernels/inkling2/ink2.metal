@@ -1901,7 +1901,19 @@ NI_INLINE void ink2_st4(device float* a, float4 v) { *(device float4*)a = v; }
 NI_INLINE void ink2_st4(device coherent(device) float* a, float4 v) { *(device coherent(device) float4*)a = v; }
 #endif
 // (PT: the partials' pointer type; lab11 REDLAST 3 passes device coherent(device) float*)
-template <uint VB, bool AT = false, typename PT = device float*>
+NI_INLINE uint ink2_ring_add(uint base, uint off, uint cap) {  // (base < cap, off < cap)
+  const uint r = base + off;
+  return r >= cap ? r - cap : r;
+}
+// lab12 PR mask (0 = round 11). Production: 512 | 8192 (ink2_attn_decode_g3kw_rc_ml, NI_INK2_ATTL=1, bit-identical):
+//   512: SWA ring slots by one uniform modulo per 32-key block + a conditional subtract (the per-key `% kv_cap` was
+//        if-converted, so the global visits paid it too: -1.21 ms at 84k);
+//   8192: a whole block whose rows do not wrap reads V by a constant stride from one base pointer (no per-row clamp,
+//        slot or 64-bit index math). Same loads, same sums in the same order.
+// Timing-only probes (wrong results; NI_INK2_ATTP=<mask> under BENCH_AB): 1 no QK, 2 V loads replaced by 1.0, 4 no rel
+//   bias, 8 no key loop, 16 no last-TG reduce, 131072 K read lane-contiguous (same bytes, wrong rows), 262144 K loads
+//   without the q dots, 524288 the q dots on a register K.
+template <uint VB, bool AT = false, typename PT = device float*, uint PR = 0>
 NI_INLINE void ink2_attn_decode_g3kw_impl(const device float* q, const device half* kc, const device half* vc,
                                         const device float* rb, PT pm, PT pl, PT po,
                                         constant Ink2AttnDecP& p, uint2 tg, uint sg, uint lane, uint tid,
@@ -1917,22 +1929,27 @@ NI_INLINE void ink2_attn_decode_g3kw_impl(const device float* q, const device ha
   float mw[G], lw[G];
   float4 ow[G];
   for (uint g = 0; g < G; ++g) { mw[g] = -INFINITY; lw[g] = 0.0f; ow[g] = float4(0.0f); }
-  for (uint kb = c0 + sg * 32u; kb < c1; kb += 128u) {
+  for (uint kb = c0 + sg * 32u; kb < c1 && !(PR & 8u); kb += 128u) {
     const uint kp = kb + lane;
     const uint kpc = min(kp, c1 - 1u);
-    const uint slot = p.is_swa ? (kpc % p.kv_cap) : kpc;
+    const uint kbm = (PR & 512u) && p.is_swa ? kb % p.kv_cap : kb;
+#define INK2_KW_SLOT(X) \
+  ((PR & 512u) ? (p.is_swa ? ink2_ring_add(kbm, (X) - kb, p.kv_cap) : (X)) : (p.is_swa ? ((X) % p.kv_cap) : (X)))
+    const uint slot = INK2_KW_SLOT(kpc);
     const device uint4* kr = (const device uint4*)(kc + (size_t(slot) * p.Hkv + hkv) * p.D);
+    const device uint4* kblk = (const device uint4*)(kc + (size_t(kbm) * p.Hkv + hkv) * p.D);  // (probe 131072)
     float s[G] = {0.0f, 0.0f, 0.0f};
-    for (uint c = 0; c < 32u; c += 2u) {
-      const uint4 kk = kr[c >> 1];
+    for (uint c = 0; c < 32u && !(PR & 1u); c += 2u) {
+      const uint4 kk = (PR & 524288u) ? uint4(lane + c) : (PR & 131072u) ? kblk[(c >> 1) * 32u + lane] : kr[c >> 1];
       const float4 k0 = float4(as_type<half4>(kk.xy)), k1 = float4(as_type<half4>(kk.zw));
-      for (uint g = 0; g < G; ++g) s[g] += dot(k0, qs[g * 32u + c]) + dot(k1, qs[g * 32u + c + 1u]);
+      if (PR & 262144u) s[0] += k0.x + k1.y;
+      else for (uint g = 0; g < G; ++g) s[g] += dot(k0, qs[g * 32u + c]) + dot(k1, qs[g * 32u + c + 1u]);
     }
     const uint dist = p.pos - kp;
     float e[G];
     for (uint g = 0; g < G; ++g) {
       float sc = s[g];
-      if (dist < p.rel_extent && kp < c1) sc += rb[size_t(h0 + g) * p.rel_extent + dist];
+      if (!(PR & 4u) && dist < p.rel_extent && kp < c1) sc += rb[size_t(h0 + g) * p.rel_extent + dist];
       sc = kp < c1 ? sc : -INFINITY;
       const float nm = max(mw[g], simd_max(sc));
       const float corr = fast::exp(mw[g] - nm);
@@ -1942,12 +1959,25 @@ NI_INLINE void ink2_attn_decode_g3kw_impl(const device float* q, const device ha
       mw[g] = nm;
     }
     const uint nk = min(32u, c1 - kb);
-    for (uint j0 = 0; j0 < nk; j0 += VB) {
+    const bool lin = (PR & 8192u) && nk == 32u && (!p.is_swa || kbm + 32u <= p.kv_cap);
+    if (lin) {
+      const device half* vrow = vc + (size_t(kbm) * p.Hkv + hkv) * p.D + d0;
+      const uint vst = p.Hkv * p.D;
+      for (uint j0 = 0; j0 < 32u; j0 += VB) {
+        half4 vv[VB];
+        for (uint j = 0; j < VB; ++j) vv[j] = (PR & 2u) ? half4(1.0h) : *(const device half4*)(vrow + (j0 + j) * vst);
+        for (uint j = 0; j < VB; ++j) {
+          const float4 v = float4(vv[j]);
+          for (uint g = 0; g < G; ++g) ow[g] += v * simd_shuffle(e[g], ushort(j0 + j));
+        }
+      }
+    }
+    for (uint j0 = 0; j0 < nk && !lin; j0 += VB) {
       half4 vv[VB];
       for (uint j = 0; j < VB; ++j) {
         const uint vp = min(kb + j0 + j, c1 - 1u);
-        const uint vs = p.is_swa ? (vp % p.kv_cap) : vp;
-        vv[j] = *(const device half4*)(vc + (size_t(vs) * p.Hkv + hkv) * p.D + d0);
+        const uint vs = INK2_KW_SLOT(vp);
+        vv[j] = (PR & 2u) ? half4(1.0h) : *(const device half4*)(vc + (size_t(vs) * p.Hkv + hkv) * p.D + d0);
       }
       for (uint j = 0; j < VB; ++j) {
         const float4 v = float4(vv[j]);
@@ -2115,6 +2145,7 @@ NI_INLINE void ink2_attn_reduce_par_c(device coherent(device) float* pm, device 
                                                            metal::precise::exp(-g4.z), metal::precise::exp(-g4.w)));
   *(device float4*)(out + d0) = (oo / ll) * sig;
 }
+template <uint PR>
 [[kernel]] void ink2_attn_decode_g3kw_rc(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
                                          const device half* vc [[buffer(2)]], const device float* rb [[buffer(3)]],
                                          device coherent(device) float* pm [[buffer(4)]],
@@ -2128,8 +2159,8 @@ NI_INLINE void ink2_attn_reduce_par_c(device coherent(device) float* pm, device 
   threadgroup float tgb[24 + 12 * 128];
   threadgroup float4 qs[3 * 32];
   threadgroup uint last;
-  ink2_attn_decode_g3kw_impl<4, false, device coherent(device) float*>(q, kc, vc, rb, pm, pl, po, p, tg, sg, lane, tid,
-                                                                       tgb, qs);
+  ink2_attn_decode_g3kw_impl<4, false, device coherent(device) float*, PR>(q, kc, vc, rb, pm, pl, po, p, tg, sg, lane,
+                                                                           tid, tgb, qs);
   atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);  // every writer
   threadgroup_barrier(mem_flags::mem_device | mem_flags::mem_threadgroup);
   if (tid == 0) {
@@ -2137,7 +2168,7 @@ NI_INLINE void ink2_attn_reduce_par_c(device coherent(device) float* pm, device 
     if (last) atomic_store_explicit(cnt + tg.x, 0u, memory_order_relaxed);
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (last == 0u) return;
+  if (last == 0u || (PR & 16u)) return;
   atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
   if (sg < 3u) {
     const uint h = tg.x * 3u + sg;
@@ -2145,6 +2176,24 @@ NI_INLINE void ink2_attn_reduce_par_c(device coherent(device) float* pm, device 
                            p.nchunks, p.D, lane, tgb + sg * 128u);
   }
 }
+#define INK2_RC(N, PR) template [[host_name(N)]] [[kernel]] decltype(ink2_attn_decode_g3kw_rc<PR>) ink2_attn_decode_g3kw_rc<PR>;
+INK2_RC("ink2_attn_decode_g3kw_rc", 0)
+INK2_RC("ink2_attn_decode_g3kw_rc_ml", 8704)
+INK2_RC("ink2_attn_decode_g3kw_rc_p1", 1)
+INK2_RC("ink2_attn_decode_g3kw_rc_p2", 2)
+INK2_RC("ink2_attn_decode_g3kw_rc_p3", 3)
+INK2_RC("ink2_attn_decode_g3kw_rc_p4", 4)
+INK2_RC("ink2_attn_decode_g3kw_rc_p8", 8)
+INK2_RC("ink2_attn_decode_g3kw_rc_p16", 16)
+INK2_RC("ink2_attn_decode_g3kw_rc_p512", 512)
+INK2_RC("ink2_attn_decode_g3kw_rc_p8705", 8705)
+INK2_RC("ink2_attn_decode_g3kw_rc_p8706", 8706)
+INK2_RC("ink2_attn_decode_g3kw_rc_p8708", 8708)
+INK2_RC("ink2_attn_decode_g3kw_rc_p8712", 8712)
+INK2_RC("ink2_attn_decode_g3kw_rc_p8720", 8720)
+INK2_RC("ink2_attn_decode_g3kw_rc_p139776", 139776)
+INK2_RC("ink2_attn_decode_g3kw_rc_p270848", 270848)
+INK2_RC("ink2_attn_decode_g3kw_rc_p532992", 532992)
 #endif
 
 // ink2_attn_decode_g3 with a transpose-reduce: per 8-key block a lane holds the 24 partial (head, key) dots of its 4

@@ -47,6 +47,7 @@ int ink2_ab(const char* name, int v) {
 namespace {
 
 constexpr uint32_t kMaxAttnChunks = 64;
+constexpr uint32_t kAttnChunkCap = 128;  // (lab12: partials capacity; NI_INK2_KW_MAXCH up to it)
 
 // NI_INK2_SCFOLD mask (unset = 3: wo / w2 and SWA k / v folds on), A/B-able
 int ink2_scfold() {
@@ -113,6 +114,16 @@ struct Ink2Grouped {
 int ink2_fa_nt() {
   static const int v = getenv("NI_INK2_FA") ? atoi(getenv("NI_INK2_FA")) : 16;
   return v;
+}
+
+// lab12: g3kw_rc variant. NI_INK2_ATTL=1 (A/B-able): ink2_attn_decode_g3kw_rc_ml (ring slots without a per-key modulo +
+// whole blocks by a constant V stride; bit-identical). NI_INK2_ATTP=<mask> (A/B-able, timing only): the probe
+// ink2_attn_decode_g3kw_rc_p<mask> (masks instantiated in ink2.metal next to the kernel; ml = 8704).
+std::string ink2_rc_name() {
+  static const int attl = getenv("NI_INK2_ATTL") ? atoi(getenv("NI_INK2_ATTL")) : 0;
+  static const int attp = getenv("NI_INK2_ATTP") ? atoi(getenv("NI_INK2_ATTP")) : 0;
+  if (const int v = ink2_ab("NI_INK2_ATTP", attp)) return "ink2_attn_decode_g3kw_rc_p" + std::to_string(v);
+  return ink2_ab("NI_INK2_ATTL", attl) ? "ink2_attn_decode_g3kw_rc_ml" : "ink2_attn_decode_g3kw_rc";
 }
 
 void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
@@ -493,7 +504,7 @@ MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
                          size_t(c.n_experts) * 4 + 2 * size_t(c.top_k) * 4 + size_t(c.top_k) * size_t(c.moe_I) * 4;
   const size_t fixed = size_t(c.core_end - c.core_start) * 4 * H * 4 +
                        size_t(c.num_layers) * 2 * size_t(c.n_experts) * 4 +
-                       size_t(c.hq) * kMaxAttnChunks * kMaxVerify * (2 + size_t(c.head_dim)) * 4 + V * 4 +
+                       size_t(c.hq) * kAttnChunkCap * kMaxVerify * (2 + size_t(c.head_dim)) * 4 + V * 4 +
                        2 * (V / 2048 + 2) * 64 * 4 + 2 * 64 * 4;
   const size_t P = T * size_t(c.top_k);
   const size_t moe_tmp_bytes = ink2_tensor_pf_want()
@@ -1001,9 +1012,9 @@ void Inkling2::alloc_buffers() {
   a_out_ = alloc(T * H * 4, "ink2_a_out");
   dyn_ = alloc(T * 4 * size_t(cfg_.hkv) * 4, "ink2_dyn");
   rb_ = alloc(T * size_t(cfg_.hq) * size_t(cfg_.rel_extent) * 4, "ink2_rb");
-  part_m_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * kMaxVerify * 4, "ink2_part_m");
-  part_l_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * kMaxVerify * 4, "ink2_part_l");
-  part_o_ = alloc(size_t(cfg_.hq) * kMaxAttnChunks * kMaxVerify * size_t(cfg_.head_dim) * 4, "ink2_part_o");
+  part_m_ = alloc(size_t(cfg_.hq) * kAttnChunkCap * kMaxVerify * 4, "ink2_part_m");
+  part_l_ = alloc(size_t(cfg_.hq) * kAttnChunkCap * kMaxVerify * 4, "ink2_part_l");
+  part_o_ = alloc(size_t(cfg_.hq) * kAttnChunkCap * kMaxVerify * size_t(cfg_.head_dim) * 4, "ink2_part_o");
   // (+ 16 bytes: the router's arrival counter, ink2_mv_sk_route)
   attn_cnt_ = alloc(size_t(kMaxVerify) * size_t(cfg_.hkv) * 4 + 16, "ink2_attn_cnt");
   memset(attn_cnt_.base + attn_cnt_.offset, 0, attn_cnt_.size);
@@ -2053,7 +2064,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     const float attn_scale = 1.0f / std::sqrt(float(cfg_.head_dim));
     if (T == 1 || multi_) {
       // (multi rows: one decode attention per sequence, each into its own partials; then the reduces)
-      const size_t pm = size_t(cfg_.hq) * kMaxAttnChunks * 4, rbr = size_t(cfg_.hq) * size_t(cfg_.rel_extent) * 4;
+      const size_t pm = size_t(cfg_.hq) * kAttnChunkCap * 4, rbr = size_t(cfg_.hq) * size_t(cfg_.rel_extent) * 4;
       std::vector<Ink2AttnDecP> adps;
       bool redlast = false;
       if (gconc) e.group_begin();
@@ -2064,8 +2075,16 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       static const int dec_g_mode = getenv("NI_INK2_DEC_G") ? atoi(getenv("NI_INK2_DEC_G")) : 3;
       const bool kw = dec_g_mode == 3;
       // (keys-across-lanes kernel: chunks of whole 32-key blocks; NI_INK2_KW_MINCHUNK for the SWA window's)
-      static const uint32_t kw_min = getenv("NI_INK2_KW_MINCHUNK") ? uint32_t(atoi(getenv("NI_INK2_KW_MINCHUNK"))) : 64u;
-      uint32_t chunk = std::max(kw ? kw_min : 32u, (lk + kMaxAttnChunks - 1) / kMaxAttnChunks);
+      static const int kw_min_env = getenv("NI_INK2_KW_MINCHUNK") ? atoi(getenv("NI_INK2_KW_MINCHUNK")) : 64;
+      static const int kw_maxch_env = getenv("NI_INK2_KW_MAXCH") ? atoi(getenv("NI_INK2_KW_MAXCH")) : int(kMaxAttnChunks);
+      const uint32_t kw_min = uint32_t(ink2_ab("NI_INK2_KW_MINCHUNK", kw_min_env));
+      // (lab12 NI_INK2_KW_MAXCH: chunks of a long visit, <= kAttnChunkCap; ulp-level when changed)
+      const uint32_t maxch = kw ? std::min(kAttnChunkCap, uint32_t(ink2_ab("NI_INK2_KW_MAXCH", kw_maxch_env))) : kMaxAttnChunks;
+      // (lab12 NI_INK2_KW_SWACH: keys per threadgroup of the SWA visits (0: KW_MINCHUNK's); 128 = 8 chunks of the
+      //  1024 window with all 4 simdgroups busy, vs 16 x 64 with 2 idle: -0.19 ms at 8k on ATTP=8704; ulp-level)
+      static const int kw_swach_env = getenv("NI_INK2_KW_SWACH") ? atoi(getenv("NI_INK2_KW_SWACH")) : 0;
+      const uint32_t swach = kw && L.is_swa ? uint32_t(ink2_ab("NI_INK2_KW_SWACH", kw_swach_env)) : 0u;
+      uint32_t chunk = std::max(swach ? swach : kw ? kw_min : 32u, (lk + maxch - 1) / maxch);
       chunk = kw ? (chunk + 31) / 32 * 32 : (chunk + 3) / 4 * 4;
       const uint32_t nchunks = std::max(1u, (lk + chunk - 1) / chunk);
       const Ink2AttnDecP adp{uint32_t(pos0),
@@ -2090,7 +2109,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       // (2: plain loads in the reduce; probe. 3 (lab11): coherent(device) partials + device-scope fences, plain stores)
       const int redlast_v = ink2_ab("NI_INK2_REDLAST", redlast_env);
       redlast = redlast_v != 0 && g3 && kw && red_p0;
-      e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : kw ? (redlast ? (redlast_v == 3 ? "ink2_attn_decode_g3kw_rc" : redlast_v == 2 ? "ink2_attn_decode_g3kw_r0" : "ink2_attn_decode_g3kw_r") : "ink2_attn_decode_g3kw")
+      e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : kw ? (redlast ? (redlast_v == 3 ? ink2_rc_name().c_str() : redlast_v == 2 ? "ink2_attn_decode_g3kw_r0" : "ink2_attn_decode_g3kw_r") : "ink2_attn_decode_g3kw")
                                                                                                : "ink2_attn_decode_g3_fx"));
       if (redlast) {
         e.buf(8, rv(sinks_, size_t(cfg_.hq) * 4, gi));
