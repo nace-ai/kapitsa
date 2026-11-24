@@ -409,8 +409,9 @@ static Profile ink2_profile() {
   return profile(default_profile(current_device(), ModelFacts{.inkling2 = true}));
 }
 
-static bool ink2_tensor_pf_want(Profile selected) {
+static bool ink2_tensor_pf_want() {
   if (__builtin_available(macOS 26.0, *)) {
+    const Profile selected = ink2_profile();
     const bool here = default_on(Knob::kInk2TensorPf, ModelFacts{});
     return profile_switch("NI_INK2_TENSOR", here, "Inkling-2-Mini prefill GEMMs on the matrix units (NI_INK2_TENSOR)", selected);
   }
@@ -445,7 +446,7 @@ MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
                        size_t(c.hq) * kMaxAttnChunks * (2 + size_t(c.head_dim)) * 4 + V * 4 +
                        2 * (V / 2048 + 2) * 64 * 4 + 2 * 64 * 4;
   const size_t P = T * size_t(c.top_k);
-  const size_t moe_tmp_bytes = ink2_tensor_pf_want(ink2_profile())
+  const size_t moe_tmp_bytes = ink2_tensor_pf_want()
                                    ? (P * std::max(H, size_t(2) * size_t(c.moe_I)) * 4 + P * size_t(c.moe_I) * 2 +
                                       2 * P * 4 + (P / 16 + size_t(c.n_experts) + 2) * 16 + 16)
                                    : 0;
@@ -475,7 +476,7 @@ Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
                              "Inkling-2-Mini Q8-packed dense projections and unembed (NI_INK2_Q8)", profile_);
   logi("Inkling-2 profile: %s", profile_ == Profile::kFast ? "fast" : "precise");
   ink2::compile_kernels();
-  if (ink2_tensor_pf_want(profile_)) {
+  if (ink2_tensor_pf_want()) {
     if (__builtin_available(macOS 26.0, *)) {
       Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
       tensor_pf_ = Gpu::get().pipeline("ink2_t_bf16_m64", false).pso != nullptr;
