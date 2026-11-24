@@ -58,14 +58,20 @@ jobs:
   profile-gates:
     # A new inline chip, core or RAM check outside src/engine/device_profile.cpp fails this, and so does a comment or doc line
     # that gives a measured-only-here or nothing-was-run reason for a narrow default, anywhere in the repo
-    # (tests/test_comment_gates.py). No build.
+    # (tests/test_comment_gates.py). CPU only.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
       - run: python3 tests/test_profile_gates.py
+      - name: Inkling planning with a simulated older macOS and no live device
+        run: python3 tests/test_inkling_plan_profile.py
       - run: python3 tests/test_comment_gates.py --self-test
       - run: python3 tests/test_comment_gates.py
+      - name: Inkling conditional-quality evidence
+        run: |
+          python3 tests/test_inkling_profile_evidence.py
+          python3 tools/check_inkling_profile_evidence.py bench/results/inkling-fast-default-20261124/conditional-quality.json
 
   models-table:
     # docs/models.md is written by tools/models_table.py from src/hub/catalog.cpp; a catalog change without the rewritten
@@ -212,7 +218,7 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa gguf_output_cleanup_test ane_segment_check systemone api_test bench_test update_test prefix_cache_test kflash_cache_test grammar_test structured_check fn_store_test hy4_engram_test fn_dflash_test dflash_lowrank_cache_test dflash_plan_test drafter_attach_test dflash_accept_test tokenizer_test iq_layout_test exl3_test vision_pixels_test tree_reduce_test rope_pair_test remote_test cluster_test split_place_test gemm_slices_test kv_grow_test device_profile_test sample_topk_test catalog_profile_test qwen4_config_test flint_kv_test json_file_test affine_pack_test ffn_share_test systemone_test systemone_codes_probe_test execution_session_test think_control_test http_stream_test disconnect_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump qmm_device_conditions serve_options_test events_test control_test engine_view_test ink2_check
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa gguf_output_cleanup_test ane_segment_check systemone api_test bench_test update_test prefix_cache_test kflash_cache_test grammar_test structured_check fn_store_test hy4_engram_test fn_dflash_test dflash_lowrank_cache_test dflash_plan_test drafter_attach_test dflash_accept_test tokenizer_test iq_layout_test ink2_gguf_test plan_weights_test exl3_test vision_pixels_test tree_reduce_test rope_pair_test remote_test cluster_test split_place_test gemm_slices_test kv_grow_test device_profile_test profile_test sample_topk_test catalog_profile_test qwen4_config_test flint_kv_test json_file_test affine_pack_test ffn_share_test systemone_test systemone_codes_probe_test execution_session_test think_control_test http_stream_test disconnect_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump qmm_device_conditions serve_options_test events_test control_test engine_view_test ink2_check
       - name: GGUF row worker lifetime
         if: steps.changes.outputs.code == 'true'
         run: python3 tests/test_gguf_parallel_rows.py
@@ -299,6 +305,12 @@ jobs:
       - name: iq_layout_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/iq_layout_test
+      - name: ink2_gguf_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/ink2_gguf_test
+      - name: plan_weights_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/plan_weights_test
       - name: exl3_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/exl3_test
@@ -326,6 +338,9 @@ jobs:
       - name: device_profile_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/device_profile_test
+      - name: profile_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/profile_test
       - name: sample_topk_test --cpu
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/sample_topk_test --cpu
@@ -610,6 +625,7 @@ jobs:
           need metal3.2 && check nh      embed_kernels_nh.cmake    metal3.2
           need metal3.2 && check dory    embed_kernels_dory.cmake  metal3.2
           need metal3.2 && check flint   embed_kernels_flint.cmake metal3.2
+          need metal3.2 && check ink2    embed_kernels_inkling2.cmake metal3.2
           # The tensor library is Metal 4, and a macOS 15 runner has no Metal 4 compiler - the driver on such a Mac
           # does not build it either, so this is a skip on this image, not a pass. On a runner that has Metal 4 it is
           # compiled like the rest, which is how a typo there gets caught instead of shipped.

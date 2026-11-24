@@ -13,6 +13,9 @@
 namespace ink2_gguf {
 #ifndef __METAL_VERSION__
 using ni::gguf::iq::kIq2xxs;
+using ni::gguf::iq::kIq2xs;
+using ni::gguf::iq::kIq2s;
+using ni::gguf::iq::kIq3xxs;
 #endif
 INK2_CONSTANT int levels[16] = {-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113};
 inline unsigned u16(const INK2_DEVICE unsigned char* p) { return unsigned(p[0]) | (unsigned(p[1]) << 8); }
@@ -35,7 +38,10 @@ inline unsigned block_bytes(unsigned type) {
     case 13: return 176;
     case 14: return 210;
     case 16: return 66;
+    case 17: return 74;
+    case 18: return 98;
     case 20: return 18;
+    case 22: return 82;
     case 23: return 136;
     default: return 0;
   }
@@ -90,9 +96,46 @@ inline float value(const INK2_DEVICE unsigned char* row, unsigned type, unsigned
       const float d = f16(b) * (0.5f + float(aux >> 28)) * 0.25f;
       return d * float((signs & (1u << j)) ? -int(magnitude) : int(magnitude));
     }
+    case 17: {
+      const unsigned group = i / 32, lane = (i % 32) / 8, j = i % 8;
+      const unsigned entry = u16(b + 2 + 2 * (4 * group + lane));
+      unsigned signs = entry >> 9;
+      unsigned parity = signs ^ (signs >> 4);
+      parity ^= parity >> 2;
+      parity ^= parity >> 1;
+      signs |= (parity & 1u) << 7;
+      const unsigned magnitude = unsigned((kIq2xs[entry & 511u] >> (8 * j)) & 255u);
+      const unsigned scale = (b[66 + group] >> (4 * (lane / 2))) & 15u;
+      const float d = f16(b) * (0.5f + float(scale)) * 0.25f;
+      return d * float((signs & (1u << j)) ? -int(magnitude) : int(magnitude));
+    }
+    case 18: {
+      const unsigned group = i / 32, lane = (i % 32) / 8, j = i % 8;
+      const INK2_DEVICE unsigned char* a = b + 66 + 4 * group;
+      const unsigned aux = u16(a) | (u16(a + 2) << 16);
+      unsigned signs = (aux >> (7 * lane)) & 127u;
+      unsigned parity = signs ^ (signs >> 4);
+      parity ^= parity >> 2;
+      parity ^= parity >> 1;
+      signs |= (parity & 1u) << 7;
+      const unsigned grid = kIq3xxs[b[2 + 8 * group + 2 * lane + j / 4]];
+      const unsigned magnitude = (grid >> (8 * (j % 4))) & 255u;
+      const float d = f16(b) * (0.5f + float(aux >> 28)) * 0.5f;
+      return d * float((signs & (1u << j)) ? -int(magnitude) : int(magnitude));
+    }
     case 20: {
       const unsigned q = (b[2 + i % 16] >> (4 * (i / 16))) & 15u;
       return f16(b) * float(levels[q]);
+    }
+    case 22: {
+      const unsigned group = i / 32, lane = (i % 32) / 8, j = i % 8;
+      const unsigned high = (b[66 + group] >> (2 * lane)) & 3u;
+      const unsigned index = b[2 + 4 * group + lane] | (high << 8);
+      const unsigned signs = b[34 + 4 * group + lane];
+      const unsigned magnitude = unsigned((kIq2s[index] >> (8 * j)) & 255u);
+      const unsigned scale = (b[74 + group] >> (4 * (lane / 2))) & 15u;
+      const float d = f16(b) * (0.5f + float(scale)) * 0.25f;
+      return (d * float(magnitude)) * ((signs & (1u << j)) ? -1.0f : 1.0f);
     }
     case 23: {
       const unsigned group = i / 32, lane = i % 32;

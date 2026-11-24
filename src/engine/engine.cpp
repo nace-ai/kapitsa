@@ -838,6 +838,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
                                    : std::string();
   logi("engine ready: %s, context %d, %d slots, %s%s%s%s", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots),
        mode.c_str(), looped.c_str(), kf_src.empty() ? "" : (", KFlash (" + kf_src + ")").c_str(), vision_ ? ", images on" : "");
+  if (ink2_ && Inkling2::fast_profile_available())
+    logi("profile precise: --profile fast turns on faster Inkling-2-Mini kernels (outputs can move slightly; docs/profiles.md)");
   disk_start();  // the SSD prefix cache (engine_disk.cpp): its files open in the background
 }
 

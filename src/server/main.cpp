@@ -85,7 +85,7 @@
 #include <ctime>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.2.39"
+#define KAPITSA_VERSION "0.2.40"
 #endif
 #ifndef KAPITSA_GIT
 #define KAPITSA_GIT ""
@@ -409,8 +409,8 @@ static void print_serve_help() {
          "                         Dory with --loop-kv per-loop: drafts per cycle (default 2 at 1-2 loops, 3 at 3-4)\n"
          "  --mem-budget GB        GPU memory Kapitsa may hold (default: what macOS recommends for this GPU, a\n"
          "                         little less; kapitsa doctor shows it)\n"
-         "  --profile NAME         precise (default): the exact outputs. fast: also the speedups that move the\n"
-         "                         outputs no more than the fastest other engine does, where they were measured\n"
+         "  --profile NAME         precise or fast (default: fast for Inkling-2, precise otherwise). fast adds\n"
+         "                         faster kernels with measured output drift; precise keeps the exact defaults\n"
          "                         (docs/profiles.md; also KAPITSA_PROFILE)\n"
          "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n"
          "  --disk-cache SIZE      SSD prefix cache: conversations kept on the SSD, also across restarts, in\n"
