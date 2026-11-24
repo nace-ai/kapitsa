@@ -4289,11 +4289,26 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     int P = n;
     bool go = handle(s.tokens()[n]);
     int cur_d = ink2_spec_auto_ ? std::min(2, ink2_spec_) : ink2_spec_;
-    // Cost-priced backoff (adaptive depth): while the tokens a cycle emits (a running mean) stay below what a cycle of
-    // this depth costs in plain steps (Ink2DFlare::cost_ratio, fixed per process), decode 16 plain steps, then draft
-    // again at depth 2. Both inputs depend only on the text and the cached table, so a request decodes the same way.
+    // Cost-priced depth (adaptive mode): each cycle drafts at the depth d that maximizes the expected tokens of a cycle,
+    // 1 + p + ... + p^d with p a running per-position acceptance, over what that cycle costs in plain steps
+    // (Ink2DFlare::cost_ratio, fixed per process). When even the best depth returns less than a plain step per step,
+    // 16 plain steps follow, then 2 drafting cycles probe again. p and the table depend only on the text and the cached
+    // table, so a request decodes the same way every time.
     int plain_rem = 0, spec_cycles = 0;
-    double tok_mean = 0.0;
+    double acc_n = 3.0, try_n = 5.0;  // prior p = 0.6
+    auto best_depth = [&](double* value) {
+      const double pa = acc_n / try_n;
+      double e = 1.0, pk = 1.0, best = 0.0;
+      int bd = 1;
+      for (int dd = 1; dd <= ink2_spec_; ++dd) {
+        pk *= pa;
+        e += pk;
+        const double v = e / std::max(1.0, double(ink2_dfl_->cost_ratio(dd)));
+        if (v > best) best = v, bd = dd;
+      }
+      *value = best;
+      return bd;
+    };
     int pending_commit = 0, pending_pos = 0, pending_stride = 0, pending_rb = -1;
     // Flush pending rollback + tap commit before yielding the GPU turn, growing KV, or leaving the loop so another
     // concurrent slot can never overwrite shared conv_snap_ / ink2_vf_taps_ buffers in between.
@@ -4404,13 +4419,13 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       pending_stride = d + 1;
       P += m;
       if (ink2_spec_auto_) {
-        tok_mean = spec_cycles++ > 0 ? 0.75 * tok_mean + 0.25 * m : m;
-        if (a == d) cur_d = std::min(ink2_spec_, cur_d + 2);
-        else cur_d = std::clamp(a + 1, 2, ink2_spec_);
-        if (spec_cycles >= 4 && tok_mean < ink2_dfl_->cost_ratio(d)) {
+        acc_n = 0.85 * acc_n + a;
+        try_n = 0.85 * try_n + a + (a < d ? 1 : 0);
+        double v = 0.0;
+        cur_d = best_depth(&v);
+        if (++spec_cycles >= 2 && v < 1.0) {
           plain_rem = 16;
           spec_cycles = 0;
-          cur_d = std::min(2, ink2_spec_);
         }
       }
       if (go && contended()) {
