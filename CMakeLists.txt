@@ -154,6 +154,10 @@ add_executable(kv_grow_test tests/kv_grow_test.cpp)  # src/model/kv_grow.h: how 
 target_include_directories(kv_grow_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(device_profile_test tests/device_profile_test.cpp src/engine/device_profile.cpp src/ane/default_share.cpp)
 target_include_directories(device_profile_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_executable(profile_test tests/profile_test.cpp src/engine/profile.cpp src/engine/device_profile.cpp src/ane/default_share.cpp)
+target_include_directories(profile_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_test(NAME profile_test COMMAND profile_test)
+set_tests_properties(profile_test PROPERTIES TIMEOUT 30)
 add_executable(catalog_profile_test tests/catalog_profile_test.cpp src/hub/catalog.cpp src/hub/resolve.cpp
   src/engine/device_profile.cpp src/util/json_file.cpp)
 target_include_directories(catalog_profile_test PRIVATE src third_party)

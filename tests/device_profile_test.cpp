@@ -48,6 +48,24 @@ int main() {
   unread.cores_measured = false;
   CHECK(ni::resolve_device(unread).chip == ChipClass::kMatrix);
 
+  const ni::ModelFacts inkling{.inkling2 = true};
+  CHECK(ni::resolve_model(inkling) == ni::ModelClass::kInkling2);
+  CHECK(std::string(ni::model_class_name(ni::ModelClass::kInkling2)) == "inkling2");
+  const auto* automatic = row("ink2_profile_fast");
+  CHECK(automatic && automatic->live && automatic->model == ni::ModelClass::kInkling2 &&
+        automatic->scope == ni::DefaultScope::kAll && !automatic->exclusive);
+  for (const auto& facts : {mac(7, 32, "Apple M1 Max", 64L << 30), mac(8, 10, "Apple M2", 24L << 30),
+                            mac(9, 20, "Apple M4 Pro", g48), mac(10, 20, "Apple M5 Pro", g48),
+                            mac(10, 40, "Apple M5 Max", 128L << 30), mac(11, 12, "Apple M6", 32L << 30)}) {
+    const auto device = ni::resolve_device(facts);
+    CHECK(ni::default_profile(device, inkling) == ni::Profile::kFast);
+    CHECK(ni::default_profile(device, {}) == ni::Profile::kPrecise);
+    CHECK(ni::default_on(ni::Knob::kInk2Q8Fast, device, inkling));
+    CHECK(ni::default_on(ni::Knob::kInk2TensorPf, device, inkling) == (facts.apple_family >= 10));
+    CHECK(ni::format_profile(device, false).find("ink2_profile_fast") != std::string::npos);
+    CHECK(ni::format_profile(device, true).find("\"model\":\"inkling2\"") != std::string::npos);
+  }
+
   ni::ModelFacts a3b;
   a3b.moe = true;
   a3b.hidden = 2048;
@@ -84,7 +102,7 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 22);  // +1: 9B mixed-format catalog policy (#493); +1: kflash_block16; +1: ane_proj_fast; +1: a4_qtm_fast; +1: ink2_tensor_pf; +1: ink2_q8_fast
+  CHECK(ni::default_count() == 23);
   const ni::DefaultRow* i2q8 = row("ink2_q8_fast");
   CHECK(i2q8 && i2q8->scope == ni::DefaultScope::kAll && i2q8->live && !i2q8->exclusive && i2q8->win_pct == 20 &&
         i2q8->win_pct_hi == 29);
