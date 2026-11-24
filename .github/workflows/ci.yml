@@ -66,6 +66,10 @@ jobs:
       - run: python3 tests/test_profile_gates.py
       - run: python3 tests/test_comment_gates.py --self-test
       - run: python3 tests/test_comment_gates.py
+      - name: Inkling conditional-quality evidence
+        run: |
+          python3 tests/test_inkling_profile_evidence.py
+          python3 tools/check_inkling_profile_evidence.py bench/results/inkling-fast-default-20261124/conditional-quality.json
 
   models-table:
     # docs/models.md is written by tools/models_table.py from src/hub/catalog.cpp; a catalog change without the rewritten
