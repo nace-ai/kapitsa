@@ -161,7 +161,7 @@ static int run_checks(ni::Gpu& gpu, std::vector<ni::Buffer>& owned) {
         if (f32) norm.as<float>()[i] = n;
         else norm.as<uint16_t>()[i] = uint16_t(std::bit_cast<uint32_t>(n) >> 16);
       }
-      struct { uint32_t T, H, offset, V, f32; float eps; } p{T, H, 2, V, f32, 1e-6f};
+      struct { uint32_t T, H, offset, V, f32; float eps; uint32_t type, rb; } p{T, H, 2, V, f32, 1e-6f, 0, 0};
       { auto e = gpu.begin(); e->use(ni::ink2::pipeline("ink2_gguf_embed"));
         e->buf(0, tokens); e->buf(1, q); e->buf(2, sc); e->buf(3, norm); e->buf(4, out); e->val(5, p);
         e->dispatch(T, 1, 1, 512); e->commit_and_wait(); }
@@ -176,6 +176,35 @@ static int run_checks(ni::Gpu& gpu, std::vector<ni::Buffer>& owned) {
           const size_t index = size_t(ids[t + 2]) * H + c;
           const double ref = float(q.as<int8_t>()[index]) * float(sc.as<_Float16>()[index / 32]) * inv * (.75f + float(c % 9) / 16);
           if (!check(out.as<float>()[size_t(t) * H + c], ref, "embedding/norm", f32, size_t(t) * H + c)) return 1;
+        }
+      }
+    }
+  }
+  for (uint32_t type : {6u, 8u, 12u, 13u, 14u, 16u, 17u, 18u, 20u, 22u, 23u}) {
+    const uint32_t H = 2304, V = 7, T = 3;
+    const uint32_t rb = H / ink2_gguf::block_values(type) * ink2_gguf::block_bytes(type);
+    auto packed = data(type, H, V), norm = buffer(H * 4), tokens = buffer(5 * 4), out = buffer(T * H * 4);
+    const int ids[] = {1, 2, -1, 6, 7};
+    std::memcpy(tokens.ptr(), ids, sizeof(ids));
+    for (uint32_t f32 : {0u, 1u}) {
+      for (unsigned c = 0; c < H; ++c) {
+        const float n = .75f + float(c % 9) / 16;
+        if (f32) norm.as<float>()[c] = n;
+        else norm.as<uint16_t>()[c] = uint16_t(std::bit_cast<uint32_t>(n) >> 16);
+      }
+      struct { uint32_t T, H, offset, V, f32; float eps; uint32_t type, rb; } p{T, H, 2, V, f32, 1e-6f, type, rb};
+      { auto e = gpu.begin(); e->use(ni::ink2::pipeline("ink2_gguf_embed"));
+        e->buf(0, tokens); e->buf(1, packed); e->buf(2, packed); e->buf(3, norm); e->buf(4, out); e->val(5, p);
+        e->dispatch(T, 1, 1, 512); e->commit_and_wait(); }
+      for (unsigned t = 0; t < T; ++t) {
+        const unsigned token = ids[t + 2] >= 0 && unsigned(ids[t + 2]) < V ? unsigned(ids[t + 2]) : 0;
+        const auto* row = packed.as<uint8_t>() + size_t(token) * rb;
+        double ss = 0;
+        for (unsigned c = 0; c < H; ++c) { const float v = ink2_gguf::value(row, type, c); ss += double(v) * v; }
+        const double inv = 1 / std::sqrt(ss / H + p.eps);
+        for (unsigned c = 0; c < H; ++c) {
+          const double ref = ink2_gguf::value(row, type, c) * inv * (.75f + float(c % 9) / 16);
+          if (!check(out.as<float>()[size_t(t) * H + c], ref, "packed embedding/norm", type, size_t(t) * H + c)) return 1;
         }
       }
     }

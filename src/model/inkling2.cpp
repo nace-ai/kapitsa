@@ -127,7 +127,7 @@ struct Ink2MsgGateP {
 };
 struct Ink2GgufMmP { uint32_t M, N, K, type, row_bytes, add; };
 struct Ink2GgufMoeP { uint32_t T, H, I, top, type, row_bytes; };
-struct Ink2GgufEmbedP { uint32_t T, H, tok_off, V, norm_f32; float eps; };
+struct Ink2GgufEmbedP { uint32_t T, H, tok_off, V, norm_f32; float eps; uint32_t type, row_bytes; };
 struct Ink2MmP {
   uint32_t M, N, K, x_ld, y_ld, w_f32, add;
 };
@@ -1220,11 +1220,15 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
   const float sconv_static_scale = 1.0f / std::sqrt(5.0f);
 
   // Embed + norm -> x_
-  if (gguf_embed_.is_q8()) {
+  if (gguf_embed_.is_q8() || gguf_embed_.gguf.data) {
+    const auto& blocks = gguf_embed_.gguf;
     const Ink2GgufEmbedP ep{uint32_t(T), H, uint32_t(pos0), gguf_embed_.N,
-                           embed_norm_->dtype == DType::F32 ? 1u : 0u, cfg_.rms_eps};
+                           embed_norm_->dtype == DType::F32 ? 1u : 0u, cfg_.rms_eps,
+                           blocks.type, blocks.row_bytes};
     e.use(ink2_pipe("ink2_gguf_embed"));
-    e.buf(0, s.tok); e.buf(1, gguf_embed_.q); e.buf(2, gguf_embed_.s);
+    e.buf(0, s.tok);
+    e.buf(1, blocks.data ? blocks.data : gguf_embed_.q);
+    e.buf(2, blocks.data ? blocks.data : gguf_embed_.s);
     e.buf(3, embed_norm_->buf); e.buf(4, x_); e.val(5, ep);
     e.dispatch(uint32_t(T), 1, 1, 512);
   } else {

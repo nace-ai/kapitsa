@@ -2,7 +2,7 @@
 
 struct Ink2GgufMmP { uint M, N, K, type, row_bytes, add; };
 struct Ink2GgufMoeP { uint T, H, I, top, type, row_bytes; };
-struct Ink2GgufEmbedP { uint T, H, tok_off, V, norm_f32; float eps; };
+struct Ink2GgufEmbedP { uint T, H, tok_off, V, norm_f32; float eps; uint type, row_bytes; };
 
 [[kernel]] void ink2_gguf_mm(const device float* x [[buffer(0)]], const device uchar* w [[buffer(1)]],
                             device float* y [[buffer(2)]], constant Ink2GgufMmP& p [[buffer(3)]],
@@ -71,7 +71,9 @@ struct Ink2GgufEmbedP { uint T, H, tok_off, V, norm_f32; float eps; };
   const uint token = id >= 0 && uint(id) < p.V ? uint(id) : 0u;
   float sum = 0.0f;
   for (uint c = tid; c < p.H; c += nt) {
-    const float v = float(q[size_t(token) * p.H + c]) * float(scales[size_t(token) * (p.H / 32) + c / 32]);
+    const float v = p.row_bytes
+        ? ink2_gguf::value((const device uchar*)q + size_t(token) * p.row_bytes, p.type, c)
+        : float(q[size_t(token) * p.H + c]) * float(scales[size_t(token) * (p.H / 32) + c / 32]);
     out[size_t(t) * p.H + c] = v;
     sum += v * v;
   }

@@ -68,7 +68,7 @@ void Inkling2::load_gguf() {
   const uint64_t H = cfg_.hidden, QD = uint64_t(cfg_.hq) * cfg_.head_dim;
   const uint64_t KD = uint64_t(cfg_.hkv) * cfg_.head_dim, E = cfg_.n_experts, I = cfg_.moe_I;
   gguf_embed_ = mat("token_embd.weight", cfg_.vocab_padded, H);
-  if (!gguf_embed_.is_q8()) throw gguf::Error("Inkling2 GGUF embedding must be Q8_0");
+  if (gguf_embed_.raw) throw gguf::Error("Inkling2 GGUF embedding must use block quantization");
   embed_norm_ = small("token_embd_norm.weight", {H});
   final_norm_ = small("output_norm.weight", {H});
   unembed_ = mat("output.weight", cfg_.vocab_padded, H);
