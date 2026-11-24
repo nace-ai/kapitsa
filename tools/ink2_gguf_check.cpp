@@ -5,6 +5,7 @@
 #include "kernels/inkling2/gguf_blocks.h"
 #include "../tests/fixtures/ink2_iq3_reference.h"
 #include "../tests/fixtures/ink2_iq2_cases.h"
+#include <algorithm>
 #include <bit>
 #include <cmath>
 #include <cstring>
@@ -117,34 +118,44 @@ static int run_checks(ni::Gpu& gpu, std::vector<ni::Buffer>& owned) {
     auto gu = data(type, H, experts * 2 * I), dn = data(type, I, experts * H);
     auto input = buffer(T * H * 4), ids = buffer(T * top * 4), wt = buffer(T * top * 4);
     auto act = buffer(T * top * I * 4), out = buffer(T * H * 4);
+    auto gu_outer = buffer(experts * 4), dn_outer = buffer(experts * 4);
     for (unsigned k = 0; k < T * H; ++k) input.as<float>()[k] = float(int(rng() % 101) - 50) / 100;
     for (unsigned k = 0; k < T * top; ++k) { ids.as<uint32_t>()[k] = (k + 1) % experts; wt.as<float>()[k] = .1f * float(k + 1); }
     const MoeP gp{T, H, I, top, type, grb}, dp{T, H, I, top, type, rb};
-    { auto e = gpu.begin(); e->use(ni::ink2::pipeline("ink2_gguf_gu"));
-      e->buf(0, input); e->buf(1, ids); e->buf(2, gu); e->buf(3, act); e->val(4, gp);
-      e->dispatch((I + 3) / 4, top, T, 128); e->commit_and_wait(); }
-    std::vector<float> ref_act(T * top * I);
-    for (unsigned t = 0; t < T; ++t) for (unsigned s = 0; s < top; ++s) for (unsigned j = 0; j < I; ++j) {
-      const unsigned id = ids.as<uint32_t>()[t * top + s];
-      const uint8_t* gate = gu.as<uint8_t>() + (size_t(id) * 2 * I + j) * grb;
-      double g = 0, u = 0;
-      for (unsigned k = 0; k < H; ++k) { const float v = input.as<float>()[t * H + k];
-        g += double(v) * ink2_gguf::value(gate, type, k); u += double(v) * ink2_gguf::value(gate + size_t(I) * grb, type, k); }
-      const size_t idx = (size_t(t) * top + s) * I + j;
-      ref_act[idx] = float(4 * std::tanh(g / 4) / (1 + std::exp(-g)) * 25 * std::tanh(u / 25));
-      if (!check(act.as<float>()[idx], ref_act[idx], "gate-up/SiTU", type, idx)) return 1;
-    }
-    { auto e = gpu.begin(); e->use(ni::ink2::pipeline("ink2_gguf_down"));
-      e->buf(0, act); e->buf(1, ids); e->buf(2, wt); e->buf(3, dn); e->buf(4, out); e->val(5, dp);
-      e->dispatch((H + 3) / 4, T, 1, 128); e->commit_and_wait(); }
-    for (unsigned t = 0; t < T; ++t) for (unsigned h = 0; h < H; ++h) {
-      double total = 0;
-      for (unsigned s = 0; s < top; ++s) { double sum = 0;
-        const auto* row = dn.as<uint8_t>() + (size_t(ids.as<uint32_t>()[t * top + s]) * H + h) * rb;
-        for (unsigned k = 0; k < I; ++k) sum += double(act.as<float>()[(t * top + s) * I + k]) * ink2_gguf::value(row, type, k);
-        total += wt.as<float>()[t * top + s] * sum;
+    for (bool scaled : {false, true}) {
+      const float gu_scales[] = {.25f, 1.5f, .75f}, dn_scales[] = {1.75f, .03125f, .5f};
+      for (unsigned id = 0; id < experts; ++id) {
+        gu_outer.as<float>()[id] = scaled ? gu_scales[id] : 1.0f;
+        dn_outer.as<float>()[id] = scaled ? dn_scales[id] : 1.0f;
       }
-      if (!check(out.as<float>()[t * H + h], total, "down/combine", type, t * H + h)) return 1;
+      { auto e = gpu.begin(); e->use(ni::ink2::pipeline("ink2_gguf_gu"));
+        e->buf(0, input); e->buf(1, ids); e->buf(2, gu); e->buf(3, act); e->buf(4, gu_outer); e->val(5, gp);
+        e->dispatch((I + 3) / 4, top, T, 128); e->commit_and_wait(); }
+      std::vector<float> ref_act(T * top * I);
+      for (unsigned t = 0; t < T; ++t) for (unsigned s = 0; s < top; ++s) for (unsigned j = 0; j < I; ++j) {
+        const unsigned id = ids.as<uint32_t>()[t * top + s];
+        const uint8_t* gate = gu.as<uint8_t>() + (size_t(id) * 2 * I + j) * grb;
+        double g = 0, u = 0;
+        for (unsigned k = 0; k < H; ++k) { const float v = input.as<float>()[t * H + k];
+          g += double(v) * ink2_gguf::value(gate, type, k); u += double(v) * ink2_gguf::value(gate + size_t(I) * grb, type, k); }
+        g *= gu_outer.as<float>()[id]; u *= gu_outer.as<float>()[id];
+        const size_t idx = (size_t(t) * top + s) * I + j;
+        ref_act[idx] = float(4 * std::tanh(g / 4) / (1 + std::exp(-g)) * 25 * std::tanh(u / 25));
+        if (!check(act.as<float>()[idx], ref_act[idx], "gate-up/SiTU", type, idx)) return 1;
+      }
+      { auto e = gpu.begin(); e->use(ni::ink2::pipeline("ink2_gguf_down"));
+        e->buf(0, act); e->buf(1, ids); e->buf(2, wt); e->buf(3, dn); e->buf(4, out); e->buf(5, dn_outer); e->val(6, dp);
+        e->dispatch((H + 3) / 4, T, 1, 128); e->commit_and_wait(); }
+      for (unsigned t = 0; t < T; ++t) for (unsigned h = 0; h < H; ++h) {
+        double total = 0;
+        for (unsigned s = 0; s < top; ++s) { double sum = 0;
+          const unsigned id = ids.as<uint32_t>()[t * top + s];
+          const auto* row = dn.as<uint8_t>() + (size_t(id) * H + h) * rb;
+          for (unsigned k = 0; k < I; ++k) sum += double(act.as<float>()[(t * top + s) * I + k]) * ink2_gguf::value(row, type, k);
+          total += wt.as<float>()[t * top + s] * (sum * dn_outer.as<float>()[id]);
+        }
+        if (!check(out.as<float>()[t * H + h], total, "down/combine", type, t * H + h)) return 1;
+      }
     }
   }
   {
