@@ -408,7 +408,23 @@ void Ink2DFlare::calibrate(const Buffer& pf_taps, const Buffer& vf_taps, const B
   }
   std::string t;
   for (int d = 1; d <= kMaxDrafts; ++d) t += std::format(" {:.2f}", ratio_[d]);
-  logi("DFlare: a draft cycle costs%s plain steps at depth 1..%d (%s, %s)", t.c_str(), kMaxDrafts, how, path.c_str());
+  logi("DFlare: a draft cycle costs%s plain steps at depth 1..%d, so it pays above %.2f per-position acceptance (%s, %s)",
+       t.c_str(), kMaxDrafts, break_even(), how, path.c_str());
+}
+
+double Ink2DFlare::break_even() const {
+  double best = 1.0;
+  for (int d = 1; d <= kMaxDrafts; ++d) {
+    double lo = 0.0, hi = 1.0;
+    for (int it = 0; it < 40; ++it) {
+      const double p = 0.5 * (lo + hi);
+      double e = 1.0, pk = 1.0;
+      for (int k = 1; k <= d; ++k) e += (pk *= p);
+      (e < ratio_[d] ? lo : hi) = p;
+    }
+    best = std::min(best, hi);
+  }
+  return best;
 }
 
 void Ink2DFlare::enc_q8(Encoder& e, const Q8Mat& w, const Buffer& x, const Buffer& y, int M, bool add) {

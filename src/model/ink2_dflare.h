@@ -36,6 +36,8 @@ class Ink2DFlare {
   // the process and across restarts. The engine backs off to plain steps while its tokens per cycle stay below it.
   void calibrate(const Buffer& pf_taps, const Buffer& vf_taps, const Buffer& vf_logits);
   float cost_ratio(int depth) const { return ratio_[std::clamp(depth, 1, kMaxDrafts)]; }
+  // The lowest per-position acceptance p at which some depth pays: 1 + p + ... + p^d = cost_ratio(d), over d.
+  double break_even() const;
   void reset(Ink2DFlareSeq& ds);
 
   // Commit `n_rows` target taps ([4, taps_stride_rows, H] float) starting at sequence position `pos0`.

@@ -672,6 +672,16 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       ink2_vf_taps_ = g.alloc(4 * size_t(Inkling2::kMaxVerify) * H * 4, "ink2_vf_taps");
       ink2_vf_logits_ = g.alloc(size_t(Inkling2::kMaxVerify) * V * 4, "ink2_vf_logits");
       if (ink2_spec_auto_) ink2_dfl_->calibrate(ink2_pf_taps_, ink2_vf_taps_, ink2_vf_logits_);
+      // Off by default where drafting needs a per-position acceptance the drafter reaches only on code: above 0.65, what
+      // it accepts on prose and reasoning (0.6 measured on an M6; MTPLX 0.63-0.65 on reasoning). Measured: 0.53 / +5.8%
+      // on an M6 (fast), 0.44 / +13.2% on an M3 Pro (precise), 0.69 / -5.3% on that M3 Pro (fast), #1383.
+      if (ink2_spec_auto_ && ink2_dfl_->break_even() > 0.65) {
+        logi("DFlare drafter: off (a draft cycle pays only above %.2f per-position acceptance on this Mac; --spec K turns it on)",
+             ink2_dfl_->break_even());
+        for (Buffer* b : {&ink2_pf_taps_, &ink2_vf_taps_, &ink2_vf_logits_}) g.release(*b);
+        ink2_dfl_.reset();
+        ink2_spec_ = 0;
+      }
     }
   }
 
