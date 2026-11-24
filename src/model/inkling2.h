@@ -148,6 +148,8 @@ class Inkling2 : public Model {
   std::string disk_format() const override;
   void disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const override;
   void disk_state(const Seq& s, const Checkpoint* ck, std::vector<Buffer>& out) const override;
+  void enc_kt_tile(Encoder& e, Seq& s, size_t v, int a, int b);  // kc rows [a, b) of visit v into s.kt[v]
+  void disk_loaded(Seq& s) override { s.kt_stale = !s.kt.empty(); }
 
   void encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample = true) override;
   void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,

@@ -1028,6 +1028,7 @@ bool Engine::disk_restore(Slot& slot, const pcache::Hit& hit) {
   if (d.mtp && q35_) q35_->draft_vocab_restore(s, e.vocab, e.vocab_scanned);
   slot.turns = std::max(slot.turns, 2);
   slot.live_ok = false;
+  model_->disk_loaded(s);
   logi("SSD cache: read %d tokens of a stored conversation into slot %d (%.0f MB in %.0f ms)", P, idx,
        (d.store.stats().read - r0) / 1e6, now_ms() - t0);
   return true;

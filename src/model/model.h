@@ -47,6 +47,10 @@ struct Seq {
   // (half [cap, 128]) and block keys (bf16 [cap / 4, 128]), grown with the KV cache; the n-gram embedding's conv
   // window (fp32 [32, 4 x hidden], position mod 32)
   std::vector<Buffer> ixk, ixb;
+  // Inkling-2 NI_INK2_KT (lab13): per attention visit a tiled copy of kc for decode attention (written with kc by every
+  // pass); kt_stale: kc was written outside the passes (SSD cache read), the copy is rebuilt before the next pass
+  std::vector<Buffer> kt;
+  bool kt_stale = false;
   Buffer mtp_ixk, mtp_ixb;
   Buffer pconv;
   std::shared_ptr<void> draft_vocab;  // Qwen35: the MTP draft head's rows for this conversation's tokens
@@ -220,6 +224,8 @@ class Model {
   virtual void disk_state(const Seq& s, const Checkpoint* c, std::vector<Buffer>& out) const {
     (void)s, (void)c, (void)out;
   }
+  // The SSD cache wrote s's disk_rows / disk_state buffers (a stored conversation read into s)
+  virtual void disk_loaded(Seq& s) { (void)s; }
 
   // ---- images ----
   // The positions of a prompt of n rows whose images sit at `spans`, kept in s for every pass that follows (prefill,

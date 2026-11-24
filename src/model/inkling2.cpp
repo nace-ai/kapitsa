@@ -119,12 +119,23 @@ int ink2_fa_nt() {
 // lab12: g3kw_rc variant. NI_INK2_ATTL=1 (A/B-able): ink2_attn_decode_g3kw_rc_ml (ring slots without a per-key modulo +
 // whole blocks by a constant V stride; bit-identical). NI_INK2_ATTP=<mask> (A/B-able, timing only): the probe
 // ink2_attn_decode_g3kw_rc_p<mask> (masks instantiated in ink2.metal next to the kernel; ml = 8704).
-std::string ink2_rc_name() {
+std::string ink2_rc_name(bool kt) {
   static const int attl = getenv("NI_INK2_ATTL") ? atoi(getenv("NI_INK2_ATTL")) : 0;
   static const int attp = getenv("NI_INK2_ATTP") ? atoi(getenv("NI_INK2_ATTP")) : 0;
   if (const int v = ink2_ab("NI_INK2_ATTP", attp)) return "ink2_attn_decode_g3kw_rc_p" + std::to_string(v);
-  return ink2_ab("NI_INK2_ATTL", attl) ? "ink2_attn_decode_g3kw_rc_ml" : "ink2_attn_decode_g3kw_rc";
+  return ink2_ab("NI_INK2_ATTL", attl) ? (kt ? "ink2_attn_decode_g3kw_rc_mlt" : "ink2_attn_decode_g3kw_rc_ml")
+                                       : "ink2_attn_decode_g3kw_rc";
 }
+
+// lab13 NI_INK2_KT=1: a tiled copy of every visit's K (Seq::kt, ink2_kt_idx in ink2.metal) read by the decode attention
+// (ink2_attn_decode_g3kw_rc_mlt, with NI_INK2_ATTL=1 NI_INK2_REDLAST=3; bit-identical). Costs K's bytes again:
+// +16 KB per position (8 global visits) and +50% on the SWA rings. Allocation and the writes follow the env at start;
+// the read is A/B-able (BENCH_AB NI_INK2_KT=0).
+static bool ink2_kt_alloc() {
+  static const bool v = getenv("NI_INK2_KT") && atoi(getenv("NI_INK2_KT")) != 0;
+  return v;
+}
+static size_t ink2_kt_rows(size_t rows) { return (rows + 31) / 32 * 32; }
 
 void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
   if (const char* v = getenv("NI_PREWARM"); v && !strcmp(v, "0")) return;
@@ -194,6 +205,10 @@ struct Ink2SconvDynP {
 struct Ink2QkvrP {
   uint32_t T, Hq, Hkv, D, d_rel, pos0, kv_cap, is_swa, scale_f32;
   float qk_clip, r_clip, v_eps, log_floor, log_alpha;
+  uint32_t kt;
+};
+struct Ink2KtP {
+  uint32_t a, Hkv, D;
 };
 struct Ink2RelP {
   uint32_t T, Hq, d_rel, extent, proj_f32;
@@ -450,8 +465,8 @@ size_t Inkling2::kv_per_pos(const Ink2Config& c) {
   int n_global = 0;
   for (int ip : c.schedule)
     if (!c.is_local[size_t(ip)]) ++n_global;
-  // 2 (K, V) * hkv * head_dim * sizeof(half)
-  return size_t(n_global) * 2 * size_t(c.hkv) * size_t(c.head_dim) * 2;
+  // (2 (K, V) + the tiled K copy) * hkv * head_dim * sizeof(half)
+  return size_t(n_global) * (ink2_kt_alloc() ? 3 : 2) * size_t(c.hkv) * size_t(c.head_dim) * 2;
 }
 
 size_t Inkling2::conv_bytes_per_seq(const Ink2Config& c) {
@@ -463,7 +478,8 @@ size_t Inkling2::ring_bytes_per_seq(const Ink2Config& c, int tmax) {
   for (int ip : c.schedule)
     if (c.is_local[size_t(ip)]) ++n_swa;
   const int rcap = (c.swa + std::max(1, tmax) + 15) / 16 * 16;
-  return size_t(n_swa) * 2 * size_t(rcap) * size_t(c.hkv) * size_t(c.head_dim) * 2;
+  return size_t(n_swa) * (2 * size_t(rcap) + (ink2_kt_alloc() ? ink2_kt_rows(size_t(rcap)) : 0)) * size_t(c.hkv) *
+         size_t(c.head_dim) * 2;
 }
 
 static Profile ink2_profile() {
@@ -1051,6 +1067,7 @@ std::unique_ptr<Seq> Inkling2::new_seq(int limit, int initial) {
   const size_t nv = cfg_.schedule.size();
   s->kc.resize(nv);
   s->vc.resize(nv);
+  if (ink2_kt_alloc()) s->kt.resize(nv);
   s->conv.push_back(g.alloc(conv_bytes_per_seq(cfg_), "ink2_conv"));
   g.make_resident(s->conv);
   reset(*s);
@@ -1068,7 +1085,8 @@ bool Inkling2::ensure_rings(Seq& s) {
   const size_t nv = cfg_.schedule.size();
   size_t need = 0;
   for (size_t v = 0; v < nv; ++v)
-    if (cfg_.is_local[size_t(cfg_.schedule[v])] && !s.kc[v]) need += 2 * row * size_t(ring_rows_);
+    if (cfg_.is_local[size_t(cfg_.schedule[v])] && !s.kc[v])
+      need += 2 * row * size_t(ring_rows_) + (s.kt.empty() ? 0 : row * ink2_kt_rows(size_t(ring_rows_)));
   if (!need) return true;
   if (mem_budget_ && g.allocated_bytes() + need > mem_budget_) return false;
   std::vector<Buffer> add;
@@ -1080,6 +1098,11 @@ bool Inkling2::ensure_rings(Seq& s) {
       memset(s.vc[v].ptr(), 0, s.vc[v].size);
       add.push_back(s.kc[v]);
       add.push_back(s.vc[v]);
+      if (!s.kt.empty()) {
+        s.kt[v] = g.alloc(row * ink2_kt_rows(size_t(ring_rows_)), "ink2_kt_ring");
+        memset(s.kt[v].ptr(), 0, s.kt[v].size);
+        add.push_back(s.kt[v]);
+      }
     }
   g.make_resident(add);
   return true;
@@ -1123,17 +1146,21 @@ bool Inkling2::reserve(Seq& s, int need) {
   };
   for (size_t v = 0; v < nv; ++v) {
     if (cfg_.is_local[size_t(cfg_.schedule[v])]) continue;
-    for (Buffer* b : {&s.kc[v], &s.vc[v]}) {
-      if (batch && batch + nb > p.batch) flush();
-      Buffer nbuf = g.alloc(nb, "ink2_kv_global");
+    for (Buffer* b : {&s.kc[v], &s.vc[v], s.kt.empty() ? nullptr : &s.kt[v]}) {
+      if (!b) continue;
+      const bool tiled = !s.kt.empty() && b == &s.kt[v];  // (whole 32-row tiles; old tiles keep their offsets)
+      const size_t nbb = tiled ? row * ink2_kt_rows(size_t(target)) : nb;
+      if (batch && batch + nbb > p.batch) flush();
+      Buffer nbuf = g.alloc(nbb, tiled ? "ink2_kt_global" : "ink2_kv_global");
+      if (tiled) memset(nbuf.ptr(), 0, nbuf.size);  // (tiles zeroed as the lab ran them; kc / vc unzeroed as #1396)
       if (old > 0 && *b) {
         if (!e) e = g.begin();
-        enc_copy_buf(*e, *b, nbuf, size_t(old) * row);
+        enc_copy_buf(*e, *b, nbuf, tiled ? row * ink2_kt_rows(size_t(old)) : size_t(old) * row);
       }
       if (*b) olds.push_back(*b);
       *b = nbuf;
       news.push_back(nbuf);
-      batch += nb;
+      batch += nbb;
     }
   }
   flush();
@@ -1144,7 +1171,7 @@ bool Inkling2::reserve(Seq& s, int need) {
 
 void Inkling2::drop_kv(Seq& s) {
   Gpu& g = Gpu::get();
-  for (auto* v : {&s.kc, &s.vc})
+  for (auto* v : {&s.kc, &s.vc, &s.kt})
     for (Buffer& b : *v) {
       g.release(b);
       b = Buffer{};
@@ -1213,8 +1240,19 @@ void Inkling2::restore(Encoder& e, Seq& s, const Checkpoint& c) {
       if (v >= dsts.size() || !dsts[v] || dsts[v].size < src.size)
         fatal("inkling2: restore missing or undersized ring destination buffer for visit %zu (%s)", v, kv ? "v" : "k");
       enc_copy_buf(e, src, dsts[v], src.size);
+      if (!kv && v < s.kt.size() && s.kt[v]) enc_kt_tile(e, s, v, 0, ring_rows_);  // (the ring's tiled K again)
     }
   }
+}
+
+void Inkling2::enc_kt_tile(Encoder& e, Seq& s, size_t v, int a, int b) {
+  if (b <= a) return;
+  const Ink2KtP p{uint32_t(a), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim)};
+  e.use(ink2_pipe("ink2_kt_tile"));
+  e.buf(0, s.kc[v]);
+  e.buf(1, s.kt[v]);
+  e.val(2, p);
+  e.dispatch(uint32_t(b - a), uint32_t(cfg_.hkv), 1, uint32_t(cfg_.head_dim));
 }
 
 std::string Inkling2::disk_format() const {
@@ -1621,6 +1659,13 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
   auto gseq = [&](int gi) -> Seq& { return multi_ ? *(*multi_)[size_t(gi)].s : s; };
   auto gpos = [&](int gi) { return multi_ ? (*multi_)[size_t(gi)].pos : pos0; };
   auto rv = [&](const Buffer& b, size_t rb, int gi) { return multi_ ? b.view(size_t(gi) * rb, rb) : b; };
+  for (int gi = 0; gi < ng; ++gi) {  // (NI_INK2_KT: kc rows the SSD cache wrote; rows >= pos are written before read)
+    Seq& sg = gseq(gi);
+    if (!sg.kt_stale) continue;
+    for (size_t v = 0; v < cfg_.schedule.size(); ++v)
+      if (sg.kt[v]) enc_kt_tile(e, sg, v, 0, cfg_.is_local[size_t(cfg_.schedule[v])] ? ring_rows_ : std::min(gpos(gi), sg.cap));
+    sg.kt_stale = false;
+  }
   // (multi rows: a per-sequence stage's group dispatches run concurrently: distinct rows and state)
   static const bool mconc = !getenv("NI_INK2_MCONC") || atoi(getenv("NI_INK2_MCONC")) != 0;
   const bool gconc = multi_ && ng > 1 && mconc;
@@ -2018,7 +2063,8 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
                          cfg_.rel_clip,
                          cfg_.rms_eps,
                          cfg_.log_floor,
-                         cfg_.log_alpha};
+                         cfg_.log_alpha,
+                         gseq(gi).kt.empty() ? 0u : 1u};
       e.use(ink2_pipe(rbfold ? "ink2_qkvr_prep_rb" : "ink2_qkvr_prep"));
       if (rbfold) {
         e.buf(9, L.rel_proj->buf);
@@ -2034,6 +2080,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       e.buf(6, gseq(gi).kc[v_idx]);
       e.buf(7, gseq(gi).vc[v_idx]);
       e.val(8, qp);
+      e.buf(12, gseq(gi).kt.empty() ? gseq(gi).kc[v_idx] : gseq(gi).kt[v_idx]);
       const uint32_t rj = rbfold ? (uint32_t(cfg_.rel_extent) + uint32_t(cfg_.head_dim) - 1) / uint32_t(cfg_.head_dim) : 1u;
       e.dispatch(uint32_t(cfg_.hq) * (1 + rj) + uint32_t(2 * cfg_.hkv), Tg, 1, uint32_t(cfg_.head_dim));
     }
@@ -2109,7 +2156,9 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       // (2: plain loads in the reduce; probe. 3 (lab11): coherent(device) partials + device-scope fences, plain stores)
       const int redlast_v = ink2_ab("NI_INK2_REDLAST", redlast_env);
       redlast = redlast_v != 0 && g3 && kw && red_p0;
-      e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : kw ? (redlast ? (redlast_v == 3 ? ink2_rc_name().c_str() : redlast_v == 2 ? "ink2_attn_decode_g3kw_r0" : "ink2_attn_decode_g3kw_r") : "ink2_attn_decode_g3kw")
+      static const int kt_env = ink2_kt_alloc() ? atoi(getenv("NI_INK2_KT")) : 0;
+      const bool kt = redlast && redlast_v == 3 && !gseq(gi).kt.empty() && ink2_ab("NI_INK2_KT", kt_env) != 0;
+      e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : kw ? (redlast ? (redlast_v == 3 ? ink2_rc_name(kt).c_str() : redlast_v == 2 ? "ink2_attn_decode_g3kw_r0" : "ink2_attn_decode_g3kw_r") : "ink2_attn_decode_g3kw")
                                                                                                : "ink2_attn_decode_g3_fx"));
       if (redlast) {
         e.buf(8, rv(sinks_, size_t(cfg_.hq) * 4, gi));
@@ -2118,7 +2167,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         e.buf(11, attn_cnt_.view(size_t(gi) * size_t(cfg_.hkv) * 4, size_t(cfg_.hkv) * 4));
       }
       e.buf(0, rv(q_, QD * 4, gi));
-      e.buf(1, gseq(gi).kc[v_idx]);
+      e.buf(1, kt ? gseq(gi).kt[v_idx] : gseq(gi).kc[v_idx]);
       e.buf(2, gseq(gi).vc[v_idx]);
       e.buf(3, rv(rb_, rbr, gi));
       e.buf(4, rv(part_m_, pm, gi));

@@ -1517,14 +1517,31 @@ struct Ink2SconvDynP {
 struct Ink2QkvrP {
   uint T, Hq, Hkv, D, d_rel, pos0, kv_cap, is_swa, scale_f32;
   float qk_clip, r_clip, v_eps, log_floor, log_alpha;
+  uint kt;  // lab13: 1 = also write the row into the tiled K copy kt (buffer 12)
 };
+// lab13 (NI_INK2_KT): tiled K copy for decode attention, beside the row-major K cache. 32-slot tiles stored
+// [tile][Hkv][16-byte piece][slot & 31]: the keys-across-lanes QK (one key per lane, 16-byte loads) then reads 512
+// contiguous bytes per load instruction instead of touching 32 rows. Same halves as kc, so bit-identical attention.
+NI_INLINE size_t ink2_kt_idx(uint slot, uint h, uint Hkv, uint D, uint d) {  // (in halves)
+  return ((((size_t(slot >> 5) * Hkv + h) * (D >> 3) + (d >> 3)) << 5) + (slot & 31u)) * 8u + (d & 7u);
+}
+// rows [a, b) of kc (slots) into kt; grid (b - a, Hkv), D threads (restore / SSD-cache reads write kc only)
+struct Ink2KtP {
+  uint a, Hkv, D;
+};
+[[kernel]] void ink2_kt_tile(const device half* kc [[buffer(0)]], device half* kt [[buffer(1)]],
+                             constant Ink2KtP& p [[buffer(2)]], uint2 tg [[threadgroup_position_in_grid]],
+                             uint tid [[thread_index_in_threadgroup]]) {
+  const uint slot = p.a + tg.x, h = tg.y;
+  kt[ink2_kt_idx(slot, h, p.Hkv, p.D, tid)] = kc[(size_t(slot) * p.Hkv + h) * p.D + tid];
+}
 
 [[kernel]] void ink2_qkvr_prep(device float* q [[buffer(0)]], const device float* k [[buffer(1)]],
                                const device float* v [[buffer(2)]], device float* r [[buffer(3)]],
                                const device void* q_scale [[buffer(4)]], const device void* r_scale [[buffer(5)]],
                                device half* kc [[buffer(6)]], device half* vc [[buffer(7)]],
-                               constant Ink2QkvrP& p [[buffer(8)]], uint2 tg [[threadgroup_position_in_grid]],
-                               uint tid [[thread_index_in_threadgroup]]) {
+                               constant Ink2QkvrP& p [[buffer(8)]], device half* kt [[buffer(12)]],
+                               uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]]) {
   threadgroup float scratch[32];
   const uint kind_h = tg.x, t = tg.y;
   const uint pos = p.pos0 + t;
@@ -1548,7 +1565,9 @@ struct Ink2QkvrP {
     const float val = k[(size_t(t) * p.Hkv + h) * p.D + tid];
     const float ss = tg_sum(val * val, scratch, tid, p.D);
     const float mult = min(1.0f, p.qk_clip / (metal::precise::sqrt(ss) + 1e-6f));
-    kc[(size_t(slot) * p.Hkv + h) * p.D + tid] = half(val * mult);
+    const half hv = half(val * mult);
+    kc[(size_t(slot) * p.Hkv + h) * p.D + tid] = hv;
+    if (p.kt) kt[ink2_kt_idx(slot, h, p.Hkv, p.D, tid)] = hv;
     return;
   }
   rem -= p.Hkv;
@@ -1590,7 +1609,8 @@ struct Ink2RelP {
                                   device half* kc [[buffer(6)]], device half* vc [[buffer(7)]],
                                   constant Ink2QkvrP& p [[buffer(8)]], const device void* rel_proj [[buffer(9)]],
                                   device float* rb [[buffer(10)]], constant Ink2RelP& rp [[buffer(11)]],
-                                  uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]]) {
+                                  device half* kt [[buffer(12)]], uint2 tg [[threadgroup_position_in_grid]],
+                                  uint tid [[thread_index_in_threadgroup]]) {
   threadgroup float scratch[32];
   threadgroup float rs[128];
   const uint kind_h = tg.x, t = tg.y;
@@ -1615,7 +1635,9 @@ struct Ink2RelP {
     const float val = k[(size_t(t) * p.Hkv + h) * p.D + tid];
     const float ss = tg_sum(val * val, scratch, tid, p.D);
     const float mult = min(1.0f, p.qk_clip / (metal::precise::sqrt(ss) + 1e-6f));
-    kc[(size_t(slot) * p.Hkv + h) * p.D + tid] = half(val * mult);
+    const half hv = half(val * mult);
+    kc[(size_t(slot) * p.Hkv + h) * p.D + tid] = hv;
+    if (p.kt) kt[ink2_kt_idx(slot, h, p.Hkv, p.D, tid)] = hv;
     return;
   }
   rem -= p.Hkv;
@@ -1936,11 +1958,13 @@ NI_INLINE void ink2_attn_decode_g3kw_impl(const device float* q, const device ha
 #define INK2_KW_SLOT(X) \
   ((PR & 512u) ? (p.is_swa ? ink2_ring_add(kbm, (X) - kb, p.kv_cap) : (X)) : (p.is_swa ? ((X) % p.kv_cap) : (X)))
     const uint slot = INK2_KW_SLOT(kpc);
-    const device uint4* kr = (const device uint4*)(kc + (size_t(slot) * p.Hkv + hkv) * p.D);
+    // (PR 1048576, lab13 KT: kc is the tiled copy, ink2_kt_idx; a lane's 16 pieces are 32 uint4 apart)
+    const device uint4* kr = (PR & 1048576u) ? (const device uint4*)kc + ((size_t(slot >> 5) * p.Hkv + hkv) * 512u + (slot & 31u))
+                                             : (const device uint4*)(kc + (size_t(slot) * p.Hkv + hkv) * p.D);
     const device uint4* kblk = (const device uint4*)(kc + (size_t(kbm) * p.Hkv + hkv) * p.D);  // (probe 131072)
     float s[G] = {0.0f, 0.0f, 0.0f};
     for (uint c = 0; c < 32u && !(PR & 1u); c += 2u) {
-      const uint4 kk = (PR & 524288u) ? uint4(lane + c) : (PR & 131072u) ? kblk[(c >> 1) * 32u + lane] : kr[c >> 1];
+      const uint4 kk = (PR & 524288u) ? uint4(lane + c) : (PR & 131072u) ? kblk[(c >> 1) * 32u + lane] : (PR & 1048576u) ? kr[(c >> 1) * 32u] : kr[c >> 1];
       const float4 k0 = float4(as_type<half4>(kk.xy)), k1 = float4(as_type<half4>(kk.zw));
       if (PR & 262144u) s[0] += k0.x + k1.y;
       else for (uint g = 0; g < G; ++g) s[g] += dot(k0, qs[g * 32u + c]) + dot(k1, qs[g * 32u + c + 1u]);
@@ -2179,6 +2203,7 @@ template <uint PR>
 #define INK2_RC(N, PR) template [[host_name(N)]] [[kernel]] decltype(ink2_attn_decode_g3kw_rc<PR>) ink2_attn_decode_g3kw_rc<PR>;
 INK2_RC("ink2_attn_decode_g3kw_rc", 0)
 INK2_RC("ink2_attn_decode_g3kw_rc_ml", 8704)
+INK2_RC("ink2_attn_decode_g3kw_rc_mlt", 8704 | 1048576)  // (lab13 NI_INK2_KT: ml reading the tiled K copy)
 INK2_RC("ink2_attn_decode_g3kw_rc_p1", 1)
 INK2_RC("ink2_attn_decode_g3kw_rc_p2", 2)
 INK2_RC("ink2_attn_decode_g3kw_rc_p3", 3)
