@@ -117,12 +117,9 @@ int ink2_fa_nt() {
 }
 
 // lab12: g3kw_rc variant. NI_INK2_ATTL=1 (A/B-able): ink2_attn_decode_g3kw_rc_ml (ring slots without a per-key modulo +
-// whole blocks by a constant V stride; bit-identical). NI_INK2_ATTP=<mask> (A/B-able, timing only): the probe
-// ink2_attn_decode_g3kw_rc_p<mask> (masks instantiated in ink2.metal next to the kernel; ml = 8704).
+// whole blocks by a constant V stride; bit-identical).
 std::string ink2_rc_name(bool kt) {
   static const int attl = getenv("NI_INK2_ATTL") ? atoi(getenv("NI_INK2_ATTL")) : 0;
-  static const int attp = getenv("NI_INK2_ATTP") ? atoi(getenv("NI_INK2_ATTP")) : 0;
-  if (const int v = ink2_ab("NI_INK2_ATTP", attp)) return "ink2_attn_decode_g3kw_rc_p" + std::to_string(v);
   return ink2_ab("NI_INK2_ATTL", attl) ? (kt ? "ink2_attn_decode_g3kw_rc_mlt" : "ink2_attn_decode_g3kw_rc_ml")
                                        : "ink2_attn_decode_g3kw_rc";
 }
@@ -1653,12 +1650,13 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
   const uint32_t KVD = uint32_t(cfg_.hkv) * uint32_t(cfg_.head_dim);
   const size_t row_bytes = size_t(T) * H * 4;
   const Buffer& conv = s.conv[0];
-  // row groups (multi_: one row per sequence, buffer views at row gi); one sequence: ng = 1
-  const int ng = multi_ ? int(multi_->size()) : 1;
-  const uint32_t Tg = multi_ ? 1u : uint32_t(T);
-  auto gseq = [&](int gi) -> Seq& { return multi_ ? *(*multi_)[size_t(gi)].s : s; };
-  auto gpos = [&](int gi) { return multi_ ? (*multi_)[size_t(gi)].pos : pos0; };
-  auto rv = [&](const Buffer& b, size_t rb, int gi) { return multi_ ? b.view(size_t(gi) * rb, rb) : b; };
+  // One sequence: the per-sequence stages keep the loop shape over ng = 1 group (row views at gi) that the verify rows'
+  // decode attention (NI_INK2_VDEC, aseq / arv below) runs over T groups.
+  const int ng = 1;
+  const uint32_t Tg = uint32_t(T);
+  auto gseq = [&](int) -> Seq& { return s; };
+  auto gpos = [&](int) { return pos0; };
+  auto rv = [&](const Buffer& b, size_t, int) { return b; };
   for (int gi = 0; gi < ng; ++gi) {  // (NI_INK2_KT: kc rows the SSD cache wrote; rows >= pos are written before read)
     Seq& sg = gseq(gi);
     if (!sg.kt_stale) continue;
@@ -1666,9 +1664,8 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       if (sg.kt[v]) enc_kt_tile(e, sg, v, 0, cfg_.is_local[size_t(cfg_.schedule[v])] ? ring_rows_ : std::min(gpos(gi), sg.cap));
     sg.kt_stale = false;
   }
-  // (multi rows: a per-sequence stage's group dispatches run concurrently: distinct rows and state)
+  // (verify rows' decode attention dispatches run concurrently: distinct rows and partials; NI_INK2_MCONC=0 serial)
   static const bool mconc = !getenv("NI_INK2_MCONC") || atoi(getenv("NI_INK2_MCONC")) != 0;
-  const bool gconc = multi_ && ng > 1 && mconc;
   const float sconv_static_scale = 1.0f / std::sqrt(5.0f);
   // Q8 one-row matvec + ink2_sconv1 epilogue (the fused short convs; R as enc_q8 picks it)
   auto enc_q8_sc = [&](Encoder& e, const Ink2Mat& w, const Buffer& x, const Buffer& y, const Buffer& cw,
@@ -1701,7 +1698,6 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
   }
 
   // Embed + norm -> x_
-  if (gconc) e.group_begin();
   for (int gi = 0; gi < ng; ++gi) {
     if (gguf_embed_.is_q8() || gguf_embed_.gguf.data) {
       const auto& blocks = gguf_embed_.gguf;
@@ -1725,7 +1721,6 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     e.val(4, ep);
     e.dispatch(Tg, 1, 1, 512);
   }
-  if (gconc) e.group_end();
   if (diag_rows) enc_copy_buf(e, x_.view(size_t(T - 1) * H * 4, H * 4), diag_rows->view(0, H * 4), H * 4);
 
   // Ping-pong active residual stream between x_ and inp_sa_ with zero extra copies.
@@ -2027,13 +2022,9 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         e.group_end();
       } else {
         enc_mm(e, *L.k_proj, kn, dyn_, T);
-        if (gconc) e.group_begin();
         for (int gi = 0; gi < ng; ++gi) dyn_conv(gi, false);
-        if (gconc) e.group_end();
         enc_mm(e, *L.v_proj, vn, dyn_, T);
-        if (gconc) e.group_begin();
         for (int gi = 0; gi < ng; ++gi) dyn_conv(gi, true);
-        if (gconc) e.group_end();
       }
     }
 
@@ -2047,7 +2038,6 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     const Ink2RelP rbp{Tg, uint32_t(cfg_.hq), uint32_t(cfg_.d_rel), uint32_t(cfg_.rel_extent),
                        L.rel_proj->dtype == DType::F32 ? 1u : 0u};
     const size_t rbrow = size_t(cfg_.hq) * size_t(cfg_.rel_extent) * 4;
-    if (gconc) e.group_begin();
     for (int gi = 0; gi < ng; ++gi) {
       const uint32_t g_cap = L.is_swa ? uint32_t(ring_rows_) : uint32_t(gseq(gi).cap);
       const Ink2QkvrP qp{Tg,
@@ -2084,7 +2074,6 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       const uint32_t rj = rbfold ? (uint32_t(cfg_.rel_extent) + uint32_t(cfg_.head_dim) - 1) / uint32_t(cfg_.head_dim) : 1u;
       e.dispatch(uint32_t(cfg_.hq) * (1 + rj) + uint32_t(2 * cfg_.hkv), Tg, 1, uint32_t(cfg_.head_dim));
     }
-    if (gconc) e.group_end();
 
     // Rel bias [T, Hq, rel_extent]
     if (!rbfold) {
@@ -2109,15 +2098,25 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
 
     // Attention
     const float attn_scale = 1.0f / std::sqrt(float(cfg_.head_dim));
-    if (T == 1 || multi_) {
+    // lab15 NI_INK2_VDEC=1 (A/B-able): verify rows (T = 2..8, one sequence) run the decode attention once per row
+    // (row t at position pos0 + t, its own partials), concurrent, instead of ink2_attn_verify_g3 (8k: 37.3 ms at T = 8
+    // vs 2.9 for one decode row: simd_sum per (key, row, head) made it ALU-bound). Every row = a decode step's math.
+    static const int vdec_env = ink2_env("NI_INK2_VDEC", 0);
+    const bool vdec = T > 1 && T <= kMaxVerify && ink2_ab("NI_INK2_VDEC", vdec_env) != 0;
+    if (T == 1 || vdec) {
+      const int ang = vdec ? T : ng;
+      const bool aconc = vdec && mconc;
+      auto aseq = [&](int gi) -> Seq& { return vdec ? s : gseq(gi); };
+      auto apos = [&](int gi) { return vdec ? pos0 + gi : gpos(gi); };
+      auto arv = [&](const Buffer& b, size_t rb, int gi) { return vdec ? b.view(size_t(gi) * rb, rb) : rv(b, rb, gi); };
       // (multi rows: one decode attention per sequence, each into its own partials; then the reduces)
       const size_t pm = size_t(cfg_.hq) * kAttnChunkCap * 4, rbr = size_t(cfg_.hq) * size_t(cfg_.rel_extent) * 4;
       std::vector<Ink2AttnDecP> adps;
       bool redlast = false;
-      if (gconc) e.group_begin();
-      for (int gi = 0; gi < ng; ++gi) {
-      const int pos0 = gpos(gi);
-      const uint32_t kv_cap = L.is_swa ? uint32_t(ring_rows_) : uint32_t(gseq(gi).cap);
+      if (aconc) e.group_begin();
+      for (int gi = 0; gi < ang; ++gi) {
+      const int pos0 = apos(gi);
+      const uint32_t kv_cap = L.is_swa ? uint32_t(ring_rows_) : uint32_t(aseq(gi).cap);
       const uint32_t lk = L.is_swa ? std::min(uint32_t(pos0 + 1), uint32_t(cfg_.swa)) : uint32_t(pos0 + 1);
       static const int dec_g_mode = getenv("NI_INK2_DEC_G") ? atoi(getenv("NI_INK2_DEC_G")) : 3;
       const bool kw = dec_g_mode == 3;
@@ -2149,50 +2148,49 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       const bool g3 = dec_g && cfg_.hq == 3 * cfg_.hkv && cfg_.head_dim == 128;
       // NI_INK2_DEC_G: 1 GQA kernel with fast::exp (decbench 40K: 1.83 -> 0.80 ms a global visit), 2 the
       // same with precise::exp (1.37 ms), 0 the per-head kernel; 3 (default, round 3) keys across lanes (0.59 ms)
-      // NI_INK2_REDLAST=1 (lab8, default 0): the split-K reduce by the last threadgroup of each KV head (g3kw_r; exact,
-      // 48 stages less, but its partials must go through device atomics on the M1 Max: no gain, +0.03 ms +-0.1)
       static const int redlast_env = getenv("NI_INK2_REDLAST") ? atoi(getenv("NI_INK2_REDLAST")) : 0;
       static const bool red_p0 = !getenv("NI_INK2_REDP") || atoi(getenv("NI_INK2_REDP")) != 0;
-      // (2: plain loads in the reduce; probe. 3 (lab11): coherent(device) partials + device-scope fences, plain stores)
+      // NI_INK2_REDLAST=3 (lab11): the split-K reduce by the last threadgroup of each KV head, its partials device
+      // coherent(device) memory + device-scope fences (plain stores and loads); other values: the reduce stage
       const int redlast_v = ink2_ab("NI_INK2_REDLAST", redlast_env);
-      redlast = redlast_v != 0 && g3 && kw && red_p0;
+      redlast = redlast_v == 3 && g3 && kw && red_p0;
       static const int kt_env = ink2_kt_alloc() ? atoi(getenv("NI_INK2_KT")) : 0;
-      const bool kt = redlast && redlast_v == 3 && !gseq(gi).kt.empty() && ink2_ab("NI_INK2_KT", kt_env) != 0;
-      e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : kw ? (redlast ? (redlast_v == 3 ? ink2_rc_name(kt).c_str() : redlast_v == 2 ? "ink2_attn_decode_g3kw_r0" : "ink2_attn_decode_g3kw_r") : "ink2_attn_decode_g3kw")
+      const bool kt = redlast && !aseq(gi).kt.empty() && ink2_ab("NI_INK2_KT", kt_env) != 0;
+      e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : kw ? (redlast ? ink2_rc_name(kt).c_str() : "ink2_attn_decode_g3kw")
                                                                                                : "ink2_attn_decode_g3_fx"));
       if (redlast) {
-        e.buf(8, rv(sinks_, size_t(cfg_.hq) * 4, gi));
-        e.buf(9, rv(gate_attn_, QD * 4, gi));
-        e.buf(10, rv(att_out_, QD * 4, gi));
+        e.buf(8, arv(sinks_, size_t(cfg_.hq) * 4, gi));
+        e.buf(9, arv(gate_attn_, QD * 4, gi));
+        e.buf(10, arv(att_out_, QD * 4, gi));
         e.buf(11, attn_cnt_.view(size_t(gi) * size_t(cfg_.hkv) * 4, size_t(cfg_.hkv) * 4));
       }
-      e.buf(0, rv(q_, QD * 4, gi));
-      e.buf(1, kt ? gseq(gi).kt[v_idx] : gseq(gi).kc[v_idx]);
-      e.buf(2, gseq(gi).vc[v_idx]);
-      e.buf(3, rv(rb_, rbr, gi));
-      e.buf(4, rv(part_m_, pm, gi));
-      e.buf(5, rv(part_l_, pm, gi));
-      e.buf(6, rv(part_o_, pm * cfg_.head_dim, gi));
+      e.buf(0, arv(q_, QD * 4, gi));
+      e.buf(1, kt ? aseq(gi).kt[v_idx] : aseq(gi).kc[v_idx]);
+      e.buf(2, aseq(gi).vc[v_idx]);
+      e.buf(3, arv(rb_, rbr, gi));
+      e.buf(4, arv(part_m_, pm, gi));
+      e.buf(5, arv(part_l_, pm, gi));
+      e.buf(6, arv(part_o_, pm * cfg_.head_dim, gi));
       e.val(7, adp);
       e.dispatch(uint32_t(g3 ? cfg_.hkv : cfg_.hq), nchunks, 1, 128);
       adps.push_back(adp);
       }
-      if (gconc) e.group_end(), e.group_begin();
-      for (int gi = 0; gi < ng && !redlast; ++gi) {
+      if (aconc) e.group_end(), e.group_begin();
+      for (int gi = 0; gi < ang && !redlast; ++gi) {
       const Ink2AttnDecP& adp = adps[size_t(gi)];
 
       static const bool red_p = !getenv("NI_INK2_REDP") || atoi(getenv("NI_INK2_REDP")) != 0;
       e.use(ink2_pipe(red_p ? "ink2_attn_decode_reduce_p" : "ink2_attn_decode_reduce"));
-      e.buf(0, rv(part_m_, pm, gi));
-      e.buf(1, rv(part_l_, pm, gi));
-      e.buf(2, rv(part_o_, pm * cfg_.head_dim, gi));
-      e.buf(3, rv(sinks_, size_t(cfg_.hq) * 4, gi));
-      e.buf(4, rv(gate_attn_, QD * 4, gi));
-      e.buf(5, rv(att_out_, QD * 4, gi));
+      e.buf(0, arv(part_m_, pm, gi));
+      e.buf(1, arv(part_l_, pm, gi));
+      e.buf(2, arv(part_o_, pm * cfg_.head_dim, gi));
+      e.buf(3, arv(sinks_, size_t(cfg_.hq) * 4, gi));
+      e.buf(4, arv(gate_attn_, QD * 4, gi));
+      e.buf(5, arv(att_out_, QD * 4, gi));
       e.val(6, adp);
       e.dispatch(uint32_t(cfg_.hq), 1, 1, 32);
       }
-      if (gconc) e.group_end();
+      if (aconc) e.group_end();
     } else {
       const Ink2AttnPfP apf{uint32_t(T),
                             uint32_t(pos0),
@@ -2307,7 +2305,6 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     } else {
       enc_mm(e, L.wo_ud, att_out_, a_out_, T);
     }
-    if (gconc) e.group_begin();
     for (int gi = 0; gi < ng && !attn_sc_fused; ++gi) {
     Ink2SconvStaticP gasp = asp;
     gasp.T = Tg;
@@ -2326,7 +2323,6 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       e.dispatch((H + 255) / 256, 1, 1, 256);
     }
     }
-    if (gconc) e.group_end();
     if (is_boundary) {
       if (!bcopy_grp) enc_copy_buf(e, *cur_x, bdst, row_bytes);
       blocks_vec.push_back(&bdst);
@@ -2575,7 +2571,6 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
 
     // mlp_sconv + residual add -> *alt_x, then swap(cur_x, alt_x)
     if (!mlp_sc_fused) {
-      if (gconc) e.group_begin();
       for (int gi = 0; gi < ng; ++gi) {
       const Ink2SconvStaticP msp{Tg, H, L.mlp_sconv->dtype == DType::F32 ? 1u : 0u, 1u, sconv_static_scale,
                                  snap_stride};
@@ -2596,7 +2591,6 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         e.dispatch((H + 255) / 256, 1, 1, 256);
       }
       }
-      if (gconc) e.group_end();
     }
     std::swap(cur_x, alt_x);
     if (alt_x == &x_pre_) alt_x = &x_;

@@ -1932,7 +1932,7 @@ NI_INLINE uint ink2_ring_add(uint base, uint off, uint cap) {  // (base < cap, o
 //        if-converted, so the global visits paid it too: -1.21 ms at 84k);
 //   8192: a whole block whose rows do not wrap reads V by a constant stride from one base pointer (no per-row clamp,
 //        slot or 64-bit index math). Same loads, same sums in the same order.
-// Timing-only probes (wrong results; NI_INK2_ATTP=<mask> under BENCH_AB): 1 no QK, 2 V loads replaced by 1.0, 4 no rel
+// Timing-only probe bits (wrong results; lab12, not instantiated here): 1 no QK, 2 V loads replaced by 1.0, 4 no rel
 //   bias, 8 no key loop, 16 no last-TG reduce, 131072 K read lane-contiguous (same bytes, wrong rows), 262144 K loads
 //   without the q dots, 524288 the q dots on a register K.
 template <uint VB, bool AT = false, typename PT = device float*, uint PR = 0>
@@ -2138,8 +2138,6 @@ template <bool READ_AT>
   }
   if (tid == 0) atomic_store_explicit(cnt + tg.x, 0u, memory_order_relaxed);
 }
-template [[host_name("ink2_attn_decode_g3kw_r")]] [[kernel]] decltype(ink2_attn_decode_g3kw_r<true>) ink2_attn_decode_g3kw_r<true>;
-template [[host_name("ink2_attn_decode_g3kw_r0")]] [[kernel]] decltype(ink2_attn_decode_g3kw_r<false>) ink2_attn_decode_g3kw_r<false>;
 // lab11 (NI_INK2_REDLAST=3): the same last-threadgroup reduce with the partials as device coherent(device) memory and
 // thread_scope_device fences on both sides of the arrival count (the consult's pattern; lab11/coh stress test: only
 // coherent + fences passes, 0 bad of 10^5 runs also under GPU load; plain / coherent only / fence only fail): plain
@@ -2204,21 +2202,6 @@ template <uint PR>
 INK2_RC("ink2_attn_decode_g3kw_rc", 0)
 INK2_RC("ink2_attn_decode_g3kw_rc_ml", 8704)
 INK2_RC("ink2_attn_decode_g3kw_rc_mlt", 8704 | 1048576)  // (lab13 NI_INK2_KT: ml reading the tiled K copy)
-INK2_RC("ink2_attn_decode_g3kw_rc_p1", 1)
-INK2_RC("ink2_attn_decode_g3kw_rc_p2", 2)
-INK2_RC("ink2_attn_decode_g3kw_rc_p3", 3)
-INK2_RC("ink2_attn_decode_g3kw_rc_p4", 4)
-INK2_RC("ink2_attn_decode_g3kw_rc_p8", 8)
-INK2_RC("ink2_attn_decode_g3kw_rc_p16", 16)
-INK2_RC("ink2_attn_decode_g3kw_rc_p512", 512)
-INK2_RC("ink2_attn_decode_g3kw_rc_p8705", 8705)
-INK2_RC("ink2_attn_decode_g3kw_rc_p8706", 8706)
-INK2_RC("ink2_attn_decode_g3kw_rc_p8708", 8708)
-INK2_RC("ink2_attn_decode_g3kw_rc_p8712", 8712)
-INK2_RC("ink2_attn_decode_g3kw_rc_p8720", 8720)
-INK2_RC("ink2_attn_decode_g3kw_rc_p139776", 139776)
-INK2_RC("ink2_attn_decode_g3kw_rc_p270848", 270848)
-INK2_RC("ink2_attn_decode_g3kw_rc_p532992", 532992)
 #endif
 
 // ink2_attn_decode_g3 with a transpose-reduce: per 8-key block a lane holds the 24 partial (head, key) dots of its 4
@@ -2970,6 +2953,7 @@ template [[host_name("ink2_moe_nvfp4_w2_f2")]] [[kernel]] decltype(ink2_moe_nvfp
 template [[host_name("ink2_moe_nvfp4_w2_f2_d1")]] [[kernel]] decltype(ink2_moe_nvfp4_w2_f2_t<1>) ink2_moe_nvfp4_w2_f2_t<1>;
 template [[host_name("ink2_moe_nvfp4_w2_f2_d2")]] [[kernel]] decltype(ink2_moe_nvfp4_w2_f2_t<2>) ink2_moe_nvfp4_w2_f2_t<2>;
 template [[host_name("ink2_moe_nvfp4_w2_f2_d3")]] [[kernel]] decltype(ink2_moe_nvfp4_w2_f2_t<3>) ink2_moe_nvfp4_w2_f2_t<3>;
+
 
 // w2_f2 with R rows per simdgroup: act (fp32 [K_top, I], 36.9 KB > 8 KB L1) is re-read once per R rows instead of per
 // 2. B = 1: the f2 lane walk, so each row's sum is bit-identical to f2; B = 2: 2 blocks (16-byte weight loads) per unit
