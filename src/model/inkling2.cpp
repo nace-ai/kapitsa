@@ -405,22 +405,27 @@ size_t Inkling2::ring_bytes_per_seq(const Ink2Config& c, int tmax) {
   return size_t(n_swa) * 2 * size_t(rcap) * size_t(c.hkv) * size_t(c.head_dim) * 2;
 }
 
-static bool ink2_tensor_pf_want() {
+static Profile ink2_profile() {
+  return profile(default_profile(current_device(), ModelFacts{.inkling2 = true}));
+}
+
+static bool ink2_tensor_pf_want(Profile selected) {
   if (__builtin_available(macOS 26.0, *)) {
     const bool here = default_on(Knob::kInk2TensorPf, ModelFacts{});
-    return profile_switch("NI_INK2_TENSOR", here, "Inkling-2-Mini prefill GEMMs on the matrix units (NI_INK2_TENSOR)");
+    return profile_switch("NI_INK2_TENSOR", here, "Inkling-2-Mini prefill GEMMs on the matrix units (NI_INK2_TENSOR)", selected);
   }
   return false;
 }
 
 bool Inkling2::fast_profile_available() {
-  if (profile() != Profile::kPrecise) return false;
+  if (ink2_profile() != Profile::kPrecise) return false;
   auto unset = [](const char* env) {
     const char* v = std::getenv(env);
     return v == nullptr || *v == '\0';
   };
-  if (unset("NI_INK2_TENSOR") && __builtin_available(macOS 26.0, *) && default_on(Knob::kInk2TensorPf, ModelFacts{}))
-    return true;
+  if (__builtin_available(macOS 26.0, *)) {
+    if (unset("NI_INK2_TENSOR") && default_on(Knob::kInk2TensorPf, ModelFacts{})) return true;
+  }
   return unset("NI_INK2_Q8") && default_on(Knob::kInk2Q8Fast, ModelFacts{});
 }
 
@@ -440,7 +445,7 @@ MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
                        size_t(c.hq) * kMaxAttnChunks * (2 + size_t(c.head_dim)) * 4 + V * 4 +
                        2 * (V / 2048 + 2) * 64 * 4 + 2 * 64 * 4;
   const size_t P = T * size_t(c.top_k);
-  const size_t moe_tmp_bytes = ink2_tensor_pf_want()
+  const size_t moe_tmp_bytes = ink2_tensor_pf_want(ink2_profile())
                                    ? (P * std::max(H, size_t(2) * size_t(c.moe_I)) * 4 + P * size_t(c.moe_I) * 2 +
                                       2 * P * 4 + (P / 16 + size_t(c.n_experts) + 2) * 16 + 16)
                                    : 0;
@@ -463,12 +468,14 @@ Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
   while (path_.size() > 1 && path_.back() == '/') path_.pop_back();
   if (!is_model(path_)) fatal("%s: not an Inkling-2 checkpoint folder", path.c_str());
   cfg_ = read_config(path_);
+  profile_ = ink2_profile();
   tmax_ = std::max(8, prefill_chunk > 0 ? prefill_chunk : 512);
   ring_rows_ = (cfg_.swa + tmax_ + 15) / 16 * 16;
   q8_dense_ = profile_switch("NI_INK2_Q8", default_on(Knob::kInk2Q8Fast, {}),
-                             "Inkling-2-Mini Q8-packed dense projections and unembed (NI_INK2_Q8)");
+                             "Inkling-2-Mini Q8-packed dense projections and unembed (NI_INK2_Q8)", profile_);
+  logi("Inkling-2 profile: %s", profile_ == Profile::kFast ? "fast" : "precise");
   ink2::compile_kernels();
-  if (ink2_tensor_pf_want()) {
+  if (ink2_tensor_pf_want(profile_)) {
     if (__builtin_available(macOS 26.0, *)) {
       Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
       tensor_pf_ = Gpu::get().pipeline("ink2_t_bf16_m64", false).pso != nullptr;

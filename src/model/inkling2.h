@@ -6,6 +6,7 @@
 // Vision tower (model.visual.*) is skipped in Stage 1.
 #pragma once
 
+#include "engine/profile.h"
 #include "loader/safetensors.h"
 #include "model/model.h"
 
@@ -111,6 +112,7 @@ class Inkling2 : public Model {
   static size_t conv_bytes_per_seq(const Ink2Config& c);
   static size_t ring_bytes_per_seq(const Ink2Config& c, int tmax);
 
+  Profile effective_profile() const { return profile_; }
   const Ink2Config& config() const { return cfg_; }
   int vocab() const override { return cfg_.vocab; }
   const std::vector<int>& eos_ids() const override { return cfg_.eos; }
@@ -160,6 +162,7 @@ class Inkling2 : public Model {
   void enc_sample(Encoder& e, Seq& s, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
                   uint32_t step);
 
+  Profile profile_ = Profile::kPrecise;  // Resolved once during construction, after validating the checkpoint.
   std::string path_;
   Ink2Config cfg_;
   WeightStore ws_;

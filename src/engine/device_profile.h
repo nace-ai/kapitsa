@@ -6,6 +6,8 @@
 // a model file.
 #pragma once
 
+#include "engine/profile.h"
+
 #include <string>
 
 namespace ni {
@@ -19,13 +21,13 @@ enum class ChipClass { kLegacy, kSimd, kMatrix, kWide };
 // 2048, 40 layers), which Clover-35B-A3B shares; kQwen35A3b is the full shape with the drafter fields, Clover out
 // (its sampled decode is slower with the KFlash lanes on the M5 Pro, #1094). kQwen27bDense is the Qwen3.8 27B's shape
 // (dense, hidden 5120, 64 layers).
-enum class ModelClass { kOther, kQwen35Shape, kQwen35A3b, kQwen27bDense };
+enum class ModelClass { kOther, kQwen35Shape, kQwen35A3b, kQwen27bDense, kInkling2 };
 
 // The knobs the table decides, in the table's order. A call site passes the enum, not the string: a typo is a
 // compile error, not a default that silently reads as off. kNone is a documentation row (a class or a guard the
 // call site still reads itself); default_on never looks one up.
 enum class Knob { kPfWave, kKflashHist, kGemmSlices, kHcWide, kMoe4Dx, kTreeG6, kKflashNarrow, kQwen9bQ4, kKflashBlock16, kAneProjFast,
-                  kA4QtmFast, kInk2TensorPf, kInk2Q8Fast, kNone };
+                  kA4QtmFast, kInk2TensorPf, kInk2Q8Fast, kProfileFast, kNone };
 
 // A row's device half. A class matches its own chips, and kMatrix also matches kWide (a wide chip has matrix
 // units). kName is a narrow exception: the name must match, and the row
@@ -53,6 +55,7 @@ struct ModelFacts {
   int moe_i = 0;
   int shared_i = 0;
   bool clover = false;  // DiffuSpace's Clover: the 35B-A3B shape; kQwen35A3b leaves it out (slower at temperature 0.6 on the M5 Pro, #1094)
+  bool inkling2 = false;  // Inkling-2's architecture, not a directory name or a particular checkpoint pack.
 };
 
 struct DeviceProfile {
@@ -95,6 +98,9 @@ bool model_class_matches(ModelClass, const ModelFacts&);        // the row's mod
 // the knob has no row. The 3-fact form is the pure one the CPU test links; the 2-fact form resolves the live device.
 bool default_on(Knob, const DeviceProfile&, const ModelFacts&);
 bool default_on(Knob, const ModelFacts&);
+
+// Automatic selection only; profile() applies the explicit process override afterward.
+Profile default_profile(const DeviceProfile&, const ModelFacts&);
 
 // The doctor lines. as_json is the same fields for programs.
 std::string format_profile(const DeviceProfile&, bool as_json);
