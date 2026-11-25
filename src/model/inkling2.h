@@ -138,6 +138,12 @@ class Inkling2 : public Model {
   void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
                       Checkpoint* snap = nullptr, int snap_row = 0) override;
 
+  // Speculative decoding hooks (the model half of #1383, its drafter left out): multi-row verify + conv rollback
+  static constexpr int kMaxVerify = 8;
+  void encode_verify(Encoder& e, Seq& s, int pos0, int T, const Buffer& out_logits, const Buffer* taps_out,
+                     bool save_conv_snap = true);
+  void encode_conv_rollback(Encoder& e, Seq& s, int keep_idx, int total_rows);
+
   // Diagnostic helpers (tools/ink2_check)
   float* logits() { return logits_.as<float>(); }
   Buffer logits_buf() const { return logits_; }
@@ -151,7 +157,7 @@ class Inkling2 : public Model {
   bool ensure_rings(Seq& s);
   size_t kv_grow_unit() const;
   void enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits, const Buffer* out_logits, bool need_all_logits,
-                   const Buffer* diag_rows = nullptr);
+                   const Buffer* diag_rows = nullptr, const Buffer* taps_out = nullptr, bool save_conv_snap = false);
   void enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer& y, int M, uint32_t N_limit = 0, bool add = false,
               bool exact_f32 = false);
   void enc_mm(Encoder& e, const Ink2Mat& w, const Buffer& x, const Buffer& y, int M, uint32_t N_limit = 0, bool add = false,
@@ -193,6 +199,12 @@ class Inkling2 : public Model {
   Buffer msg_out_;          // cross-pass messages: 4 * tmax * H
   Buffer mg_cat_, mg_lat_;  // split MessageGate staging buffers (T <= 16)
   Buffer mg_catb_, mg_latb_, mg_gb_;  // MessageGate as GEMMs (T > 16, NI_INK2_MSG_MM)
+  // largest row count on the matvec kernels (the M > 1 matvec keeps its accumulators in memory: verify T=4 ran
+  // bf16_mv4 at 218 us a call vs 57 at T=1); above it the GEMM path. NI_INK2_MV_ROWS (default 32; 1 measured worse at T=2: 102 -> 141 ms)
+  static int mv_rows() {
+    static const int v = getenv("NI_INK2_MV_ROWS") ? atoi(getenv("NI_INK2_MV_ROWS")) : 32;
+    return v;
+  }
   static bool msg_mm() {
     static const bool v = !getenv("NI_INK2_MSG_MM") || atoi(getenv("NI_INK2_MSG_MM")) != 0;
     return v;
@@ -203,6 +215,7 @@ class Inkling2 : public Model {
   Buffer h_mlp_, x_mlp_, rlog_, eid_, ew_, moe_act_, moe_out_;
   Buffer moe_sorted_, moe_rank_, moe_tiles_, moe_ntiles_, moe_tmp_, moe_act_h_;
   Buffer logits_, cand_v_, cand_i_, sprob_, samp_;
+  Buffer conv_snap_;  // lazy [kMaxVerify, conv_bytes_per_seq] for speculative verify conv rollback
 };
 
 }  // namespace ni

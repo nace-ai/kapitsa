@@ -727,11 +727,13 @@ struct Ink2MultiMmP {
 struct Ink2SconvStaticP {
   uint T, C, w_f32, add_res;
   float scale;
+  uint snap_stride;  // 0 = no snapshots; else floats between per-row conv snapshots
 };
 
 [[kernel]] void ink2_sconv_static(const device float* x [[buffer(0)]], const device void* w [[buffer(1)]],
                                   device float* hist [[buffer(2)]], device float* out [[buffer(3)]],
                                   constant Ink2SconvStaticP& p [[buffer(4)]], const device float* res [[buffer(5)]],
+                                  device float* snap [[buffer(6)]],
                                   uint c [[thread_position_in_grid]]) {
   if (c >= p.C) return;
   float w0, w1, w2, w3;
@@ -751,6 +753,12 @@ struct Ink2SconvStaticP {
     if (p.add_res) y += res[idx];
     out[idx] = y;
     h0 = h1; h1 = h2; h2 = xt;
+    if (p.snap_stride) {
+      device float* sh = snap + size_t(t) * p.snap_stride;
+      sh[0 * p.C + c] = h0;
+      sh[1 * p.C + c] = h1;
+      sh[2 * p.C + c] = h2;
+    }
   }
   hist[0 * p.C + c] = h0;
   hist[1 * p.C + c] = h1;
@@ -788,13 +796,13 @@ struct Ink2SconvStaticP {
 }
 
 struct Ink2SconvDynP {
-  uint T, C, n_heads, sw_f32;
+  uint T, C, n_heads, sw_f32, snap_stride;
 };
 
 [[kernel]] void ink2_sconv_dynamic(const device float* x [[buffer(0)]], const device float* dyn [[buffer(1)]],
                                    const device void* static_w [[buffer(2)]], device float* hist [[buffer(3)]],
                                    device float* out [[buffer(4)]], constant Ink2SconvDynP& p [[buffer(5)]],
-                                   uint c [[thread_position_in_grid]]) {
+                                   device float* snap [[buffer(6)]], uint c [[thread_position_in_grid]]) {
   if (c >= p.C) return;
   const uint head_dim = p.C / p.n_heads;
   const uint h = c / head_dim;
@@ -810,6 +818,12 @@ struct Ink2SconvDynP {
     const float conv = (sw[0] + d.x) * xt + (sw[1] + d.y) * h2 + (sw[2] + d.z) * h1 + (sw[3] + d.w) * h0;
     out[size_t(t) * p.C + c] = (conv + xt) * (1.0f / 3.0f);
     h0 = h1; h1 = h2; h2 = xt;
+    if (p.snap_stride) {
+      device float* sh = snap + size_t(t) * p.snap_stride;
+      sh[0 * p.C + c] = h0;
+      sh[1 * p.C + c] = h1;
+      sh[2 * p.C + c] = h2;
+    }
   }
   hist[0 * p.C + c] = h0;
   hist[1 * p.C + c] = h1;
