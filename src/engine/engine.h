@@ -705,6 +705,10 @@ class Engine {
   Hy4Flash* hy4_ = nullptr;  // model_ when it is Hy4-flash
   Clover* clover_ = nullptr;  // model_ when it is Clover (block diffusion; q35_ too)
   Inkling2* ink2_ = nullptr;  // model_ when it is Inkling-2-Mini (inkling2_loop)
+  Buffer ink2_vf_logits_;  // Inkling-2 verify logits [kMaxVerify, V] (NI_INK2_NGRAM)
+  // lab16 NI_INK2_NGRAM=K: prompt-lookup drafts (up to K per cycle) for Inkling-2 with no drafter loaded (0: off);
+  // the lookup's longest / shortest n-gram, the first cycle's drafts and the plain steps after a cycle that kept none
+  int ink2_ngram_ = 0, ink2_ng_nmax_ = 32, ink2_ng_nmin_ = 2, ink2_ng_k0_ = 3, ink2_ng_backoff_ = 2, ink2_ng_sw_ = 2;
   int flint_ngram_ = 0;      // Flint: prompt-lookup drafts per cycle (0: plain decoding)
   // Flint: self-drafts per cycle at long contexts (Flint::encode_draft; 0: none), their full-attention layers' window,
   // and the shortest prompt that takes them

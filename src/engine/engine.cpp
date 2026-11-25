@@ -124,6 +124,129 @@ static void ngram_drafts(const int* tok, int P, int k, std::vector<int>& out, in
   }
 }
 
+// lab16 Inkling-2 prompt lookup (NI_INK2_NGRAM): the earlier occurrence of tok[.. P] with the longest common suffix
+// (at most nmax tokens; the latest one among equals), when that suffix has nmin tokens or more: up to k of the tokens
+// that followed it go into out. Returns the suffix length (0: no match, out empty). A copy in progress matches its
+// source by a suffix that grows with each copied token, where the latest short n-gram (ngram_drafts) is often another
+// line of similar code.
+static int ink2_lookup(const int* tok, int P, int k, std::vector<int>& out, int nmin, int nmax) {
+  out.clear();
+  int best = 0, at = -1;
+  const int last = tok[P];
+  for (int i = P - 1; i >= 0; --i) {  // occurrence ending at i
+    if (tok[i] != last) continue;
+    int l = 1;
+    while (l < nmax && i - l >= 0 && tok[i - l] == tok[P - l]) ++l;
+    if (l > best) best = l, at = i;
+    if (best >= nmax) break;
+  }
+  if (best < nmin) return 0;
+  for (int j = 1; j <= k && at + j <= P; ++j) out.push_back(tok[at + j]);
+  return out.empty() ? 0 : best;
+}
+
+// lab16 Inkling-2 prompt lookup (NI_INK2_NGRAM): a verify's acceptance of `d` drafts at tok[P + 1 ..] from its logits
+// rows [d + 1, V], as the DFlare loop's (greedy: argmax rows; sampled: speculative sampling with a point-mass draft,
+// accept with p(draft), else a draw from p without the draft; p as sample.metal builds it: top-k, top-p on the
+// untempered distribution, then the temperature). Returns the drafts accepted; *bonus = the token after them.
+static float ink2_row_max(const float* row, int V) {  // (lanes of 16 the compiler vectorizes: 8 rows took 4.4 ms scalar)
+  float m[16];
+  for (int j = 0; j < 16; ++j) m[j] = -INFINITY;
+  int i = 0;
+  for (; i + 16 <= V; i += 16)
+    for (int j = 0; j < 16; ++j) m[j] = std::max(m[j], row[i + j]);
+  float mx = -INFINITY;
+  for (int j = 0; j < 16; ++j) mx = std::max(mx, m[j]);
+  for (; i < V; ++i) mx = std::max(mx, row[i]);
+  return mx;
+}
+
+static int ink2_accept_rows(const float* vl, int V, int d, const int* tok, int P, const SamplingParams& sp, int* bonus) {
+  auto argmax_row = [V](const float* row) {  // the first index of the largest (as the scalar scan's)
+    const float mx = ink2_row_max(row, V);
+    return int(std::find(row, row + V, mx) - row);
+  };
+  if (sp.temperature <= 0.0f) {
+    for (int k = 0; k < d; ++k) {
+      const int t = argmax_row(vl + size_t(k) * size_t(V));
+      if (t != tok[P + 1 + k]) return *bonus = t, k;
+    }
+    *bonus = argmax_row(vl + size_t(d) * size_t(V));
+    return d;
+  }
+  auto splitmix = [](uint64_t x) -> double {
+    x += 0x9e3779b97f4a7c15ULL;
+    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
+    x ^= x >> 31;
+    return double(x >> 11) * (1.0 / double(1ULL << 53));
+  };
+  const float inv_t = 1.0f / sp.temperature;
+  std::vector<std::pair<int, float>> act;
+  act.reserve(256);
+  auto build = [&](const float* row) {
+    const float mx = ink2_row_max(row, V);
+    const float cutoff = mx - 18.0f * std::max(1.0f, sp.temperature);
+    act.clear();
+    for (int i = 0; i < V; ++i)
+      if (row[i] >= cutoff) act.emplace_back(i, row[i]);
+    if (sp.top_k > 0 && int(act.size()) > sp.top_k) {
+      std::nth_element(act.begin(), act.begin() + sp.top_k, act.end(),
+                       [](const auto& a, const auto& b) { return a.second > b.second; });
+      act.resize(size_t(sp.top_k));
+    }
+    if (sp.top_p > 0.0f && sp.top_p < 1.0f && act.size() > 1) {
+      std::sort(act.begin(), act.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+      double tot = 0.0, cum = 0.0;
+      for (const auto& kv : act) tot += std::exp(kv.second - mx);
+      size_t keep = act.size();
+      for (size_t r = 0; r < act.size(); ++r)
+        if ((cum += std::exp(act[r].second - mx) / tot) >= double(sp.top_p)) {
+          keep = r + 1;
+          break;
+        }
+      act.resize(keep);
+    }
+    double sum = 0.0;
+    for (auto& kv : act) sum += (kv.second = std::exp((kv.second - mx) * inv_t));
+    const float inv_s = sum > 0.0 ? float(1.0 / sum) : 0.0f;
+    for (auto& kv : act) kv.second *= inv_s;
+  };
+  auto prob_of = [&](int id) {
+    for (const auto& kv : act)
+      if (kv.first == id) return kv.second;
+    return 0.0f;
+  };
+  auto draw = [&](int excl, double u) {  // a draw from p without `excl` (-1: none)
+    double tot = 1.0 - (excl >= 0 ? double(prob_of(excl)) : 0.0);
+    if (tot <= 1e-9) {
+      int best = act.empty() ? 0 : act[0].first;
+      float bv = -1.0f;
+      for (const auto& kv : act)
+        if (kv.second > bv) bv = kv.second, best = kv.first;
+      return best;
+    }
+    double acc = 0.0;
+    int last = act.empty() ? 0 : act[0].first;
+    for (const auto& kv : act) {
+      if (kv.first == excl || kv.second <= 0.0f) continue;
+      last = kv.first;
+      if ((acc += kv.second) >= u * tot) return kv.first;
+    }
+    return last;
+  };
+  for (int k = 0; k < d; ++k) {
+    build(vl + size_t(k) * size_t(V));
+    const int t = tok[P + 1 + k];
+    if (splitmix(uint64_t(sp.seed) ^ (uint64_t(P + k) * 0x9e3779b97f4a7c15ULL)) < double(prob_of(t))) continue;
+    *bonus = draw(t, splitmix(uint64_t(sp.seed) ^ (uint64_t(P + k) * 0xbf58476d1ce4e5b9ULL) ^ 1ULL));
+    return k;
+  }
+  build(vl + size_t(d) * size_t(V));
+  *bonus = draw(-1, splitmix(uint64_t(sp.seed) ^ (uint64_t(P + d) * 0x9e3779b97f4a7c15ULL)));
+  return d;
+}
+
 // Dory's speculative drafts (per-loop KV): NI_DORY_SPEC = both (the default: prompt lookup, else self-speculation),
 // ngram (prompt lookup only) or self
 // Streamed experts (a Qwen3.8-Flash-Next Q2_0 pack, src/model/expert_store.h): the store's work since the last call,
@@ -662,6 +785,25 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     if ((v = getenv("NI_FLINT_SELF_MIN")) && *v) flint_self_min_ = std::max(0, atoi(v));
   }
 
+  // lab16 NI_INK2_NGRAM=K (default off; it holds with --spec 0, the drafter left out): prompt lookup for Inkling-2,
+  // up to K (<= 7) drafts verified in one pass (NI_INK2_VDEC=1 makes that pass cheap). No drafter state, so the prefix
+  // checkpoint stays on. NI_INK2_NGRAM_NMAX / _NMIN (32 / 2): the longest suffix match looked for / the shortest used; _K0 (3): the drafts of a cycle
+  // after a miss grow from there (+2 when all are kept, accepted + 1 otherwise); _BACKOFF (2): plain steps after a
+  // cycle that kept no draft; _SW (= _NMIN): the shortest suffix match that turns plain steps into a verify.
+  if (ink2_) {
+    auto env_i = [](const char* k, int d) { const char* v = getenv(k); return v && *v ? atoi(v) : d; };
+    const int k = env_i("NI_INK2_NGRAM", 0);
+    if (k > 0) {
+      ink2_ngram_ = std::min(k, Inkling2::kMaxVerify - 1);
+      ink2_ng_nmax_ = std::max(1, env_i("NI_INK2_NGRAM_NMAX", 32));
+      ink2_ng_nmin_ = std::clamp(env_i("NI_INK2_NGRAM_NMIN", 2), 1, ink2_ng_nmax_);
+      ink2_ng_k0_ = std::clamp(env_i("NI_INK2_NGRAM_K0", 3), 1, ink2_ngram_);
+      ink2_ng_backoff_ = std::max(0, env_i("NI_INK2_NGRAM_BACKOFF", 2));
+      ink2_ng_sw_ = std::max(ink2_ng_nmin_, env_i("NI_INK2_NGRAM_SW", ink2_ng_nmin_));
+      ink2_vf_logits_ = Gpu::get().alloc(size_t(Inkling2::kMaxVerify) * size_t(ink2_->vocab()) * 4, "ink2_vf_logits");
+    }
+  }
+
   // NI_PREFIX_CKPT=0: no prefix checkpoint. Not with LiLiCorr / KFlash drafters (their context has no rewind to an
   // empty ring).
   {
@@ -766,6 +908,9 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
                                                " drafts per cycle)"
                          : dfl_ && dfl_->tree() ? std::string("KFlash speculative decoding (DFlash2 lattice, tree verify)")
                          : dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(dfl_->verify_depth()) + " of 7)"
+                         : ink2_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(ink2_ngram_) +
+                                                 " drafts per cycle, suffix matches " + std::to_string(ink2_ng_nmin_) + "-" +
+                                                 std::to_string(ink2_ng_nmax_) + ")"
                          : spec_ ? "MTP speculative decoding depth " + std::to_string(opts_.spec_depth)
                          : dory_spec_ > 0 ? "speculative decoding (" +
                                                     (dory_spec_kind() == "ngram"  ? std::string("prompt lookup")
@@ -4180,6 +4325,124 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     q35_->encode_flush(*e3, s);
     e3->commit_and_wait();
     fed_until = P;
+  } else if (ink2_ngram_ > 0 && !gm && !tc.on()) {
+    // lab16 NI_INK2_NGRAM: Inkling-2 prompt lookup. Two modes. Plain: the plain loop's pipelined steps (one in flight,
+    // feeding tokens[P]); while it runs, the tokens up to P are looked up, and on a match (no back-off left) the step
+    // completes and the loop turns to verify at P + 1. Verify: tokens[P] is pending (known); the drafts after it go in
+    // one pass of d + 1 rows (encode_verify, its conv snapshot), the acceptance keeps a of them and the token after them,
+    // and the conv state rolls back to the last kept row at the next pass's start (rows past it leave keys at positions
+    // the next pass writes again before any row reads them). No draft: back to plain steps.
+    const int V = ink2_->vocab();
+    const int K = ink2_ngram_;
+    int P = n;
+    bool go = handle(s.tokens()[n]);
+    int kcur = ink2_ng_k0_, backoff = 0;
+    int pending_rb = -1, pending_stride = 0;  // the last verify's rollback (row kept last, rows), not encoded yet
+    long ng_cycles = 0, ng_drafts = 0, ng_acc = 0, ng_plain = 0, ng_switch = 0;
+    double ng_verify_ms = 0, ng_accept_ms = 0;
+    std::vector<int> nd;
+    std::unique_ptr<Encoder> next;  // plain mode: the step feeding tokens[P] (its sample: tokens[P + 1])
+    auto rollback = [&](Encoder& e) {
+      if (pending_rb >= 0) ink2_->encode_conv_rollback(e, s, pending_rb, pending_stride);
+      pending_rb = -1;
+    };
+    auto encode_at = [&](int q) {
+      auto x = model_->grouped_passes() ? g.begin_grouped() : g.begin();
+      rollback(*x);
+      model_->encode_step(*x, s, q, sp, uint32_t(q), true);
+      x->commit();
+      return x;
+    };
+    auto flush = [&] {  // (before a turn yields or the loop ends: the conv snapshot is the model's, shared by slots)
+      if (pending_rb < 0) return;
+      auto e = g.begin();
+      rollback(*e);
+      e->commit_and_wait();
+    };
+    auto park = [&] {
+      if (next) next->wait();
+    };
+    auto lookup = [&](int at, int k, int nmin) { return ink2_lookup(s.tokens(), at, k, nd, nmin, ink2_ng_nmax_) > 0; };
+    while (go) {
+      if (P + K + 3 >= s.cap) {
+        park();
+        flush();
+        if (P + K + 3 >= s.limit || !grow_kv(std::min(s.limit, P + K + 4), park)) {
+          finish = "length";
+          res.context_full = true;
+          break;
+        }
+      }
+      if (contended()) {
+        park();
+        flush();
+        yield_turn(res);
+      }
+      if (next) {  // plain mode
+        if (backoff == 0 && lookup(P, 1, ink2_ng_sw_)) {
+          next->wait();  // (state through P; tokens[P + 1] pending)
+          next.reset();
+          ++P, ++ng_plain, ++ng_switch;
+          cycle_done(1);
+          go = handle(s.tokens()[P]);
+          continue;
+        }
+        if (backoff > 0) --backoff;
+        auto cur = std::move(next);
+        next = encode_at(P + 1);
+        cur->wait();
+        ++P, ++ng_plain;
+        cycle_done(1);
+        go = handle(s.tokens()[P]);
+        continue;
+      }
+      if (backoff > 0 || !lookup(P, kcur, ink2_ng_nmin_)) {
+        next = encode_at(P);
+        continue;
+      }
+      const int d = int(nd.size());
+      int* tk = s.tokens();
+      for (int j = 0; j < d; ++j) tk[P + 1 + j] = nd[size_t(j)];
+      const double t0 = now_ms();
+      {
+        auto e = g.begin();
+        rollback(*e);
+        ink2_->encode_verify(*e, s, P, d + 1, ink2_vf_logits_, nullptr, true);
+        e->commit_and_wait();
+      }
+      int bonus = 0;
+      const double t1 = now_ms();
+      const int a = ink2_accept_rows(ink2_vf_logits_.as<float>(), V, d, tk, P, sp, &bonus);
+      ng_verify_ms += now_ms() - t0, ng_accept_ms += now_ms() - t1;
+      tk[P + a + 1] = bonus;
+      int m = 0;
+      while (m < a + 1) {
+        ++m;
+        if (!handle(tk[P + m])) {
+          go = false;
+          break;
+        }
+      }
+      ++spec_cycles_, ++req_cycles, ++ng_cycles;
+      spec_accepted_ += a, ng_drafts += d, ng_acc += a;
+      kf_rows = d + 1;
+      cycle_done(m);
+      pending_rb = m - 1, pending_stride = d + 1;
+      P += m;
+      if (a == d) kcur = std::min(K, kcur + 2);
+      else if (a > 0) kcur = std::clamp(a + 1, 1, K);
+      else kcur = ink2_ng_k0_, backoff = ink2_ng_backoff_;
+    }
+    fed_until = P;
+    if (next) {
+      next->wait();
+      fed_until = P + 1;
+    }
+    flush();
+    logi("ink2 prompt lookup: %ld verify cycles (%.1f ms each, acceptance %.2f ms), %ld drafts, %ld accepted (%.1f%%), "
+         "%ld plain steps, %ld switches", ng_cycles, ng_cycles ? ng_verify_ms / double(ng_cycles) : 0.0,
+         ng_cycles ? ng_accept_ms / double(ng_cycles) : 0.0, ng_drafts, ng_acc,
+         ng_drafts ? 100.0 * double(ng_acc) / double(ng_drafts) : 0.0, ng_plain, ng_switch);
   } else if (clover_own) {
     // Clover, block diffusion (NI_CLOVER_DECODE=diffusion): a block of B rows at P starts as mask tokens; each
     // denoising pass gives every row a token and its probability, the rows still masked take theirs above the
@@ -5015,7 +5278,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   slot.live_ok = finish == "tool_calls";
   ++slot.version;  // (a state the SSD prefix cache does not have yet)
   char cyc[192] = "";
-  if ((dfl_ || lili_ || dory_spec_ || nh_ngram_ || flint_ngram_ || flint_self_) && req_cycles > 0)
+  if ((dfl_ || lili_ || ink2_ngram_ || dory_spec_ || nh_ngram_ || flint_ngram_ || flint_self_) && req_cycles > 0)
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
   if (clover_own && clover_own->self_spec() && req_cycles > 0)
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle (%d-row draft and verify)", double(gen - 1) / req_cycles,
