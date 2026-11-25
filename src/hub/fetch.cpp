@@ -181,6 +181,34 @@ Headers hub_headers() {
   return h;
 }
 
+// Shared by the listing, metadata reads and download workers for one operation. A
+// public repo may reject a fine-grained token while accepting the same request anonymously.
+struct HubAuth {
+  const Headers authenticated = hub_headers();
+  const Headers anonymous{{"User-Agent", "kapitsa/" KAPITSA_VERSION}};
+  std::mutex mu;
+  std::map<std::string, bool> public_repos;
+
+  template <class Send>
+  HttpResult request(const std::string& repo, Send send) {
+    bool use_token;
+    {
+      std::lock_guard<std::mutex> lock(mu);
+      use_token = authenticated.size() > anonymous.size() && !public_repos[repo];
+    }
+    HttpResult original = send(use_token ? authenticated : anonymous);
+    if (!use_token || (original.status != 401 && original.status != 403)) return original;
+    HttpResult retry = send(anonymous);
+    // A stream's sink also cancels once it has received its complete range.
+    if (retry.status >= 200 && retry.status < 300 && retry.error.empty() && !retry.range_ignored) {
+      std::lock_guard<std::mutex> lock(mu);
+      public_repos[repo] = true;
+      return retry;
+    }
+    return original;
+  }
+};
+
 std::string url_encode(const std::string& p, bool keep_slashes) {
   static const char* hexd = "0123456789ABCDEF";
   std::string o;
@@ -336,8 +364,8 @@ bool retryable(const HttpResult& r) {
 }
 
 // A range download that keeps failing.
-std::string chunk_failure(const HttpResult& r, const std::string& label) {
-  if (r.offline || r.status == 401 || r.status == 403 || r.status == 429) return failure(r, label, "", label);
+std::string chunk_failure(const HttpResult& r, const std::string& repo, const std::string& label) {
+  if (r.offline || r.status == 401 || r.status == 403 || r.status == 429) return failure(r, repo, "", label);
   if (r.range_ignored) return "The download server ignored a byte-range request for " + label + ". Run the same command again.";
   if (!r.error.empty())
     return "The download of " + label + " keeps failing (" + r.error + "). Run the same command again; it continues where it stopped.";
@@ -346,9 +374,9 @@ std::string chunk_failure(const HttpResult& r, const std::string& label) {
          ". Run the same command again in a minute; it continues where it stopped.";
 }
 
-HttpResult get_retry(HttpClient& c, const std::string& url, uint64_t a = 0, uint64_t b = 0, int attempts = 4) {
+HttpResult get_retry(HttpClient& c, HubAuth& auth, const std::string& repo, const std::string& url, uint64_t a = 0, uint64_t b = 0, int attempts = 4) {
   for (int i = 1;; ++i) {
-    HttpResult r = c.get(url, hub_headers(), a, b);
+    HttpResult r = auth.request(repo, [&](const Headers& h) { return c.get(url, h, a, b); });
     if (r.ok()) {
       if (b <= a || (r.status == 206 && r.body.size() == b - a)) return r;
       r.error = "short read";
@@ -359,10 +387,10 @@ HttpResult get_retry(HttpClient& c, const std::string& url, uint64_t a = 0, uint
   }
 }
 
-Listing list_repo(HttpClient& c, const std::string& repo, const std::string& revision) {
+Listing list_repo(HttpClient& c, HubAuth& auth, const std::string& repo, const std::string& revision) {
   const std::string rev = revision.empty() ? "main" : revision;
   const std::string url = endpoint() + "/api/models/" + repo + "/revision/" + url_encode(rev, false) + "?blobs=true";
-  HttpResult r = get_retry(c, url);
+  HttpResult r = get_retry(c, auth, repo, url);
   if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
   if (!r.ok()) throw Error(failure(r, repo, rev, "the file list of " + repo));
   Listing L;
@@ -433,6 +461,7 @@ struct Piece {
   std::string url;
   uint64_t src = 0, dst = 0, len = 0;
   bool plus_one = false;  // bf16 values + 1 (the sidecar's norm weights): fetched whole, converted, written
+  std::string repo;
 };
 
 // One file to produce.
@@ -629,7 +658,7 @@ struct Chunk {
 };
 
 // One range, retried from where it stopped. False with `err` set when it cannot be completed.
-bool fetch_chunk(HttpClient& c, const Headers& h, const Chunk& k, Progress& prog, const std::atomic<bool>& failed,
+bool fetch_chunk(HttpClient& c, HubAuth& auth, const Chunk& k, Progress& prog, const std::atomic<bool>& failed,
                  std::string& err) {
   Target& t = *k.t;
   const Piece& p = *k.p;
@@ -640,7 +669,7 @@ bool fetch_chunk(HttpClient& c, const Headers& h, const Chunk& k, Progress& prog
     HttpResult r;
     std::string werr;
     if (p.plus_one) {
-      r = c.get(p.url, h, a, b);
+      r = auth.request(p.repo, [&](const Headers& h) { return c.get(p.url, h, a, b); });
       if (r.ok() && r.status == 206 && r.body.size() == k.len) {
         const std::string v = plus_one(r.body);
         if (!pwrite_all(t.fd, v.data(), v.size(), p.dst + k.off)) {
@@ -675,7 +704,7 @@ bool fetch_chunk(HttpClient& c, const Headers& h, const Chunk& k, Progress& prog
         prog.done += m;
         return pos < end;
       };
-      r = c.stream(p.url, h, a, b, sink);
+      r = auth.request(p.repo, [&](const Headers& h) { return c.stream(p.url, h, a, b, sink); });
       if (!werr.empty()) {
         err = werr;
         return false;
@@ -684,7 +713,7 @@ bool fetch_chunk(HttpClient& c, const Headers& h, const Chunk& k, Progress& prog
     }
     if (g_stop || failed) return false;
     if (!retryable(r) || attempt >= kAttempts) {
-      err = chunk_failure(r, t.label);
+      err = chunk_failure(r, p.repo, t.label);
       return false;
     }
     nap(std::min(15.0, 0.5 * double(1 << attempt)));
@@ -692,7 +721,7 @@ bool fetch_chunk(HttpClient& c, const Headers& h, const Chunk& k, Progress& prog
 }
 
 // Downloads every target (8 connections, 64 MB ranges, small files first), verifying each as it completes.
-void download(std::vector<Target*>& todo, Progress& prog) {
+void download(std::vector<Target*>& todo, Progress& prog, HubAuth& auth) {
   std::deque<Chunk> q;
   std::stable_sort(todo.begin(), todo.end(), [](const Target* a, const Target* b) { return a->size < b->size; });
   uint64_t total = 0;
@@ -739,7 +768,6 @@ void download(std::vector<Target*>& todo, Progress& prog) {
   };
   auto worker = [&] {
     HttpClient c(60);
-    const Headers h = hub_headers();
     for (;;) {
       Chunk k;
       {
@@ -749,7 +777,7 @@ void download(std::vector<Target*>& todo, Progress& prog) {
         q.pop_front();
       }
       std::string err;
-      if (!fetch_chunk(c, h, k, prog, failed, err)) {
+      if (!fetch_chunk(c, auth, k, prog, failed, err)) {
         if (!err.empty()) fail(err);
         return;
       }
@@ -978,6 +1006,7 @@ struct SidecarSource {
   bool local = false;
   std::string src, rev;
   HttpClient* http = nullptr;
+  HubAuth* auth = nullptr;
   std::string url(const std::string& file) const {
     return local ? src + "/" + file : file_url(src, rev, file);
   }
@@ -989,7 +1018,7 @@ struct SidecarSource {
       if (!f.read(out.data(), std::streamsize(b - a))) throw Error("Can't read " + src + "/" + file + ".");
       return out;
     }
-    HttpResult r = get_retry(*http, url(file), a, b);
+    HttpResult r = get_retry(*http, *auth, src, url(file), a, b);
     if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
     if (!r.ok() || r.status != 206) throw Error(failure(r, src, rev, file + " of " + src));
     return r.body;
@@ -1020,7 +1049,7 @@ struct SidecarSource {
         return wm;
       }
     } else {
-      HttpResult r = get_retry(*http, url("model.safetensors.index.json"));
+      HttpResult r = get_retry(*http, *auth, src, url("model.safetensors.index.json"));
       if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
       if (!r.ok()) throw Error(failure(r, src, rev, "the weight index of " + src));
       text = r.body;
@@ -1073,7 +1102,7 @@ SidecarPlan plan_sidecar(const SidecarSource& s, const std::string& source_name,
   p.head = le64_bytes(h.size()) + h;
   uint64_t dst = p.head.size();
   for (const auto& [k, t] : tensors) {
-    p.pieces.push_back(Piece{s.url(t.file), t.a, dst, t.b - t.a, is_norm(k)});
+    p.pieces.push_back(Piece{s.url(t.file), t.a, dst, t.b - t.a, is_norm(k), s.src});
     dst += t.b - t.a;
   }
   p.size = dst;
@@ -1105,7 +1134,7 @@ std::string now_iso() {
 // affine 3/4/5/6/8-bit with groups of 64 (4-bit also 32, 8-bit also 128), one format or mixed per module (the engine's
 // format_supported, model/qwen35.cpp); or Recursive's Flint in MLX 4- or 8-bit group 64 (its 4-bit export, 8-bit or mixed
 // 4/8-bit packs; model/flint.h, which checks each module's format at load).
-void check_supported(HttpClient& c, const Listing& L) {
+void check_supported(HttpClient& c, HubAuth& auth, const Listing& L) {
   const RemoteFile* cfg = L.find("config.json");
   bool st = false;
   for (const auto& f : L.files)
@@ -1113,7 +1142,7 @@ void check_supported(HttpClient& c, const Listing& L) {
   const std::string runs = " Kapitsa runs Qwen3.5-family models (Qwen3.5, 3.6, 3.8) in MLX format: bf16, or MLX affine "
                            "3/4/5/6/8-bit.";
   if (!cfg || !st) throw Error(L.repo + " has no " + (cfg ? "safetensors weights" : "config.json") + "." + runs);
-  HttpResult r = get_retry(c, file_url(L.repo, L.commit, "config.json"));
+  HttpResult r = get_retry(c, auth, L.repo, file_url(L.repo, L.commit, "config.json"));
   if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
   if (!r.ok()) throw Error(failure(r, L.repo, L.revision, "config.json of " + L.repo));
   json j;
@@ -1314,6 +1343,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
   mkdirs(ref.dir);
   FolderLock lock(ref.dir);
   if (is_current(ref)) return ref.dir;  // another kapitsa just finished it
+  HubAuth auth;
   HttpClient api(30);
   // a GGUF variant: its pinned file, then the import (no file list to fetch)
   const bool gguf = ref.kind == ModelRef::kCatalog && !ref.variant->gguf.path.empty();
@@ -1325,8 +1355,8 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
                                                 : "Fetching the file list of " + term::bold(ref.name) + term::dim(" from " + endpoint_host()));
   else if (opt.progress && !gguf) fprintf(stderr, "Fetching the file list of %s from %s...\n", ref.name.c_str(), endpoint_host().c_str());
 
-  const Listing main = gguf ? gguf_listing(ref) : list_repo(api, ref.repo, ref.revision);
-  if (ref.kind == ModelRef::kRepo) check_supported(api, main);
+  const Listing main = gguf ? gguf_listing(ref) : list_repo(api, auth, ref.repo, ref.revision);
+  if (ref.kind == ModelRef::kRepo) check_supported(api, auth, main);
 
   std::vector<std::unique_ptr<Target>> targets;
   ojson mfiles = ojson::array(), mcomp = ojson::array();
@@ -1342,7 +1372,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     t->final_path = ref.dir + "/" + rel;
     t->part_path = ref.dir + "/.kapitsa/parts/" + rel + ".part";
     t->state_path = t->part_path + ".json";
-    t->pieces.push_back(Piece{file_url(L.repo, L.commit, f.path), 0, 0, f.size, false});
+    t->pieces.push_back(Piece{file_url(L.repo, L.commit, f.path), 0, 0, f.size, false, L.repo});
     std::string cache_repo = L.repo;
     for (size_t p; (p = cache_repo.find('/')) != std::string::npos;) cache_repo.replace(p, 1, "--");
     t->hf_cached = hf_cache_root() + "/models--" + cache_repo + "/snapshots/" + L.commit + "/" + f.path;
@@ -1364,6 +1394,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
         s.src = c.repo;
         s.rev = c.revision;
         s.http = &api;
+        s.auth = &auth;
         const SidecarPlan p = plan_sidecar(s, c.repo, "post_norm");
         auto t = std::make_unique<Target>();
         const std::string rel = c.subdir.empty() ? "mtp.safetensors" : c.subdir + "/mtp.safetensors";
@@ -1387,7 +1418,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
         extras.push_back("MTP head " + fmt_bytes(p.size));
         continue;
       }
-      const Listing L = list_repo(api, c.repo, c.revision);
+      const Listing L = list_repo(api, auth, c.repo, c.revision);
       ojson cf = ojson::array();
       uint64_t cbytes = 0;
       for (const auto& name : c.files) {
@@ -1569,7 +1600,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
       fprintf(stderr, "Downloading %s (%s) into %s%s\n", ref.name.c_str(), what.c_str(), tilde(ref.dir).c_str(),
               have ? (", " + fmt_bytes(have) + " already here").c_str() : "");
     }
-    download(todo, prog);
+    download(todo, prog, auth);
     if (tui)
       term::line("  " + term::accent(term::kOk) + " Downloaded " + fmt_bytes(prog.total) +
                      term::dim(" in " + fmt_duration(prog.secs()) + " (" +
@@ -1662,14 +1693,16 @@ std::string ensure(const ModelRef& ref, const PullOptions& opt) {
 void build_mtp_sidecar(const std::string& src, const std::string& revision, const std::string& out,
                        const std::string& hidden) {
   SignalGuard sig;
+  HubAuth auth;
   HttpClient http(30);
   SidecarSource s;
   s.local = is_dir(src);
   s.src = src;
   s.rev = revision.empty() ? "main" : revision;
   s.http = &http;
+  s.auth = &auth;
   if (!s.local) {  // pin the revision's commit, like a download
-    const Listing L = list_repo(http, src, s.rev);
+    const Listing L = list_repo(http, auth, src, s.rev);
     s.rev = L.commit;
   }
   const SidecarPlan p = plan_sidecar(s, src, hidden);
@@ -1696,7 +1729,7 @@ void build_mtp_sidecar(const std::string& src, const std::string& revision, cons
     Progress prog;
     prog.tty = isatty(2);
     std::vector<Target*> todo{&t};
-    download(todo, prog);
+    download(todo, prog, auth);
   }
   fprintf(stderr, "wrote %s: %zu tensors, %.1f MB, base_hidden_variant %s\n", out.c_str(), p.pieces.size(),
           double(p.size - p.head.size()) / 1e6, hidden.c_str());
@@ -1776,13 +1809,14 @@ static bool plan_gguf(const ModelRef& ref, const std::string& dir, const std::st
       where = tmp_dir = t;
     }
     tmp = src = where + "/" + g.path.substr(g.path.find_last_of('/') + 1);
+    HubAuth auth;
     HttpClient http(30);
     const std::string url = file_url(ref.repo, ref.revision, g.path);
     std::string head;
     bool whole = false;  // the header, all of it
     for (uint64_t n = 16ull << 20; !whole; n *= 4) {
       n = std::min(n, g.size);
-      HttpResult r = get_retry(http, url, head.size(), n);
+      HttpResult r = get_retry(http, auth, ref.repo, url, head.size(), n);
       if (!r.ok() || r.status != 206) break;
       head += r.body;
       const int fd = open(tmp.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
@@ -1856,6 +1890,7 @@ std::string plan_dir(const ModelRef& ref) {
     if (c.kind == "mtp-sidecar") sidecar = &c;
     else repos.push_back({c.repo, c.revision, c.subdir.empty() ? "" : c.subdir + "/", c.files, {}});
   }
+  HubAuth auth;
   std::atomic<bool> bad{false};
   auto parallel = [&](size_t n, const std::function<void(size_t, HttpClient&)>& job) {
     std::atomic<size_t> next{0};
@@ -1876,40 +1911,42 @@ std::string plan_dir(const ModelRef& ref) {
   std::string head4b;
   parallel(repos.size() + (sidecar ? 1 : 0), [&](size_t i, HttpClient& http) {
     if (i < repos.size()) {
-      repos[i].L = list_repo(http, repos[i].repo, repos[i].revision);
+      repos[i].L = list_repo(http, auth, repos[i].repo, repos[i].revision);
       return;
     }
     SidecarSource s;
     s.src = sidecar->repo;
     s.rev = sidecar->revision;
     s.http = &http;
+    s.auth = &auth;
     head4b = plan_sidecar(s, sidecar->repo, "post_norm").head;
   });
   if (bad) return "";
   struct Job {
     std::string url, dest;
     bool header;
+    std::string repo;
   };
   std::vector<Job> jobs;
   for (const Repo& r : repos)
     for (const auto& f : r.L.files) {
       if (!r.only.empty() && std::find(r.only.begin(), r.only.end(), f.path) == r.only.end()) continue;
       const bool st = f.path.size() > 12 && f.path.compare(f.path.size() - 12, 12, ".safetensors") == 0;
-      if (st || f.path == "config.json") jobs.push_back({file_url(r.repo, r.L.commit, f.path), dir + "/" + r.sub + f.path, st});
+      if (st || f.path == "config.json") jobs.push_back({file_url(r.repo, r.L.commit, f.path), dir + "/" + r.sub + f.path, st, r.repo});
     }
   parallel(jobs.size(), [&](size_t i, HttpClient& http) {
     const Job& j = jobs[i];
     if (!j.header) {
-      HttpResult r = get_retry(http, j.url);
+      HttpResult r = get_retry(http, auth, j.repo, j.url);
       if (!r.ok()) throw Error(r.error);
       write_atomic(j.dest, r.body);
       return;
     }
-    HttpResult r = get_retry(http, j.url, 0, 8);
+    HttpResult r = get_retry(http, auth, j.repo, j.url, 0, 8);
     if (!r.ok() || r.status != 206) throw Error(r.error);
     const uint64_t n = le64(r.body);
     if (n > (64u << 20)) throw Error("not a safetensors file");
-    HttpResult h = get_retry(http, j.url, 8, 8 + n);
+    HttpResult h = get_retry(http, auth, j.repo, j.url, 8, 8 + n);
     if (!h.ok() || h.status != 206) throw Error(h.error);
     write_atomic(j.dest, r.body + h.body);
   });
@@ -2107,8 +2144,9 @@ std::string fetch_drafter(const std::string& dir, bool progress) {
   if (!c) return "";
   SignalGuard sig;
   FolderLock lock(dir);
+  HubAuth auth;
   HttpClient api(30);
-  const Listing L = list_repo(api, c->repo, c->revision);
+  const Listing L = list_repo(api, auth, c->repo, c->revision);
   std::vector<std::unique_ptr<Target>> targets;
   std::vector<Target*> todo;
   ojson added = ojson::array();
@@ -2126,7 +2164,7 @@ std::string fetch_drafter(const std::string& dir, bool progress) {
     tg->final_path = dir + "/" + rel;
     tg->part_path = dir + "/.kapitsa/parts/" + rel + ".part";
     tg->state_path = tg->part_path + ".json";
-    tg->pieces.push_back(Piece{file_url(L.repo, L.commit, f->path), 0, 0, f->size, false});
+    tg->pieces.push_back(Piece{file_url(L.repo, L.commit, f->path), 0, 0, f->size, false, L.repo});
     std::string cache_repo = L.repo;
     for (size_t q; (q = cache_repo.find('/')) != std::string::npos;) cache_repo.replace(q, 1, "--");
     tg->hf_cached = hf_cache_root() + "/models--" + cache_repo + "/snapshots/" + L.commit + "/" + f->path;
@@ -2162,7 +2200,7 @@ std::string fetch_drafter(const std::string& dir, bool progress) {
     prog.tty = isatty(2);
     if (progress) fprintf(stderr, "Fetching the %s drafter (%s) into %s/%s...\n", c->repo.c_str(), fmt_bytes(bytes).c_str(), tilde(dir).c_str(), c->subdir.c_str());
     try {
-      download(todo, prog);
+      download(todo, prog, auth);
     } catch (...) {
       // a stopped or failed download leaves the small files (config.json, LICENSE) in dflash2/ and the weights as a .part:
       // without the weights `--dflash auto` must not find the folder (DFlash2::find accepts it on config.json alone)
