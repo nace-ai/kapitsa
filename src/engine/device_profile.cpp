@@ -180,6 +180,19 @@ const DefaultRow kDefaults[] = {
     // +20-22%, prefill +8-16%; 192 step rows 1 flip, mean KL 2.0e-3 (within the fast fallback bar).
     {"ink2_q8_fast", Knob::kInk2Q8Fast, ModelClass::kOther, DefaultScope::kAll, nullptr, "on", 20, 29, false,
      "Mac mini M6 (+29.2%, -1.04 GB), M5 Pro (+20-22%); fast profile only", true},
+    // Fast profile only: Inkling-2-Mini's M1 stack (inkling2.cpp ink2_knob; one switch each, its env var wins): tensor
+    // prefill with the M1 cooperative-tensor layout and the simdgroup FlashAttention, MessageGate GEMMs, Q8 matvecs for
+    // 1-8 rows beside #1381's packing with BF16 kept for prefill, repacked NVFP4 MoE decode, folded norms / short
+    // convs / rel bias / softcap, last-threadgroup attention and router reductions, ring-modulo-free and tiled-K decode
+    // attention, verify rows through the decode attention, prompt lookup with a table policy. Mechanism (M1 Max
+    // profiles, lab rounds 2-17): decode on Apple7 is issue- and latency-bound (MoE decode at 220-307 GB/s of ~355,
+    // decode attention not DRAM-bound, a removed stage worth its ~2.4 us barrier), so the changes cut ALU work, stages
+    // and dependent hops rather than bytes; the chunk sizes (KW_SWACH 128, KW_MAXCH 48) are the 32-core M1 Max's wave
+    // quantization. M1 Max 64 GB, served 1 slot: decode 46.0 / 40.3 / 34.3 tok/s at 8k / 40k / 84k, prefill ~430 / 380
+    // / 330 (lab13 base; round 1 on the #1379 + #1387 tree: 25.4 / 22.8 / 19.6, 292 / 256 / 218). Not measured on
+    // other classes: they keep the shipped path.
+    {"ink2_m1_stack", Knob::kInk2M1Stack, ModelClass::kInkling2, DefaultScope::kLegacy, nullptr, "on", 75, 81, false,
+     "M1 Max 64 GB (32 cores); fast profile only", true},
 };
 
 bool guard_matches(const char* id, const DeviceProfile& dev) {

@@ -792,7 +792,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   // cycle that kept no draft; _SW (= _NMIN): the shortest suffix match that turns plain steps into a verify.
   if (ink2_) {
     auto env_i = [](const char* k, int d) { const char* v = getenv(k); return v && *v ? atoi(v) : d; };
-    const int k = env_i("NI_INK2_NGRAM", 0);
+    const int k = env_i("NI_INK2_NGRAM", ink2_m1_stack() ? 7 : 0);
     if (k > 0) {
       ink2_ngram_ = std::min(k, Inkling2::kMaxVerify - 1);
       ink2_ng_nmax_ = std::max(1, env_i("NI_INK2_NGRAM_NMAX", 32));
@@ -806,7 +806,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       // 0 (plain steps) where none does. Rows: context >= 0 / 16k / 32k / 48k; columns: L >= 1 2 3 4 6 8 12 16 24 32.
       // NI_INK2_NGRAM_TAB="d,d,..(10)/../../.." overrides it; _BACKOFF (here 0 unless set) applies after a cycle
       // that kept no draft (offline: 2 vs 0 changes nothing once short matches never draft).
-      if (env_i("NI_INK2_NGRAM_POLICY", 0) > 0) {
+      if (env_i("NI_INK2_NGRAM_POLICY", ink2_m1_stack() ? 1 : 0) > 0) {
         ink2_ng_policy_ = true;
         ink2_ng_backoff_ = std::max(0, env_i("NI_INK2_NGRAM_BACKOFF", 0));
         if (const char* t = getenv("NI_INK2_NGRAM_TAB"); t && *t) {

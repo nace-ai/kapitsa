@@ -51,7 +51,7 @@ constexpr uint32_t kAttnChunkCap = 128;  // (lab12: partials capacity; NI_INK2_K
 
 // NI_INK2_SCFOLD mask (unset = 3: wo / w2 and SWA k / v folds on), A/B-able
 int ink2_scfold() {
-  static const int v = getenv("NI_INK2_SCFOLD") ? atoi(getenv("NI_INK2_SCFOLD")) : 3;
+  static const int v = ink2_knob("NI_INK2_SCFOLD", 3, 0);
   return ink2_ab("NI_INK2_SCFOLD", v);
 }
 
@@ -93,7 +93,7 @@ struct Ink2PassEach {
   Encoder& e;
   const bool prev;
   Ink2PassEach(Encoder& enc, int T) : e(enc), prev(enc.pass_per_dispatch()) {
-    static const int min_rows = getenv("NI_INK2_PASS_MIN") ? atoi(getenv("NI_INK2_PASS_MIN")) : 256;
+    static const int min_rows = ink2_knob("NI_INK2_PASS_MIN", 256, 0);
     if (min_rows > 0 && T >= min_rows && !enc.recording()) e.set_pass_per_dispatch(true);
   }
   ~Ink2PassEach() { e.set_pass_per_dispatch(prev); }
@@ -112,14 +112,14 @@ struct Ink2Grouped {
 };
 
 int ink2_fa_nt() {
-  static const int v = getenv("NI_INK2_FA") ? atoi(getenv("NI_INK2_FA")) : 16;
+  static const int v = ink2_knob("NI_INK2_FA", 16, 0);
   return v;
 }
 
 // lab12: g3kw_rc variant. NI_INK2_ATTL=1 (A/B-able): ink2_attn_decode_g3kw_rc_ml (ring slots without a per-key modulo +
 // whole blocks by a constant V stride; bit-identical).
 std::string ink2_rc_name(bool kt) {
-  static const int attl = getenv("NI_INK2_ATTL") ? atoi(getenv("NI_INK2_ATTL")) : 0;
+  static const int attl = ink2_knob("NI_INK2_ATTL", 1, 0);
   return ink2_ab("NI_INK2_ATTL", attl) ? (kt ? "ink2_attn_decode_g3kw_rc_mlt" : "ink2_attn_decode_g3kw_rc_ml")
                                        : "ink2_attn_decode_g3kw_rc";
 }
@@ -129,7 +129,7 @@ std::string ink2_rc_name(bool kt) {
 // +16 KB per position (8 global visits) and +50% on the SWA rings. Allocation and the writes follow the env at start;
 // the read is A/B-able (BENCH_AB NI_INK2_KT=0).
 static bool ink2_kt_alloc() {
-  static const bool v = getenv("NI_INK2_KT") && atoi(getenv("NI_INK2_KT")) != 0;
+  static const bool v = ink2_knob("NI_INK2_KT", 1, 0) != 0;
   return v;
 }
 static size_t ink2_kt_rows(size_t rows) { return (rows + 31) / 32 * 32; }
@@ -483,10 +483,24 @@ static Profile ink2_profile() {
   return profile(default_profile(current_device(), ModelFacts{.inkling2 = true}));
 }
 
+// The M1 stack (device profile row ink2_m1_stack: the fast profile on the legacy class, Apple7 = M1): the decode and
+// prefill changes measured on the M1 Max default to their served values there; on every other Mac, and under
+// precise, they default to the path #1379 / #1381 / #1387 shipped. A switch's env var, when set, always wins.
+bool ink2_m1_stack() {  // NI_INK2_M1_STACK=0|1 overrides the row (0: every switch at its shipped default)
+  static const char* env = getenv("NI_INK2_M1_STACK");
+  static const bool v = env && *env ? atoi(env) != 0
+                                    : ink2_profile() == Profile::kFast && default_on(Knob::kInk2M1Stack, ModelFacts{.inkling2 = true});
+  return v;
+}
+int ink2_knob(const char* env, int m1_value, int off_value) {
+  if (const char* v = getenv(env); v && *v) return atoi(v);
+  return ink2_m1_stack() ? m1_value : off_value;
+}
+
 static bool ink2_tensor_pf_want() {
   if (__builtin_available(macOS 26.0, *)) {
     const Profile selected = ink2_profile();
-    const bool here = default_on(Knob::kInk2TensorPf, ModelFacts{});
+    const bool here = default_on(Knob::kInk2TensorPf, ModelFacts{}) || ink2_m1_stack();
     return profile_switch("NI_INK2_TENSOR", here, "Inkling-2-Mini prefill GEMMs on the matrix units (NI_INK2_TENSOR)", selected);
   }
   return false;
@@ -556,8 +570,8 @@ Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
       tensor_pf_ = Gpu::get().pipeline("ink2_t_bf16_m64", false).pso != nullptr;
     }
   }
-  q8m_ = q8_dense_ && (!getenv("NI_INK2_Q8M") || atoi(getenv("NI_INK2_Q8M")) != 0);
-  q8_bf16_ = q8_dense_ && (getenv("NI_INK2_Q8_BF16") ? atoi(getenv("NI_INK2_Q8_BF16")) != 0 : tensor_pf_);
+  q8m_ = q8_dense_ && ink2_knob("NI_INK2_Q8M", 1, 0) != 0;
+  q8_bf16_ = q8_dense_ && tensor_pf_ && ink2_knob("NI_INK2_Q8_BF16", 1, 0) != 0;
   prewarm_pipelines(tensor_pf_, q8_dense_);
   load();
 }
@@ -906,9 +920,9 @@ int ink2_env(const char* name, int dflt) { return getenv(name) ? atoi(getenv(nam
 
 void Inkling2::repack_moe() {
   static const char* ab = getenv("BENCH_AB");
-  repack_ = ink2_env("NI_INK2_REPACK", 0);
-  const bool want_sc = getenv("NI_INK2_SCPAIR") || (ab && strstr(ab, "NI_INK2_SCPAIR"));
-  const bool bt = ink2_env("NI_INK2_MOEBT", 1) != 0 && cfg_.hidden % 256 == 0 && cfg_.moe_I % 16 == 0 && cfg_.moe_I >= 512;
+  repack_ = ink2_knob("NI_INK2_REPACK", 1, 0);
+  const bool want_sc = ink2_knob("NI_INK2_SCPAIR", 1, 0) != 0 || (ab && strstr(ab, "NI_INK2_SCPAIR"));
+  const bool bt = ink2_knob("NI_INK2_MOEBT", 1, 0) != 0 && cfg_.hidden % 256 == 0 && cfg_.moe_I % 16 == 0 && cfg_.moe_I >= 512;
   if (repack_ && !bt) {
     fprintf(stderr, "[kapitsa] NI_INK2_REPACK needs the bt MoE kernels (NI_INK2_MOEBT, H %% 256, I %% 16): off\n");
     repack_ = 0;
@@ -962,7 +976,7 @@ bool Inkling2::moe_lean() const {
 // DEC mask for this step: 1 lean (repacked), 2 scale pair (NI_INK2_SCPAIR, sign-0 scales checked), probes
 // NI_INK2_LITE (BENCH_AB only; wrong math): 1 / 2 w13 decode-lite / x-lite, 4 / 8 w2 decode-lite / act-lite
 uint32_t Inkling2::moe_dec(bool w2) const {
-  static const int scp_env = ink2_env("NI_INK2_SCPAIR", 0);
+  static const int scp_env = ink2_knob("NI_INK2_SCPAIR", 1, 0);
   static const int lean_mask = ink2_env("NI_INK2_LEANMASK", 3);  // (debug: 1 w13 only, 2 w2 only; needs REPACK=2)
   const int lite = ink2_ab("NI_INK2_LITE", 0) >> (w2 ? 2 : 0);
   return (moe_lean() && (lean_mask >> (w2 ? 1 : 0) & 1) ? 1u : 0u) | (sc_pos_ && ink2_ab("NI_INK2_SCPAIR", scp_env) != 0 ? 2u : 0u) |
@@ -1297,7 +1311,7 @@ void Inkling2::enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer
     e.dispatch((N + 15) / 16, (uint32_t(M) + 7) / 8, 1, 128);
     return;
   }
-  static const uint32_t sk_max = getenv("NI_INK2_MVSK") ? uint32_t(atoi(getenv("NI_INK2_MVSK"))) : 256u;
+  static const uint32_t sk_max = ink2_knob("NI_INK2_MVSK", 256, 0);
   if (M == 1 && N <= sk_max && (K & 3u) == 0u && (w.dtype == DType::BF16 || w.dtype == DType::F32)) {
     const Ink2MmP p{1u, N, K, K, N, w.dtype == DType::F32 ? 1u : 0u, add ? 1u : 0u};
     e.use(ink2_pipe("ink2_mv_sk"));
@@ -1310,7 +1324,7 @@ void Inkling2::enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer
   }
   // 2..8 rows of the same small-N matvecs (2-slot decode / verify rows; lab6): ink2_mv_sk_m<M>, each row bit-identical
   // to its one-row ink2_mv_sk result (8k 2-slot: 64 BF16 calls 2.68 ms as bf16_mvm2). NI_INK2_MVSKM=0: the old path
-  static const bool skm = !getenv("NI_INK2_MVSKM") || atoi(getenv("NI_INK2_MVSKM")) != 0;
+  static const bool skm = ink2_knob("NI_INK2_MVSKM", 1, 0) != 0;
   if (skm && M >= 2 && M <= 8 && N <= sk_max && (K & 3u) == 0u && (w.dtype == DType::BF16 || w.dtype == DType::F32)) {
     const Ink2MmP p{uint32_t(M), N, K, K, N, w.dtype == DType::F32 ? 1u : 0u, add ? 1u : 0u};
     e.use(ink2_pipe("ink2_mv_sk_m" + std::to_string(M)));
@@ -1359,7 +1373,7 @@ void Inkling2::enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer
   } else if (tensor_pf_ && w.dtype == DType::BF16 && K % 32 == 0) {
     // Split-K for small N (lab5): N <= 64 ran (M / 64) threadgroups through all of K (msg gate down [64, 4608] at
     // M = 500: 0.97 ms); NI_INK2_SK = splits (default 8, 0 = off). Partials in moe_tmp_ (free outside the MoE).
-    static const uint32_t sk = getenv("NI_INK2_SK") ? uint32_t(atoi(getenv("NI_INK2_SK"))) : 8u;
+    static const uint32_t sk = ink2_knob("NI_INK2_SK", 8, 0);
     if (sk > 1 && N <= 64 && K >= 1024 && K % (sk * 32) == 0 && M >= 64 && !e.in_group() &&
         size_t(sk) * M * N * 4 <= moe_tmp_.size) {
       const Ink2tGemmP p{uint32_t(M), N, K, K, N, 0u, K / sk, 0u, 0u};
@@ -1467,8 +1481,8 @@ void Inkling2::enc_attn_res(Encoder& e, const Buffer* const* states, int M, cons
                        q_f32 ? 1u : 0u,
                        cfg_.rms_eps,
                        1.0f / std::sqrt(float(cfg_.hidden))};
-  static const bool res1 = !getenv("NI_INK2_RES1") || atoi(getenv("NI_INK2_RES1")) != 0;
-  static const bool resmq = !getenv("NI_INK2_RESMQ") || atoi(getenv("NI_INK2_RESMQ")) != 0;
+  static const bool res1 = ink2_knob("NI_INK2_RES1", 1, 0) != 0;
+  static const bool resmq = ink2_knob("NI_INK2_RESMQ", 1, 0) != 0;
   e.use(ink2_pipe(!res1  ? std::string("ink2_attn_res")
                   : resmq ? "ink2_attn_res_m" + std::to_string(M) + "q" + std::to_string(Q)
                           : std::string("ink2_attn_res1")));
@@ -1488,10 +1502,10 @@ bool Inkling2::enc_attn_res_norm(Encoder& e, const Buffer* const* states, int M,
                                  const Tensor* const* w, const Buffer* const* nout) {
   // NI_INK2_NFOLD=0: separate ink2_rmsnorm stages (lab7: the fold is bit-identical)
   // (bit mask: 1 attention input, 2 MLP input, 4 final norm)
-  static const int nfold_env = getenv("NI_INK2_NFOLD") ? atoi(getenv("NI_INK2_NFOLD")) : 7;
+  static const int nfold_env = ink2_knob("NI_INK2_NFOLD", 7, 0);
   const int nfold = ink2_ab("NI_INK2_NFOLD", nfold_env);
-  static const bool res1 = !getenv("NI_INK2_RES1") || atoi(getenv("NI_INK2_RES1")) != 0;
-  static const bool resmq = !getenv("NI_INK2_RESMQ") || atoi(getenv("NI_INK2_RESMQ")) != 0;
+  static const bool res1 = ink2_knob("NI_INK2_RES1", 1, 0) != 0;
+  static const bool resmq = ink2_knob("NI_INK2_RESMQ", 1, 0) != 0;
   const int site = nout[0] == &n0_ ? 1 : nout[0] == &x_mlp_ ? 2 : 4;
   if (!(nfold & site) || !res1 || !resmq || M < 1 || M > 6 || (Q != 1 && Q != 3) || (nn != 1 && nn != 3) ||
       cfg_.hidden > 5 * 512)
@@ -1741,7 +1755,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     const Buffer conv_m = conv.view(cbase + 6 * KVD * 4 + 3 * H * 4, 3 * H * 4);
     auto gconv = [&](int gi, size_t off, size_t bytes) { return gseq(gi).conv[0].view(cbase + off, bytes); };
 
-    static const int cpgrp_env = getenv("NI_INK2_CPGRP") ? atoi(getenv("NI_INK2_CPGRP")) : 1;
+    static const int cpgrp_env = ink2_knob("NI_INK2_CPGRP", 1, 0);
     const bool cpgrp = ink2_ab("NI_INK2_CPGRP", cpgrp_env) != 0;
     if (ip == cfg_.core_start) {
       if (!have_prelude) {
@@ -1924,7 +1938,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       enc_mm(e, L.wk_dv, kn, pf_sconv_kv ? moe_out_ : k_, T);
       enc_mm(e, L.wv_dv, vn, pf_sconv_kv ? h_mlp_ : v_, T);
       enc_mm(e, L.wr_du, n0_, r_, T);
-      static const bool sk_sinks = !getenv("NI_INK2_SK") || atoi(getenv("NI_INK2_SK")) > 1;
+      static const bool sk_sinks = ink2_knob("NI_INK2_SK", 8, 0) > 1;
       if (!sk_sinks) enc_mm(e, *L.attn_sink_proj, n0_, sinks_, T);
       enc_mm(e, L.gate_attn, n0_, gate_attn_, T);
       e.group_end();
@@ -1993,7 +2007,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     } else {
       // NI_INK2_KVGRP (lab8, default 1; Kapitsa #1393): k_proj + v_proj in one step (v's dynamic weights in a second
       // dyn_ region), then both dynamic convs in one step: 4 -> 2 stages per global visit (one-dispatch matvecs, T <= 8)
-      static const int kvgrp_env = getenv("NI_INK2_KVGRP") ? atoi(getenv("NI_INK2_KVGRP")) : 1;
+      static const int kvgrp_env = ink2_knob("NI_INK2_KVGRP", 1, 0);
       const bool kvgrp = ink2_ab("NI_INK2_KVGRP", kvgrp_env) != 0 && T <= 8 && 2 * T <= tmax_;
       const size_t dynb = size_t(T) * 4 * size_t(cfg_.hkv) * 4;
       const Buffer dyn_v = kvgrp ? dyn_.view(dynb, dynb) : dyn_;
@@ -2032,7 +2046,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     const uint32_t kv_cap = L.is_swa ? uint32_t(ring_rows_) : uint32_t(s.cap);
     const size_t rrow = size_t(cfg_.hq) * size_t(cfg_.d_rel) * 4;
     // NI_INK2_RBFOLD (lab8, default 1): the decode-size rel bias (ink2_rel_bias rows, T < 8) in qkvr_prep's r heads
-    static const int rbfold_env = getenv("NI_INK2_RBFOLD") ? atoi(getenv("NI_INK2_RBFOLD")) : 1;
+    static const int rbfold_env = ink2_knob("NI_INK2_RBFOLD", 1, 0);
     const bool rb_pf = cfg_.d_rel == 16 && T >= 8;
     const bool rbfold = ink2_ab("NI_INK2_RBFOLD", rbfold_env) != 0 && !rb_pf && cfg_.d_rel <= cfg_.head_dim;
     const Ink2RelP rbp{Tg, uint32_t(cfg_.hq), uint32_t(cfg_.d_rel), uint32_t(cfg_.rel_extent),
@@ -2101,7 +2115,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     // lab15 NI_INK2_VDEC=1 (A/B-able): verify rows (T = 2..8, one sequence) run the decode attention once per row
     // (row t at position pos0 + t, its own partials), concurrent, instead of ink2_attn_verify_g3 (8k: 37.3 ms at T = 8
     // vs 2.9 for one decode row: simd_sum per (key, row, head) made it ALU-bound). Every row = a decode step's math.
-    static const int vdec_env = ink2_env("NI_INK2_VDEC", 0);
+    static const int vdec_env = ink2_knob("NI_INK2_VDEC", 1, 0);
     const bool vdec = T > 1 && T <= kMaxVerify && ink2_ab("NI_INK2_VDEC", vdec_env) != 0;
     if (T == 1 || vdec) {
       const int ang = vdec ? T : ng;
@@ -2118,17 +2132,17 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       const int pos0 = apos(gi);
       const uint32_t kv_cap = L.is_swa ? uint32_t(ring_rows_) : uint32_t(aseq(gi).cap);
       const uint32_t lk = L.is_swa ? std::min(uint32_t(pos0 + 1), uint32_t(cfg_.swa)) : uint32_t(pos0 + 1);
-      static const int dec_g_mode = getenv("NI_INK2_DEC_G") ? atoi(getenv("NI_INK2_DEC_G")) : 3;
+      static const int dec_g_mode = ink2_knob("NI_INK2_DEC_G", 3, 0);
       const bool kw = dec_g_mode == 3;
       // (keys-across-lanes kernel: chunks of whole 32-key blocks; NI_INK2_KW_MINCHUNK for the SWA window's)
       static const int kw_min_env = getenv("NI_INK2_KW_MINCHUNK") ? atoi(getenv("NI_INK2_KW_MINCHUNK")) : 64;
-      static const int kw_maxch_env = getenv("NI_INK2_KW_MAXCH") ? atoi(getenv("NI_INK2_KW_MAXCH")) : int(kMaxAttnChunks);
+      static const int kw_maxch_env = ink2_knob("NI_INK2_KW_MAXCH", 48, int(kMaxAttnChunks));
       const uint32_t kw_min = uint32_t(ink2_ab("NI_INK2_KW_MINCHUNK", kw_min_env));
       // (lab12 NI_INK2_KW_MAXCH: chunks of a long visit, <= kAttnChunkCap; ulp-level when changed)
       const uint32_t maxch = kw ? std::min(kAttnChunkCap, uint32_t(ink2_ab("NI_INK2_KW_MAXCH", kw_maxch_env))) : kMaxAttnChunks;
       // (lab12 NI_INK2_KW_SWACH: keys per threadgroup of the SWA visits (0: KW_MINCHUNK's); 128 = 8 chunks of the
       //  1024 window with all 4 simdgroups busy, vs 16 x 64 with 2 idle: -0.19 ms at 8k on ATTP=8704; ulp-level)
-      static const int kw_swach_env = getenv("NI_INK2_KW_SWACH") ? atoi(getenv("NI_INK2_KW_SWACH")) : 0;
+      static const int kw_swach_env = ink2_knob("NI_INK2_KW_SWACH", 128, 0);
       const uint32_t swach = kw && L.is_swa ? uint32_t(ink2_ab("NI_INK2_KW_SWACH", kw_swach_env)) : 0u;
       uint32_t chunk = std::max(swach ? swach : kw ? kw_min : 32u, (lk + maxch - 1) / maxch);
       chunk = kw ? (chunk + 31) / 32 * 32 : (chunk + 3) / 4 * 4;
@@ -2148,13 +2162,13 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       const bool g3 = dec_g && cfg_.hq == 3 * cfg_.hkv && cfg_.head_dim == 128;
       // NI_INK2_DEC_G: 1 GQA kernel with fast::exp (decbench 40K: 1.83 -> 0.80 ms a global visit), 2 the
       // same with precise::exp (1.37 ms), 0 the per-head kernel; 3 (default, round 3) keys across lanes (0.59 ms)
-      static const int redlast_env = getenv("NI_INK2_REDLAST") ? atoi(getenv("NI_INK2_REDLAST")) : 0;
-      static const bool red_p0 = !getenv("NI_INK2_REDP") || atoi(getenv("NI_INK2_REDP")) != 0;
+      static const int redlast_env = ink2_knob("NI_INK2_REDLAST", 3, 0);
+      static const bool red_p0 = ink2_knob("NI_INK2_REDP", 1, 0) != 0;
       // NI_INK2_REDLAST=3 (lab11): the split-K reduce by the last threadgroup of each KV head, its partials device
       // coherent(device) memory + device-scope fences (plain stores and loads); other values: the reduce stage
       const int redlast_v = ink2_ab("NI_INK2_REDLAST", redlast_env);
       redlast = redlast_v == 3 && g3 && kw && red_p0;
-      static const int kt_env = ink2_kt_alloc() ? atoi(getenv("NI_INK2_KT")) : 0;
+      static const int kt_env = ink2_kt_alloc() ? 1 : 0;
       const bool kt = redlast && !aseq(gi).kt.empty() && ink2_ab("NI_INK2_KT", kt_env) != 0;
       e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : kw ? (redlast ? ink2_rc_name(kt).c_str() : "ink2_attn_decode_g3kw")
                                                                                                : "ink2_attn_decode_g3_fx"));
@@ -2179,7 +2193,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       for (int gi = 0; gi < ang && !redlast; ++gi) {
       const Ink2AttnDecP& adp = adps[size_t(gi)];
 
-      static const bool red_p = !getenv("NI_INK2_REDP") || atoi(getenv("NI_INK2_REDP")) != 0;
+      static const bool red_p = ink2_knob("NI_INK2_REDP", 1, 0) != 0;
       e.use(ink2_pipe(red_p ? "ink2_attn_decode_reduce_p" : "ink2_attn_decode_reduce"));
       e.buf(0, arv(part_m_, pm, gi));
       e.buf(1, arv(part_l_, pm, gi));
@@ -2206,7 +2220,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       static const bool qat_small = getenv("MTL_SHADER_VALIDATION") && atoi(getenv("MTL_SHADER_VALIDATION")) != 0;
       static const int qat_min = getenv("NI_INK2_QAT_MIN") ? atoi(getenv("NI_INK2_QAT_MIN")) : 16;
       const bool use_qat = qat_env && tensor_pf_ && T >= qat_min && cfg_.head_dim == 128 && cfg_.hq == cfg_.hkv * 3;
-      static const bool aver = !getenv("NI_INK2_AVER") || atoi(getenv("NI_INK2_AVER")) != 0;
+      static const bool aver = ink2_knob("NI_INK2_AVER", 1, 0) != 0;
       if (!use_qat && aver && T <= kMaxVerify && cfg_.hq == 3 * cfg_.hkv && cfg_.head_dim == 128) {
         // verify rows: split-K over the union key range, K / V read once for all rows (ink2_attn_verify_g3)
         const uint32_t k_first =
@@ -2230,7 +2244,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         e.buf(6, part_o_);
         e.val(7, vp);
         e.dispatch(uint32_t(cfg_.hkv), nchunks, (uint32_t(T) + tr - 1) / tr, 128);
-        static const bool vred_p = !getenv("NI_INK2_REDP") || atoi(getenv("NI_INK2_REDP")) != 0;
+        static const bool vred_p = ink2_knob("NI_INK2_REDP", 1, 0) != 0;
         e.use(ink2_pipe(vred_p ? "ink2_attn_verify_reduce_p" : "ink2_attn_verify_reduce"));
         e.buf(0, part_m_);
         e.buf(1, part_l_);
@@ -2257,8 +2271,9 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         const uint32_t qat_tok = qat_small ? 16u : 32u;
         // Cooperative-tensor lane layout: Apple10+ (written for M5) vs the simdgroup_matrix layout of older GPUs (M1;
         // the M5 layout there gave wrong attention, ink2_check v0_out off). NI_INK2_ATTN_LAY=0|1 overrides.
+        // (the M5 layout on the chips without matrix units: those the ink2_tensor_pf row leaves out)
         static const bool lay1 = getenv("NI_INK2_ATTN_LAY") ? atoi(getenv("NI_INK2_ATTN_LAY")) != 0
-                                                             : Gpu::get().apple_family() < 10;
+                                                             : !default_on(Knob::kInk2TensorPf, ModelFacts{});
         e.use(base_pipe(std::string(qat_small ? "qattn_ink2_s3k16" : "qattn_ink2_s6k32p") +
                         (lay1 ? "_l1" : "")));
         e.buf(0, q_);
@@ -2348,8 +2363,8 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     // Router + MoE (router uses exact FP32 math on all M so prefill top-k matches decode)
     // NI_INK2_RTLAST=1 (lab11; BENCH_AB-able): one row, the router matvec's last threadgroup runs the route
     // (ink2_mv_sk_route: same logits, same route math), one stage less per visit
-    static const int rtlast_env = ink2_env("NI_INK2_RTLAST", 0);
-    static const uint32_t sk_max_r = getenv("NI_INK2_MVSK") ? uint32_t(atoi(getenv("NI_INK2_MVSK"))) : 256u;
+    static const int rtlast_env = ink2_knob("NI_INK2_RTLAST", 1, 0);
+    static const uint32_t sk_max_r = ink2_knob("NI_INK2_MVSK", 256, 0);
     const uint32_t rN = uint32_t(L.router_w->shape[0]), rK = uint32_t(L.router_w->shape[1]);
     const bool rtlast = ink2_ab("NI_INK2_RTLAST", rtlast_env) != 0 && T == 1 && rN <= sk_max_r && (rK & 3u) == 0u &&
                         (L.router_w->dtype == DType::BF16 || L.router_w->dtype == DType::F32) &&
@@ -2423,7 +2438,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         // 8k prefill 391.6 -> 431.1 tok/s at m32). NI_INK2_MOE_M64=1 = old rule (64 from 40 rows/expert),
         // NI_INK2_MOE_BM=16|32|64 forces one tile height
         static const uint32_t bm_env = getenv("NI_INK2_MOE_BM") ? uint32_t(atoi(getenv("NI_INK2_MOE_BM"))) : 0u;
-        static const bool m64 = getenv("NI_INK2_MOE_M64") && atoi(getenv("NI_INK2_MOE_M64")) != 0;
+        static const bool m64 = ink2_knob("NI_INK2_MOE_M64", 0, 1) != 0;
         const uint32_t bm = bm_env ? bm_env : (m64 && per >= 40) ? 64u : per >= 12 ? 32u : 16u;
         const std::string ms = "_m" + std::to_string(bm);
         const uint32_t max_tiles = P / bm + E + 1;
@@ -2493,7 +2508,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         const Ink2MoeP mp{uint32_t(T), H, uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k)};
         if (!L.is_mxfp8) {
           // NI_INK2_MOEBT=0: the per-slot LUT kernels (bit-decoded wide kernels: lab4, -2.5 ms/token at 8k)
-          static const bool moebt = !getenv("NI_INK2_MOEBT") || atoi(getenv("NI_INK2_MOEBT")) != 0;
+          static const bool moebt = ink2_knob("NI_INK2_MOEBT", 1, 0) != 0;
           const bool bt = moebt && H % 256 == 0 && cfg_.moe_I % 16 == 0 && cfg_.moe_I >= 512;
           const uint32_t dec13 = bt ? moe_dec(false) : 0u, dec2 = bt ? moe_dec(true) : 0u;
           const std::string d13 = dec13 ? "_d" + std::to_string(dec13) : "", d2 = dec2 ? "_d" + std::to_string(dec2) : "";
@@ -2545,7 +2560,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
           }
           e.dispatch(bt ? (H + 4 * w2rows - 1) / (4 * w2rows) : (H + 15) / 16, uint32_t(T), 1, 128);
         } else {
-          static const bool mxv = !getenv("NI_INK2_MXV") || atoi(getenv("NI_INK2_MXV")) != 0;
+          static const bool mxv = ink2_knob("NI_INK2_MXV", 1, 0) != 0;
           const bool v8 = mxv && H % 256 == 0 && cfg_.moe_I % 128 == 0;  // (16-byte loads + LUT; NI_INK2_MXV=0 old)
           e.use(ink2_pipe(v8 ? "ink2_moe_mxfp8_w13_situ_v" : "ink2_moe_mxfp8_w13_situ"));
           e.buf(0, x_mlp_);
@@ -2636,7 +2651,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
   const int rows_out = need_all_logits ? T : 1;
   const Buffer h_in = need_all_logits ? h_norm_ : h_norm_.view(size_t(T - 1) * H * 4, size_t(H) * 4);
   // NI_INK2_CAPFOLD (lab8, default 1): one row, Q8 unembed: the softcap in the matvec's epilogue (ink2_q8_mv1_cap)
-  static const int capfold_env = getenv("NI_INK2_CAPFOLD") ? atoi(getenv("NI_INK2_CAPFOLD")) : 1;
+  static const int capfold_env = ink2_knob("NI_INK2_CAPFOLD", 1, 0);
   static const uint32_t r1n = getenv("NI_INK2_Q8R_MAXN") ? uint32_t(atoi(getenv("NI_INK2_Q8R_MAXN"))) : 4096u;
   const Ink2Mat& uq = unembed_;
   const bool capfold = ink2_ab("NI_INK2_CAPFOLD", capfold_env) != 0 && rows_out == 1 && (q8m_ && uq.is_q8() && uq.K % 256 == 0) && V > r1n;

@@ -19,6 +19,11 @@
 
 namespace ni {
 
+// The M1 stack's switches (inkling2.cpp): an env var when set, else m1_value on the fast profile on the legacy class
+// (device profile row ink2_m1_stack), else off_value (the path main shipped)
+bool ink2_m1_stack();
+int ink2_knob(const char* env, int m1_value, int off_value);
+
 // In-process A/B timer (lab8; ink2_bench BENCH_AB="VAR=val[,VAR=val..]"): while g_ink2_ab_phase is 1, the knobs read
 // through ink2_ab(name, v) return the BENCH_AB value instead of v (the environment's), so one process alternates two
 // configs step by step over the same KV state.
@@ -229,7 +234,7 @@ class Inkling2 : public Model {
   }
   // compile-time-M matvec for 2..8 rows (ink2_bf16_mvm<M>, weights read once); NI_INK2_MVM=0 = old runtime-M kernels
   static bool mvm() {
-    static const bool v = !getenv("NI_INK2_MVM") || atoi(getenv("NI_INK2_MVM")) != 0;
+    static const bool v = ink2_knob("NI_INK2_MVM", 1, 0) != 0;
     return v;
   }
   // Q8_0 dense decode/verify matvecs for rows <= 8 (attention projections, fused qkvrsg, unembed) on #1381's packing
@@ -246,18 +251,18 @@ class Inkling2 : public Model {
   bool sc_pos_ = false;
   // small-T MessageGate as 2 kernels (norms folded into down, coalesced up_mix); NI_INK2_MSGF=0 = prep/down_s/up_mix_s
   static bool msg_fused() {
-    static const bool v = !getenv("NI_INK2_MSGF") || atoi(getenv("NI_INK2_MSGF")) != 0;
+    static const bool v = ink2_knob("NI_INK2_MSGF", 1, 0) != 0;
     return v;
   }
   void enc_msg_gate_f(Encoder& e, const Ink2Ctrl& c, const Buffer& h, const Buffer& m, const Buffer& lat,
                       const Buffer& out, int T, int stage);
   // NVFP4 MoE decode kernels with a threadgroup byte -> float2 E2M1 LUT; NI_INK2_MOELUT=0 = constant-space lookups
   static bool moe_lut() {
-    static const bool v = !getenv("NI_INK2_MOELUT") || atoi(getenv("NI_INK2_MOELUT")) != 0;
+    static const bool v = ink2_knob("NI_INK2_MOELUT", 1, 0) != 0;
     return v;
   }
   static bool msg_mm() {
-    static const bool v = !getenv("NI_INK2_MSG_MM") || atoi(getenv("NI_INK2_MSG_MM")) != 0;
+    static const bool v = ink2_knob("NI_INK2_MSG_MM", 1, 0) != 0;
     return v;
   }
   Buffer n0_, n1_, n2_;     // normed inputs [tmax, H]

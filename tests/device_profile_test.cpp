@@ -102,7 +102,16 @@ int main() {
   CHECK(ni::default_matches(*wave, faked));
   CHECK(ni::default_matches(*hist, faked));
 
-  CHECK(ni::default_count() == 23);
+  CHECK(ni::default_count() == 24);
+  // ink2_m1_stack: Inkling-2's M1 stack on the legacy class only (the other classes keep the shipped path)
+  const ni::DefaultRow* m1s = row("ink2_m1_stack");
+  CHECK(m1s && m1s->scope == ni::DefaultScope::kLegacy && m1s->model == ni::ModelClass::kInkling2 && m1s->live &&
+        !m1s->exclusive);
+  const ni::ModelFacts ink2m{.inkling2 = true};
+  CHECK(ni::default_on(ni::Knob::kInk2M1Stack, ni::resolve_device(mac(7, 32, "Apple M1 Max", 64L << 30)), ink2m));
+  CHECK(!ni::default_on(ni::Knob::kInk2M1Stack, ni::resolve_device(mac(9, 20, "Apple M4 Pro", g48)), ink2m));
+  CHECK(!ni::default_on(ni::Knob::kInk2M1Stack, ni::resolve_device(mac(10, 20, "Apple M5 Pro", g48)), ink2m));
+  CHECK(!ni::default_on(ni::Knob::kInk2M1Stack, ni::resolve_device(mac(7, 32, "Apple M1 Max", 64L << 30)), {}));
   const ni::DefaultRow* i2q8 = row("ink2_q8_fast");
   CHECK(i2q8 && i2q8->scope == ni::DefaultScope::kAll && i2q8->live && !i2q8->exclusive && i2q8->win_pct == 20 &&
         i2q8->win_pct_hi == 29);
