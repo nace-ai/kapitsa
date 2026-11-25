@@ -800,6 +800,29 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       ink2_ng_k0_ = std::clamp(env_i("NI_INK2_NGRAM_K0", 3), 1, ink2_ngram_);
       ink2_ng_backoff_ = std::max(0, env_i("NI_INK2_NGRAM_BACKOFF", 2));
       ink2_ng_sw_ = std::max(ink2_ng_nmin_, env_i("NI_INK2_NGRAM_SW", ink2_ng_nmin_));
+      // lab17 NI_INK2_NGRAM_POLICY=1 (default off = lab16's adaptive drafts): the drafts of a cycle come from a table
+      // fitted offline (lab17/sim2.py on temperature-0 dumps) by the suffix match length L at the current position and
+      // the context: d drafts where (1 + expected accepted) / (verify(d + 1) + overhead) beats a plain step most,
+      // 0 (plain steps) where none does. Rows: context >= 0 / 16k / 32k / 48k; columns: L >= 1 2 3 4 6 8 12 16 24 32.
+      // NI_INK2_NGRAM_TAB="d,d,..(10)/../../.." overrides it; _BACKOFF (here 0 unless set) applies after a cycle
+      // that kept no draft (offline: 2 vs 0 changes nothing once short matches never draft).
+      if (env_i("NI_INK2_NGRAM_POLICY", 0) > 0) {
+        ink2_ng_policy_ = true;
+        ink2_ng_backoff_ = std::max(0, env_i("NI_INK2_NGRAM_BACKOFF", 0));
+        if (const char* t = getenv("NI_INK2_NGRAM_TAB"); t && *t) {
+          const char* c = t;
+          for (int r = 0; r < 4; ++r)
+            for (int j = 0; j < 10; ++j) {
+              char* e = nullptr;
+              const long v = strtol(c, &e, 10);
+              if (e == c) break;
+              ink2_ng_tab_[r][j] = int(std::clamp(v, 0L, long(ink2_ngram_)));
+              c = *e ? e + 1 : e;
+            }
+        }
+        for (auto& row : ink2_ng_tab_)
+          for (int& v : row) v = std::min(v, ink2_ngram_);
+      }
       ink2_vf_logits_ = Gpu::get().alloc(size_t(Inkling2::kMaxVerify) * size_t(ink2_->vocab()) * 4, "ink2_vf_logits");
     }
   }
@@ -910,7 +933,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
                          : dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(dfl_->verify_depth()) + " of 7)"
                          : ink2_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(ink2_ngram_) +
                                                  " drafts per cycle, suffix matches " + std::to_string(ink2_ng_nmin_) + "-" +
-                                                 std::to_string(ink2_ng_nmax_) + ")"
+                                                 std::to_string(ink2_ng_nmax_) + (ink2_ng_policy_ ? ", table policy" : "") + ")"
                          : spec_ ? "MTP speculative decoding depth " + std::to_string(opts_.spec_depth)
                          : dory_spec_ > 0 ? "speculative decoding (" +
                                                     (dory_spec_kind() == "ngram"  ? std::string("prompt lookup")
@@ -4363,6 +4386,17 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
       if (next) next->wait();
     };
     auto lookup = [&](int at, int k, int nmin) { return ink2_lookup(s.tokens(), at, k, nd, nmin, ink2_ng_nmax_) > 0; };
+    // lab17 policy: the table's drafts for the longest suffix match at `at` (nd holds up to that many; 0: none)
+    auto policy = [&](int at) {
+      const int L = ink2_lookup(s.tokens(), at, K, nd, 1, ink2_ng_nmax_);
+      if (L == 0) return 0;
+      static constexpr int kLb[10] = {1, 2, 3, 4, 6, 8, 12, 16, 24, 32};
+      int j = 9;
+      while (j > 0 && L < kLb[j]) --j;
+      const int d = std::min(int(nd.size()), ink2_ng_tab_[std::min(3, at / 16000)][j]);
+      nd.resize(size_t(d));
+      return d;
+    };
     while (go) {
       if (P + K + 3 >= s.cap) {
         park();
@@ -4379,7 +4413,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         yield_turn(res);
       }
       if (next) {  // plain mode
-        if (backoff == 0 && lookup(P, 1, ink2_ng_sw_)) {
+        if (backoff == 0 && (ink2_ng_policy_ ? policy(P) > 0 : lookup(P, 1, ink2_ng_sw_))) {
           next->wait();  // (state through P; tokens[P + 1] pending)
           next.reset();
           ++P, ++ng_plain, ++ng_switch;
@@ -4396,7 +4430,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
         go = handle(s.tokens()[P]);
         continue;
       }
-      if (backoff > 0 || !lookup(P, kcur, ink2_ng_nmin_)) {
+      if (backoff > 0 || !(ink2_ng_policy_ ? policy(P) > 0 : lookup(P, kcur, ink2_ng_nmin_))) {
         next = encode_at(P);
         continue;
       }

@@ -709,6 +709,12 @@ class Engine {
   // lab16 NI_INK2_NGRAM=K: prompt-lookup drafts (up to K per cycle) for Inkling-2 with no drafter loaded (0: off);
   // the lookup's longest / shortest n-gram, the first cycle's drafts and the plain steps after a cycle that kept none
   int ink2_ngram_ = 0, ink2_ng_nmax_ = 32, ink2_ng_nmin_ = 2, ink2_ng_k0_ = 3, ink2_ng_backoff_ = 2, ink2_ng_sw_ = 2;
+  // lab17 NI_INK2_NGRAM_POLICY=1: drafts per cycle by context row (>= 0 / 16k / 32k / 48k) and suffix-length column
+  // (>= 1 2 3 4 6 8 12 16 24 32), fitted offline (lab17/sim2.py); NI_INK2_NGRAM_TAB overrides
+  bool ink2_ng_policy_ = false;
+  // (default: the margin-1.05 fit on 19 dumps: edit, 15 agent turns, prose 8k / 40k; lab17/logs/sim2-fit-1.05.out)
+  int ink2_ng_tab_[4][10] = {{0, 0, 0, 0, 0, 2, 3, 7, 7, 7}, {0, 0, 0, 0, 0, 2, 3, 7, 7, 7},
+                             {0, 0, 0, 0, 0, 0, 3, 7, 7, 7}, {0, 0, 0, 0, 0, 0, 3, 7, 7, 7}};
   int flint_ngram_ = 0;      // Flint: prompt-lookup drafts per cycle (0: plain decoding)
   // Flint: self-drafts per cycle at long contexts (Flint::encode_draft; 0: none), their full-attention layers' window,
   // and the shortest prompt that takes them
