@@ -3383,8 +3383,18 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // masks as structured output (whose masks begin at </think>, so the two never mask the same row). Clover's own
   // decoding modes (no drafter) apply their generation_config controls instead.
   ThinkControl tc;
+  bool think_off_enforced = false;  // Inkling-2 with thinking off: the cap of 0 below, not one the request set
   {
-    const int cap = think_cap_of(r.think_cap, r.thinking_budget);
+    int cap = think_cap_of(r.think_cap, r.thinking_budget);
+    // Inkling-2 reads "Thinking effort level: 0" as a hint and reasons anyway in most replies (a few hundred characters
+    // before the answer: every thinking-off run of `kapitsa bench` on Inkling-2-Mini ended in `length` with its 512
+    // tokens spent on reasoning), so thinking off (effort none, enable_thinking false, a numeric effort of 0) is
+    // enforced as a cap of 0 there, as thinking_control.hard_cap 0 does: <|content_thinking|> is forbidden where the
+    // reply starts. A cap the request set stays as it is.
+    if (ink2_ && cap < 0) {
+      const std::string level = inkling2_thinking_level(r);
+      if (level == "none" || level == "0") cap = 0, think_off_enforced = true;
+    }
     // (thinking turned off: no reasoning to cap, and a control waiting for a <think> would keep the request out of
     // batches for its whole reply. A template that opens the reasoning all the same, thinking off or not, still gets
     // it capped: for a cap of 0, the close is then its first token.)
@@ -4897,8 +4907,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   if (tc.on()) {
     res.think_forced = tc.forced();
     res.think_tokens = tc.count();
-    logi("chat: thinking budget %d: %d reasoning tokens%s%s", tc.cap(), tc.count(), tc.forced() ? ", close forced" : "",
-         tc_direct || tc_handed ? " (plain steps from the hand-over)" : "");
+    // (thinking off enforced on Inkling-2: logged only when the model opened its reasoning all the same)
+    if (!think_off_enforced || tc.count() > 0)
+      logi("chat: thinking budget %d: %d reasoning tokens%s%s", tc.cap(), tc.count(), tc.forced() ? ", close forced" : "",
+           tc_direct || tc_handed ? " (plain steps from the hand-over)" : "");
     if (tc.unmasked() > 0)  // (the mask is sized from the vocabulary, so this is a bug if it happens)
       logi("warning: thinking budget: %d forced rows could not be masked (token id past the mask width)",
            tc.unmasked());
