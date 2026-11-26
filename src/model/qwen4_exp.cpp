@@ -757,6 +757,45 @@ void Qwen4Exp::restore(Encoder& e, Seq& s, const Checkpoint& c) {
   if (remote_) remote_->restore(s.rid, c.rid);
 }
 
+// ---- SSD prefix cache (src/engine/engine_disk.cpp) ----
+// Qwen35's attention rows and GDN states, plus what this model adds: each attention layer's (and the MTP head's)
+// indexer caches, kept as KV rows, and the n-gram conv window, kept with the recurrent state (it is in every
+// checkpoint too). The block keys (fp32 [cap / ratio + 1][ix_dim]) are kept as rows of ix_dim * 4 / ratio bytes a
+// position: a block's key is written once its last token is (qwen4.metal, qsa_block) and only whole blocks are read,
+// so the bytes of rows [0, pos) hold every block a state at pos reads, and the store's 512-row blocks are whole blocks.
+std::string Qwen4Exp::disk_format() const {
+  if (remote_ || lo_ != 0 || hi_ != cfg_.layers) return "";  // a split model: the other Macs' layers are not saved
+  // block keys as whole bytes a position, whole blocks in the store's 512-row block files (kBlockRows)
+  if (c4_.ix_ratio <= 0 || (c4_.ix_dim * 4) % c4_.ix_ratio || 512 % c4_.ix_ratio) return "";
+  char b[256];
+  snprintf(b, sizeof b, "qwen4_exp %d streams; indexer: keys f16 [cap][%d], block keys f32 [cap/%d][%d]%s; n-gram conv "
+           "f32 [%d][%d][%d]; ",
+           c4_.hc, c4_.ix_dim, c4_.ix_ratio, c4_.ix_dim, mtp_loaded_ ? " (MTP head too)" : "", kRing, c4_.hc, cfg_.hidden);
+  std::string format = b + Qwen35::disk_format();
+  // the matrix units' sparse prefill attention leaves other indexer / KV values than the simdgroup kernels'
+  if (tattn(cfg_)) format += "; prefill: sparse attention on the matrix units";
+  return format;
+}
+
+void Qwen4Exp::disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const {
+  Qwen35::disk_rows(s, mtp, out);
+  const size_t krow = size_t(c4_.ix_dim) * 2, brow = size_t(c4_.ix_dim) * 4 / size_t(c4_.ix_ratio);
+  for (int i = 0; i < cfg_.layers; ++i)
+    if (!cfg_.is_linear[size_t(i)]) {
+      out.push_back({s.ixk[size_t(i)], 1, krow});
+      out.push_back({s.ixb[size_t(i)], 1, brow});
+    }
+  if (mtp && mtp_loaded_) {
+    out.push_back({s.mtp_ixk, 1, krow});
+    out.push_back({s.mtp_ixb, 1, brow});
+  }
+}
+
+void Qwen4Exp::disk_state(const Seq& s, const Checkpoint* c, std::vector<Buffer>& out) const {
+  Qwen35::disk_state(s, c, out);
+  out.push_back(c ? c->pconv : s.pconv);
+}
+
 void Qwen4Exp::set_rope_positions(Seq& s, int n, const std::vector<vision::ImageSpan>& spans) {
   Qwen35::set_rope_positions(s, n, spans);
   if (remote_) remote_->rope(s.rid, s.rope_n, s.rope_delta, s.rope_n ? s.rope_pos.as<int32_t>() : nullptr);

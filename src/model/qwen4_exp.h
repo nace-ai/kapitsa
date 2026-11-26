@@ -124,8 +124,15 @@ class Qwen4Exp : public Qwen35 {
   void save(Encoder& e, const Seq& s, Checkpoint& c, int pos) override;
   void restore(Encoder& e, Seq& s, const Checkpoint& c) override;
   void set_rope_positions(Seq& s, int n, const std::vector<vision::ImageSpan>& spans) override;
-  // not on the SSD prefix cache yet: its indexer keys and n-gram window are state Qwen35's layout does not name
-  std::string disk_format() const override { return ""; }
+  // SSD prefix cache (src/engine/engine_disk.cpp): Qwen35's states plus the sparse indexer's caches (as KV rows) and
+  // the n-gram conv window (with the recurrent state). "" on a split model: the other Macs' layers are not saved
+  std::string disk_format() const override;
+  void disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const override;
+  void disk_state(const Seq& s, const Checkpoint* c, std::vector<Buffer>& out) const override;
+  // a state read from the SSD replaced s's: an n-gram gather the last pass queued for s is not for it
+  void disk_restored(Seq& s) override {
+    if (pend_.s == &s) pend_ = Pending{};
+  }
   bool copy_prefix(Encoder&, const Seq&, Seq&, int) override { return false; }  // the sparse indexer's keys too: not copied
 
   // ---- passes ----

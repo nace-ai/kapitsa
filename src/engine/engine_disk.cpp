@@ -368,7 +368,8 @@ void Engine::disk_start() {
   if (quota == 0) return;
   const std::string fmt = model_->disk_format();
   if (fmt.empty()) {
-    logi("SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models and Dory are)");
+    logi("SSD prefix cache: off: not available for this model's states yet (the Qwen3.5-family models, Flash-Next, Flint "
+         "and Dory are)");
     return;
   }
   // one refused-version entry per slot (the store's write-behind skips a slot only while its own entry says so, #467)
@@ -1026,6 +1027,7 @@ bool Engine::disk_restore(Slot& slot, const pcache::Hit& hit) {
     slot.dseq->ctx = sn.dctx, slot.dseq->valid_lo = sn.dvalid;
   }
   if (d.mtp && q35_) q35_->draft_vocab_restore(s, e.vocab, e.vocab_scanned);
+  model_->disk_restored(s);
   slot.turns = std::max(slot.turns, 2);
   slot.live_ok = false;
   logi("SSD cache: read %d tokens of a stored conversation into slot %d (%.0f MB in %.0f ms)", P, idx,

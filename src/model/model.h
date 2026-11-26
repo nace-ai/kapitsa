@@ -44,7 +44,7 @@ struct Seq {
   int pend_half = 0;               // which half of pend_qkv holds the pending rows (Nemotron-H: 2 x 8 rows)
   Buffer mtp_kc, mtp_vc;           // MTP head's attention cache (positions = trunk positions)
   // Qwen3.8-Flash-Next: per attention layer (and the MTP head's) the sparse-attention indexer's raw index keys
-  // (half [cap, 128]) and block keys (bf16 [cap / 4, 128]), grown with the KV cache; the n-gram embedding's conv
+  // (half [cap, 128]) and block keys (fp32 [cap / 4 + 1, 128]), grown with the KV cache; the n-gram embedding's conv
   // window (fp32 [32, 4 x hidden], position mod 32)
   std::vector<Buffer> ixk, ixb;
   Buffer mtp_ixk, mtp_ixb;
@@ -220,6 +220,9 @@ class Model {
   virtual void disk_state(const Seq& s, const Checkpoint* c, std::vector<Buffer>& out) const {
     (void)s, (void)c, (void)out;
   }
+  // After the engine read a stored state into s (its rows and disk_state's buffers): host-side bookkeeping that
+  // belonged to s's previous contents is dropped (Qwen4Exp: a queued n-gram gather)
+  virtual void disk_restored(Seq& s) { (void)s; }
 
   // ---- images ----
   // The positions of a prompt of n rows whose images sit at `spans`, kept in s for every pass that follows (prefill,
