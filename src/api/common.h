@@ -66,12 +66,19 @@ void join_text(std::string& acc, const std::string& piece);
 // an object is kept as {"arguments": <text>})
 ojson arguments_object(const ojson& args);
 
+// Whether a tool is marked "defer_loading": true, Anthropic's and OpenAI's tool search flag: such a tool goes to
+// ChatRequest::deferred_tools
+bool deferred(const ojson& tool);
+// The same for a Chat Completions tool, passed on as the client wrote it: Chat Completions has no such field, so the
+// flag is read on the tool or in its function, and taken out of both, so a template never renders it
+bool take_deferred(ojson& tool);
+
 // Structured output (src/engine/grammar.h). A JSON Schema format's own fields, {"schema": ..., "strict": ...} (Chat's
 // response_format.json_schema, Responses' text.format), into spec; ApiError (400, param) for a malformed one.
 void schema_format(const ojson& f, OutputSpec& spec, const std::string& param);
-// The grammar of `spec` over the request's tools as the prompt declares them (output_grammar), or null when nothing
-// constrains the reply; ApiError (400) for one that cannot be held, naming the field at fault (format_param: the
-// API's name for the format).
+// The grammar of `spec` over every tool a call may name (ChatRequest::call_tools: those the prompt declares and the
+// deferred ones; output_grammar), or null when nothing constrains the reply; ApiError (400) for one that cannot be
+// held, naming the field at fault (format_param: the API's name for the format).
 std::shared_ptr<const Grammar> request_grammar(const OutputSpec& spec, const ojson& tools,
                                                const std::string& format_param = "response_format");
 

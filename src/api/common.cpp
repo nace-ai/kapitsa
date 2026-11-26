@@ -179,6 +179,23 @@ ojson arguments_object(const ojson& args) {
   return ojson{{"arguments", dump(args)}};
 }
 
+bool deferred(const ojson& tool) {
+  return tool.is_object() && tool.contains("defer_loading") && tool["defer_loading"].is_boolean() &&
+         tool["defer_loading"].get<bool>();
+}
+
+bool take_deferred(ojson& tool) {
+  bool marked = false;
+  auto take = [&](ojson& j) {
+    if (!j.is_object() || !j.contains("defer_loading")) return;
+    marked = marked || deferred(j);
+    j.erase("defer_loading");
+  };
+  take(tool);
+  if (tool.is_object() && tool.contains("function")) take(tool["function"]);
+  return marked;
+}
+
 void schema_format(const ojson& f, OutputSpec& spec, const std::string& param) {
   spec.format = OutputSpec::Format::kJsonSchema;
   if (!f.contains("schema") || f["schema"].is_null()) {

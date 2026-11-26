@@ -3901,6 +3901,109 @@ void inkling2_unit() {
   }
 }
 
+// "defer_loading": true (Anthropic's and OpenAI's tool search): a tool the prompt leaves out, which every API still
+// keeps for parsing and the grammar (ChatRequest::deferred_tools)
+void deferred_tools_mapping() {
+  auto names = [](const ojson& tools) {
+    std::string out;
+    for (const auto& t : tools) out += t["function"]["name"].get<std::string>() + " ";
+    return out;
+  };
+  // chat completions: the flag on the tool or in its function, taken out of both; false is declared
+  {
+    const ojson body = J(R"({"tools": [
+      {"type": "function", "function": {"name": "a", "parameters": {"type": "object"}}},
+      {"type": "function", "defer_loading": true, "function": {"name": "b", "parameters": {"type": "object"}}},
+      {"type": "function", "function": {"name": "c", "defer_loading": true, "parameters": {"type": "object"}}},
+      {"type": "function", "defer_loading": false, "function": {"name": "d", "parameters": {"type": "object"}}}]})");
+    ChatRequest r;
+    chat_tools(body, r);
+    check(names(r.tools) == "a d " && names(r.deferred_tools) == "b c " && names(r.call_tools()) == "a d b c ",
+          "chat: defer_loading tools are deferred, on the tool or in its function", names(r.tools) + "| " + names(r.deferred_tools));
+    check(r.call_tools().dump().find("defer_loading") == std::string::npos, "chat: the flag is taken out of every tool",
+          r.call_tools().dump());
+    ojson none = body;
+    none["tool_choice"] = "none";
+    ChatRequest n;
+    chat_tools(none, n);
+    check(n.tools.empty() && n.deferred_tools.empty(), "chat: tool_choice none = no tools, deferred ones too");
+    ojson named = body;
+    named["tool_choice"] = J(R"({"type": "function", "function": {"name": "c"}})");
+    check(chat_grammar(named, r.call_tools()) != nullptr, "chat: a named tool_choice of a deferred tool has its grammar");
+  }
+  // anthropic: the flag on the tool; tool_addition keeps it, tool_removal takes a deferred tool out
+  {
+    const ojson body = J(R"({"model": "m", "max_tokens": 10, "tool_choice": {"type": "tool", "name": "b"},
+      "tools": [{"name": "a", "input_schema": {"type": "object"}},
+                {"name": "b", "defer_loading": true, "input_schema": {"type": "object"}},
+                {"name": "c", "defer_loading": true, "input_schema": {"type": "object"}}],
+      "messages": [{"role": "user", "content": "hi"},
+        {"role": "system", "content": [{"type": "tool_removal", "tool": {"type": "tool_reference", "name": "c"}},
+          {"type": "tool_addition", "tool": {"type": "tool_definition",
+            "definition": {"name": "d", "defer_loading": true, "input_schema": {"type": "object"}}}},
+          {"type": "tool_addition", "tool": {"type": "tool_definition",
+            "definition": {"name": "a", "defer_loading": true, "input_schema": {"type": "object"}}}}]}]})");
+    const MessagesRequest q = messages_request(body);
+    check(q.chat.tools.empty() && names(q.chat.deferred_tools) == "b d a ",
+          "anthropic: defer_loading tools, tool_addition and tool_removal keep the deferred list",
+          names(q.chat.tools) + "| " + names(q.chat.deferred_tools));
+    check(q.chat.grammar != nullptr, "anthropic: a tool_choice of a deferred tool has its grammar");
+  }
+  // responses: a function, or a namespace's tools, by the namespace's flag or their own
+  {
+    ResponseStore store;
+    const ResponsesRequest q = responses_request(J(R"({"input": "hi", "tools": [
+      {"type": "function", "name": "a", "parameters": {"type": "object"}},
+      {"type": "function", "name": "b", "defer_loading": true, "parameters": {"type": "object"}},
+      {"type": "namespace", "name": "ns", "defer_loading": true, "tools": [{"type": "function", "name": "f"}]},
+      {"type": "namespace", "name": "mx", "tools": [{"type": "function", "name": "g"},
+                                                     {"type": "function", "name": "h", "defer_loading": true}]}]})"),
+                                                 store);
+    check(names(q.chat.tools) == "a mx__g " && names(q.chat.deferred_tools) == "b ns__f mx__h ",
+          "responses: defer_loading on a function, a namespace or a namespace's tool",
+          names(q.chat.tools) + "| " + names(q.chat.deferred_tools));
+  }
+}
+
+// Through the template: deferred tools leave the prompt as it is without them, and a call to one is typed by its schema
+void deferred_tools_round_trip(const TmplModel& m, const std::string& tag) {
+  const ojson declared = J(R"({"type": "function", "function": {"name": "search", "description": "Search",
+    "parameters": {"type": "object", "properties": {"q": {"type": "string"}}}}})");
+  const ojson make = J(R"({"type": "function", "defer_loading": true, "function": {"name": "make", "description": "Make",
+    "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "n": {"type": "integer"},
+      "urgent": {"type": "boolean"}, "blocks": {"type": "array", "items": {"type": "object"}}}}}})");
+  const ojson messages = J(R"([{"role": "system", "content": "S"}, {"role": "user", "content": "Make one."}])");
+  ChatRequest without, with;
+  chat_tools(ojson{{"tools", ojson::array({declared})}}, without);
+  chat_tools(ojson{{"tools", ojson::array({declared, make})}}, with);
+  without.messages = with.messages = messages;
+  check(render_chat(*m.tmpl, without, true) == render_chat(*m.tmpl, with, true),
+        tag + "deferred tools: the prompt is the one without them");
+
+  const std::string body = "<function=make>\n<parameter=name>\nMahina\n</parameter>\n<parameter=n>\n3\n</parameter>\n"
+                           "<parameter=urgent>\ntrue\n</parameter>\n<parameter=blocks>\n[{\"page\": \"paul\"}]\n"
+                           "</parameter>\n</function>\n</tool_call>";
+  for (const bool opener : {true, false}) {
+    const std::string label = tag + "deferred tools: a call " + (opener ? "" : "without its opener ");
+    std::vector<int> ids;
+    const auto res = finished(generate(m, (opener ? "<tool_call>\n" : "") + body, false, with.call_tools(), &ids), int(ids.size()));
+    const auto calls = chat_tool_calls(res.tool_calls, 0, false);
+    const ojson args = calls.size() == 1 ? ojson::parse(calls[0]["function"]["arguments"].get<std::string>(), nullptr, false)
+                                         : ojson();
+    check(calls.size() == 1 && calls[0]["function"]["name"] == "make" && args.is_object() && args["name"] == "Mahina" &&
+              args["n"] == 3 && args["urgent"] == true && args["blocks"].is_array() && args["blocks"][0]["page"] == "paul",
+          label + "is typed by its schema", calls.empty() ? res.content : calls[0].dump());
+  }
+  // (without the schema, as a tool left out of the request: every argument its text)
+  std::vector<int> ids;
+  const auto res = finished(generate(m, "<tool_call>\n" + body, false, with.tools, &ids), int(ids.size()));
+  const auto calls = chat_tool_calls(res.tool_calls, 0, false);
+  const ojson args = calls.size() == 1 ? ojson::parse(calls[0]["function"]["arguments"].get<std::string>(), nullptr, false)
+                                       : ojson();
+  check(args.is_object() && args["n"] == "3" && args["blocks"].is_string(),
+        tag + "deferred tools: an unknown tool's arguments stay text", calls.empty() ? res.content : calls[0].dump());
+}
+
 int main(int argc, char** argv) {
   hy4_plan_unit();
   inkling2_plan_unit();
@@ -3935,6 +4038,7 @@ int main(int argc, char** argv) {
   new_conversation_slot_unit();
   evicted_prefix_slot_unit();
   thinking_budget_mapping();
+  deferred_tools_mapping();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dump" && i + 1 < argc) dump_cases(argv[++i]);
@@ -3964,6 +4068,7 @@ int main(int argc, char** argv) {
     template_checks(m, tag);
     draft_checks(m, tag);
     thinking_cap_zero_render(m, tag);
+    deferred_tools_round_trip(m, tag);
   }
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;

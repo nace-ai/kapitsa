@@ -3397,7 +3397,8 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     if (cap >= 0 && think_close_ >= 0 && !clover_own && (!think_off || think || ink2_)) {
       std::vector<int> forced = r.think_close_text.empty() ? std::vector<int>() : tok_.encode(r.think_close_text);
       forced.push_back(think_close_);  // (ThinkControl::start shortens it to fit the cap, think_close_for)
-      const bool on_call = r.think_end_on_tool_call >= 0 ? r.think_end_on_tool_call > 0 : !r.tools.empty();
+      const bool on_call =
+          r.think_end_on_tool_call >= 0 ? r.think_end_on_tool_call > 0 : !(r.tools.empty() && r.deferred_tools.empty());
       tc.start(cap, std::move(forced), think_open_, think_close_, on_call ? tc_open_ : -1, think, &think_space_);
       if (!s.mask) {  // (the grammar's width, TokenTable::words(): a later structured-output request reuses the buffer)
         s.mask_words = (std::max(model_->vocab(), tok_.vocab_size()) + 31) / 32;
@@ -3862,10 +3863,12 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     const char* v = getenv("NI_THINK_TOOLCALLS");
     return !(v && v[0] == '0' && v[1] == 0);
   }();
+  // The tools a call may name: the deferred ones too, which the model calls from their definitions in the conversation
+  const ojson call_tools = r.call_tools();
   // (Nemotron-H, Dory and Flint: the whitespace before </think> stays in the reasoning, as their templates render
   // returned turns, unless the template writes a newline of its own there: think_ws_; the Nano 9B v2's tags as text;
   // Flint's calls in GLM's markup)
-  OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
+  OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !call_tools.empty(), call_tools,
                       ink2_ ? false : think_tools,
                       ((nh_ != nullptr || dory_ != nullptr || flint_ != nullptr) && think_ws_) || ink2_ != nullptr,
                       text_tags_,

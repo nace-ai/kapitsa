@@ -777,6 +777,23 @@ steps, without the drafter, so they decode slower: on an M5 Pro at temperature 0
 kapitsa#1286 every `top_k` was clamped to 32 without a word. A request that leaves `top_k` out gets the model's default (Qwen: 20; a
 `generation_config.json` without one: 32), so it stays on the two-pass sampler. Clover's own loops apply no top-k at all.
 
+### Deferred tools
+
+A tool marked `"defer_loading": true`, as Anthropic's and OpenAI's tool search mark one, is kept for the request but
+left out of the prompt. A client that loads its tools as a conversation needs them, by writing their definitions into
+the conversation, keeps the prompt's start the same as it does, and so the cached prefix: adding a tool to the prompt's
+tool list changes its beginning and reads the whole conversation again. A call to a deferred tool is parsed, its
+arguments typed by its `parameters` (a tool the request leaves out has every argument as its text), and a named or
+required `tool_choice`, and `strict`, hold to it, as for a declared tool.
+
+- **Messages and Responses:** the flag where those APIs put it, on the tool (Responses: also on a namespace, for all of its
+  tools). A `tool_addition` keeps it.
+- **Chat Completions**, which has no such field: on the tool or in its `function`. It is taken out before the template
+  sees the tool.
+
+With every tool deferred the prompt declares none, so the template writes no instructions for the call format: declare
+at least one.
+
 ### Structured output
 
 A request can hold the reply to a JSON Schema, to any JSON object, or to tool calls. Each token is then sampled under a
