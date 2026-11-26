@@ -1038,8 +1038,9 @@ note in the prompt, so agents that attach screenshots keep working.
   GIF, HEIC, TIFF, BMP). Video is not supported (a 400 error).
 - Size: images over 1.2 million pixels (Bolt and Super-VL: 1.4 million) are scaled down to about that; a 2880x1800 screenshot becomes
   1376x864. `--image-max-pixels N` sets the cap, `0` lifts it to the model's own limit. Inkling-2-Mini reads an image
-  at its own resolution, one token per 40x40 pixels (a 1280x800 screenshot: 640 tokens; its processor has no limit of
-  its own, so `0` keeps every image whole, at 1600 pixels per token of prompt).
+  at its own resolution, one token per 40x40 pixels (a 1280x800 screenshot: 640 tokens); the cap bounds its token grid
+  (N / 1600 tokens, 750 by default: a 2880x1800 screenshot becomes 1360x850, 748 tokens), and its processor has no
+  limit of its own, so `0` keeps every image whole. Transparent pixels show its processor's gray checkerboard.
 - Tokens: an image costs prompt tokens by its size (a 1280x800 screenshot: 1000 tokens), in `usage` and `count_tokens`.
 - Cache: the same image sent again (an agent's screenshot every turn) reuses the cached prompt, and the embeddings of
   recent images are kept (`NI_IMAGE_CACHE_MB`, default 256).

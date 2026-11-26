@@ -3,12 +3,13 @@
 (transformers 5.24 or later) with the checkpoint's model.visual.* tensors, on the CPU, for comparison with Kapitsa's
 GPU encoder (build/vit_check tower; tests/vision/check_ink2.py drives both).
 
-usage: ref_ink2.py MODEL_DIR IN.rgb W H OUT_DIR [--bf16]
-IN.rgb: raw 8-bit RGB of W x H, any size (the processor pads it to whole 40-pixel tokens). Writes to OUT_DIR, float32:
+usage: ref_ink2.py MODEL_DIR IMAGE OUT_DIR [--bf16] [--prep]
+IMAGE: an image file, opened as the reference opens it (PIL, the EXIF orientation applied, transparency kept for the
+processor's checkerboard), any size (the processor pads it to whole 40-pixel tokens). Writes to OUT_DIR, float32:
 pv.f32 (the processor's pixel_values [tokens, 40, 40, 3]), h0.f32 (every row after the embeddings' LayerNorm: the class
 token, then the patches), h1.f32 and hL.f32 (the same after block 1 and after the last block) and emb.f32 (the merger's
 output [tokens, text hidden]); prints "grid_h grid_w tokens". --bf16 runs the tower in bfloat16 as it ships (its error
-against float32 is the scale for Kapitsa's). Needs torch, torchvision and transformers. CPU only.
+against float32 is the scale for Kapitsa's); --prep stops after pv.f32. Needs torch, torchvision and transformers. CPU only.
 """
 import json, os, struct, sys
 
@@ -16,7 +17,7 @@ import numpy as np
 import torch
 
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
-model_dir, rgb_path, W, H, out_dir = args[0], args[1], int(args[2]), int(args[3]), args[4]
+model_dir, image_path, out_dir = args[0], args[1], args[2]
 dtype = torch.bfloat16 if "--bf16" in sys.argv else torch.float32
 os.makedirs(out_dir, exist_ok=True)
 torch.set_grad_enabled(False)
@@ -24,6 +25,19 @@ torch.set_grad_enabled(False)
 from transformers.models.inkling2.configuration_inkling2 import Inkling2VisionConfig
 from transformers.models.inkling2.image_processing_inkling2 import Inkling2ImageProcessor
 from transformers.models.inkling2.modeling_inkling2 import Inkling2VisionModel
+
+# the processor on the file as PIL opens it (an RGBA, LA or transparent palette image keeps its alpha)
+from PIL import Image, ImageOps
+
+proc = Inkling2ImageProcessor()
+feats = proc(images=[ImageOps.exif_transpose(Image.open(image_path))], return_tensors="pt")
+pixel_values, grid = feats["pixel_values"], feats["image_grid_thw"]
+pixel_values.float().numpy().astype(np.float32).tofile(os.path.join(out_dir, "pv.f32"))
+gt, gh, gw = (int(v) for v in grid[0])
+result = f"{gh} {gw} {gt * gh * gw}"  # grid_h grid_w tokens
+if "--prep" in sys.argv:
+    print(result)
+    sys.exit(0)
 
 cfg = json.load(open(os.path.join(model_dir, "config.json")))
 vc = dict(cfg["vision_config"])
@@ -84,22 +98,12 @@ missing, unexpected = model.load_state_dict(state, strict=False)
 missing = [m for m in missing if "inv_freq" not in m]
 assert not missing and not unexpected, (missing, unexpected)
 
-# the processor on the raw RGB (as PIL gives it: no alpha)
-from PIL import Image
-
-rgb = np.fromfile(rgb_path, np.uint8).reshape(H, W, 3)
-proc = Inkling2ImageProcessor()
-feats = proc(images=[Image.fromarray(rgb)], return_tensors="pt")
-pixel_values, grid = feats["pixel_values"], feats["image_grid_thw"]
-pixel_values.float().numpy().astype(np.float32).tofile(os.path.join(out_dir, "pv.f32"))
-
 # the forward, with the hidden state after the embeddings' LayerNorm, block 1 and the last block
 taps = {}
 model.pre_layernorm.register_forward_hook(lambda m, i, o: taps.__setitem__("h0", o))
 model.layers[0].register_forward_hook(lambda m, i, o: taps.__setitem__("h1", o))
 model.layers[-1].register_forward_hook(lambda m, i, o: taps.__setitem__("hL", o))
 out = model(pixel_values=pixel_values, image_grid_thw=grid)
-for name, t in (("h0", taps["h0"]), ("h1", taps["h1"]), ("hL", taps["hL"]), ("emb", out.pooler_output)):
-    t.float().numpy().astype(np.float32).tofile(os.path.join(out_dir, name + ".f32"))
-t, gh, gw = (int(v) for v in grid[0])
-print(gh, gw, t * gh * gw)
+for name, x in (("h0", taps["h0"]), ("h1", taps["h1"]), ("hL", taps["hL"]), ("emb", out.pooler_output)):
+    x.float().numpy().astype(np.float32).tofile(os.path.join(out_dir, name + ".f32"))
+print(result)

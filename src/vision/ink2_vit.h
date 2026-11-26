@@ -1,7 +1,7 @@
 // Inkling-2's image encoder (Thinking Machines' inkling2_vision, model.visual.* of an Inkling-2 checkpoint): the
 // processor, the ViT and the merger.
-// Processor: no resizing (the image at its own resolution, within --image-max-pixels: larger images are scaled down
-// first), padded right and below to whole 40-pixel tokens (2 x 2 patches of 20 pixels) with the reference's fill (-1 on
+// Processor: transparency composited onto the reference's 8-pixel gray checkerboard, no resizing (the image at its own
+// resolution, within --image-max-pixels: an image whose token grid is larger is scaled down first), padded right and below to whole 40-pixel tokens (2 x 2 patches of 20 pixels) with the reference's fill (-1 on
 // the 0-255 scale), normalized with mean and std 0.5. Tower: a class token in front of the patches (which keep their
 // 2 x 2 token order), the patch embedding + a 32 x 32 position table resampled bilinearly to the patch grid, a
 // LayerNorm, then 23 pre-LayerNorm blocks of attention (16 heads of 64, axial 2D RoPE over interleaved pairs, the class
@@ -15,6 +15,7 @@
 #include "vision/vit_common.h"
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ni::vision {
@@ -35,6 +36,11 @@ struct Ink2ViTConfig {
   double rescale = 1.0 / 255.0;
   bool do_rescale = true, do_normalize = true;
 };
+
+// The size a w x h image is scaled to so that its grid of `token`-pixel tokens (padding included) holds at most
+// max_pixels / token^2 tokens (at least one): the largest such size with the aspect kept and neither side enlarged;
+// w x h itself when it fits or max_pixels <= 0.
+std::pair<int, int> ink2_target_size(int w, int h, int token, long max_pixels);
 
 class Ink2ViT : public ImageEncoder {
  public:

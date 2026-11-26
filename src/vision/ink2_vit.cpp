@@ -114,37 +114,68 @@ std::string Ink2ViT::describe() const {
   return name() + " (" + std::to_string(c_.depth) + " blocks, width " + std::to_string(c_.hidden) + ", " +
          std::to_string(c_.patch) + "-pixel patches, " + std::to_string(c_.patch * c_.merge) +
          "-pixel tokens at the image's own resolution" +
-         (c_.max_pixels > 0 ? ", images over " + std::to_string(c_.max_pixels / 1000) + "K pixels scaled down" : "") +
+         (c_.max_pixels > 0 ? ", images over " + std::to_string(c_.max_pixels / (c_.patch * c_.merge * c_.patch * c_.merge)) +
+                                  " tokens scaled down"
+                            : "") +
          ")";
 }
 
 // ---- the processor (CPU) ----
 
+std::pair<int, int> ink2_target_size(int w, int h, int token, long max_pixels) {
+  if (max_pixels <= 0 || w < 1 || h < 1 || token < 1) return {w, h};
+  const long budget = std::max(1L, max_pixels / (long(token) * token));
+  auto tokens = [&](long a, long b) { return ((a + token - 1) / token) * ((b + token - 1) / token); };
+  if (tokens(w, h) <= budget) return {w, h};
+  // the longer side's length decides; the shorter one follows it (rounded, at least 1, so never above its own)
+  const bool wide = w >= h;
+  const long L = wide ? w : h, S = wide ? h : w;
+  auto other = [&](long l) { return std::max(1L, long(std::lround(double(S) * double(l) / double(L)))); };
+  long lo = 1, hi = L;  // tokens(1, other(1)) is 1: lo always fits; the token count grows with the longer side
+  while (lo < hi) {
+    const long mid = lo + (hi - lo + 1) / 2;
+    if (tokens(mid, other(mid)) <= budget) lo = mid;
+    else hi = mid - 1;
+  }
+  return wide ? std::pair<int, int>{int(lo), int(other(lo))} : std::pair<int, int>{int(other(lo)), int(lo)};
+}
+
 Prepared Ink2ViT::prepare(const Image& im) const {
   const int F = c_.patch * c_.merge;
-  int w = im.width, h = im.height;
-  Prepared p;
-  if (c_.max_pixels > 0 && long(w) * h > c_.max_pixels) {
-    // Kapitsa's cap (the reference processor has none): scaled down to about max_pixels, aspect kept, to whole tokens
-    const double s = std::sqrt(double(c_.max_pixels) / (double(w) * h));
-    const int ow = std::max(F, int(std::floor(w * s / F)) * F), oh = std::max(F, int(std::floor(h * s / F)) * F);
-    p.pixels = pil_resize_bicubic(im.rgb, w, h, ow, oh);
-    w = ow;
-    h = oh;
-  } else {
-    p.pixels = PixelBuffer(im.rgb.begin(), im.rgb.end());
+  if (im.width < 1 || im.height < 1 || im.rgb.size() != size_t(im.width) * im.height * 3 ||
+      (!im.alpha.empty() && im.alpha.size() != size_t(im.width) * im.height))
+    throw Error("an image of inconsistent size");
+  // transparency onto the reference's checkerboard (8-pixel squares, 204 where (row / 8 + column / 8) is even, else
+  // 153), in its integer arithmetic: (rgb * a + bg * (255 - a) + 127) / 255; opaque pixels keep their values
+  const std::vector<uint8_t>* rgb = &im.rgb;
+  std::vector<uint8_t> comp;
+  Digest base = im.digest;
+  if (!im.alpha.empty()) {
+    comp.resize(im.rgb.size());
+    for (int y = 0; y < im.height; ++y)
+      for (int x = 0; x < im.width; ++x) {
+        const size_t i = size_t(y) * im.width + x;
+        const uint32_t a = im.alpha[i], bg = ((y / 8 + x / 8) % 2 == 0) ? 204 : 153;
+        for (int c = 0; c < 3; ++c) comp[3 * i + c] = uint8_t((im.rgb[3 * i + c] * a + bg * (255 - a) + 127) / 255);
+      }
+    rgb = &comp;
+    base = sha256(comp.data(), comp.size());  // what the tower sees: two images differing in alpha differ here
   }
+  const auto [w, h] = ink2_target_size(im.width, im.height, F, c_.max_pixels);
+  Prepared p;
+  if (w != im.width || h != im.height) p.pixels = pil_resize_bicubic(*rgb, im.width, im.height, w, h);
+  else p.pixels = PixelBuffer(rgb->begin(), rgb->end());
   p.width = w;
   p.height = h;
   p.grid_t = 1;
   p.grid_h = (h + F - 1) / F;
   p.grid_w = (w + F - 1) / F;
   p.tokens = p.grid_h * p.grid_w;
-  uint8_t key[32 + 8 + 8];
-  memcpy(key, im.digest.data(), 32);
-  const int32_t dims[2] = {h, w};
-  memcpy(key + 32, dims, 8);
-  memcpy(key + 40, "ink2-vit", 8);
+  uint8_t key[32 + 16 + 8];
+  memcpy(key, base.data(), 32);
+  const int32_t dims[4] = {h, w, im.height, im.width};
+  memcpy(key + 32, dims, 16);
+  memcpy(key + 48, "ink2-vit", 8);
   p.digest = sha256(key, sizeof key);
   return p;
 }

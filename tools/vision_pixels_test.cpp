@@ -1,5 +1,7 @@
-// CPU-only checks of the storage wrapped by the Qwen vision encoder. No model or Metal device is needed.
+// CPU-only checks of the storage wrapped by the Qwen vision encoder, and of Inkling-2's processor (its size cap and
+// transparency). No model or Metal device is needed.
 #include "vision/encoder.h"
+#include "vision/ink2_vit.h"
 #include "vision/qwen_vit.h"
 
 #include <algorithm>
@@ -66,5 +68,44 @@ int main() {
     resize_ok &= std::all_of(out.begin(), out.end(), [](uint8_t v) { return v == 73; });
   }
   check(resize_ok, "every bicubic resize branch writes directly into aligned pixel storage");
+  // Inkling-2: the final token grid (padding included) within the cap, neither side enlarged, the aspect kept
+  {
+    bool ok = true;
+    const long cap = 1200000;  // 750 tokens of 40 x 40
+    for (auto [w, h] : {std::pair{25, 65520}, {65520, 25}, {2880, 1800}, {1095, 1095}, {39, 39}, {1, 100000}, {4096, 2414}}) {
+      const auto [ow, oh] = ink2_target_size(w, h, 40, cap);
+      const long tokens = long((ow + 39) / 40) * ((oh + 39) / 40);
+      const bool fits = tokens * 1600 <= cap, kept = ow <= w && oh <= h && ow >= 1 && oh >= 1;
+      const bool whole = long((w + 39) / 40) * ((h + 39) / 40) * 1600 <= cap ? (ow == w && oh == h) : true;
+      printf("     %d x %d -> %d x %d (%ld tokens)\n", w, h, ow, oh, tokens);
+      ok &= fits && kept && whole;
+    }
+    const auto [w0, h0] = ink2_target_size(25, 65520, 40, 0);
+    ok &= w0 == 25 && h0 == 65520;
+    check(ok, "Inkling-2 size cap: final token grid within 750 tokens, no side enlarged, 0 keeps the image");
+  }
+  // Inkling-2: transparency composited onto the 8-pixel checkerboard as the reference does, and in the digest
+  {
+    const Ink2ViT enc("", Ink2ViTConfig{});
+    Image im;
+    im.width = 20, im.height = 10;
+    im.rgb.assign(size_t(im.width) * im.height * 3, 0);  // black
+    im.alpha.assign(size_t(im.width) * im.height, 0);    // transparent
+    for (int x = 0; x < im.width; ++x) im.alpha[size_t(5) * im.width + x] = uint8_t(x * 13);  // a partial row
+    im.alpha[0] = 255;  // one opaque black pixel
+    const Prepared p = enc.prepare(im);
+    bool ok = p.pixels.size() == im.rgb.size();
+    for (int y = 0; ok && y < im.height; ++y)
+      for (int x = 0; x < im.width; ++x) {
+        const uint32_t a = im.alpha[size_t(y) * im.width + x], bg = ((y / 8 + x / 8) % 2 == 0) ? 204 : 153;
+        const uint8_t want = uint8_t((bg * (255 - a) + 127) / 255);
+        for (int c = 0; c < 3; ++c) ok &= p.pixels[(size_t(y) * im.width + x) * 3 + c] == want;
+      }
+    Image opaque = im;
+    opaque.alpha.clear();
+    const Prepared q = enc.prepare(opaque);
+    ok &= std::all_of(q.pixels.begin(), q.pixels.end(), [](uint8_t v) { return v == 0; }) && q.digest != p.digest;
+    check(ok, "Inkling-2 transparency: the checkerboard composite to the bit; transparent and opaque black differ");
+  }
   return fails ? 1 : 0;
 }

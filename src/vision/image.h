@@ -24,8 +24,10 @@ using Digest = std::array<uint8_t, 32>;  // SHA-256
 // color management, alpha dropped (not composited), 16-bit samples by their high byte; the EXIF orientation applied.
 struct Image {
   int width = 0, height = 0;
-  std::vector<uint8_t> rgb;  // height x width x 3
-  Digest digest{};           // SHA-256 of the dimensions and the RGB bytes: the same picture in any file format
+  std::vector<uint8_t> rgb;    // height x width x 3
+  std::vector<uint8_t> alpha;  // height x width straight alpha (PIL's convert("RGBA")), empty without an alpha channel:
+                               // only an encoder whose processor composites transparency reads it (Ink2ViT)
+  Digest digest{};             // SHA-256 of the dimensions and the RGB bytes: the same picture in any file format
 };
 
 struct FetchLimits {

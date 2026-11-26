@@ -14,6 +14,8 @@
 //   vit_check tower MODEL IN.rgb W H OUT [LAYERS]     GPU: the encoder on raw RGB of W x H (a size its processor
 //                                                     keeps: multiples of 32): bf16 embeddings, or with LAYERS the fp32
 //                                                     hidden state of every row after that many blocks
+//   vit_check tower MODEL IMAGE OUT [LAYERS]          the same on an image file, decoded and prepared as the server
+//                                                     does (the model's own size limits)
 //   vit_check bench MODEL W H [REPS]                  GPU: encode time of a W x H image (random pixels)
 //   vit_check kernels                                 GPU, tiny synthetic tensors: attn_prep_m vs attn_prep (bitwise
 //                                                     on text rows), vs a CPU M-RoPE on image rows; embed_rows_bf16;
@@ -298,6 +300,19 @@ int main(int argc, char** argv) {
       for (int r = end; r < n; ++r) table.insert(table.end(), {r + delta, r + delta, r + delta});
       dump(argv[3], table.data(), table.size() * 4);
       printf("%d\n", delta);
+      return 0;
+    }
+    if (cmd == "tower" && (argc == 5 || argc == 6)) {  // an image file
+      auto vit = open_vit(argv[2]);
+      const Prepared p = vit->prepare(decode(slurp(argv[3])));
+      const int layers = argc == 6 ? atoi(argv[5]) : -1;
+      vit->load();
+      const size_t bytes = layers >= 0 ? size_t(vit->debug_rows(p)) * vit->debug_width() * 4
+                                       : size_t(p.tokens) * vit->out_dim() * 2;
+      Buffer out = Gpu::get().alloc(bytes + 16, "out");
+      if (layers >= 0) vit->set_debug_stop(layers);
+      vit->encode(p, out);
+      dump(argv[4], out.ptr(), bytes);
       return 0;
     }
     if (cmd == "tower" && (argc == 7 || argc == 8)) {
