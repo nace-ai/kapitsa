@@ -269,24 +269,28 @@ ResponsesRequest responses_request(const ojson& body, const ResponseStore& store
   if (!cv.system.empty()) r.messages.push_back({{"role", "system"}, {"content", cv.system}});
   for (auto& m : cv.messages) r.messages.push_back(std::move(m));
 
+  // a tool marked "defer_loading" (OpenAI's tool search: a function, a custom tool, or a namespace's tools) goes to
+  // deferred_tools, out of the prompt
+  auto list = [&](bool d) -> ojson& { return d ? r.deferred_tools : r.tools; };
   if (body.contains("tools") && body["tools"].is_array())
     for (const auto& t : body["tools"]) {
       const std::string type = str(t, "type"), name = str(t, "name");
       if (type == "function" && !name.empty()) {
-        r.tools.push_back(function_tool(name, t));
+        list(deferred(t)).push_back(function_tool(name, t));
       } else if (type == "custom" && !name.empty()) {
-        r.tools.push_back(custom_tool(name, t));
+        list(deferred(t)).push_back(custom_tool(name, t));
         q.custom.insert(name);
       } else if (type == "namespace" && t.contains("tools") && t["tools"].is_array()) {
         for (const auto& c : t["tools"]) {
           const std::string child = str(c, "name"), kind = str(c, "type");
           if (child.empty() || (kind != "function" && kind != "custom")) continue;
           const std::string a = alias(name, child);
+          const bool d = deferred(t) || deferred(c);
           if (kind == "custom") {
-            r.tools.push_back(custom_tool(a, c));
+            list(d).push_back(custom_tool(a, c));
             q.custom.insert(a);
           } else {
-            r.tools.push_back(function_tool(a, c));
+            list(d).push_back(function_tool(a, c));
           }
           q.namespaced[a] = {name, child};
         }
@@ -296,7 +300,7 @@ ResponsesRequest responses_request(const ojson& body, const ResponseStore& store
       }
     }
   if (body.contains("tool_choice") && body["tool_choice"].is_string() && body["tool_choice"] == "none")
-    r.tools = ojson::array();
+    r.tools = r.deferred_tools = ojson::array();
   // Structured output (src/engine/grammar.h): text.format, tool_choice required, a named function or custom tool, or
   // allowed_tools, parallel_tool_calls, and strict function tools ("strict": true; one that leaves it out is not strict,
   // where OpenAI defaults it to true: coding agents send their tools without it and stay unconstrained)
@@ -336,7 +340,8 @@ ResponsesRequest responses_request(const ojson& body, const ResponseStore& store
     }
     if (body.contains("parallel_tool_calls") && body["parallel_tool_calls"].is_boolean())
       spec.parallel = body["parallel_tool_calls"].get<bool>();
-    if (!r.tools.empty() && body.contains("tools") && body["tools"].is_array())
+    const ojson call_tools = r.call_tools();
+    if (!call_tools.empty() && body.contains("tools") && body["tools"].is_array())
       for (const auto& t : body["tools"]) {
         auto strict = [](const ojson& x) { return x.contains("strict") && x["strict"].is_boolean() && x["strict"].get<bool>(); };
         if (str(t, "type") == "function" && strict(t)) spec.strict_tools.push_back(str(t, "name"));
@@ -344,7 +349,7 @@ ResponsesRequest responses_request(const ojson& body, const ResponseStore& store
           for (const auto& c : t["tools"])
             if (str(c, "type") == "function" && strict(c)) spec.strict_tools.push_back(alias(str(t, "name"), str(c, "name")));
       }
-    r.grammar = request_grammar(spec, r.tools, "text.format");
+    r.grammar = request_grammar(spec, call_tools, "text.format");
   }
 
   r.max_tokens = 32768;

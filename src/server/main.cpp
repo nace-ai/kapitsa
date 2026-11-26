@@ -137,8 +137,7 @@ static void splash_sampling_defaults(const json& b, const Engine& e, ChatRequest
 static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
   ChatRequest r = defaults;
   r.messages = normalize_messages(b.at("messages"));
-  if (b.contains("tools") && b["tools"].is_array()) r.tools = b["tools"];
-  if (b.contains("tool_choice") && b["tool_choice"].is_string() && b["tool_choice"] == "none") r.tools = json::array();
+  api::chat_tools(b, r);  // (the ones marked "defer_loading" in deferred_tools)
   r.max_tokens = api::chat_max_tokens(b);
   if (b.contains("temperature") && b["temperature"].is_number()) r.temperature = b["temperature"];
   if (b.contains("top_p") && b["top_p"].is_number()) r.top_p = b["top_p"];
@@ -177,7 +176,7 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
   r.loops = api::request_loops_field(b);
   api::request_think_field(b, r);
   // structured output: response_format, tool_choice required or named, strict tools (src/api/chat_completions.cpp)
-  r.grammar = api::chat_grammar(b, r.tools);
+  r.grammar = api::chat_grammar(b, r.call_tools());
   return r;
 }
 
