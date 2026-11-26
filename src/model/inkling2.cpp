@@ -118,10 +118,13 @@ int ink2_fa_nt() {
 
 // lab12: g3kw_rc variant. NI_INK2_ATTL=1 (A/B-able): ink2_attn_decode_g3kw_rc_ml (ring slots without a per-key modulo +
 // whole blocks by a constant V stride; bit-identical).
-std::string ink2_rc_name(bool kt) {
+// The tiled K (NI_INK2_KT) is read only by the _mlt variant, so the decode binds it only when this is on.
+static bool ink2_attl() {
   static const int attl = ink2_knob("NI_INK2_ATTL", 1, 0);
-  return ink2_ab("NI_INK2_ATTL", attl) ? (kt ? "ink2_attn_decode_g3kw_rc_mlt" : "ink2_attn_decode_g3kw_rc_ml")
-                                       : "ink2_attn_decode_g3kw_rc";
+  return ink2_ab("NI_INK2_ATTL", attl) != 0;
+}
+std::string ink2_rc_name(bool kt) {
+  return ink2_attl() ? (kt ? "ink2_attn_decode_g3kw_rc_mlt" : "ink2_attn_decode_g3kw_rc_ml") : "ink2_attn_decode_g3kw_rc";
 }
 
 // lab13 NI_INK2_KT=1: a tiled copy of every visit's K (Seq::kt, ink2_kt_idx in ink2.metal) read by the decode attention
@@ -2174,7 +2177,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       const int redlast_v = ink2_ab("NI_INK2_REDLAST", redlast_env);
       redlast = redlast_v == 3 && g3 && kw && red_p0;
       static const int kt_env = ink2_kt_alloc() ? 1 : 0;
-      const bool kt = redlast && !aseq(gi).kt.empty() && ink2_ab("NI_INK2_KT", kt_env) != 0;
+      const bool kt = redlast && ink2_attl() && !aseq(gi).kt.empty() && ink2_ab("NI_INK2_KT", kt_env) != 0;
       e.use(ink2_pipe(!g3 ? "ink2_attn_decode" : dec_g_mode == 2 ? "ink2_attn_decode_g3" : kw ? (redlast ? ink2_rc_name(kt).c_str() : "ink2_attn_decode_g3kw")
                                                                                                : "ink2_attn_decode_g3_fx"));
       if (redlast) {
