@@ -13,6 +13,8 @@ No model, no Metal, no GPU: every lock here is a temporary file ($BENCH_GPU_LOCK
 4. compare_engines.engine_env(): the environment of a launched engine drops both names, whatever the caller or the
    config's own env says.
 5. The scripts that gate on the lock go through held_by_caller(), not their own spelling of the variable.
+6. tests/vision/check_ink2.py --gpu waits for a held lock before its first tower run, runs once it is released and
+   frees it on exit; a caller that holds it (either name) is not made to wait (stand-ins: no numpy needed).
 """
 import os
 import re
@@ -144,13 +146,65 @@ finally:
 # 5. no script keeps its own spelling of the variable
 SITES = ("bench/harness/bench.py", "bench/quality/eval_mlx.py", "bench/quality/eval_stream.py",
          "bench/quality/speed_variants.py", "bench/quality/speed_mlx.py", "bench/harness/agent_replay.py",
-         "bench/harness/compare_engines.py", "bench/reasoning/reasoning.py", "tools/qwen4_exp_pack.py")
+         "bench/harness/compare_engines.py", "bench/reasoning/reasoning.py", "tools/qwen4_exp_pack.py",
+         "tests/vision/check_ink2.py")
 own = re.compile(r"""environ(\.get\(|\[)\s*["'](NI_LOCK_HELD|NACE_GPU_LOCK_HELD)["']|getenv\(\s*["'](NI_LOCK_HELD|NACE_GPU_LOCK_HELD)["']""")
 for rel in SITES:
     with open(os.path.join(REPO, rel)) as f:
         text = f.read()
     bad = [i + 1 for i, line in enumerate(text.splitlines()) if own.search(line) and "environ[" not in line.split("=")[0]]
     check("held_by_caller()" in text and not bad, f"{rel} uses held_by_caller()", f"own reads on lines {bad}")
+
+# 6. tests/vision/check_ink2.py --gpu holds BENCH_GPU_LOCK over its tower runs unless the caller holds it (stand-in
+# vit_check and reference that log their calls; their outputs are not real, so the script's own checks fail)
+import time
+with tempfile.TemporaryDirectory() as tmp:
+    lock_path, log = os.path.join(tmp, "gpu.lock"), os.path.join(tmp, "calls")
+    stub = os.path.join(tmp, "stub")
+    with open(stub, "w") as f:
+        f.write('#!/bin/sh\necho "$1 $2" >> "$CALL_LOG"\n')
+    os.chmod(stub, 0o755)
+    cmd = [sys.executable, os.path.join(REPO, "tests/vision/check_ink2.py"), tmp, stub, "x.png", "--gpu", "--python", stub]
+
+    def calls():
+        return open(log).read() if os.path.exists(log) else ""
+
+    def wait_for(pred, s=10):
+        t0 = time.time()
+        while time.time() - t0 < s and not pred():
+            time.sleep(0.1)
+        return pred()
+
+    env = clean_env(BENCH_GPU_LOCK=lock_path, CALL_LOG=log)
+    lk = gpu_hogs.GpuLock(path=lock_path, **quiet).acquire()
+    try:
+        p = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        ran_cpu = wait_for(lambda: "prep" in calls())
+        time.sleep(1.0)
+        check(ran_cpu and p.poll() is None and "tower" not in calls(), "check_ink2: the processor leg runs, a held lock stops the tower",
+              calls())
+        lk.release()
+        p.communicate(timeout=30)
+        check("tower" in calls(), "check_ink2: the tower runs once the lock is released", calls())
+        try:
+            gpu_hogs.GpuLock(path=lock_path, timeout=1, **quiet).acquire().release()
+            check(True, "check_ink2: the lock is free after it exits")
+        except TimeoutError:
+            check(False, "check_ink2: the lock is free after it exits")
+        lk.acquire()
+        for name in NAMES:
+            os.path.exists(log) and os.remove(log)
+            r = subprocess.run(cmd, env=dict(env, **{name: "1"}), capture_output=True, text=True, timeout=30)
+            check("tower" in calls(), f"check_ink2: {name}=1 runs the tower under the caller's lock", calls())
+        os.path.exists(log) and os.remove(log)
+        p0 = subprocess.Popen(cmd, env=dict(env, NI_LOCK_HELD="0"), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        wait_for(lambda: "prep" in calls())
+        time.sleep(1.0)
+        check(p0.poll() is None and "tower" not in calls(), "check_ink2: NI_LOCK_HELD=0 still waits for the lock", calls())
+        p0.kill()
+        p0.communicate()
+    finally:
+        lk.release()
 
 if FAILS:
     print(f"\n{len(FAILS)} FAILED")
