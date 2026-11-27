@@ -1313,6 +1313,42 @@ struct Ink2SconvStaticP {
   for (uint t = 0; t < p.T; ++t) {
     const size_t idx = size_t(t) * p.C + c;
     const float xt = x[idx];
+    const float conv = w0 * h0 + w1 * h1 + w2 * h2 + w3 * xt;
+    float y = (conv + xt) * p.scale;
+    if (p.add_res) y += res[idx];
+    out[idx] = y;
+    h0 = h1; h1 = h2; h2 = xt;
+    if (p.snap_stride) {
+      device float* sh = snap + size_t(t) * p.snap_stride;
+      sh[0 * p.C + c] = h0;
+      sh[1 * p.C + c] = h1;
+      sh[2 * p.C + c] = h2;
+    }
+  }
+  hist[0 * p.C + c] = h0;
+  hist[1 * p.C + c] = h1;
+  hist[2 * p.C + c] = h2;
+}
+
+// ink2_sconv_static with explicit fmas (the M1 stack): rounds as the fused epilogues; the shipped kernel stays as it was
+[[kernel]] void ink2_sconv_static_f(const device float* x [[buffer(0)]], const device void* w [[buffer(1)]],
+                                  device float* hist [[buffer(2)]], device float* out [[buffer(3)]],
+                                  constant Ink2SconvStaticP& p [[buffer(4)]], const device float* res [[buffer(5)]],
+                                  device float* snap [[buffer(6)]],
+                                  uint c [[thread_position_in_grid]]) {
+  if (c >= p.C) return;
+  float w0, w1, w2, w3;
+  if (p.w_f32) {
+    const float4 wf = *(const device float4*)((const device float*)w + size_t(c) * 4);
+    w0 = wf.x; w1 = wf.y; w2 = wf.z; w3 = wf.w;
+  } else {
+    const device bfloat* wb = (const device bfloat*)w + size_t(c) * 4;
+    w0 = float(wb[0]); w1 = float(wb[1]); w2 = float(wb[2]); w3 = float(wb[3]);
+  }
+  float h0 = hist[0 * p.C + c], h1 = hist[1 * p.C + c], h2 = hist[2 * p.C + c];
+  for (uint t = 0; t < p.T; ++t) {
+    const size_t idx = size_t(t) * p.C + c;
+    const float xt = x[idx];
     // (explicit fmas, as ink2_sconv1: the fused epilogues and this kernel round identically)
     const float conv = metal::fma(w3, xt, metal::fma(w2, h2, metal::fma(w1, h1, w0 * h0)));
     const float y = p.add_res ? metal::fma(conv + xt, p.scale, res[idx]) : (conv + xt) * p.scale;
@@ -1342,7 +1378,7 @@ NI_INLINE void ink2_sconv1(float xt, const device void* w, device float* hist, d
     w0 = float(wb[0]); w1 = float(wb[1]); w2 = float(wb[2]); w3 = float(wb[3]);
   }
   float h0 = hist[0 * p.C + c], h1 = hist[1 * p.C + c], h2 = hist[2 * p.C + c];
-  // (explicit fmas, shared with ink2_sconv_static: the plain expression contracted differently per kernel, ulp-off)
+  // (explicit fmas, shared with ink2_sconv_static_f: the plain expression contracted differently per kernel, ulp-off)
   const float conv = metal::fma(w3, xt, metal::fma(w2, h2, metal::fma(w1, h1, w0 * h0)));
   float y = p.add_res ? metal::fma(conv + xt, p.scale, res[c]) : (conv + xt) * p.scale;
   out[c] = y;

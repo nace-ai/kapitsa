@@ -140,7 +140,7 @@ void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
       "ink2_copy_bytes",       "ink2_bf16_mv",           "ink2_bf16_mv4",         "ink2_bf16_mv4_multi6",
       "ink2_bf16_mv8",         "ink2_bf16_mm", "ink2_mv_sk",           "ink2_rmsnorm",          "ink2_attn_res",
       "ink2_msg_gate",         "ink2_msg_gate_prep_s",   "ink2_msg_gate_down_s",  "ink2_msg_gate_up_mix_s", "ink2_msg_gate_down_f", "ink2_msg_gate_up_mix_c",
-      "ink2_embed_norm",       "ink2_sconv_static",      "ink2_sconv_static_pf",  "ink2_sconv_dynamic",    "ink2_qkvr_prep",         "ink2_rel_bias",         "ink2_rel_bias_pf",
+      "ink2_embed_norm",       "ink2_sconv_static",      "ink2_sconv_static_f",    "ink2_sconv_static_pf",  "ink2_sconv_dynamic",    "ink2_qkvr_prep",         "ink2_rel_bias",         "ink2_rel_bias_pf",
       "ink2_attn_decode",      "ink2_attn_decode_reduce", "ink2_attn_decode_g3", "ink2_attn_decode_g3_fx", "ink2_attn_decode_g3kw", "ink2_attn_res1", "ink2_msg_gate_mix","ink2_attn_prefill",     "ink2_moe_route",
       "ink2_moe_nvfp4_w13_situ","ink2_moe_nvfp4_w2_acc", "ink2_moe_nvfp4_w13_q4", "ink2_moe_nvfp4_w2_f2", "ink2_moe_mxfp8_w13_situ","ink2_moe_mxfp8_w2_acc", "ink2_moe_mxfp8_w13_situ_v", "ink2_moe_mxfp8_w2_acc_v",
       "ink2_softcap",           "ink2_moe_bucket",       "ink2_moe_situ_half",
@@ -191,6 +191,11 @@ struct Ink2MultiMmP {
   uint32_t M, K, N_tot, n_segs;
   uint32_t offs[7];
 };
+// The fused short conv epilogues round with explicit fmas; on the M1 stack the standalone conv matches them
+static std::string ink2_sconv_name() {
+  static const bool f = ink2_knob("NI_INK2_SCFMA", 1, 0) != 0;
+  return f ? "ink2_sconv_static_f" : "ink2_sconv_static";
+}
 struct Ink2SconvStaticP {
   uint32_t T, C, w_f32, add_res;
   float scale;
@@ -1980,7 +1985,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
         for (int gi = 0; gi < ng; ++gi) {
           const Ink2SconvStaticP sp{Tg, KVD, L.k_sconv->dtype == DType::F32 ? 1u : 0u, 0u, sconv_static_scale,
                                     snap_stride};
-          e.use(ink2_pipe("ink2_sconv_static"));
+          e.use(ink2_pipe(ink2_sconv_name()));
           e.buf(0, rv(k_, KVD * 4, gi));
           e.buf(1, L.k_sconv->buf);
           e.buf(2, gconv(gi, 0, 3 * KVD * 4));
@@ -1992,7 +1997,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
 
           const Ink2SconvStaticP svp{Tg, KVD, L.v_sconv->dtype == DType::F32 ? 1u : 0u, 0u, sconv_static_scale,
                                      snap_stride};
-          e.use(ink2_pipe("ink2_sconv_static"));
+          e.use(ink2_pipe(ink2_sconv_name()));
           e.buf(0, rv(v_, KVD * 4, gi));
           e.buf(1, L.v_sconv->buf);
           e.buf(2, gconv(gi, 3 * KVD * 4, 3 * KVD * 4));
@@ -2323,7 +2328,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     for (int gi = 0; gi < ng && !attn_sc_fused; ++gi) {
     Ink2SconvStaticP gasp = asp;
     gasp.T = Tg;
-    e.use(ink2_pipe(T >= 16 ? "ink2_sconv_static_pf" : "ink2_sconv_static"));
+    e.use(ink2_pipe(T >= 16 ? std::string("ink2_sconv_static_pf") : ink2_sconv_name()));
     e.buf(0, rv(a_out_, H * 4, gi));
     e.buf(1, L.attn_sconv->buf);
     e.buf(2, gconv(gi, 6 * KVD * 4, 3 * H * 4));
@@ -2589,7 +2594,7 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       for (int gi = 0; gi < ng; ++gi) {
       const Ink2SconvStaticP msp{Tg, H, L.mlp_sconv->dtype == DType::F32 ? 1u : 0u, 1u, sconv_static_scale,
                                  snap_stride};
-      e.use(ink2_pipe(T >= 16 ? "ink2_sconv_static_pf" : "ink2_sconv_static"));
+      e.use(ink2_pipe(T >= 16 ? std::string("ink2_sconv_static_pf") : ink2_sconv_name()));
       e.buf(0, rv(moe_out_, H * 4, gi));
       e.buf(1, L.mlp_sconv->buf);
       e.buf(2, gconv(gi, 6 * KVD * 4 + 3 * H * 4, 3 * H * 4));
