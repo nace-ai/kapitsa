@@ -233,7 +233,9 @@ in the [benchmark reports](benchmarks.md).
 
 The model catalog pins checkpoint and companion revisions. Downloads resume and validate checksums. The safetensors
 loader supplies weights to the backends; Bolt repacks codes and scales into its GPU layout at load time. Supported
-Qwen GGUF files are converted once into a reusable model folder.
+Qwen GGUF files are converted once into a reusable model folder. An Inkling-2 import retains the unsplit GGUF as
+`model.gguf` and translates its config and tokenizer metadata. At load time, the Inkling loader can use supported
+expert blocks directly or repack NVFP4 experts for its native kernels.
 
 Vision is optional. `open_encoder` selects `QwenViT` for supported Qwen checkpoints (the 4B's tower: 24 blocks, head
 dimension 64; the 35B's and 27B's: 27 blocks, head dimension 72) or `RadioViT` for Nemotron 3.5 Bolt's and Super-VL's
