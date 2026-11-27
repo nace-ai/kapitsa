@@ -102,7 +102,7 @@ if GPU:
                 gh, gw, tokens = (int(v) for v in run(py, "-I", ref_script, model_dir, img, ref32).split())
                 run(py, "-I", ref_script, model_dir, img, ref16, "--bf16")
                 rows = 1 + tokens * 4
-                worst_ratio, worst_cos, lines = 0.0, 1.0, []
+                worst_ratio, worst_cos, lines, invalid = 0.0, 1.0, [], []
                 for stage in ("h0", "h1", "hL", "emb"):
                     ref = np.fromfile(os.path.join(ref32, stage + ".f32"), np.float32)
                     bf = np.fromfile(os.path.join(ref16, stage + ".f32"), np.float32)
@@ -112,16 +112,23 @@ if GPU:
                         raw = np.fromfile(outs[stage], np.uint16).astype(np.uint32) << 16
                         got = raw.view(np.float32).reshape(tokens, -1)
                     ref, bf = ref.reshape(got.shape), bf.reshape(got.shape)
+                    # A NaN or infinity anywhere fails the image: max() would keep the last finite ratio and pass a
+                    # corrupt stage (review 6073858784 on #1431).
+                    for label, values in (("Kapitsa", got), ("reference", ref), ("bf16 reference", bf)):
+                        if not np.isfinite(values).all():
+                            invalid.append(f"{stage}: {label} has {int((~np.isfinite(values)).sum())} non-finite values")
                     krel, kmax, kcos = stats(got, ref)
                     brel, bmax, bcos = stats(bf, ref)
                     ratio = krel / max(brel, 1e-9)
-                    worst_ratio = max(worst_ratio, ratio)
+                    if not all(np.isfinite(v) for v in (krel, kmax, kcos, brel, bmax, bcos, ratio)):
+                        invalid.append(f"{stage}: a non-finite statistic")
+                    worst_ratio = max(worst_ratio, ratio) if np.isfinite(ratio) else float("inf")
                     worst_cos = kcos if stage == "emb" else worst_cos
                     lines.append(f"{stage}: Kapitsa rel {krel:.2e} max {kmax:.2e} cos>={kcos:.5f} | bf16 rel {brel:.2e} "
                                  f"max {bmax:.2e} cos>={bcos:.5f} | ratio {ratio:.2f}")
-                report(f"tower {name}", worst_ratio <= 2.0 and worst_cos >= 0.999,
+                report(f"tower {name}", not invalid and worst_ratio <= 2.0 and worst_cos >= 0.999,
                        f"{tokens} tokens ({gh}x{gw}), {rows} rows; worst ratio {worst_ratio:.2f}, output cos>={worst_cos:.5f}"
-                       "\n  " + "\n  ".join(lines))
+                       + "".join(f"\n  INVALID {line}" for line in invalid) + "\n  " + "\n  ".join(lines))
             except Exception as e:  # noqa: BLE001
                 report(f"tower {name}", False, str(e)[:300])
     finally:
