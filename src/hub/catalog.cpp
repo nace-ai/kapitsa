@@ -619,13 +619,13 @@ const std::vector<CatalogModel>& catalog(const ni::DeviceProfile& device) {
             .download_gb = 133.83},
        }},
       // Thinking Machines Lab's Inkling-2-Mini (inkling2_loop, 26.4B MoE / 3.4B active / 5.4B looped, 1M context,
-      // text only while vision stays uncoded): the official NVFP4 (L0-19) / MXFP8 (L20-23) / BF16-dense checkpoint as
+      // images through its own vision tower, src/vision/ink2_vit.h): the official NVFP4 (L0-19) / MXFP8 (L20-23) / BF16-dense checkpoint as
       // it is, with no companion drafter wired (mtp.safetensors rides along in the repo). download_gb: every file of
       // the revision except .gitattributes, 20,191,641,763 B (20.19 GB).
       {.name = "inkling-2-mini",
        .aliases = {"inkling2", "ink2"},
        .title = "Inkling-2-Mini",
-       .about = "Thinking Machines Lab's 26.4B-A3.4B looped MoE (NVFP4/MXFP8, 1M context, text only)",
+       .about = "Thinking Machines Lab's 26.4B-A3.4B looped MoE (NVFP4/MXFP8, 1M context, images at their own resolution)",
        .brief = "Thinking Machines looped MoE, 26.4B-A3.4B",
        .default_variant = "nvfp4",
        .fallbacks = {},

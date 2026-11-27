@@ -11,6 +11,7 @@
 #include "util/bf16.h"
 #include "util/json_file.h"
 #include "util/log.h"
+#include "vision/embed.h"
 
 #include <nlohmann/json.hpp>
 
@@ -454,7 +455,7 @@ MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
   m.hidden = c.hidden;
   m.layers = int(c.schedule.size());
   m.formats = gguf ? "mixed GGUF blocks + native NVFP4 (text-only)"
-                   : "NVFP4 (L0-19) + MXFP8 (L20-23) + BF16 dense (text-only)";
+                   : "NVFP4 (L0-19) + MXFP8 (L20-23) + BF16 dense";
   return m;
 }
 
@@ -1229,6 +1230,9 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
     e.val(4, ep);
     e.dispatch(uint32_t(T), 1, 1, 512);
   }
+  // image rows: their embeddings over the placeholder tokens' normalized ones (the reference's masked_scatter after
+  // embed_norm)
+  if (s.embeds) vision::enc_embed_runs(e, *s.embeds, pos0, T, x_, int(H));
   if (diag_rows) enc_copy_buf(e, x_.view(size_t(T - 1) * H * 4, H * 4), diag_rows->view(0, H * 4), H * 4);
 
   // Ping-pong active residual stream between x_ and inp_sa_ with zero extra copies.
@@ -1840,7 +1844,6 @@ void Inkling2::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const Samplin
   if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
   if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
   if (snap) fatal("inkling2: in-pass snapshots are not supported");
-  if (s.embeds) fatal("inkling2: image inputs are not supported in Stage 1");
   enc_forward(e, s, pos0, T, sample, nullptr, false);
   if (!sample) return;
   enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);
