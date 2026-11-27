@@ -243,8 +243,9 @@ hub::ModelRef pick_variant(const hub::CatalogModel& m, const EngineOptions& opt,
 // "128k", "1m"), or max (kContextMax): the model's own limit. 0, with *why, when it is none of those.
 constexpr int kContextMax = -1;
 int parse_context(const std::string& s, std::string* why);
-// The longest context the model was trained for: max_position_embeddings in its config.json (262,144 tokens for the
-// Qwen3.5 family, Dory and Bolt, 1,048,576 for Lightning and Super-VL); 0 when it does not say.
+// The longest context the model was trained for: max_position_embeddings or model_max_length in its config.json
+// (262,144 tokens for the Qwen3.5 family, Dory and Bolt, 1,048,576 for Lightning, Super-VL and Inkling-2); 0 when it
+// does not say.
 int model_context_limit(const std::string& model_dir);
 // `context` within the model's limit, if it states one
 int context_within_limit(const std::string& model_dir, int context);

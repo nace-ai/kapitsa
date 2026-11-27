@@ -93,6 +93,7 @@ int main(int argc, char** argv) {
     const json none = fields(ni::server::parse_options(json::object()));
     CHECK(none == fields(from_flags({})), "no flags and an empty config agree");
     CHECK(none == fields(Options{}), "an empty config is Options' defaults");
+    CHECK(none["profile"] == "", "omitted profile preserves model-dependent automatic selection");
     CHECK(none["slots"] == d.slots && none["spec_depth"] == d.spec_depth && none["prefill_chunk"] == d.prefill_chunk &&
               none["mem_budget_gb"] == d.mem_budget_gb && none["image_max_pixels"] == d.image_max_pixels &&
               none["dflash"] == d.dflash && none["suppress_tokens"] == d.suppress_tokens &&
@@ -109,6 +110,7 @@ int main(int argc, char** argv) {
     json config;
   };
   const std::vector<Same> same = {
+      {{"--profile", "precise"}, {{"profile", "precise"}}},
       {{"--model", "4b", "--port", "8123", "--host", "127.0.0.1", "--ctx", "128k", "--slots", "2", "--spec", "3",
         "--dflash", "none", "--suppress-tokens", "/tmp/mask.json", "--prefill-chunk", "1024", "--api-key", "k", "--allow-switch", "--idle-unload", "0.5",
         "--mem-budget", "20.5", "--image-max-pixels", "0", "--timing", "ttft", "--disk-cache", "16G", "--loops", "3",

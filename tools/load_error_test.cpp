@@ -2,6 +2,7 @@
 // under the GPU lock; never run that mode automatically in CTest. --mtp-gpu checks sidecar tensor admission
 // through the real loader using tiny Metal buffers, without dispatching a kernel.
 #include "util/load_threads.h"
+#include "engine/device_profile.h"
 #include "loader/safetensors.h"
 #include "loader/load_stop.h"
 #include "gguf/gguf.h"
@@ -660,13 +661,11 @@ void ink2_plan_tensor_scratch() {
   const std::string saved_t = prev_t ? prev_t : "";
   const bool had_t = prev_t != nullptr;
   unsetenv("NI_INK2_TENSOR");
-  const size_t prec_512 = Inkling2::plan(dir.string(), 512).activations;
-  const size_t prec_2048 = Inkling2::plan(dir.string(), 2048).activations;
+  const size_t default_512 = Inkling2::plan(dir.string(), 512).activations;
+  const size_t default_2048 = Inkling2::plan(dir.string(), 2048).activations;
   setenv("NI_INK2_TENSOR", "0", 1);
   const size_t off_512 = Inkling2::plan(dir.string(), 512).activations;
   const size_t off_2048 = Inkling2::plan(dir.string(), 2048).activations;
-  CHECK(prec_512 == off_512);
-  CHECK(prec_2048 == off_2048);
   if (__builtin_available(macOS 26.0, *)) {
     setenv("NI_INK2_TENSOR", "1", 1);
     const size_t on_512 = Inkling2::plan(dir.string(), 512).activations;
@@ -677,6 +676,13 @@ void ink2_plan_tensor_scratch() {
     };
     CHECK(on_512 - off_512 == expect_tmp(512));
     CHECK(on_2048 - off_2048 == expect_tmp(2048));
+    const bool tensor_default = profile(default_profile(current_device(), ModelFacts{.inkling2 = true})) == Profile::kFast &&
+                                default_on(Knob::kInk2TensorPf, ModelFacts{});
+    CHECK(default_512 == (tensor_default ? on_512 : off_512));
+    CHECK(default_2048 == (tensor_default ? on_2048 : off_2048));
+  } else {
+    CHECK(default_512 == off_512);
+    CHECK(default_2048 == off_2048);
   }
   if (had_t) setenv("NI_INK2_TENSOR", saved_t.c_str(), 1);
   else unsetenv("NI_INK2_TENSOR");

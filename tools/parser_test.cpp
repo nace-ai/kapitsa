@@ -426,9 +426,35 @@ int main(int argc, char** argv) {
        glm_call("read_file", glm_arg("path", "123") + glm_arg("start_line", "five")) +
            glm_call("search", glm_arg("note", "[1, 2]") + glm_arg("other", "7")),
        false, "", "", R"([read_file{"path":"123","start_line":"five"}, search{"note":[1,2],"other":"7"}])"},
+      {"issue 1400 form A, doubled first key opener",
+       "<tool_call>write<arg_key><arg_key>content</arg_key><arg_value># Handoff ...\nnext line\n</arg_value>"
+       "<arg_key>path</arg_key><arg_value>.handoff.md</arg_value></tool_call>",
+       false, "", "", R"([write{"content":"# Handoff ...\nnext line\n","path":".handoff.md"}])"},
+      {"issue 1400 form B, a valueless key then a repeated key",
+       "<tool_call>edit<arg_key>path</arg_key><arg_value>{worktree}/scripts/test_x.py</arg_value>"
+       "<arg_key>oldString</arg_key><arg_value>...</arg_value><arg_key>newString</arg_key><arg_value>...</arg_value>"
+       "<arg_key>oldString_is_replace</arg_key><arg_key>path</arg_key>"
+       "<arg_value>{worktree}/scripts/test_x.py</arg_value></tool_call>",
+       false, "", "",
+       R"([edit{"path":"{worktree}/scripts/test_x.py","oldString":"...","newString":"..."}])"},
       {"two calls", glm_a + glm_call("read_file", glm_arg("path", "b.txt") + glm_arg("start_line", "5")), false, "", "",
        R"([read_file{"path":"a.txt"}, read_file{"path":"b.txt","start_line":5}])"},
       {"a call without arguments", glm_call("get_time"), false, "", "", "[get_time{}]"},
+      {"a key without a value is dropped", "<tool_call>read_file<arg_key>path</arg_key></tool_call>",
+       false, "", "", "[read_file{}]"},
+      {"a trailing valueless key preserves earlier arguments",
+       glm_call("read_file", glm_arg("path", "a.txt") + "<arg_key>start_line</arg_key> \n"),
+       false, "", "", R"([read_file{"path":"a.txt"}])"},
+      {"several valueless keys before a tripled opener",
+       glm_call("read_file", "<arg_key>unused</arg_key>\n<arg_key>start_line</arg_key> "
+                            "<arg_key><arg_key>" + glm_arg("path", "a.txt")),
+       false, "", "", R"([read_file{"path":"a.txt"}])"},
+      {"a valueless duplicate does not erase a value",
+       glm_call("read_file", glm_arg("path", "a.txt") + "<arg_key>path</arg_key>"),
+       false, "", "", R"([read_file{"path":"a.txt"}])"},
+      {"a valued duplicate keeps the last value",
+       glm_call("read_file", glm_arg("path", "a.txt") + glm_arg("path", "b.txt")),
+       false, "", "", R"([read_file{"path":"b.txt"}])"},
       {"GLM-4.5's newlines between the elements and the calls",
        "<tool_call>read_file\n<arg_key>path</arg_key>\n<arg_value>a.txt</arg_value>\n<arg_key>start_line</arg_key>\n"
        "<arg_value>5</arg_value>\n</tool_call>\n<tool_call>get_time\n</tool_call>\n",
@@ -456,7 +482,7 @@ int main(int argc, char** argv) {
            {"no name", glm_call("", glm_arg("path", "a.txt"))},
            {"an empty call", glm_call("")},
            {"a value left open", "<tool_call>read_file<arg_key>path</arg_key><arg_value>a.txt</tool_call>"},
-           {"a key without a value", "<tool_call>read_file<arg_key>path</arg_key></tool_call>"},
+           {"a key left open", "<tool_call>read_file<arg_key>path</tool_call>"},
            {"text between a key and its value",
             glm_call("read_file", "<arg_key>path</arg_key> is <arg_value>a</arg_value>")},
            {"text after a value", glm_call("read_file", glm_arg("path", "a.txt") + " and more")},

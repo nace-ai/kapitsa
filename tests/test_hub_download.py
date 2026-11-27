@@ -238,6 +238,122 @@ def download_checks(kapitsa, check):
         thread.join()
 
 
+def auth_checks(kapitsa, check):
+    config = json.dumps({"model_type": "qwen3_5", "linear_num_value_heads": 1,
+                         "num_hidden_layers": 1}).encode()
+    files = {"config.json": config, "tokenizer_config.json": b"{}",
+             "model.safetensors": b"fixture weights"}
+    listing = json.dumps({"sha": "fixture-revision", "siblings": [
+        {"rfilename": name, "size": len(data),
+         "lfs": {"sha256": hashlib.sha256(data).hexdigest()}}
+        for name, data in files.items()]}).encode()
+
+    class Hub(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *_):
+            pass
+
+        def do_GET(self):
+            authenticated = self.headers.get("Authorization") is not None
+            span = self.headers.get("Range")
+            self.server.requests.append((self.path, span, authenticated))
+            name = self.path.rsplit("/", 1)[-1]
+            denied = ((self.server.denied == "listing" and self.path.startswith("/api/"))
+                      or (self.server.denied == "metadata" and name == "config.json" and not span)
+                      or (self.server.denied == "chunk" and name == "tokenizer_config.json"))
+            if denied and (authenticated or self.server.anonymous_status):
+                self.send_error(self.server.token_status if authenticated else self.server.anonymous_status)
+                return
+            data = listing if self.path.startswith("/api/") else files[name]
+            status = 200
+            content_range = None
+            if span:
+                first, last = map(int, span.removeprefix("bytes=").split("-"))
+                content_range = f"bytes {first}-{last}/{len(data)}"
+                data = data[first:last + 1]
+                status = 206
+            self.send_response(status)
+            self.send_header("Content-Length", str(len(data)))
+            if content_range:
+                self.send_header("Content-Range", content_range)
+            self.end_headers()
+            self.wfile.write(data)
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Hub)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        with tempfile.TemporaryDirectory(prefix="kapitsa-auth-") as tmp:
+            root = Path(tmp)
+            # A synthetic token only; never read credentials or reuse the user's cache.
+            env = dict(os.environ, HF_ENDPOINT=f"http://127.0.0.1:{server.server_port}",
+                       HF_HOME=str(root / "hf"), HF_HUB_CACHE=str(root / "hf" / "hub"),
+                       HUGGINGFACE_HUB_CACHE=str(root / "hf" / "hub"),
+                       HF_TOKEN="fixture-token", HUGGING_FACE_HUB_TOKEN="",
+                       HF_TOKEN_PATH=str(root / "no-token"), KAPITSA_NO_AUTO_UPDATE="1",
+                       KAPITSA_NO_PROMPT="1", NI_LOG="0")
+            cases = [(stage, status, 0) for stage in ("listing", "metadata", "chunk")
+                     for status in (401, 403)]
+            cases += [("chunk", 403, 404), ("listing", 401, 403), ("chunk", 404, 0)]
+            for i, (stage, status, anonymous_status) in enumerate(cases):
+                server.requests = []
+                server.denied = stage
+                server.token_status = status
+                server.anonymous_status = anonymous_status
+                home = root / str(i)
+                result = subprocess.run([kapitsa, "pull", "test/public"],
+                                        env=dict(env, KAPITSA_HOME=str(home)),
+                                        capture_output=True, text=True, timeout=30)
+                retried = [(path, span) for path, span, auth in server.requests if not auth]
+                label = f"pull: {stage} HTTP {status}"
+                if not anonymous_status and status in (401, 403):
+                    model = home / "models" / "test--public"
+                    check(label + " retries anonymously and verifies downloaded bytes",
+                          result.returncode == 0 and retried
+                          and all((model / name).read_bytes() == data for name, data in files.items()),
+                          result.stderr)
+                    if stage in ("listing", "metadata"):
+                        # These requests complete before the download workers start.
+                        ranges = [auth for _, span, auth in server.requests if span]
+                        check(label + " keeps subsequent file requests anonymous",
+                              bool(ranges) and not any(ranges), result.stderr)
+                elif anonymous_status:
+                    check(label + " preserves the original error after anonymous failure",
+                          result.returncode != 0 and len(retried) == 1
+                          and f"(HTTP {status})" in result.stderr, result.stderr)
+                    if stage == "chunk":
+                        check("pull: chunk auth error links to the repo, not the filename",
+                              "https://huggingface.co/test/public" in result.stderr
+                              and "https://huggingface.co/tokenizer_config" not in result.stderr,
+                              result.stderr)
+                else:
+                    check(label + " does not retry anonymously",
+                          result.returncode != 0 and not retried, result.stderr)
+
+            server.denied = "listing"
+            server.token_status = 403
+            server.anonymous_status = 401
+            server.requests = []
+            result = subprocess.run([kapitsa, "pull", "test/public"],
+                                    env=dict(env, HF_TOKEN="", KAPITSA_HOME=str(root / "anonymous")),
+                                    capture_output=True, text=True, timeout=30)
+            check("pull: an already-anonymous auth failure is not retried",
+                  result.returncode != 0 and len(server.requests) == 1
+                  and not server.requests[0][2], result.stderr)
+
+            server.denied = "none"
+            server.requests = []
+            result = subprocess.run([kapitsa, "pull", "test/public"],
+                                    env=dict(env, KAPITSA_HOME=str(root / "authorized")),
+                                    capture_output=True, text=True, timeout=30)
+            check("pull: a working token stays on every request",
+                  result.returncode == 0 and bool(server.requests)
+                  and all(auth for _, _, auth in server.requests), result.stderr)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
 if __name__ == "__main__":
     failures = []
 
@@ -248,5 +364,7 @@ if __name__ == "__main__":
             if detail:
                 print(detail)
 
-    download_checks(str(Path(sys.argv[1] if len(sys.argv) > 1 else "build/kapitsa").resolve()), report)
+    kapitsa = str(Path(sys.argv[1] if len(sys.argv) > 1 else "build/kapitsa").resolve())
+    download_checks(kapitsa, report)
+    auth_checks(kapitsa, report)
     sys.exit(bool(failures))

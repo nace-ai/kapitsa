@@ -2,13 +2,33 @@
 
 Kapitsa runs one of two profiles.
 
-- **precise** (the default) is today's Kapitsa: every default passed the output check against the model's noise floor
+- **precise** is the default except for Inkling-2. Its defaults passed the output check against the model's noise floor
   on this Mac (CONTRIBUTING.md, "Output check").
-- **fast** is precise plus every speedup that moves the outputs no more than the fastest other engine does for that
-  model on that Mac. `kapitsa serve --profile fast` or `KAPITSA_PROFILE=fast` turns it on.
+- **fast** adds speedups with measured output drift, under the bar below. Inkling-2 selects fast automatically on every Mac.
+  Other models use `kapitsa serve --profile fast` or `KAPITSA_PROFILE=fast`.
+
+`kapitsa serve --profile precise` or `KAPITSA_PROFILE=precise` keeps Inkling-2 on the precise path.
+An explicit profile wins over automatic selection. A member's own `NI_*` override still wins over either profile.
+Unset or empty `KAPITSA_PROFILE` uses the model default. Invalid values warn and select precise.
+The process caches only the explicit override, not a loaded model's default. Loading Inkling-2 does not change another model's profile.
 
 A fast member is on for the whole class of Macs or models it targets, as every default is (AGENTS.md, "Defaults follow
 the concept"); its class is a row in `src/engine/device_profile.cpp`. Outside its class the fast profile is the precise one.
+
+## Inkling-2 automatic selection
+
+Inkling-2 uses the existing fast members on all Macs: Q8 dense packing on Apple Silicon, and tensor prefill where
+matrix units and macOS 26+ are available. Explicit precise disables both unless their own switches are set.
+`kapitsa doctor --print-profile` lists the automatic-selection row as `ink2_profile_fast` for the `inkling2` model class.
+Load logs and `logit_dump` metadata record the effective profile, including automatic selection.
+
+This selection uses a separately accepted quantization-relative check, not the other-engine bar below.
+Against BF16 compute on the same quantized checkpoint, mean conditional KL on 62 certified top-k unions is
+0.0034085092 for precise and 0.0048458636 for fast: a ratio of 1.4216959, below the accepted 1.5 limit.
+Two clipped-reference rows are excluded from that KL check. Across all 64 rows, precise matches reference top-1
+on 63 rows and fast on 64. Full-reference KL is unavailable, and fast can change generated continuations.
+The [evidence and CPU replay](../bench/results/inkling-fast-default-20261124/README.md) document the subset,
+reference limitations, historical prefill observations, and missing current-main GPU measurements.
 
 ## The bar
 

@@ -6,11 +6,13 @@
 // Vision tower (model.visual.*) is skipped in Stage 1.
 #pragma once
 
+#include "engine/profile.h"
 #include "loader/safetensors.h"
 #include "model/model.h"
 
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <string>
 #include <vector>
@@ -54,9 +56,15 @@ struct Ink2Ctrl {
   const Tensor* gain = nullptr;    // [2304, 64]
 };
 
+struct Ink2Blocks {
+  Buffer data;
+  uint32_t type = 0, row_bytes = 0;
+};
+
 struct Ink2Mat {
   const Tensor* raw = nullptr;  // BF16 or F32 when not Q8-packed
   Buffer q, s;                  // Q8_0: int8 [N, K], half [N, K/32]
+  Ink2Blocks gguf;
   uint32_t N = 0, K = 0;
   bool is_q8() const { return bool(q); }
 };
@@ -83,6 +91,7 @@ struct Ink2Layer {
   // MoE
   const Tensor *router_w = nullptr, *router_bias = nullptr;
   const Tensor *w13 = nullptr, *w13_sc = nullptr, *w2 = nullptr, *w2_sc = nullptr;
+  Ink2Blocks gguf_gu, gguf_down;
   Buffer w13_outer, w2_outer;  // FP32 [128] = amax[e] / outer_scale_denominator[0] (NVFP4 only)
   Buffer qkvrsg_w;             // Fused BF16 [wq_du; wr_du; attn_sink_proj; gate_attn; wk_dv; wv_dv]
   uint32_t qkvrsg_offs[7] = {};
@@ -94,12 +103,16 @@ class Inkling2 : public Model {
   ~Inkling2() override;
 
   static bool is_model(const std::string& dir);
+  // True when the precise profile runs with a fast-profile member that would be on here (its env switch unset): the engine
+  // ready line then names `--profile fast`. False under the fast profile, and when the member is off on this Mac.
+  static bool fast_profile_available();
   static Ink2Config read_config(const std::string& dir);
   static MemPlan plan(const std::string& dir, int prefill_chunk = 512);
   static size_t kv_per_pos(const Ink2Config& c);
   static size_t conv_bytes_per_seq(const Ink2Config& c);
   static size_t ring_bytes_per_seq(const Ink2Config& c, int tmax);
 
+  Profile effective_profile() const { return profile_; }
   const Ink2Config& config() const { return cfg_; }
   int vocab() const override { return cfg_.vocab; }
   const std::vector<int>& eos_ids() const override { return cfg_.eos; }
@@ -110,6 +123,7 @@ class Inkling2 : public Model {
   void set_mem_budget(size_t bytes) override { mem_budget_ = bytes; }
   std::unique_ptr<Seq> new_seq(int limit, int initial = -1) override;
   bool reserve(Seq& s, int need) override;
+  size_t kv_grow_held(const Seq& s) const override;
   void drop_kv(Seq& s) override;
   size_t kv_bytes_per_pos() const override { return kv_per_pos(cfg_); }
   void reset(Seq& s) override;
@@ -129,8 +143,10 @@ class Inkling2 : public Model {
 
  private:
   void load();
+  void load_gguf();
   void alloc_buffers();
   bool ensure_rings(Seq& s);
+  size_t kv_grow_unit() const;
   void enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits, const Buffer* out_logits, bool need_all_logits,
                    const Buffer* diag_rows = nullptr);
   void enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer& y, int M, uint32_t N_limit = 0, bool add = false,
@@ -146,12 +162,14 @@ class Inkling2 : public Model {
   void enc_sample(Encoder& e, Seq& s, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
                   uint32_t step);
 
+  Profile profile_ = Profile::kPrecise;  // Resolved once during construction, after validating the checkpoint.
   std::string path_;
   Ink2Config cfg_;
   WeightStore ws_;
   std::vector<Ink2Layer> layers_;
   const Tensor *embed_ = nullptr, *embed_norm_ = nullptr, *final_norm_ = nullptr;
-  Ink2Mat unembed_;
+  Ink2Mat unembed_, gguf_embed_;
+  std::deque<Tensor> gguf_tensors_;
   std::vector<const Tensor*> attn_queries_;  // [23] (layers 1..23 -> idx 0..22)
   std::vector<const Tensor*> mlp_queries_;   // [24] (layers 0..23)
   const Tensor* output_query_ = nullptr;

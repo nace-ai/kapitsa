@@ -5,6 +5,7 @@
 #include "engine/profile.h"
 #include "model/inkling2_kernels.h"
 #include "model/kparams.h"
+#include "model/kv_grow.h"
 #include "model/quant_q8.h"
 #include "model/sampler.h"
 #include "util/bf16.h"
@@ -124,6 +125,9 @@ struct Ink2MsgGateP {
   uint32_t T, H, R, w_f32;
   float eps;
 };
+struct Ink2GgufMmP { uint32_t M, N, K, type, row_bytes, add; };
+struct Ink2GgufMoeP { uint32_t T, H, I, top, type, row_bytes; };
+struct Ink2GgufEmbedP { uint32_t T, H, tok_off, V, norm_f32; float eps; uint32_t type, row_bytes; };
 struct Ink2MmP {
   uint32_t M, N, K, x_ld, y_ld, w_f32, add;
 };
@@ -401,12 +405,29 @@ size_t Inkling2::ring_bytes_per_seq(const Ink2Config& c, int tmax) {
   return size_t(n_swa) * 2 * size_t(rcap) * size_t(c.hkv) * size_t(c.head_dim) * 2;
 }
 
+static Profile ink2_profile() {
+  return profile(default_profile(current_device(), ModelFacts{.inkling2 = true}));
+}
+
 static bool ink2_tensor_pf_want() {
   if (__builtin_available(macOS 26.0, *)) {
+    const Profile selected = ink2_profile();
     const bool here = default_on(Knob::kInk2TensorPf, ModelFacts{});
-    return profile_switch("NI_INK2_TENSOR", here, "Inkling-2-Mini prefill GEMMs on the matrix units (NI_INK2_TENSOR)");
+    return profile_switch("NI_INK2_TENSOR", here, "Inkling-2-Mini prefill GEMMs on the matrix units (NI_INK2_TENSOR)", selected);
   }
   return false;
+}
+
+bool Inkling2::fast_profile_available() {
+  if (ink2_profile() != Profile::kPrecise) return false;
+  auto unset = [](const char* env) {
+    const char* v = std::getenv(env);
+    return v == nullptr || *v == '\0';
+  };
+  if (__builtin_available(macOS 26.0, *)) {
+    if (unset("NI_INK2_TENSOR") && default_on(Knob::kInk2TensorPf, ModelFacts{})) return true;
+  }
+  return unset("NI_INK2_Q8") && default_on(Knob::kInk2Q8Fast, ModelFacts{});
 }
 
 MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
@@ -430,13 +451,16 @@ MemPlan Inkling2::plan(const std::string& dir, int prefill_chunk) {
                                       2 * P * 4 + (P / 16 + size_t(c.n_experts) + 2) * 16 + 16)
                                    : 0;
   MemPlan m;
-  m.weights = safetensors_llm_bytes(dir);
+  const auto model_config = json_file(dir + "/config.json");
+  const bool gguf = model_config->contains("gguf_file");
+  m.weights = gguf ? model_config->at("gguf_tensor_bytes").get<size_t>() + (16u << 20) : safetensors_llm_bytes(dir);
   m.kv_per_pos = kv_per_pos(c);
   m.slot_state = 3 * (ring_bytes_per_seq(c, chunk) + conv_bytes_per_seq(c));
   m.activations = T * per_row + fixed + moe_tmp_bytes + (16u << 20);
   m.hidden = c.hidden;
   m.layers = int(c.schedule.size());
-  m.formats = "NVFP4 (L0-19) + MXFP8 (L20-23) + BF16 dense (text-only)";
+  m.formats = gguf ? "mixed GGUF blocks + native NVFP4 (text-only)"
+                   : "NVFP4 (L0-19) + MXFP8 (L20-23) + BF16 dense (text-only)";
   return m;
 }
 
@@ -445,10 +469,12 @@ Inkling2::Inkling2(const std::string& path, int prefill_chunk) {
   while (path_.size() > 1 && path_.back() == '/') path_.pop_back();
   if (!is_model(path_)) fatal("%s: not an Inkling-2 checkpoint folder", path.c_str());
   cfg_ = read_config(path_);
+  profile_ = ink2_profile();
   tmax_ = std::max(8, prefill_chunk > 0 ? prefill_chunk : 512);
   ring_rows_ = (cfg_.swa + tmax_ + 15) / 16 * 16;
   q8_dense_ = profile_switch("NI_INK2_Q8", default_on(Knob::kInk2Q8Fast, {}),
-                             "Inkling-2-Mini Q8-packed dense projections and unembed (NI_INK2_Q8)");
+                             "Inkling-2-Mini Q8-packed dense projections and unembed (NI_INK2_Q8)", profile_);
+  logi("Inkling-2 profile: %s", profile_ == Profile::kFast ? "fast" : "precise");
   ink2::compile_kernels();
   if (ink2_tensor_pf_want()) {
     if (__builtin_available(macOS 26.0, *)) {
@@ -466,6 +492,10 @@ Inkling2::~Inkling2() {
 }
 
 void Inkling2::load() {
+  if (json_file(path_ + "/config.json")->contains("gguf_file")) {
+    load_gguf();
+    return;
+  }
   const double t0 = now_ms();
   auto is_q8_target = [&](const std::string& n) -> bool {
     if (!q8_dense_) return false;
@@ -837,23 +867,30 @@ bool Inkling2::ensure_rings(Seq& s) {
   return true;
 }
 
+size_t Inkling2::kv_grow_unit() const {
+  return size_t(cfg_.hkv) * size_t(cfg_.head_dim) * 2u;
+}
+
+size_t Inkling2::kv_grow_held(const Seq& s) const {
+  return kvgrow::held(s.cap, kv_bytes_per_pos(), kv_grow_unit());
+}
+
 bool Inkling2::reserve(Seq& s, int need) {
   if (need <= s.cap) return ensure_rings(s);
   if (need > s.limit) return false;
   Gpu& g = Gpu::get();
   const size_t per = kv_per_pos(cfg_);
-  const size_t row = size_t(cfg_.hkv) * size_t(cfg_.head_dim) * 2;
-  auto round_up = [](int v, int m) { return (v + m - 1) / m * m; };
-  const size_t rings = s.kc[0] ? 0 : ring_bytes_per_seq(cfg_, tmax_);
-  auto fits = [&](int c) {
-    const size_t copy = std::min(size_t(256) << 20, size_t(s.cap) * per);
-    return !mem_budget_ || g.allocated_bytes() + size_t(c - s.cap) * per + copy + rings <= mem_budget_;
-  };
-  int target = std::min(s.limit, round_up(std::max(need, s.cap + s.cap / 4), 1024));
-  if (!fits(target)) target = std::min(s.limit, round_up(need, 256));
-  if (!fits(target)) return false;
-
+  const size_t row = kv_grow_unit();
   const size_t nv = cfg_.schedule.size();
+  size_t rings = 0;
+  for (size_t v = 0; v < nv; ++v)
+    if (cfg_.is_local[size_t(cfg_.schedule[v])] && !s.kc[v]) rings += 2 * row * size_t(ring_rows_);
+  const size_t alloc = g.allocated_bytes();
+  const size_t room = !mem_budget_ ? SIZE_MAX : (mem_budget_ > alloc + rings ? mem_budget_ - alloc - rings : 0);
+  const kvgrow::Plan p = kvgrow::plan(s.cap, need, s.limit, per, row, room);
+  if (!p.target) return false;
+  const int target = p.target;
+
   const size_t nb = row * size_t(target);
   const int old = s.cap;
   std::vector<Buffer> olds, news;
@@ -869,9 +906,8 @@ bool Inkling2::reserve(Seq& s, int need) {
   for (size_t v = 0; v < nv; ++v) {
     if (cfg_.is_local[size_t(cfg_.schedule[v])]) continue;
     for (Buffer* b : {&s.kc[v], &s.vc[v]}) {
-      if (batch && batch + nb > (size_t(256) << 20)) flush();
+      if (batch && batch + nb > p.batch) flush();
       Buffer nbuf = g.alloc(nb, "ink2_kv_global");
-      memset(nbuf.ptr(), 0, nbuf.size);
       if (old > 0 && *b) {
         if (!e) e = g.begin();
         enc_copy_buf(*e, *b, nbuf, size_t(old) * row);
@@ -1032,6 +1068,14 @@ void Inkling2::enc_mm(Encoder& e, const Tensor& w, const Buffer& x, const Buffer
 
 void Inkling2::enc_mm(Encoder& e, const Ink2Mat& w, const Buffer& x, const Buffer& y, int M, uint32_t N_limit,
                       bool add, bool exact_f32) {
+  if (w.gguf.data) {
+    const uint32_t N = N_limit ? N_limit : w.N;
+    const Ink2GgufMmP p{uint32_t(M), N, w.K, w.gguf.type, w.gguf.row_bytes, add ? 1u : 0u};
+    e.use(ink2_pipe("ink2_gguf_mm"));
+    e.buf(0, x); e.buf(1, w.gguf.data); e.buf(2, y); e.val(3, p);
+    e.dispatch((N + 3) / 4, uint32_t(M), 1, 128);
+    return;
+  }
   if (!w.is_q8()) {
     enc_mm(e, *w.raw, x, y, M, N_limit, add, exact_f32);
     return;
@@ -1176,7 +1220,18 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
   const float sconv_static_scale = 1.0f / std::sqrt(5.0f);
 
   // Embed + norm -> x_
-  {
+  if (gguf_embed_.is_q8() || gguf_embed_.gguf.data) {
+    const auto& blocks = gguf_embed_.gguf;
+    const Ink2GgufEmbedP ep{uint32_t(T), H, uint32_t(pos0), gguf_embed_.N,
+                           embed_norm_->dtype == DType::F32 ? 1u : 0u, cfg_.rms_eps,
+                           blocks.type, blocks.row_bytes};
+    e.use(ink2_pipe("ink2_gguf_embed"));
+    e.buf(0, s.tok);
+    e.buf(1, blocks.data ? blocks.data : gguf_embed_.q);
+    e.buf(2, blocks.data ? blocks.data : gguf_embed_.s);
+    e.buf(3, embed_norm_->buf); e.buf(4, x_); e.val(5, ep);
+    e.dispatch(uint32_t(T), 1, 1, 512);
+  } else {
     const Ink2EmbedP ep{uint32_t(T), H, uint32_t(pos0), uint32_t(embed_->shape[0]), cfg_.rms_eps};
     e.use(ink2_pipe("ink2_embed_norm"));
     e.buf(0, s.tok);
@@ -1572,7 +1627,35 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
       e.dispatch(uint32_t(T), 1, 1, 32);
     }
     {
-      if (tensor_pf_ && T > 32) {
+      if (L.gguf_gu.data || L.gguf_down.data) {
+        const Ink2MoeP mp{uint32_t(T), H, uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k)};
+        if (L.gguf_gu.data) {
+          const Ink2GgufMoeP gu{uint32_t(T), H, uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k),
+                                L.gguf_gu.type, L.gguf_gu.row_bytes};
+          e.use(ink2_pipe("ink2_gguf_gu"));
+          e.buf(0, x_mlp_); e.buf(1, eid_); e.buf(2, L.gguf_gu.data); e.buf(3, moe_act_);
+          e.buf(4, L.w13_outer); e.val(5, gu);
+          e.dispatch((gu.I + 3) / 4, gu.top, uint32_t(T), 128);
+        } else {
+          e.use(ink2_pipe("ink2_moe_nvfp4_w13_situ"));
+          e.buf(0, x_mlp_); e.buf(1, eid_); e.buf(2, L.w13->buf); e.buf(3, L.w13_sc->buf);
+          e.buf(4, L.w13_outer); e.buf(5, moe_act_); e.val(6, mp);
+          e.dispatch((mp.I + 15) / 16, mp.K_top, uint32_t(T), 128);
+        }
+        if (L.gguf_down.data) {
+          const Ink2GgufMoeP dn{uint32_t(T), H, uint32_t(cfg_.moe_I), uint32_t(cfg_.top_k),
+                                L.gguf_down.type, L.gguf_down.row_bytes};
+          e.use(ink2_pipe("ink2_gguf_down"));
+          e.buf(0, moe_act_); e.buf(1, eid_); e.buf(2, ew_); e.buf(3, L.gguf_down.data);
+          e.buf(4, moe_out_); e.buf(5, L.w2_outer); e.val(6, dn);
+          e.dispatch((H + 3) / 4, uint32_t(T), 1, 128);
+        } else {
+          e.use(ink2_pipe("ink2_moe_nvfp4_w2_acc"));
+          e.buf(0, moe_act_); e.buf(1, eid_); e.buf(2, ew_); e.buf(3, L.w2->buf); e.buf(4, L.w2_sc->buf);
+          e.buf(5, L.w2_outer); e.buf(6, moe_out_); e.val(7, mp);
+          e.dispatch((H + 15) / 16, uint32_t(T), 1, 128);
+        }
+      } else if (tensor_pf_ && T > 32) {
         const uint32_t P = uint32_t(T) * uint32_t(cfg_.top_k);
         const uint32_t E = uint32_t(cfg_.n_experts);
         const uint32_t I = uint32_t(cfg_.moe_I);

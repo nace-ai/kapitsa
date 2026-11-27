@@ -27,10 +27,14 @@ std::pair<int, ojson> chat_failure(const ChatResult& res);
 // otherwise throws ApiError (400), naming the selected field.
 int chat_max_tokens(const ojson& body);
 
+// The body's tools into r: those marked "defer_loading" in r.deferred_tools, the rest in r.tools (take_deferred), none
+// for tool_choice "none"
+void chat_tools(const ojson& body, ChatRequest& r);
+
 // Structured output of a request (src/engine/grammar.h): response_format (json_object; json_schema with its strict),
 // tool_choice (required, or a named function), parallel_tool_calls and strict tools ("strict": true in a function),
-// over `tools`, the request's as the prompt declares them (none for tool_choice "none"). Null when nothing constrains
-// the reply. Throws ApiError (400) for a malformed or unsupported one.
+// over `tools`, every tool a call may name (ChatRequest::call_tools: the declared ones and the deferred ones). Null when
+// nothing constrains the reply. Throws ApiError (400) for a malformed or unsupported one.
 std::shared_ptr<const Grammar> chat_grammar(const ojson& body, const ojson& tools);
 
 // The stream: a chat.completion.chunk with the assistant's role at begin(), one per delta's reasoning

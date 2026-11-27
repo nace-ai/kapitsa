@@ -85,7 +85,7 @@
 #include <ctime>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.2.39"
+#define KAPITSA_VERSION "0.2.40"
 #endif
 #ifndef KAPITSA_GIT
 #define KAPITSA_GIT ""
@@ -137,8 +137,7 @@ static void splash_sampling_defaults(const json& b, const Engine& e, ChatRequest
 static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
   ChatRequest r = defaults;
   r.messages = normalize_messages(b.at("messages"));
-  if (b.contains("tools") && b["tools"].is_array()) r.tools = b["tools"];
-  if (b.contains("tool_choice") && b["tool_choice"].is_string() && b["tool_choice"] == "none") r.tools = json::array();
+  api::chat_tools(b, r);  // (the ones marked "defer_loading" in deferred_tools)
   r.max_tokens = api::chat_max_tokens(b);
   if (b.contains("temperature") && b["temperature"].is_number()) r.temperature = b["temperature"];
   if (b.contains("top_p") && b["top_p"].is_number()) r.top_p = b["top_p"];
@@ -177,7 +176,7 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
   r.loops = api::request_loops_field(b);
   api::request_think_field(b, r);
   // structured output: response_format, tool_choice required or named, strict tools (src/api/chat_completions.cpp)
-  r.grammar = api::chat_grammar(b, r.tools);
+  r.grammar = api::chat_grammar(b, r.call_tools());
   return r;
 }
 
@@ -409,8 +408,8 @@ static void print_serve_help() {
          "                         Dory with --loop-kv per-loop: drafts per cycle (default 2 at 1-2 loops, 3 at 3-4)\n"
          "  --mem-budget GB        GPU memory Kapitsa may hold (default: what macOS recommends for this GPU, a\n"
          "                         little less; kapitsa doctor shows it)\n"
-         "  --profile NAME         precise (default): the exact outputs. fast: also the speedups that move the\n"
-         "                         outputs no more than the fastest other engine does, where they were measured\n"
+         "  --profile NAME         precise or fast (default: fast for Inkling-2, precise otherwise). fast adds\n"
+         "                         faster kernels with measured output drift; precise keeps the exact defaults\n"
          "                         (docs/profiles.md; also KAPITSA_PROFILE)\n"
          "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n"
          "  --disk-cache SIZE      SSD prefix cache: conversations kept on the SSD, also across restarts, in\n"
@@ -1512,8 +1511,9 @@ int ni::server::run_service(Options o) {
     std::string say;
     if (context_req == kContextMax) {
       if (limit <= 0)
-        return fail(ref.name + " does not state the context it was trained for (max_position_embeddings in its "
-                    "config.json), so --context max has no size here: give it in tokens (--context 128k).", 2);
+        return fail(ref.name + " does not state the context it was trained for (max_position_embeddings or "
+                    "model_max_length in its config.json), so --context max has no size here: give it in tokens "
+                    "(--context 128k).", 2);
       opt.context = limit;
     } else if (context_req > 0) {
       opt.context = context_req;

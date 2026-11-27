@@ -47,6 +47,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 using namespace ni;
@@ -3157,10 +3158,9 @@ void chat_template_format_unit() {
   rmdir(dir.c_str());
 }
 
-// OutputParser's CallFormat::Hy4 on a byte-level vocabulary with Hy4-flash's tags as added (non-special) tokens, as
-// its tokenizer has them: the list of calls, GLM's markup with :opensource tags, typed values, text when tools are off,
-// a malformed call and a call cut by max_tokens returned as the text written.
-void hy4_parser_unit() {
+// GLM and Hy4 output parsing on a byte-level vocabulary: issue 1400's malformed calls, typed values, and Hy4's
+// :opensource tags as added (non-special) tokens. No model folder needed.
+void glm_hy4_parser_unit() {
   nlohmann::json vocab = nlohmann::json::object(), added = nlohmann::json::array();
   for (int b = 0, n = 0; b < 256; ++b) {
     const bool keep = (b >= '!' && b <= '~') || (b >= 0xA1 && b <= 0xAC) || (b >= 0xAE && b <= 0xFF);
@@ -3170,7 +3170,8 @@ void hy4_parser_unit() {
   int id = 256;
   for (const char* t : {"<think:opensource>", "</think:opensource>", "<tool_call:opensource>", "</tool_call:opensource>",
                         "<tool_calls:opensource>", "</tool_calls:opensource>", "<arg_key:opensource>",
-                        "</arg_key:opensource>", "<arg_value:opensource>", "</arg_value:opensource>"})
+                        "</arg_key:opensource>", "<arg_value:opensource>", "</arg_value:opensource>",
+                        "<think>", "</think>", "<tool_call>", "</tool_call>"})
     added.push_back({{"id", id++}, {"content", t}, {"special", false}});
   char path[] = "/tmp/api_test_hy4tok.XXXXXX";
   const int fd = mkstemp(path);
@@ -3198,21 +3199,82 @@ void hy4_parser_unit() {
   struct Out {
     std::string content, reasoning;
     std::vector<ToolCall> calls;
+    std::vector<ChatDelta> deltas;
   };
-  const auto run = [&](const std::string& text, bool parse_tools, bool ended = true) {
-    OutputParser p(tok, tok.find("<think:opensource>"), tok.find("</think:opensource>"),
-                   tok.find("<tool_call:opensource>"), tok.find("</tool_call:opensource>"), false, parse_tools, tools,
-                   false, false, {}, CallFormat::Hy4);
+  const auto run = [&](const std::string& text, bool parse_tools, bool ended = true,
+                       CallFormat fmt = CallFormat::Hy4) {
+    const std::string sfx = fmt == CallFormat::Hy4 ? ":opensource" : "";
+    OutputParser p(tok, tok.find("<think" + sfx + ">"), tok.find("</think" + sfx + ">"),
+                   tok.find("<tool_call" + sfx + ">"), tok.find("</tool_call" + sfx + ">"), false, parse_tools, tools,
+                   false, false, {}, fmt);
     Out o;
     const auto add = [&](const ChatDelta& d) {
       o.content += d.content;
       o.reasoning += d.reasoning;
       for (auto& c : d.tool_calls) o.calls.push_back(c);
+      o.deltas.push_back(d);
     };
     for (int i : tok.encode(text)) add(p.push(i));
     add(p.finish(ended));
     return o;
   };
+  for (const auto& [label, text, name, args] :
+       std::vector<std::tuple<std::string, std::string, std::string, ojson>>{
+           {"form A", "<tool_call>write<arg_key><arg_key>content</arg_key><arg_value># Handoff ...\nnext line\n"
+                      "</arg_value><arg_key>path</arg_key><arg_value>.handoff.md</arg_value></tool_call>",
+            "write", {{"content", "# Handoff ...\nnext line\n"}, {"path", ".handoff.md"}}},
+           {"form B", "<tool_call>edit<arg_key>path</arg_key><arg_value>{worktree}/scripts/test_x.py</arg_value>"
+                      "<arg_key>oldString</arg_key><arg_value>...</arg_value><arg_key>newString</arg_key>"
+                      "<arg_value>...</arg_value><arg_key>oldString_is_replace</arg_key><arg_key>path</arg_key>"
+                      "<arg_value>{worktree}/scripts/test_x.py</arg_value></tool_call>",
+            "edit", {{"path", "{worktree}/scripts/test_x.py"}, {"oldString", "..."}, {"newString", "..."}}},
+            {"trailing missing value", "<tool_call>read_file<arg_key>path</arg_key><arg_value>a.txt</arg_value>"
+                                       "<arg_key>start_line</arg_key> \n</tool_call>",
+             "read_file", {{"path", "a.txt"}}},
+            {"only missing value", "<tool_call>read_file<arg_key>path</arg_key></tool_call>",
+             "read_file", ojson::object()},
+            {"missing duplicate value", "<tool_call>read_file<arg_key>path</arg_key><arg_value>a.txt</arg_value>"
+                                        "<arg_key>path</arg_key></tool_call>",
+             "read_file", {{"path", "a.txt"}}}}) {
+    for (CallFormat fmt : {CallFormat::Glm, CallFormat::Hy4}) {
+      std::string input = text;
+      if (fmt == CallFormat::Hy4) {
+        for (size_t pos = 0; (pos = input.find('>', pos)) != std::string::npos; pos += 12)
+          input.insert(pos, ":opensource");
+      }
+      const std::string tag = std::string(fmt == CallFormat::Glm ? "glm" : "hy4") + " parser: issue 1400 " + label;
+      const Out parsed = run(input, true, true, fmt);
+      check(parsed.content.empty() && parsed.reasoning.empty() && parsed.calls.size() == 1 &&
+                parsed.calls[0].name == name && ojson::parse(parsed.calls[0].arguments) == args,
+            tag, parsed.content);
+      const auto res = finished(parsed.deltas, 1);
+      const auto calls = chat_tool_calls(res.tool_calls, 0, false);
+      check(calls.size() == 1 && calls[0]["function"]["name"] == name &&
+                ojson::parse(calls[0]["function"]["arguments"].get<std::string>()) == args,
+            tag + " chat reply");
+      ChatCompletionsStream cw("chat", "m", 1);
+      std::string wire = cw.begin(res);
+      for (const auto& d : parsed.deltas) wire += cw.delta(d);
+      wire += cw.end(res);
+      const size_t done = wire.find("data: [DONE]");
+      std::string content, reason;
+      ojson streamed = ojson::array();
+      for (const auto& e : parse_sse(wire.substr(0, done))) {
+        const auto& choice = e.data["choices"][0];
+        const auto& delta = choice["delta"];
+        if (delta.contains("content")) content += delta["content"].get<std::string>();
+        if (delta.contains("tool_calls")) for (auto c : delta["tool_calls"]) {
+          c.erase("index");
+          streamed.push_back(std::move(c));
+        }
+        if (choice["finish_reason"].is_string()) reason = choice["finish_reason"];
+      }
+      check(done != std::string::npos && content.empty() && streamed == calls && reason == "tool_calls",
+            tag + " chat stream");
+      const Out off = run(input, false, true, fmt);
+      check(off.calls.empty() && off.content == input, tag + " tools off keeps text", off.content);
+    }
+  }
   const std::string two =
       "<tool_calls:opensource><tool_call:opensource>read_file<arg_key:opensource>path</arg_key:opensource>"
       "<arg_value:opensource>src/main.py</arg_value:opensource><arg_key:opensource>start_line</arg_key:opensource>"
@@ -3811,13 +3873,142 @@ void inkling2_unit() {
       rmdir(dir.c_str());
     }
   }
+
+  // 4. model_context_limit(): max_position_embeddings takes precedence; falls back to model_max_length
+  {
+    char dir_tmpl[] = "/tmp/api_test_ctxlim.XXXXXX";
+    if (mkdtemp(dir_tmpl)) {
+      const std::string dir = dir_tmpl;
+      auto write_cfg = [&](const nlohmann::json& j) {
+        if (FILE* f = fopen((dir + "/config.json").c_str(), "w")) fputs(j.dump().c_str(), f), fclose(f);
+      };
+      write_cfg({{"text_config", {{"model_max_length", 1048576}}}});
+      check(model_context_limit(dir) == 1048576, "model_context_limit reads text_config.model_max_length");
+
+      write_cfg({{"model_max_length", 65536}});
+      check(model_context_limit(dir) == 65536, "model_context_limit reads top-level model_max_length");
+
+      write_cfg({{"llm_config", {{"model_max_length", 262144}}}});
+      check(model_context_limit(dir) == 262144, "model_context_limit reads llm_config.model_max_length");
+
+      write_cfg({{"text_config", {{"max_position_embeddings", 131072}, {"model_max_length", 1048576}}}});
+      check(model_context_limit(dir) == 131072,
+            "model_context_limit prefers max_position_embeddings over model_max_length");
+
+      unlink((dir + "/config.json").c_str());
+      rmdir(dir.c_str());
+    }
+  }
+}
+
+// "defer_loading": true (Anthropic's and OpenAI's tool search): a tool the prompt leaves out, which every API still
+// keeps for parsing and the grammar (ChatRequest::deferred_tools)
+void deferred_tools_mapping() {
+  auto names = [](const ojson& tools) {
+    std::string out;
+    for (const auto& t : tools) out += t["function"]["name"].get<std::string>() + " ";
+    return out;
+  };
+  // chat completions: the flag on the tool or in its function, taken out of both; false is declared
+  {
+    const ojson body = J(R"({"tools": [
+      {"type": "function", "function": {"name": "a", "parameters": {"type": "object"}}},
+      {"type": "function", "defer_loading": true, "function": {"name": "b", "parameters": {"type": "object"}}},
+      {"type": "function", "function": {"name": "c", "defer_loading": true, "parameters": {"type": "object"}}},
+      {"type": "function", "defer_loading": false, "function": {"name": "d", "parameters": {"type": "object"}}}]})");
+    ChatRequest r;
+    chat_tools(body, r);
+    check(names(r.tools) == "a d " && names(r.deferred_tools) == "b c " && names(r.call_tools()) == "a d b c ",
+          "chat: defer_loading tools are deferred, on the tool or in its function", names(r.tools) + "| " + names(r.deferred_tools));
+    check(r.call_tools().dump().find("defer_loading") == std::string::npos, "chat: the flag is taken out of every tool",
+          r.call_tools().dump());
+    ojson none = body;
+    none["tool_choice"] = "none";
+    ChatRequest n;
+    chat_tools(none, n);
+    check(n.tools.empty() && n.deferred_tools.empty(), "chat: tool_choice none = no tools, deferred ones too");
+    ojson named = body;
+    named["tool_choice"] = J(R"({"type": "function", "function": {"name": "c"}})");
+    check(chat_grammar(named, r.call_tools()) != nullptr, "chat: a named tool_choice of a deferred tool has its grammar");
+  }
+  // anthropic: the flag on the tool; tool_addition keeps it, tool_removal takes a deferred tool out
+  {
+    const ojson body = J(R"({"model": "m", "max_tokens": 10, "tool_choice": {"type": "tool", "name": "b"},
+      "tools": [{"name": "a", "input_schema": {"type": "object"}},
+                {"name": "b", "defer_loading": true, "input_schema": {"type": "object"}},
+                {"name": "c", "defer_loading": true, "input_schema": {"type": "object"}}],
+      "messages": [{"role": "user", "content": "hi"},
+        {"role": "system", "content": [{"type": "tool_removal", "tool": {"type": "tool_reference", "name": "c"}},
+          {"type": "tool_addition", "tool": {"type": "tool_definition",
+            "definition": {"name": "d", "defer_loading": true, "input_schema": {"type": "object"}}}},
+          {"type": "tool_addition", "tool": {"type": "tool_definition",
+            "definition": {"name": "a", "defer_loading": true, "input_schema": {"type": "object"}}}}]}]})");
+    const MessagesRequest q = messages_request(body);
+    check(q.chat.tools.empty() && names(q.chat.deferred_tools) == "b d a ",
+          "anthropic: defer_loading tools, tool_addition and tool_removal keep the deferred list",
+          names(q.chat.tools) + "| " + names(q.chat.deferred_tools));
+    check(q.chat.grammar != nullptr, "anthropic: a tool_choice of a deferred tool has its grammar");
+  }
+  // responses: a function, or a namespace's tools, by the namespace's flag or their own
+  {
+    ResponseStore store;
+    const ResponsesRequest q = responses_request(J(R"({"input": "hi", "tools": [
+      {"type": "function", "name": "a", "parameters": {"type": "object"}},
+      {"type": "function", "name": "b", "defer_loading": true, "parameters": {"type": "object"}},
+      {"type": "namespace", "name": "ns", "defer_loading": true, "tools": [{"type": "function", "name": "f"}]},
+      {"type": "namespace", "name": "mx", "tools": [{"type": "function", "name": "g"},
+                                                     {"type": "function", "name": "h", "defer_loading": true}]}]})"),
+                                                 store);
+    check(names(q.chat.tools) == "a mx__g " && names(q.chat.deferred_tools) == "b ns__f mx__h ",
+          "responses: defer_loading on a function, a namespace or a namespace's tool",
+          names(q.chat.tools) + "| " + names(q.chat.deferred_tools));
+  }
+}
+
+// Through the template: deferred tools leave the prompt as it is without them, and a call to one is typed by its schema
+void deferred_tools_round_trip(const TmplModel& m, const std::string& tag) {
+  const ojson declared = J(R"({"type": "function", "function": {"name": "search", "description": "Search",
+    "parameters": {"type": "object", "properties": {"q": {"type": "string"}}}}})");
+  const ojson make = J(R"({"type": "function", "defer_loading": true, "function": {"name": "make", "description": "Make",
+    "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "n": {"type": "integer"},
+      "urgent": {"type": "boolean"}, "blocks": {"type": "array", "items": {"type": "object"}}}}}})");
+  const ojson messages = J(R"([{"role": "system", "content": "S"}, {"role": "user", "content": "Make one."}])");
+  ChatRequest without, with;
+  chat_tools(ojson{{"tools", ojson::array({declared})}}, without);
+  chat_tools(ojson{{"tools", ojson::array({declared, make})}}, with);
+  without.messages = with.messages = messages;
+  check(render_chat(*m.tmpl, without, true) == render_chat(*m.tmpl, with, true),
+        tag + "deferred tools: the prompt is the one without them");
+
+  const std::string body = "<function=make>\n<parameter=name>\nMahina\n</parameter>\n<parameter=n>\n3\n</parameter>\n"
+                           "<parameter=urgent>\ntrue\n</parameter>\n<parameter=blocks>\n[{\"page\": \"paul\"}]\n"
+                           "</parameter>\n</function>\n</tool_call>";
+  for (const bool opener : {true, false}) {
+    const std::string label = tag + "deferred tools: a call " + (opener ? "" : "without its opener ");
+    std::vector<int> ids;
+    const auto res = finished(generate(m, (opener ? "<tool_call>\n" : "") + body, false, with.call_tools(), &ids), int(ids.size()));
+    const auto calls = chat_tool_calls(res.tool_calls, 0, false);
+    const ojson args = calls.size() == 1 ? ojson::parse(calls[0]["function"]["arguments"].get<std::string>(), nullptr, false)
+                                         : ojson();
+    check(calls.size() == 1 && calls[0]["function"]["name"] == "make" && args.is_object() && args["name"] == "Mahina" &&
+              args["n"] == 3 && args["urgent"] == true && args["blocks"].is_array() && args["blocks"][0]["page"] == "paul",
+          label + "is typed by its schema", calls.empty() ? res.content : calls[0].dump());
+  }
+  // (without the schema, as a tool left out of the request: every argument its text)
+  std::vector<int> ids;
+  const auto res = finished(generate(m, "<tool_call>\n" + body, false, with.tools, &ids), int(ids.size()));
+  const auto calls = chat_tool_calls(res.tool_calls, 0, false);
+  const ojson args = calls.size() == 1 ? ojson::parse(calls[0]["function"]["arguments"].get<std::string>(), nullptr, false)
+                                       : ojson();
+  check(args.is_object() && args["n"] == "3" && args["blocks"].is_string(),
+        tag + "deferred tools: an unknown tool's arguments stay text", calls.empty() ? res.content : calls[0].dump());
 }
 
 int main(int argc, char** argv) {
   hy4_plan_unit();
   inkling2_plan_unit();
   a4_arena_unit();
-  hy4_parser_unit();
+  glm_hy4_parser_unit();
   stop_filter_unit();
   anthropic_mapping();
   responses_mapping();
@@ -3847,6 +4038,7 @@ int main(int argc, char** argv) {
   new_conversation_slot_unit();
   evicted_prefix_slot_unit();
   thinking_budget_mapping();
+  deferred_tools_mapping();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dump" && i + 1 < argc) dump_cases(argv[++i]);
@@ -3876,6 +4068,7 @@ int main(int argc, char** argv) {
     template_checks(m, tag);
     draft_checks(m, tag);
     thinking_cap_zero_render(m, tag);
+    deferred_tools_round_trip(m, tag);
   }
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;

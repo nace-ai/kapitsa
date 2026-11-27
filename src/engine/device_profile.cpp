@@ -67,6 +67,7 @@ bool model_class_matches(ModelClass c, const ModelFacts& m) {
     case ModelClass::kQwen35Shape: return qwen35_shape(m);
     case ModelClass::kQwen35A3b: return qwen35_a3b(m);
     case ModelClass::kQwen27bDense: return qwen27b_dense(m);
+    case ModelClass::kInkling2: return m.inkling2;
   }
   return false;
 }
@@ -74,6 +75,11 @@ bool model_class_matches(ModelClass c, const ModelFacts& m) {
 namespace {
 
 const DefaultRow kDefaults[] = {
+    // Inkling-2 architecture, all Macs. Automatic fast selection keeps the member eligibility below unchanged:
+    // tensor prefill needs matrix units; Q8 dense packing runs on every Apple Silicon GPU. Evidence and the
+    // quantization-relative quality gate: bench/results/inkling-fast-default-20261124/README.md.
+    {"ink2_profile_fast", Knob::kProfileFast, ModelClass::kInkling2, DefaultScope::kAll, nullptr, "on", 0, 0, false,
+     "Inkling-2; automatic fast profile (explicit precise wins)", true},
     // Mixed 4/5-bit 9B uses the matrix path. The SIMD packed-coefficient path accepts only 4-bit weights.
     // #493 keeps the legacy pack on non-matrix Macs; this is a format policy, not an M3/M4 speed measurement.
     {"qwen9b_q4", Knob::kQwen9bQ4, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 0, 0, false,
@@ -207,6 +213,7 @@ DeviceProfile resolve_device(const DeviceFacts& f) {
 }
 
 ModelClass resolve_model(const ModelFacts& m) {
+  if (m.inkling2) return ModelClass::kInkling2;
   if (qwen35_a3b(m)) return ModelClass::kQwen35A3b;
   if (qwen35_shape(m)) return ModelClass::kQwen35Shape;
   if (qwen27b_dense(m)) return ModelClass::kQwen27bDense;
@@ -228,6 +235,7 @@ const char* model_class_name(ModelClass m) {
     case ModelClass::kQwen35A3b: return "qwen35-a3b";
     case ModelClass::kQwen35Shape: return "qwen35-shape";
     case ModelClass::kQwen27bDense: return "qwen-27b-dense";
+    case ModelClass::kInkling2: return "inkling2";
     case ModelClass::kOther: return "other";
   }
   return "other";
@@ -240,6 +248,10 @@ bool default_on(Knob k, const DeviceProfile& d, const ModelFacts& m) {
       return std::string(r.value) == "on" && default_matches(r, d) && model_class_matches(r.model, m);
   }
   return false;
+}
+
+Profile default_profile(const DeviceProfile& d, const ModelFacts& m) {
+  return default_on(Knob::kProfileFast, d, m) ? Profile::kFast : Profile::kPrecise;
 }
 
 int default_count() { return int(sizeof(kDefaults) / sizeof(kDefaults[0])); }

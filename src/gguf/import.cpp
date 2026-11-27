@@ -48,7 +48,7 @@
 #include <utility>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.2.39"
+#define KAPITSA_VERSION "0.2.40"
 #endif
 
 namespace ni::gguf {
@@ -900,6 +900,13 @@ const char* kQwen35Split =
     "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|"
     "\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
 
+const char* kInklingSplit =
+    "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+"
+    "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+    "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*"
+    "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+    "\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+
 struct Tok {
   std::string tokenizer_json, tokenizer_config, template_;
   int eos = -1, endoftext = -1;
@@ -907,7 +914,9 @@ struct Tok {
 
 Tok make_tokenizer(const File& f, const Hp& h) {
   const std::string file = base_name(f.parts()[0]);
-  const std::string model = h.flint ? "Flint" : "Qwen3.5", want = h.flint ? "flint" : "qwen35";
+  const bool inkling = h.arch == "inkling2_loop";
+  const std::string model = inkling ? "Inkling-2" : h.flint ? "Flint" : "Qwen3.5";
+  const std::string want = inkling ? "inkling2" : h.flint ? "flint" : "qwen35";
   if (f.str("tokenizer.ggml.model") != "gpt2")
     throw Error(file + ": tokenizer \"" + f.str("tokenizer.ggml.model") + "\" is not " + model + "'s byte-level BPE.");
   const std::string pre = f.str("tokenizer.ggml.pre");
@@ -957,13 +966,16 @@ Tok make_tokenizer(const File& f, const Hp& h) {
                     "\"post_processor\":null,\"decoder\":{\"type\":\"ByteLevel\",\"add_prefix_space\":true,"
                     "\"trim_offsets\":true,\"use_regex\":true},\"model\":{\"type\":\"BPE\",\"dropout\":null,"
                     "\"unk_token\":null,\"continuing_subword_prefix\":null,\"end_of_word_suffix\":null,"
-              : "{\"type\":\"NFC\"},\"pre_tokenizer\":{\"type\":\"Sequence\",\"pretokenizers\":[" + split(kQwen35Split) +
+              : std::string(inkling ? "null" : "{\"type\":\"NFC\"}") +
+                    ",\"pre_tokenizer\":{\"type\":\"Sequence\",\"pretokenizers\":[" +
+                    split(inkling ? kInklingSplit : kQwen35Split) +
                     bl + "]},\"post_processor\":" + bl + ",\"decoder\":" + bl +
                     ",\"model\":{\"type\":\"BPE\",\"dropout\":null,\"unk_token\":null,\"continuing_subword_prefix\":\"\","
                     "\"end_of_word_suffix\":\"\",";
   t.tokenizer_json = "{\"version\":\"1.0\",\"truncation\":null,\"padding\":null,\"added_tokens\":[" + added +
                      "],\"normalizer\":" + pre_tok +
-                     "\"fuse_unk\":false,\"byte_fallback\":false,\"ignore_merges\":false,\"vocab\":{" + vocab +
+                     "\"fuse_unk\":false,\"byte_fallback\":false,\"ignore_merges\":" +
+                      (inkling ? "true" : "false") + ",\"vocab\":{" + vocab +
                      "},\"merges\":[" + mg + "]}}";
   auto tok_at = [&](const char* key) -> json {
     const int64_t id = f.num(key, -1);
@@ -990,7 +1002,7 @@ Tok make_tokenizer(const File& f, const Hp& h) {
     tc["model_max_length"] = h.ctx;
     tc["pad_token"] = tok_at("tokenizer.ggml.padding_token_id");
     tc["split_special_tokens"] = false;
-    tc["tokenizer_class"] = "Qwen2Tokenizer";
+    tc["tokenizer_class"] = inkling ? "PreTrainedTokenizerFast" : "Qwen2Tokenizer";
     tc["unk_token"] = nullptr;
   }
   tc["chat_template"] = t.template_;
@@ -1518,6 +1530,156 @@ void remove_tree(const std::string& dir) {
   std::filesystem::remove_all(dir, ec);
 }
 
+// Inkling keeps its GGUF blocks. Only metadata is translated here; its model loader owns the layouts.
+std::string import_inkling(const ImportOptions& opt, const Source& source, const File& f) {
+  if (f.parts().size() != 1) throw Error("Inkling-2 import requires an unsplit GGUF.");
+  if (!opt.mtp.empty()) throw Error("Inkling-2 GGUF import does not attach a separate MTP file.");
+  const std::string prefix = "inkling2_loop.";
+  auto number = [&](const char* suffix) -> json {
+    const std::string key = prefix + suffix;
+    const auto it = f.meta().find(key);
+    if (it == f.meta().end() || !it->is_number() || !std::isfinite(it->get<double>()))
+      throw Error("Inkling-2 GGUF requires numeric metadata " + key + ".");
+    return *it;
+  };
+  auto integer = [&](const char* suffix) -> int64_t {
+    const json v = number(suffix);
+    if (!v.is_number_integer()) throw Error("Inkling-2 GGUF requires integer metadata " + prefix + suffix + ".");
+    return v.get<int64_t>();
+  };
+  const int64_t layers = integer("block_count");
+  auto heads = [&](const char* suffix) -> int64_t {
+    const std::string key = prefix + suffix;
+    const auto it = f.meta().find(key);
+    if (it == f.meta().end()) throw Error("Inkling-2 GGUF has no " + key + ".");
+    if (it->is_number_integer()) return it->get<int64_t>();
+    if (!it->is_array() || it->size() != size_t(layers) || it->empty())
+      throw Error("Inkling-2 GGUF has invalid per-layer metadata " + key + ".");
+    for (const auto& v : *it)
+      if (!v.is_number_integer() || v != (*it)[0])
+        throw Error("Inkling-2 GGUF has heterogeneous head geometry, which Kapitsa does not run.");
+    return (*it)[0].get<int64_t>();
+  };
+  if (layers < 2 || layers > 24) throw Error("Inkling-2 GGUF has an unsupported layer count.");
+  ojson t{{"model_type", "inkling2_loop"}};
+  for (const auto& [out, in] : std::vector<std::pair<const char*, const char*>>{
+           {"hidden_size", "embedding_length"}, {"vocab_size", "vocab_size"},
+           {"unpadded_vocab_size", "vocab_size_unpadded"}, {"head_dim", "attention.key_length"},
+           {"d_rel", "attention.relative_length"}, {"rel_extent", "attention.relative_extent"},
+           {"sliding_window_size", "attention.sliding_window"}, {"n_layers_per_attn_res_block", "attn_res.block_size"},
+           {"n_routed_experts", "expert_count"}, {"num_experts_per_tok", "expert_used_count"},
+           {"intermediate_size", "expert_feed_forward_length"}, {"sconv_kernel_size", "shortconv.l_cache"},
+           {"log_scaling_n_floor", "attention.log_scale_floor"}})
+    t[out] = integer(in);
+  for (const auto& [out, in] : std::vector<std::pair<const char*, const char*>>{
+           {"rms_norm_eps", "attention.layer_norm_rms_epsilon"}, {"qk_l2_clip_threshold", "attention.qk_clip"},
+           {"rel_l2_clip_threshold", "attention.relative_clip"}, {"log_scaling_alpha", "attention.log_scale_alpha"},
+           {"route_scale", "expert_weights_scale"}, {"final_logit_softcapping", "final_logit_softcapping"},
+           {"mlp_gate_softcap", "activation.situ_beta"}, {"mlp_up_softcap", "activation.situ_linear_beta"}})
+    t[out] = number(in);
+  t["num_hidden_layers"] = layers;
+  t["num_attention_heads"] = heads("attention.head_count");
+  t["num_key_value_heads"] = heads("attention.head_count_kv");
+  if (integer("attention.value_length") != integer("attention.key_length"))
+    throw Error("Inkling-2 GGUF has different key and value dimensions.");
+  const json pattern = f.meta().value(prefix + "attention.sliding_window_pattern", json());
+  if (!pattern.is_array() || pattern.size() != size_t(layers))
+    throw Error("Inkling-2 GGUF has no complete sliding-window pattern.");
+  t["local_layer_ids"] = json::array();
+  for (size_t i = 0; i < pattern.size(); ++i) {
+    if (!pattern[i].is_boolean()) throw Error("Inkling-2 GGUF sliding-window pattern must contain booleans.");
+    if (pattern[i].get<bool>()) t["local_layer_ids"].push_back(i);
+  }
+  t["loop_config"] = ojson{{"core_start", integer("loop.start")}, {"core_end", integer("loop.end")},
+                            {"num_passes", integer("loop.count")}, {"gate_rank", integer("loop.gate_rank")},
+                            {"is_varloop", f.flag(prefix + "loop.varying", false)}};
+  Hp h;
+  h.arch = "inkling2_loop";
+  h.vocab = integer("vocab_size_unpadded");
+  h.ctx = integer("context_length");
+  t["max_position_embeddings"] = h.ctx;
+  const Tok tok = make_tokenizer(f, h);
+  ojson config{{"architectures", json::array({"Inkling2LoopForConditionalGeneration"})},
+               {"model_type", "inkling2_loop"}, {"text_config", t}, {"gguf_file", "model.gguf"},
+               {"language_model_only", true}, {"eos_token_id", tok.eos}, {"tie_word_embeddings", false}};
+  const json sid = source_id(f, nullptr);
+  const std::string models = hub::models_dir();
+  const std::string name = opt.name.empty() ? default_name(source, f, models, sid) : clean_name(opt.name);
+  if (name.empty()) throw Error("The imported model needs a nonempty folder name.");
+  const std::string dest = models + "/" + name;
+  uint64_t tensor_bytes = 0;
+  for (const auto& tensor : f.tensors()) tensor_bytes += tensor.bytes;
+  config["gguf_tensor_bytes"] = tensor_bytes;
+  const std::string cfg = config.dump(2) + "\n";
+  const uint64_t metadata_bytes = cfg.size() + tok.tokenizer_json.size() + tok.tokenizer_config.size() + tok.template_.size();
+  const uint64_t disk = f.file_bytes() + metadata_bytes + (1u << 20);  // manifest and filesystem overhead
+  if (!opt.plan_dir.empty()) {
+    std::filesystem::create_directories(opt.plan_dir);
+    write_text(opt.plan_dir + "/config.json", cfg);
+    write_text(opt.plan_dir + "/import.json", json{{"write", disk}, {"disk", disk}}.dump() + "\n");
+    return opt.plan_dir;
+  }
+  if (opt.progress)
+    fprintf(stderr, "Inkling-2: keep GGUF weights unchanged (%s), translate config and tokenizer into %s.\n",
+            gb(f.file_bytes()).c_str(), hub::tilde(dest).c_str());
+  if (opt.dry_run) return dest;
+  if (is_dir(dest) && !opt.force) {
+    if (same_import(dest, sid)) return dest;
+    throw Error(hub::tilde(dest) + " exists already; use --name or --force.");
+  }
+  const std::string tmp = dest + ".importing-" + std::to_string(getpid());
+  std::filesystem::create_directories(models);
+  if (!std::filesystem::create_directory(tmp)) throw Error("Import staging folder exists: " + tmp);
+  StopGuard stop;
+  try {
+    std::filesystem::create_directory(tmp + "/.kapitsa");
+    write_text(tmp + "/config.json", cfg);
+    write_text(tmp + "/tokenizer.json", tok.tokenizer_json);
+    write_text(tmp + "/tokenizer_config.json", tok.tokenizer_config);
+    write_text(tmp + "/chat_template.jinja", tok.template_);
+    const bool force_copy = getenv("KAPITSA_IMPORT_COPY") && atoi(getenv("KAPITSA_IMPORT_COPY")) > 0;
+    if (force_copy || clonefile(f.parts()[0].c_str(), (tmp + "/model.gguf").c_str(), 0) != 0) {
+      if (free_bytes(models) < disk + kKeepFree) throw Error("Not enough free disk to copy the Inkling-2 GGUF.");
+      std::ifstream in(f.parts()[0], std::ios::binary);
+      std::ofstream out(tmp + "/model.gguf", std::ios::binary);
+      std::vector<char> chunk(size_t(kChunkBytes), char(0));
+      uint64_t remaining = f.file_bytes();
+      while (remaining) {
+        if (g_stop) throw Error("Inkling-2 import interrupted.");
+        const size_t n = size_t(std::min<uint64_t>(remaining, chunk.size()));
+        if (!in.read(chunk.data(), std::streamsize(n)) || !out.write(chunk.data(), std::streamsize(n)))
+          throw Error("Could not copy the Inkling-2 GGUF.");
+        remaining -= n;
+      }
+      out.close();
+      if (!out) throw Error("Could not finish writing the Inkling-2 GGUF.");
+    }
+    ojson files = ojson::array();
+    uint64_t bytes = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(tmp)) {
+      if (!entry.is_regular_file()) continue;
+      files.push_back(ojson{{"path", entry.path().filename().string()}, {"size", uint64_t(entry.file_size())}});
+      bytes += uint64_t(entry.file_size());
+    }
+    const ojson manifest{{"name", name}, {"repo", ""}, {"revision", ""}, {"commit", ""},
+                         {"variant", "gguf"}, {"quant", "GGUF blocks as stored"},
+                         {"gguf", {{"files", sid}, {"conversions", ojson::object()}, {"retained", true}}},
+                         {"files", files}, {"companions", ojson::array()}, {"total_bytes", bytes},
+                         {"kapitsa", KAPITSA_VERSION}};
+    write_text(tmp + "/.kapitsa/manifest.json", manifest.dump(2) + "\n");
+    if (g_stop) throw Error("Inkling-2 import interrupted.");
+    if (is_dir(dest)) {
+      if (dest.compare(0, models.size() + 1, models + "/") != 0) throw Error("Refusing to replace " + dest);
+      remove_tree(dest);
+    }
+    if (rename(tmp.c_str(), dest.c_str()) != 0) throw Error("Could not create " + dest + ": " + strerror(errno));
+  } catch (...) {
+    remove_tree(tmp);
+    throw;
+  }
+  return dest;
+}
+
 }  // namespace
 
 bool is_gguf_file(const std::string& arg) {
@@ -1562,12 +1724,13 @@ static std::string import_model_files(const ImportOptions& opt) {
   File f(s.path);
   const std::string file = base_name(f.parts()[0]);
   const std::string arch = f.str("general.architecture");
+  if (arch == "inkling2_loop") return import_inkling(opt, s, f);
   if (arch == "qwen3next")
     throw Error(file + " is Qwen3-Next, the model before Qwen3.5; Kapitsa runs the Qwen3.5 family (Qwen3.5, Qwen3.6, "
                 "Qwen3.8).");
   if (arch != "qwen35" && arch != "qwen35moe" && arch != "flint")
-    throw Error(file + " is a \"" + arch + "\" model; Kapitsa runs the Qwen3.5 family (GGUF architectures qwen35 and "
-                "qwen35moe) and Recursive's Flint (flint).");
+    throw Error(file + " is a \"" + arch + "\" model; Kapitsa imports the Qwen3.5 family (GGUF architectures qwen35 and "
+                "qwen35moe), Recursive's Flint (flint), and Inkling-2 (inkling2_loop).");
   const bool flint = arch == "flint";
   for (auto& [k, v] : f.meta().items())
     if (k.rfind("prism.hadamard.", 0) == 0)
@@ -1975,9 +2138,10 @@ int run_import(int argc, char** argv) {
   o.from_import_command = true;
   const char* usage =
       "kapitsa import FILE.gguf [--name NAME] [--mtp MTP.gguf] [--threads N] [--force] [--dry-run] [--no-drafter]\n\n"
-      "Converts a GGUF of a Qwen3.5-family model (from LM Studio, Ollama, llama.cpp or a Hugging Face GGUF repo) once\n"
-      "into a model folder in %s, which `kapitsa serve --model NAME` runs (`kapitsa serve --model FILE.gguf`\n"
-      "converts on first use). A split file is given by any of its parts.\n\n"
+      "Imports a GGUF of a Qwen3.5-family, Flint, or Inkling-2 model once into a model folder in %s,\n"
+      "which `kapitsa serve --model NAME` runs (`kapitsa serve --model FILE.gguf` imports on first use).\n"
+      "Inkling-2 keeps the original GGUF blocks unchanged; its config and tokenizer come from the metadata.\n"
+      "A Qwen3.5 or Flint split file is given by any of its parts. Inkling-2 requires an unsplit file.\n\n"
       "  --name NAME    the folder's name (default: from the file name)\n"
       "  --mtp FILE     the model's MTP head as a separate GGUF (default: the file's own, or an mtp-*.gguf beside it)\n"
       "  --threads N    CPU threads (default: the performance cores, at most 8)\n"
