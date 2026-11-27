@@ -92,7 +92,12 @@ NI_INLINE void ink2t_dec(const Ink2tRaw r, threadgroup half* dst) {
   *(threadgroup half4*)(dst + 12) = half4(w[12], w[13], w[14], w[15]);
 }
 
-template <int FMT, int MODE, int MR, int BN, int BK>
+[[kernel]] void ink2_t_moe_pack_x(const device float4* x [[buffer(0)]], device half4* out [[buffer(1)]],
+                                  constant uint& n4 [[buffer(2)]], uint i [[thread_position_in_grid]]) {
+  if (i < n4) out[i] = half4(x[i]);
+}
+
+template <int FMT, int MODE, int MR, int BN, int BK, bool PACKED_X = false>
 NI_INLINE void ink2t_tile(const device void* X, const device uchar* q, const device uchar* s, device float* Y,
                           constant Ink2tGemmP& p, const device uint* sorted, uint m0, uint M, uint n0, float gs,
                           uint tid, uint sg, threadgroup half* xs, threadgroup half* ws) {
@@ -137,7 +142,7 @@ NI_INLINE void ink2t_tile(const device void* X, const device uchar* q, const dev
     _Pragma("clang loop unroll(full)")
     for (int i = 0; i < XP; ++i) {
       if (xrow[i] != 0xffffffffu) {
-        if (MODE == 2) {
+        if (MODE == 2 || PACKED_X) {
           const device half* xp = (const device half*)X + size_t(xrow[i]) * p.x_ld + k0 + xk[i];
           xh0[i] = *(const device half4*)(xp);
           xh1[i] = *(const device half4*)(xp + 4);
@@ -193,7 +198,7 @@ NI_INLINE void ink2t_tile(const device void* X, const device uchar* q, const dev
   }
 }
 
-template <int FMT, int MODE, int BM, int BN, int BK>
+template <int FMT, int MODE, int BM, int BN, int BK, bool PACKED_X = false>
 NI_INLINE void ink2t_gemm_impl(const device void* X, const device uchar* Wq, const device uchar* Ws, device float* Y,
                                constant Ink2tGemmP& p, const device uint4* tiles, const device uint* ntiles,
                                const device uint* sorted, const device float* gse, uint2 tg, uint tid, uint sg,
@@ -208,10 +213,10 @@ NI_INLINE void ink2t_gemm_impl(const device void* X, const device uchar* Wq, con
   const device uchar* q = Wq + size_t(t.x) * p.q_estride;
   const device uchar* s = Ws + size_t(t.x) * p.s_estride;
   const float gs = FMT == 1 ? gse[t.x] : 1.0f;
-  ink2t_tile<FMT, MODE, BM, BN, BK>(X, q, s, Y, p, sorted, t.y, t.y + t.z, n0, gs, tid, sg, xs, ws);
+  ink2t_tile<FMT, MODE, BM, BN, BK, PACKED_X>(X, q, s, Y, p, sorted, t.y, t.y + t.z, n0, gs, tid, sg, xs, ws);
 }
 
-#define INK2T_GEMM(NAME, FMT, MODE, BM, BN, BK)                                                                        \
+#define INK2T_GEMM_X(NAME, FMT, MODE, BM, BN, BK, PACKED_X)                                                                        \
   [[kernel, max_total_threads_per_threadgroup(128)]] void NAME(                                                        \
       const device void* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]], const device uchar* Ws [[buffer(2)]],  \
       device float* Y [[buffer(3)]], constant Ink2tGemmP& p [[buffer(4)]], const device uint4* tiles [[buffer(5)]],    \
@@ -220,9 +225,13 @@ NI_INLINE void ink2t_gemm_impl(const device void* X, const device uchar* Wq, con
       uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]]) {                          \
     threadgroup half xs[2 * BM * BK];                                                                                  \
     threadgroup half ws[2 * BN * BK];                                                                                  \
-    ink2t_gemm_impl<FMT, MODE, BM, BN, BK>(X, Wq, Ws, Y, p, tiles, ntiles, sorted, gse, tg, tid, sg, xs, ws);          \
+    ink2t_gemm_impl<FMT, MODE, BM, BN, BK, PACKED_X>(X, Wq, Ws, Y, p, tiles, ntiles, sorted, gse, tg, tid, sg, xs, ws);          \
   }
 
+#define INK2T_GEMM(NAME, FMT, MODE, BM, BN, BK) INK2T_GEMM_X(NAME, FMT, MODE, BM, BN, BK, false)
+
+INK2T_GEMM_X(ink2_t_nvfp4_moe_w13_m64_pack_x, 1, 1, 64, 64, 32, true)
+INK2T_GEMM_X(ink2_t_mxfp8_moe_w13_m64_pack_x, 2, 1, 64, 64, 32, true)
 INK2T_GEMM(ink2_t_bf16_m64, 0, 0, 64, 64, 32)
 INK2T_GEMM(ink2_t_nvfp4_moe_w13_m16, 1, 1, 16, 64, 32)
 INK2T_GEMM(ink2_t_nvfp4_moe_w13_m32, 1, 1, 32, 64, 32)
