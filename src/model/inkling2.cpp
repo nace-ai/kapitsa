@@ -79,6 +79,14 @@ struct Ink2Grouped {
   }
 };
 
+bool ink2_w13_pack_x() {
+  static const bool on = [] {
+    const char* v = getenv("NI_INK2_W13_PACK_X");
+    return v && !strcmp(v, "1");
+  }();
+  return on;
+}
+
 void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
   if (const char* v = getenv("NI_PREWARM"); v && !strcmp(v, "0")) return;
   static const char* const kInk2Names[] = {
@@ -101,6 +109,10 @@ void prewarm_pipelines(bool tensor_pf, bool q8_dense) {
         "qattn_ink2_s6k32p",        "qattn_ink2_s3k16",
     };
     for (const char* n : kTensorNames) (void)base_pipe(n);
+    if (ink2_w13_pack_x()) {
+      for (const char* n : {"ink2_t_moe_pack_x", "ink2_t_nvfp4_moe_w13_m64_pack_x", "ink2_t_mxfp8_moe_w13_m64_pack_x"})
+        (void)base_pipe(n);
+    }
   }
   if (q8_dense) {
     for (const char* n : {"ink2_q8_mv1", "ink2_q8_mv", "ink2_q8_mm"}) (void)ink2_pipe(n);
@@ -1674,12 +1686,25 @@ void Inkling2::enc_forward(Encoder& e, Seq& s, int pos0, int T, bool dump_logits
           e.val(5, bp);
           e.dispatch(1, 1, 1, 256);
         }
+        const bool pack_x = bm == 64 && H % 32 == 0 && ink2_w13_pack_x();
+        // MLP norm has finished reading h_mlp_; its storage is dead until the next visit.
+        const Buffer w13_x = pack_x ? h_mlp_.view(0, size_t(T) * H * sizeof(uint16_t)) : x_mlp_;
+        if (pack_x) {
+          if (v_idx == 0) logi("Inkling-2 prefill: packed W13 input (rows=%d)", T);
+          const uint32_t n4 = uint32_t(size_t(T) * H / 4);
+          e.use(base_pipe("ink2_t_moe_pack_x"));
+          e.buf(0, x_mlp_);
+          e.buf(1, w13_x);
+          e.val(2, n4);
+          e.dispatch((n4 + 255) / 256, 1, 1, 256);
+        }
         const uint32_t w13_q_stride = L.is_mxfp8 ? (2 * I * H) : (2 * I * (H / 2));
         const uint32_t w13_s_stride = L.is_mxfp8 ? (2 * I * (H / 32)) : (2 * I * (H / 16));
         {
           const Ink2tGemmP gp{P, 2 * I, H, H, 2 * I, 0u, w13_q_stride, w13_s_stride, uint32_t(cfg_.top_k)};
-          e.use(base_pipe((L.is_mxfp8 ? "ink2_t_mxfp8_moe_w13" : "ink2_t_nvfp4_moe_w13") + ms));
-          e.buf(0, x_mlp_);
+          e.use(base_pipe((L.is_mxfp8 ? "ink2_t_mxfp8_moe_w13" : "ink2_t_nvfp4_moe_w13") + ms
+                          + (pack_x ? "_pack_x" : "")));
+          e.buf(0, w13_x);
           e.buf(1, L.w13->buf);
           e.buf(2, L.w13_sc->buf);
           e.buf(3, moe_tmp_);
