@@ -82,7 +82,7 @@ struct Ink2Grouped {
 bool ink2_w13_pack_x() {
   static const bool on = [] {
     const char* v = getenv("NI_INK2_W13_PACK_X");
-    return v && !strcmp(v, "1");
+    return !v || strcmp(v, "0") != 0;
   }();
   return on;
 }
