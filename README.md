@@ -177,7 +177,7 @@ kapitsa bench compare           # the same test against the other engines instal
 kapitsa pull 27b                # download a model without starting it
 kapitsa list                    # downloaded models and their size
 kapitsa rm 27b                  # delete a downloaded model
-kapitsa import model.gguf       # use a Qwen or Flint GGUF from LM Studio, Ollama or llama.cpp
+kapitsa import model.gguf       # import a supported Qwen, Flint or unsplit Inkling-2 GGUF
 kapitsa update                  # update now (it also updates itself)
 ```
 

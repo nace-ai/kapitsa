@@ -13,7 +13,7 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 | `kapitsa pull M... [--from DIR]...` | Downloads models without starting them. `--dry-run [--json]` shows what `M` resolves to and downloads nothing. |
 | `kapitsa list [--json]` | The downloaded models: size on disk, complete or not, MTP head and draft model. |
 | `kapitsa rm M...` | Deletes downloaded models and says how much space that gave back. Folders outside the store are left alone. |
-| `kapitsa import FILE.gguf [options]` | Converts a GGUF file into a model folder ([GGUF files](#gguf-files)). |
+| `kapitsa import FILE.gguf [options]` | Imports a supported GGUF into a model folder ([GGUF files](#gguf-files)). |
 | `kapitsa doctor [--model M]... [--json] [--print-profile]` | This Mac and which models fit it. `--print-profile` prints the chip class and the default table, and does not scan models ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `kapitsa bench [--model M] [--prefill-chunk N] [--dflash MODE] [--quick] [--submit]` | Benchmarks Kapitsa on this Mac with the published protocol, and adds the result to the community results when asked ([Benchmarking this Mac](#benchmarking-this-mac)). |
 | `kapitsa update [--check] [--version X.Y.Z] [--rollback] [--auto on\|off]` | Updates Kapitsa to its latest release; it also updates itself ([Updating](#updating)). |
@@ -322,16 +322,21 @@ checkpoints in the Hugging Face layout, and weights larger than this Mac's memor
 
 ### GGUF files
 
-`kapitsa import FILE.gguf` converts a GGUF file once into a model folder in the store and prints its name for
-`kapitsa serve --model`; `kapitsa serve --model FILE.gguf` and the coding-agent commands convert on first use and reuse
-the conversion after that. It reads the GGUF architectures `qwen35` and `qwen35moe` (Qwen3.5, 3.6 and 3.8) as LM Studio,
-Ollama (its blob files) and Hugging Face GGUF repos ship them, and `flint` (Recursive's Flint, where its routed experts
-are IQ blocks: below); a split file is named by any of its parts.
+`kapitsa import FILE.gguf` creates a model folder in the store and prints its name for `kapitsa serve --model`.
+`kapitsa serve --model FILE.gguf` and the coding-agent commands import on first use and reuse that folder.
 
-The MTP head comes from the file, an `mtp-*.gguf` beside it, an Ollama model's draft layer, or `--mtp FILE`. Options:
-`--name NAME` (the folder; default: from the file name), `--threads N` (default: the performance cores, at most 8),
-`--force` (convert again over an existing folder), `--dry-run` (show the formats, size and folder, write nothing),
-`--no-drafter` (see below).
+Inkling-2-Mini (`inkling2_loop`) requires a supported, unsplit GGUF. The import clones or copies the file as
+`model.gguf` without converting its weights, and writes the config and tokenizer metadata alongside it. Inkling-2
+rejects `--mtp` with a GGUF.
+
+The conversion path reads `qwen35` and `qwen35moe` (Qwen3.5, 3.6 and 3.8) as LM Studio, Ollama (its blob files) and
+Hugging Face GGUF repos ship them, and `flint` (Recursive's Flint; see the supported formats below). For a split
+file on this path, pass any of its parts.
+
+On the conversion path, the MTP head can come from the file, an `mtp-*.gguf` beside it, an Ollama model's draft
+layer, or `--mtp FILE`. Options include `--name NAME` (the folder; default: from the file name), `--threads N`
+(conversion threads; default: the performance cores, at most 8), `--force` (replace an existing import),
+`--dry-run` (show the import plan without writing a model folder), and `--no-drafter` (see below).
 
 A model with the shape of a catalog model (Qwen3.8-27B, Qwen3.6-35B-A3B, Qwen3.5-4B or 9B: a fine-tune of one, say) has no
 drafter in its GGUF, and without one `--dflash auto` finds none and decodes plainly (the Swift-1.5 Qwen3.8-27B import, Q4_K_M, on an M5 Pro: 34.7 tok/s without a drafter, 62.0 with
