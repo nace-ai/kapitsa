@@ -213,8 +213,8 @@ std::string hex(const Digest& d, size_t bytes) {
 
 // Raw pixels of the formats PNG and JPEG decode to, converted as PIL's convert("RGB") does: no color conversion,
 // alpha dropped (premultiplied data is unpremultiplied first), 16-bit samples by their high byte, palettes looked
-// up, gray replicated; the straight alpha into `alpha` when the image has one. False for anything else (the caller
-// draws it instead).
+// up, gray replicated; the straight alpha into `alpha` when the image has one (a padding byte is none: RGBX stays
+// opaque). False for anything else (the caller draws it instead).
 static bool raw_rgb(CGImageRef img, std::vector<uint8_t>& out, std::vector<uint8_t>& alpha_out) {
   const size_t w = CGImageGetWidth(img), h = CGImageGetHeight(img);
   const size_t bpc = CGImageGetBitsPerComponent(img), bpp = CGImageGetBitsPerPixel(img), bpr = CGImageGetBytesPerRow(img);
@@ -240,7 +240,10 @@ static bool raw_rgb(CGImageRef img, std::vector<uint8_t>& out, std::vector<uint8
   } else {
     return false;
   }
+  // A fourth component is stored for every format but None: real alpha, or padding (NoneSkipFirst / NoneSkipLast,
+  // RGBX / XRGB: an opaque 32-bit BMP, say), which keeps its place in the pixel but is no transparency.
   const bool has_alpha = alpha != kCGImageAlphaNone && alpha != kCGImageAlphaOnly;
+  const bool real_alpha = has_alpha && alpha != kCGImageAlphaNoneSkipFirst && alpha != kCGImageAlphaNoneSkipLast;
   if (alpha == kCGImageAlphaOnly) return false;
   const size_t spp = ncomp + (has_alpha ? 1 : 0);
   if (bpp != spp * bpc) return false;
@@ -269,7 +272,7 @@ static bool raw_rgb(CGImageRef img, std::vector<uint8_t>& out, std::vector<uint8
     return false;
   }
   out.resize(w * h * 3);
-  alpha_out.assign(has_alpha ? w * h : 0, 255);
+  alpha_out.assign(real_alpha ? w * h : 0, 255);
   const size_t ci = alpha_first ? 1 : 0;  // first color sample
   const size_t ai = alpha_first ? 0 : ncomp;
   for (size_t y = 0; y < h; ++y) {
@@ -295,7 +298,7 @@ static bool raw_rgb(CGImageRef img, std::vector<uint8_t>& out, std::vector<uint8
         const uint32_t a = sample(ai);
         for (uint32_t& v : c) v = a ? std::min<uint32_t>(255, (v * 255 + a / 2) / a) : 0;
       }
-      if (has_alpha) alpha_out[y * w + x] = uint8_t(sample(ai));
+      if (real_alpha) alpha_out[y * w + x] = uint8_t(sample(ai));
       o[3 * x] = uint8_t(c[0]), o[3 * x + 1] = uint8_t(c[1]), o[3 * x + 2] = uint8_t(c[2]);
     }
   }

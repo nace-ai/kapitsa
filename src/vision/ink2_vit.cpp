@@ -66,7 +66,11 @@ bool Ink2ViT::supports(const std::string& dir, Ink2ViTConfig* c) {
       return "a RoPE other than axial";
     if (r.in_ch != 3) return "channels other than RGB";
     if (r.heads <= 0 || r.hidden % r.heads || !vit_attention_has(hd) || hd % 4) return "an unexpected head dimension";
-    if (r.merge < 1 || r.hidden % 64 || r.inter % 64 || r.proj_hidden % 64 || r.out_hidden % 64 || r.side < 2)
+    // Every size the encoder divides by or allocates from is positive (a zero patch size divided describe()'s
+    // token count by zero), and the GEMM widths are whole 64s.
+    if (r.patch < 1) return "a patch size that is not positive";
+    if (r.merge < 1 || r.depth < 1 || r.hidden < 64 || r.inter < 64 || r.proj_hidden < 64 || r.out_hidden < 64 ||
+        r.hidden % 64 || r.inter % 64 || r.proj_hidden % 64 || r.out_hidden % 64 || r.side < 2)
       return "an unexpected shape";
     return "";
   };
