@@ -26,7 +26,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [MacBook Pro (16-inch, 2026) · M5 Pro 20-core GPU · 64 GB](#macbook-pro-16-inch-2026--m5-pro-20-core-gpu--64-gb) | 2 |
 | [Mac Studio (2025) · M3 Ultra 80-core GPU · 512 GB](#mac-studio-2025--m3-ultra-80-core-gpu--512-gb) | 5 |
 | [Mac Studio (2025) · M4 Max 40-core GPU · 48 GB](#mac-studio-2025--m4-max-40-core-gpu--48-gb) | 2 |
-| [Mac Studio (2025) · M4 Max 40-core GPU · 128 GB](#mac-studio-2025--m4-max-40-core-gpu--128-gb) | 2 |
+| [Mac Studio (2025) · M4 Max 40-core GPU · 128 GB](#mac-studio-2025--m4-max-40-core-gpu--128-gb) | 3 |
 | [MacBook Pro (14-inch, 2025) · M5 10-core GPU · 32 GB](#macbook-pro-14-inch-2025--m5-10-core-gpu--32-gb) | 7 |
 | [Mac mini (2024) · M4 10-core GPU · 24 GB](#mac-mini-2024--m4-10-core-gpu--24-gb) | 2 |
 | [Mac mini (2024) · M4 10-core GPU · 32 GB](#mac-mini-2024--m4-10-core-gpu--32-gb) | 1 |
@@ -458,6 +458,12 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
 | [2026-10-26](results/kapitsa-bench-2026-10-26-m4-max-qwen3.6-35b-a3b-8bit-b9ed27.json) | 184.9 tok/s | 202.4 tok/s | 2,214 tok/s | 1,863 tok/s | 0.04 s | 0.07 s | 37.4 GB | pass | KFlash | 0.2.17 | 15.7.7 | – |
+
+### Qwen3.8 Flash-Next 180B-A7B · 2-bit experts
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-11-21](results/kapitsa-bench-2026-11-21-m4-max-qwen3.8-flash-next-64gb-98ecdc.json) | 55.5 tok/s | 59.1 tok/s | 655 tok/s ⚠ | 638 tok/s ⚠ | 0.18 s ⚠ | 0.18 s ⚠ | 37.1 GB + 5.6 mapped | pass ⚠ | MTP | 0.2.39 | 27.2.1 | contention (prefill_4000, prefill_16000, tools) |
 
 ## MacBook Pro (14-inch, 2025) · M5 10-core GPU · 32 GB
 
