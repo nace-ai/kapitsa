@@ -243,8 +243,9 @@ hub::ModelRef pick_variant(const hub::CatalogModel& m, const EngineOptions& opt,
 // "128k", "1m"), or max (kContextMax): the model's own limit. 0, with *why, when it is none of those.
 constexpr int kContextMax = -1;
 int parse_context(const std::string& s, std::string* why);
-// The longest context the model was trained for: max_position_embeddings in its config.json (262,144 tokens for the
-// Qwen3.5 family, Dory and Bolt, 1,048,576 for Lightning and Super-VL); 0 when it does not say.
+// The longest context the model was trained for: max_position_embeddings or model_max_length in its config.json
+// (262,144 tokens for the Qwen3.5 family, Dory and Bolt, 1,048,576 for Lightning, Super-VL and Inkling-2); 0 when it
+// does not say.
 int model_context_limit(const std::string& model_dir);
 // `context` within the model's limit, if it states one
 int context_within_limit(const std::string& model_dir, int context);
@@ -656,11 +657,9 @@ class Engine {
     GrammarState* gst = nullptr;
     const bool* g_on = nullptr;
     // thinking budget: the request's control (its chat()'s, advanced by its handle()); near the cap its rows sample
-    // under the masks it fills (null: no budget). kNear: a member's rows in one cycle (at most 8) and the plain passes
-    // queued before the host reads the tokens of the pass before them.
+    // under the masks it fills (null: no budget; ThinkControl::kBatchNear)
     const ThinkControl* tc = nullptr;
-    static constexpr int kNear = 9;
-    bool masked() const { return (gm && *g_on) || (tc && tc->near(kNear)); }
+    bool masked() const { return (gm && *g_on) || (tc && tc->near(ThinkControl::kBatchNear)); }
   };
   // Structured output: a verify's masks, Seq::mask rows 0 .. rows - 1, from the grammar's state after the anchor
   // tokens[P]: row r's is the state after row r's path (parent[r]: a tree's, null: a chain's, r - 1; rows from `live` on

@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "")
 project(nace_infer LANGUAGES C CXX OBJCXX)
 
-set(KAPITSA_VERSION "0.2.39")
+set(KAPITSA_VERSION "0.2.40")
 if(NOT DEFINED KAPITSA_GIT)  # packaging/release/build.sh passes the commit it exported
   execute_process(COMMAND git -C ${CMAKE_SOURCE_DIR} rev-parse --short HEAD OUTPUT_VARIABLE KAPITSA_GIT
                   OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
@@ -79,13 +79,13 @@ add_custom_command(
   COMMENT "Embedding the Hy4-flash Metal kernels")
 
 # Inkling-2 kernels: compiled only when an Inkling-2 model loads (src/model/inkling2_kernels.h).
-file(GLOB NI_INK2_KERNELS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/kernels/inkling2/*.metal)
+file(GLOB NI_INK2_KERNELS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/kernels/inkling2/*.metal ${CMAKE_SOURCE_DIR}/src/kernels/inkling2/*.h)
 set(NI_INK2_EMBED ${CMAKE_BINARY_DIR}/generated/ink2_kernels_embed.cpp)
 add_custom_command(
   OUTPUT ${NI_INK2_EMBED}
   COMMAND ${CMAKE_COMMAND} -DOUT=${NI_INK2_EMBED} -DSRC_DIR=${CMAKE_SOURCE_DIR}/src/kernels
           -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_inkling2.cmake
-  DEPENDS ${NI_INK2_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h
+  DEPENDS ${NI_INK2_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/src/gguf/iq_grids.h
           ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_inkling2.cmake
   COMMENT "Embedding the Inkling-2 Metal kernels")
 
@@ -145,15 +145,24 @@ target_compile_definitions(ink2_check PRIVATE INK2_GOLDEN_PATH="${CMAKE_SOURCE_D
 
 
 find_package(Threads REQUIRED)
+add_executable(ink2_gguf_test tests/ink2_gguf_test.cpp tests/ink2_mixed_gguf_test.cpp src/gguf/quant.cpp src/gguf/gguf.cpp)
+target_include_directories(ink2_gguf_test PRIVATE src third_party)
+add_test(NAME ink2_gguf_test COMMAND ink2_gguf_test)
 add_executable(gemm_slices_test tests/gemm_slices_test.cpp)  # src/model/gemm_slices.h: row slices of a GEMM
 target_include_directories(gemm_slices_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(kv_grow_test tests/kv_grow_test.cpp)  # src/model/kv_grow.h: how far a KV cache grows in the budget
 target_include_directories(kv_grow_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(device_profile_test tests/device_profile_test.cpp src/engine/device_profile.cpp src/ane/default_share.cpp)
 target_include_directories(device_profile_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_executable(profile_test tests/profile_test.cpp src/engine/profile.cpp src/engine/device_profile.cpp src/ane/default_share.cpp)
+target_include_directories(profile_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_test(NAME profile_test COMMAND profile_test)
+set_tests_properties(profile_test PROPERTIES TIMEOUT 30)
 add_executable(catalog_profile_test tests/catalog_profile_test.cpp src/hub/catalog.cpp src/hub/resolve.cpp
   src/engine/device_profile.cpp src/util/json_file.cpp)
 target_include_directories(catalog_profile_test PRIVATE src third_party)
+add_executable(slot_policy_test tests/slot_policy_test.cpp)
+target_include_directories(slot_policy_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(execution_session_test tools/execution_session_test.cpp src/engine/execution_session.cpp)
 target_include_directories(execution_session_test PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(execution_session_test PRIVATE Threads::Threads)
@@ -164,6 +173,7 @@ add_test(NAME gemm_slices_test COMMAND gemm_slices_test)
 add_test(NAME kv_grow_test COMMAND kv_grow_test)
 add_test(NAME device_profile_test COMMAND device_profile_test)
 add_test(NAME catalog_profile_test COMMAND catalog_profile_test)
+add_test(NAME slot_policy_test COMMAND slot_policy_test)
 add_test(NAME load_error_test COMMAND load_error_test)
 set_tests_properties(load_error_test PROPERTIES TIMEOUT 30)
 add_test(NAME execution_session_test COMMAND execution_session_test)

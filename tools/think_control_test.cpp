@@ -1,10 +1,15 @@
 // The thinking budget's row masks (src/engine/think_control.h) on the CPU: chains and KFlash trees (parents), a drafted
 // </think> or tool call ending the control on its path, the closing text forced across rows and cycles, rows never
 // accepted, a cap of 0, a template that leaves <think> to the model (whitespace before it keeps the control waiting,
-// any other token ends it), the first reasoning block only, and fill() against push() on random chains and trees.
+// any other token ends it), the first reasoning block only, fill() against push() on random chains and trees, and
+// whole replies under each decode loop's gating, the block counted from the emitted tokens. The gating's choices
+// come from the functions in src/engine/think_control.h that src/engine/engine.cpp calls: fill_cycle() with a KFlash
+// tree descriptor (DFlash2 cycles), think_handover_rows() (the loops that hand over), and think_member_masks() with
+// kBatchNear (batched members).
 // The cap counts the forced close: the close starts at cap minus its length (think_close_for), so a cap of 6 with </think>
 // alone forces at reasoning position 5.
 #include "engine/think_control.h"
+#include "kernels/kflash.h"
 
 #include <cstdio>
 #include <random>
@@ -22,7 +27,8 @@ void check(bool ok, const std::string& name, const std::string& detail = "") {
   ok ? ++passes : ++fails;
 }
 
-constexpr int kOpen = 10, kClose = 11, kCall = 12, kA = 40, kB = 41, kT1 = 50, kT2 = 51, kNl = 60, kSp = 61;
+constexpr int kOpen = 10, kClose = 11, kCall = 12, kA = 40, kB = 41, kT1 = 50, kT2 = 51, kNl = 60, kSp = 61,
+              kModel = 62, kTextHdr = 63;
 constexpr size_t W = 3;  // 96 tokens
 
 // whitespace-only tokens: a line break and a space
@@ -30,6 +36,16 @@ const std::vector<uint8_t>* spaces() {
   static const std::vector<uint8_t> s = [] {
     std::vector<uint8_t> v(96, 0);
     v[kNl] = v[kSp] = 1;
+    return v;
+  }();
+  return &s;
+}
+
+// kPre-allowed prefix tokens including a leading role header (e.g., Inkling-2's <|message_model|>)
+const std::vector<uint8_t>* pre_with_model() {
+  static const std::vector<uint8_t> s = [] {
+    std::vector<uint8_t> v = *spaces();
+    v[kModel] = 1;
     return v;
   }();
   return &s;
@@ -44,10 +60,16 @@ int allowed(const std::vector<uint32_t>& m, int r) {
   return n == int(W * 32) ? -1 : n == 1 ? tok : -2;
 }
 
-std::vector<int> rows_of(ThinkControl& tc, const std::vector<int>& tokens, int P, int rows, const int* parent,
-                         int live) {
+std::vector<uint32_t> masks_of(ThinkControl& tc, const std::vector<int>& tokens, int P, int rows, const int* parent,
+                               int live) {
   std::vector<uint32_t> m(size_t(rows) * W, 0x12345678u);
   tc.fill(m.data(), W, tokens.data(), P, rows, parent, live);
+  return m;
+}
+
+std::vector<int> rows_of(ThinkControl& tc, const std::vector<int>& tokens, int P, int rows, const int* parent,
+                         int live) {
+  const auto m = masks_of(tc, tokens, P, rows, parent, live);
   std::vector<int> a;
   for (int r = 0; r < rows; ++r) a.push_back(allowed(m, r));
   return a;
@@ -60,27 +82,28 @@ std::string str(const std::vector<int>& v) {
 }
 
 // fill() over a chain or a tree against push(): each row's mask must be what push() leaves after the tokens on the
-// row's path (a copy of the control, those tokens pushed, one row filled). Rows that cannot be accepted (an ancestor
-// forces a token and the path's next token differs) are not compared.
+// row's path (a copy of the control, those tokens pushed, one row filled). Rows that cannot be accepted (an ancestor's
+// mask forbids the path's next token) are not compared.
 bool equivalent(ThinkControl& tc, const std::vector<int>& tokens, int rows, const int* parent, int live,
                 std::string* why) {
-  const auto got = rows_of(tc, tokens, 0, rows, parent, live);
+  const auto m = masks_of(tc, tokens, 0, rows, parent, live);
   for (int r = 0; r < live; ++r) {
     std::vector<int> path;
     bool ok = true;
     for (int x = r; x > 0;) {
       const int par = parent ? parent[x] : x - 1;
-      if (got[size_t(par)] >= 0 && got[size_t(par)] != tokens[size_t(x)]) ok = false;
-      path.insert(path.begin(), tokens[size_t(x)]);
+      const int tok = tokens[size_t(x)];
+      if (tok < 0 || size_t(tok) >= W * 32 || ((m[size_t(par) * W + size_t(tok) / 32] >> (unsigned(tok) % 32)) & 1u) == 0)
+        ok = false;
+      path.insert(path.begin(), tok);
       x = par;
     }
     if (!ok) continue;
     ThinkControl seq = tc;
     for (int t : path) seq.push(t);
-    const int want = rows_of(seq, {0}, 0, 1, nullptr, 1)[0];
-    if (got[size_t(r)] != want) {
-      *why = "row " + std::to_string(r) + ": fill " + std::to_string(got[size_t(r)]) + ", push " +
-             std::to_string(want) + "; path " + str(path);
+    const auto want = masks_of(seq, {0}, 0, 1, nullptr, 1);
+    if (!std::equal(want.begin(), want.end(), m.begin() + ptrdiff_t(size_t(r) * W))) {
+      *why = "row " + std::to_string(r) + ": fill mismatch vs push; path " + str(path);
       return false;
     }
   }
@@ -189,6 +212,73 @@ int main() {
           "rows: whitespace then a drafted <think>: the cap applies from it");
     check(rows_of(f, {0, kA, kOpen, kA, kA}, 0, 5, nullptr, 5) == std::vector<int>({-1, -1, -1, -1, -1}),
           "rows: a drafted content token then <think>: nothing forced");
+  }
+  {  // Inkling-2 role-header pattern: <|message_model|> keeps kPre waiting until <|content_thinking|> (or disarms on
+     // <|content_text|>)
+    ThinkControl tc;
+    tc.start(4, {kT1, kClose}, kOpen, kClose, kCall, false, pre_with_model());
+    tc.push(kModel);
+    check(tc.armed() && !tc.in_reasoning() && tc.count() == 0,
+          "role header before thinking opener: stays armed in kPre without counting toward cap");
+    tc.push(kOpen);
+    check(tc.armed() && tc.in_reasoning() && tc.count() == 0,
+          "thinking opener after role header: enters kThink cleanly at count 0");
+    tc.push(kA);
+    tc.push(kB);
+    check(tc.count() == 2 && tc.near(1), "role-header block: counts reasoning tokens after opener");
+    const auto a = rows_of(tc, {kB, kT1, kClose}, 0, 3, nullptr, 3);
+    check(a == std::vector<int>({kT1, kClose, -1}),
+          "role-header block: forces closing text and close token within cap", str(a));
+    tc.push(kT1);
+    tc.push(kClose);
+    check(!tc.armed() && tc.count() == 4 && tc.forced(),
+          "role-header block: closed cleanly at exact cap");
+
+    // Short cap drops closing text and leaves role header + opener unmasked even at cap = 1
+    ThinkControl c1;
+    c1.start(1, {kT1, kClose}, kOpen, kClose, -1, false, pre_with_model());
+    check(rows_of(c1, {0, kModel, kOpen, kClose}, 0, 4, nullptr, 4) == std::vector<int>({-1, -1, kClose, -1}),
+          "role header with cap 1: header and opener unmasked, first reasoning row forces close");
+    const int tree_par[] = {-1, 0, 1, 1, 2};
+    check(rows_of(c1, {kA, kModel, kOpen, kTextHdr, kClose}, 0, 5, tree_par, 5) ==
+              std::vector<int>({-1, -1, kClose, -1, -1}),
+          "role header tree: branch through thinking forces close, sibling text-header branch is free");
+
+    // Role-header pattern with cap 0: header and opener wait in kPre with `open` forbidden (all other bits set), and
+    // once a text header is chosen the control disarms immediately so later rows allow everything.
+    ThinkControl c0;
+    c0.start(0, {kClose}, kOpen, kClose, -1, false, pre_with_model());
+    std::vector<uint32_t> m0(3 * W, 0u);
+    const std::vector<int> tk0 = {0, kModel, kTextHdr};
+    const int n0 = c0.fill(m0.data(), W, tk0.data(), 0, 3, nullptr, 3);
+    auto only_open_blocked = [&](int row) {
+      for (size_t w = 0; w < W; ++w) {
+        const uint32_t want = (w == size_t(kOpen) / 32) ? ~(1u << (unsigned(kOpen) % 32)) : 0xffffffffu;
+        if (m0[size_t(row) * W + w] != want) return false;
+      }
+      return true;
+    };
+    check(n0 == 2 && only_open_blocked(0) && only_open_blocked(1) && allowed(m0, 2) == -1,
+          "role header with cap 0: kPre rows forbid kOpen only, text header disarms row 2");
+    ThinkControl c0_text;
+    c0_text.start(0, {kClose}, kOpen, kClose, -1, false, pre_with_model());
+    c0_text.push(kModel);
+    c0_text.push(kTextHdr);
+    check(!c0_text.armed() && c0_text.count() == 0 && !c0_text.forced(),
+          "role header with cap 0: text header disarms without forcing");
+
+    // Non-thinking reply (<|message_model|><|content_text|>...) disarms immediately
+    ThinkControl nt;
+    nt.start(3, {kClose}, kOpen, kClose, -1, false, pre_with_model());
+    nt.push(kModel);
+    nt.push(kTextHdr);
+    check(!nt.armed() && !nt.in_reasoning() && nt.count() == 0 && !nt.forced(),
+          "role header followed by text header: disarmed immediately");
+    nt.push(kModel);
+    nt.push(kOpen);
+    nt.push(kA);
+    check(!nt.armed() && nt.count() == 0 && !nt.forced(),
+          "disarmed after text header: subsequent thinking block is not capped");
   }
   {  // the first reasoning block only: after its </think> a second <think> is neither counted nor capped
     ThinkControl tc;
@@ -306,6 +396,180 @@ int main() {
     }
     check(bad == 0, "random chains and trees: fill() agrees with push() on every acceptable row", first);
     check(near_bad == 0, "random: a control not near(rows) forces none of its rows", near_first);
+  }
+  {  // whole replies under each decode loop's gating: a target that does not
+     // close its reasoning by itself and a drafter that mostly predicts it, so accepted runs are long. Whatever the
+     // loop, the capped block must end within the cap (a cap of 0 inside the reasoning: by its one forced token).
+     // Gating as in src/engine/engine.cpp: 0 a DFlash2 / KFlash cycle masked by fill_cycle() when near(its rows), a
+     // tree's masks from its descriptor; 1 a speculative loop that cannot mask (cycles of up to kf::kMaxRows rows),
+     // handing over to masked plain steps at near(think_handover_rows(true)) after a handled token; 2 the plain loop,
+     // one unhandled step in flight, handing over at near(think_handover_rows(false)); 3 batched plain passes, the next
+     // pass encoded (masked when near(kBatchNear)) before the host handled the pass in flight; 4 a batched cycle of up
+     // to 8 rows masked when near(kBatchNear). Batched members' masks: think_member_masks().
+    std::mt19937 rng(950);
+    const int alphabet[] = {kA, kB, kOpen, kClose, kCall, kT1, kNl, kSp};
+    auto state_of = [](const ThinkControl& tc) {
+      ThinkControl::State s;
+      s.phase = !tc.armed() ? ThinkControl::kEnded : tc.in_reasoning() ? ThinkControl::kThink : ThinkControl::kPre;
+      s.think = tc.count();
+      return s;
+    };
+    auto want = [&](const ThinkControl::State& s) -> int {  // the unmasked target's sample after a path in state s
+      if (s.phase == ThinkControl::kPre) return rng() % 2 ? kOpen : rng() % 2 ? kNl : kSp;
+      if (s.phase == ThinkControl::kThink) return rng() % 32 ? kA : alphabet[rng() % 8];
+      return kB;
+    };
+    // one verify of `rows` rows after the handled tokens (masked: under the masks of `how`): the tokens the cycle
+    // writes, the accepted drafts and the sample after them
+    enum How { kFill, kCycle, kMember };  // fill() (the constrained loop), fill_cycle(), think_member_masks()
+    auto cycle = [&](const ThinkControl& tc, int rows, bool masked, bool tree, How how = kFill) {
+      const size_t n = static_cast<size_t>(rows);
+      std::vector<int> par(n, -1), tk(n, 0), wants(n, 0), smp(n, 0);
+      std::vector<ThinkControl::State> st(n);
+      const int live = tree ? 1 + int(rng() % unsigned(rows)) : rows;
+      st[0] = state_of(tc);
+      wants[0] = want(st[0]);
+      for (int r = 1; r < rows; ++r) {
+        const size_t i = static_cast<size_t>(r);
+        par[i] = tree ? int(rng() % unsigned(r)) : r - 1;
+        const size_t p = static_cast<size_t>(par[i]);
+        tk[i] = rng() % 10 ? wants[p] : alphabet[rng() % 8];
+        st[i] = tc.step(st[p], tk[i]);
+        wants[i] = want(st[i]);
+      }
+      std::vector<uint32_t> m(n * W, 0xffffffffu);
+      if (masked && how == kCycle) {  // (a tree: its KFlash descriptor, the parents and the live rows)
+        std::vector<int> desc(size_t(kf::kWords), 0);
+        desc[size_t(kf::kN)] = live;
+        for (int r = 0; r < rows; ++r) desc[size_t(kf::kPar + r)] = par[static_cast<size_t>(r)];
+        tc.fill_cycle(m.data(), W, tk.data(), 0, rows, tree ? desc.data() : nullptr);
+      } else if (masked && how == kMember) {
+        think_member_masks(false, [] {}, &tc, m.data(), W, tk.data(), 0, rows);
+      } else if (masked) {
+        tc.fill(m.data(), W, tk.data(), 0, rows, tree ? par.data() : nullptr, live);
+      }
+      for (int r = 0; r < rows; ++r) {
+        const int a = allowed(m, r);
+        smp[static_cast<size_t>(r)] = a >= 0 ? a : wants[static_cast<size_t>(r)];
+      }
+      std::vector<int> out;
+      int cur = 0;
+      for (;;) {
+        int kid = -1;
+        for (int r = 1; r < live && kid < 0; ++r) {
+          const size_t i = static_cast<size_t>(r);
+          if (par[i] == cur && tk[i] == smp[static_cast<size_t>(cur)]) kid = r;
+        }
+        if (kid < 0) break;
+        cur = kid;
+        out.push_back(tk[static_cast<size_t>(cur)]);
+      }
+      out.push_back(smp[static_cast<size_t>(cur)]);
+      return out;
+    };
+    int bad = 0, open_end = 0;
+    std::string first;
+    for (int it = 0; it < 50000; ++it) {
+      ThinkControl tc;
+      const int cap = int(rng() % (it % 2 ? 80u : 12u));
+      const bool in_think = cap == 0 || rng() % 2 == 0;  // (the engine starts a cap of 0 only inside the reasoning)
+      std::vector<int> forced(static_cast<size_t>(rng() % 3), int(kT1));
+      forced.push_back(kClose);
+      const int call = rng() % 3 ? -1 : kCall;
+      tc.start(cap, forced, kOpen, kClose, call, in_think, spaces());
+      // the oracle: the first reasoning block counted from the emitted tokens alone, not by the control
+      int block = 0;
+      bool in_block = in_think, over = false;
+      auto emit = [&](int t) {
+        if (!over && in_block) {
+          ++block;
+          over = t == kClose || t == call;
+        } else if (!over) {
+          in_block = t == kOpen;
+          over = !in_block && t != kNl && t != kSp;
+        }
+        tc.push(t);
+      };
+      const int mode = it % 5;
+      auto plain_masked = [&] {  // the constrained loop: every step under its mask
+        for (int k = 0; tc.armed() && k < 400; ++k) emit(cycle(tc, 1, true, false)[0]);
+      };
+      // the prompt's last chunk samples the first token, masked when the prompt is in the reasoning at the cap
+      const int first_tok = cycle(tc, 1, in_think && tc.near(1), false)[0];
+      if (mode == 0) {
+        const int mrows = 4 << (rng() % 4);  // 4, 8, 16, 32
+        const bool tree = rng() % 2 == 0;
+        emit(first_tok);
+        for (int k = 0; tc.armed() && k < 400; ++k) {
+          const int rows = tree ? 1 + int(rng() % unsigned(mrows)) : mrows;
+          for (int t : cycle(tc, rows, tc.near(mrows), tree, kCycle)) emit(t);
+        }
+      } else if (mode == 1) {
+        const int R = 2 << (rng() % 5);  // 2, 4, 8, 16, 32 (kf::kMaxRows)
+        const int H = think_handover_rows(true);
+        bool brk = tc.near(H);  // (tc_direct: the constrained loop from the first token)
+        emit(first_tok);
+        brk = brk || tc.near(H);
+        for (int k = 0; !brk && tc.armed() && k < 400; ++k)
+          for (int t : cycle(tc, 1 + int(rng() % unsigned(R)), false, R == 16)) {
+            emit(t);
+            if (tc.near(H)) {
+              brk = true;
+              break;  // (the rest of the accepted run is dropped, as the loops drop it)
+            }
+          }
+        if (brk) plain_masked();
+      } else if (mode == 2) {
+        const int H = think_handover_rows(false);
+        if (tc.near(H)) {
+          emit(first_tok);
+          plain_masked();
+        } else {
+          int cur = first_tok;
+          for (int k = 0; k < 400; ++k) {
+            // the step in flight was encoded unmasked before `cur` is handled; its sample follows `cur`
+            ThinkControl after = tc;
+            after.push(cur);
+            const int next = cycle(after, 1, false, false)[0];
+            emit(cur);
+            if (tc.near(H)) {
+              emit(next);  // tc_unhandled: the constrained loop handles the sample in flight first
+              plain_masked();
+              break;
+            }
+            if (!tc.armed()) break;
+            cur = next;
+          }
+        }
+      } else if (mode == 3) {
+        emit(first_tok);
+        for (int run = 0; tc.armed() && run < 60; ++run) {
+          // pass 0: encoded, and its mask filled, with nothing in flight
+          int in_flight = cycle(tc, 1, tc.near(ThinkControl::kBatchNear), false, kMember)[0];
+          for (int c = 0; c < 8; ++c) {
+            const bool have_next = c + 1 < 8;
+            // pass c + 1 is encoded before pass c's token is handled
+            const bool mk_next = have_next && tc.near(ThinkControl::kBatchNear);
+            emit(in_flight);
+            if (!have_next) break;
+            in_flight = cycle(tc, 1, mk_next, false, kMember)[0];  // (its mask: the state after pass c's token)
+          }
+        }
+      } else {
+        emit(first_tok);
+        for (int k = 0; tc.armed() && k < 400; ++k)
+          for (int t : cycle(tc, 1 + int(rng() % 8), tc.near(ThinkControl::kBatchNear), false, kMember)) emit(t);
+      }
+      const int most = cap == 0 ? 1 : cap;
+      if (tc.armed()) ++open_end;
+      if ((block > most || tc.count() != block) && !bad++)
+        first = "loop " + std::to_string(mode) + ", cap " + std::to_string(cap) +
+                (in_think ? ", in the reasoning" : ", before <think>") + ": " + std::to_string(block) +
+                " reasoning tokens, count() " + std::to_string(tc.count());
+    }
+    check(bad == 0, "whole replies: the capped block ends within the cap under every loop's gating", first);
+    check(open_end == 0, "whole replies: every control ended (the cap was reached or the reasoning closed)",
+          std::to_string(open_end) + " still armed");
   }
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;

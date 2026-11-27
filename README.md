@@ -12,7 +12,7 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Re
 
 **Requirements:** a Mac with Apple silicon (M1 or newer) and macOS 14 Sonoma or later.
 
-**Limits:** Apple silicon only: no Linux or Windows. Flint, the four text-only Nemotrons, Clover, Ornith, Hy4-flash and the 35B's `16gb` build read text only, not images ([which models read images](docs/usage.md#images)).
+**Limits:** Apple silicon only: no Linux or Windows. Flint, the four text-only Nemotrons, Clover, Ornith, Hy4-flash, Inkling-2-Mini and the 35B's `16gb` build read text only, not images ([which models read images](docs/usage.md#images)).
 
 ```bash
 brew install nace-ai/tap/kapitsa
@@ -211,6 +211,7 @@ The most precise variant of each catalog model that runs on a Mac of each size. 
 | **Recursive Flint 40B-A2.5B** · `flint` | 2-bit† | 2-bit | 2-bit | 4-bit | 4-bit | 4-bit | 4-bit |
 | **Clover-35B-A3B-Preview** · `clover` | — | — | 4-bit | 4-bit | 4-bit | 4-bit | 4-bit |
 | **Hy4-flash** · `hy4` | — | 4-bit + SSD | 4-bit + SSD | 4-bit + SSD | 4-bit + SSD | 4-bit + SSD | 4-bit |
+| **Inkling-2-Mini** · `inkling2` | — | — | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 |
 | **Nemotron Dory1.0 4B** · `dory` | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 |
 | **Nemotron 3 Nano 4B** · `nano-4b` | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 | BF16 |
 | **Nemotron Nano 9B v2** · `nano-9b` | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 | NVFP4 |

@@ -73,6 +73,15 @@ int chat_max_tokens(const ojson& body) {
   return 16384;
 }
 
+void chat_tools(const ojson& body, ChatRequest& r) {
+  if (body.contains("tools") && body["tools"].is_array()) {
+    r.tools = r.deferred_tools = ojson::array();
+    for (ojson t : body["tools"]) (take_deferred(t) ? r.deferred_tools : r.tools).push_back(std::move(t));
+  }
+  if (body.contains("tool_choice") && body["tool_choice"].is_string() && body["tool_choice"] == "none")
+    r.tools = r.deferred_tools = ojson::array();
+}
+
 std::shared_ptr<const Grammar> chat_grammar(const ojson& body, const ojson& tools) {
   auto bad = [](const std::string& m, const std::string& param) {
     throw ApiError(400, "invalid_request_error", m, "", param);

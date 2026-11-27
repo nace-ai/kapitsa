@@ -509,8 +509,9 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     } else if (ctx == kContextMax) {
       ctx = model_context_limit(ref.dir);
       if (ctx <= 0)
-        return fail(serve_model + " does not state the context it was trained for (max_position_embeddings in its "
-                    "config.json), so --context max has no size here: give it in tokens (--context 128k).", 2);
+        return fail(serve_model + " does not state the context it was trained for (max_position_embeddings or "
+                    "model_max_length in its config.json), so --context max has no size here: give it in tokens "
+                    "(--context 128k).", 2);
     } else if (ctx == 0) {
       ctx = default_context(ref.dir, opt, budget);
     } else if (const int limit = model_context_limit(ref.dir); limit > 0 && ctx > limit) {

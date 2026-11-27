@@ -2,13 +2,33 @@
 
 Kapitsa runs one of two profiles.
 
-- **precise** (the default) is today's Kapitsa: every default passed the output check against the model's noise floor
+- **precise** is the default except for Inkling-2. Its defaults passed the output check against the model's noise floor
   on this Mac (CONTRIBUTING.md, "Output check").
-- **fast** is precise plus every speedup that moves the outputs no more than the fastest other engine does for that
-  model on that Mac. `kapitsa serve --profile fast` or `KAPITSA_PROFILE=fast` turns it on.
+- **fast** adds speedups with measured output drift, under the bar below. Inkling-2 selects fast automatically on every Mac.
+  Other models use `kapitsa serve --profile fast` or `KAPITSA_PROFILE=fast`.
+
+`kapitsa serve --profile precise` or `KAPITSA_PROFILE=precise` keeps Inkling-2 on the precise path.
+An explicit profile wins over automatic selection. A member's own `NI_*` override still wins over either profile.
+Unset or empty `KAPITSA_PROFILE` uses the model default. Invalid values warn and select precise.
+The process caches only the explicit override, not a loaded model's default. Loading Inkling-2 does not change another model's profile.
 
 A fast member is on for the whole class of Macs or models it targets, as every default is (AGENTS.md, "Defaults follow
 the concept"); its class is a row in `src/engine/device_profile.cpp`. Outside its class the fast profile is the precise one.
+
+## Inkling-2 automatic selection
+
+Inkling-2 uses the existing fast members on all Macs: Q8 dense packing on Apple Silicon, and tensor prefill where
+matrix units and macOS 26+ are available. Explicit precise disables both unless their own switches are set.
+`kapitsa doctor --print-profile` lists the automatic-selection row as `ink2_profile_fast` for the `inkling2` model class.
+Load logs and `logit_dump` metadata record the effective profile, including automatic selection.
+
+This selection uses a separately accepted quantization-relative check, not the other-engine bar below.
+Against BF16 compute on the same quantized checkpoint, mean conditional KL on 62 certified top-k unions is
+0.0034085092 for precise and 0.0048458636 for fast: a ratio of 1.4216959, below the accepted 1.5 limit.
+Two clipped-reference rows are excluded from that KL check. Across all 64 rows, precise matches reference top-1
+on 63 rows and fast on 64. Full-reference KL is unavailable, and fast can change generated continuations.
+The [evidence and CPU replay](../bench/results/inkling-fast-default-20261124/README.md) document the subset,
+reference limitations, historical prefill observations, and missing current-main GPU measurements.
 
 ## The bar
 
@@ -62,6 +82,8 @@ aggregate bar. [M4 exact bounds and narrow verify margin](../bench/results/2026-
 | Sparse prefill attention on the matrix units, Q and P as hi + lo halves, at the usual 2048-row chunks | Qwen3.8-Flash-Next on Macs with matrix units; measured: Q2_0, M5 Pro (the 4-bit pack and the M5 Max did not run) | `NI_QSA_TATTN` | prefill 8% faster at 32K, 10% at 64K; decode the same per draft cycle (4 interleaved pairs) | 72 rows (16K, 32K, 64K windows): 4 flips, mean KL 8.8e-3, NLL +0.018 nats |
 | Segmented dense ANE prefill (#775) | Dense Qwen 2048-channel inputs through hidden 8192 on non-matrix Macs with a built-in ANE share (M4 today); measured Qwen3.5-9B on M4 Pro | `NI_ANE` | loaded 4135-token HTTP TTFT 61.94% lower at `50fadecc` (MTP off) | 576 correlated comparisons: 6 flips / mean KL 3.699283718701063e-4, against MLX 9 / 3.747187506485964e-4; all eight prefill rows also pass |
 | Hy4-flash's routed experts' prefill GEMMs on the matrix units (`src/kernels/tensor/qmt_moe_a4.metal`), chunks of 256 rows or more | Hy4-flash on Macs with matrix units; measured: the 4-bit pack, M5 Max (other M5-class Macs did not run) | `NI_A4_QTM` | `kapitsa bench`: prefill 4K 596 -> 930 tok/s (+56%), 16K 625 -> 989 (+58%), decode unchanged; `hy4_dump`, 4,096 tokens, interleaved: 664-731 -> 1,134-1,176 tok/s | the 1,024 bar rows: 86 flips, mean KL 0.137 (MLX: 130, 0.259). Precise keeps the simdgroup kernels. |
+| Inkling-2-Mini's BF16 dense, grouped NVFP4/MXFP8 MoE, and FlashAttention prefill kernels on the matrix units (`src/kernels/tensor/ink2_t.metal`, `src/kernels/tensor/qattn_t_ink2.metal`) | Inkling-2-Mini on Macs with matrix units (Apple10, macOS 26+); measured: M6 32 GB, M5 Pro 48 GB | `NI_INK2_TENSOR` (`NI_INK2_ATTN_T=0` disables attention only) | M6 32 GB: 672-tok prefill 72.1 -> 541.5 tok/s (7.51x), 2.6K-tok 68.9 -> 548.6 tok/s (7.96x), 10.4K-tok 280.1 (GEMM only) -> 528.4 tok/s (+88.7%), 8-window `logit_dump` 224.5 -> 27.2 s (8.25x); decode unchanged | Complete fast stack vs precise (M5 Pro 48 GB, chunk 2048): 8 prefill rows 0 flips / mean KL 1.153e-3; 192 step rows 2 flips / mean KL 1.184e-3 (inside the published fallback bar of 4 flips / 2.1e-3 KL). Precise is bitwise identical on all 200 rows. |
+| Inkling-2-Mini load-time Q8_0 packing for BF16 attention projections (`wq_du`, `wk_dv`, `wv_dv`, `wr_du`, `gate_attn`, `wo_ud`) and `unembed` | Inkling-2-Mini on Apple Silicon; measured: Mac mini M6 32 GB and M5 Pro 48 GB (other Macs did not run) | `NI_INK2_Q8` | M6 32 GB: decode 20.25 -> 26.17 tok/s (+29.2%), resident text weights 18.89 -> 17.85 GB (-1.04 GB); M5 Pro 48 GB (interleaved A/B `kapitsa serve`): decode 27.8-29.1 -> 33.4-35.3 tok/s (+20-22%), prefill 78.8-99.0 -> 91.3-110.0 tok/s (+8-16%) | 192 `step` rows (8 windows, M5 Pro): 1 flip (margin 0.18), mean KL 2.0e-3 (inside the 4 / 2.1e-3 fallback bar); 8 `prefill` rows: 0 flips, mean KL 4.6e-3 (`ink2_q8_mm` stages dequantized weights in `half`, trading extra prefill drift for -1.04 GB RAM by not retaining BF16 copies). Against the 4,080-row HF BF16 reference: KL 0.00408 vs 0.00404 on precise, top-1 98.31% vs 98.26%, NLL 0.7761 vs 0.7802. |
 
 
 The ANE default for these widths excludes matrix GPUs and M1 to M3 (M1 and M2 have a share only for the 2560/5120

@@ -519,7 +519,8 @@ class OutputParser {
 
   // GLM-4.5's call (Flint's template renders it): NAME<arg_key>KEY</arg_key><arg_value>VALUE</arg_value>..., a value
   // the text of a string or the JSON of anything else; no arguments, NAME alone. Whitespace may surround the name and a
-  // key and separate the elements; a value is everything up to the first </arg_value>. Anything else (no name, a name
+  // key and separate the elements; a value is everything up to the first </arg_value>. Repeated key openers are
+  // collapsed; a key with no value before the next key or the end is dropped. Other malformed markup (no name, a name
   // with whitespace or a tag in it, a tag in a key, text between the elements, a tag left open) is no call. Hy4's tags
   // carry sfx_.
   bool parse_glm(const std::string& body, ToolCall& tc) const {
@@ -532,12 +533,18 @@ class OutputParser {
     if (name.empty() || name.find_first_of(" \n\r\t<") != npos) return false;
     ojson args = ojson::object();
     while (p != npos) {  // at an <arg_key>
-      const size_t ke = body.find(kc, p + ko.size());
+      size_t ks = p + ko.size();
+      while (body.compare(ks, ko.size(), ko) == 0) ks += ko.size();
+      const size_t ke = body.find(kc, ks);
       if (ke == npos) return false;
-      const std::string key = trim_ws(body.substr(p + ko.size(), ke - p - ko.size()));
+      const std::string key = trim_ws(body.substr(ks, ke - ks));
       if (key.empty() || key.find(ko) != npos || key.find(vo) != npos || key.find(vc) != npos) return false;
       size_t vs = body.find_first_not_of(ws, ke + kc.size());
-      if (vs == npos || body.compare(vs, vo.size(), vo) != 0) return false;
+      if (vs == npos || body.compare(vs, ko.size(), ko) == 0) {
+        p = vs;
+        continue;
+      }
+      if (body.compare(vs, vo.size(), vo) != 0) return false;
       vs += vo.size();
       const size_t ve = body.find(vc, vs);
       if (ve == npos) return false;

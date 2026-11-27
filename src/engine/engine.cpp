@@ -1,6 +1,7 @@
 #include "engine/history_gate.h"
 #include "model/sampler.h"
 #include "engine/engine.h"
+#include "engine/slot_policy.h"
 #include "engine/device_profile.h"
 #include "engine/output_parser.h"
 #include "engine/stop_filter.h"
@@ -506,6 +507,12 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     think_space_[size_t(id)] =
         !b.empty() && !tok_.is_special(id) && b.find_first_not_of(" \t\r\n") == std::string::npos;
   }
+  if (ink2_) {
+    // Inkling-2 replies open with <|message_model|> before <|content_thinking|> (or <|content_text|>);
+    // keep ThinkControl waiting in kPre across that role token so thinking_control / budget_tokens applies.
+    const int model_tok = tok_.find("<|message_model|>");
+    if (model_tok >= 0 && size_t(model_tok) < think_space_.size()) think_space_[size_t(model_tok)] = 1;
+  }
   if (nh_) {
     // Nemotron Nano 9B v2: its tokenizer has no <think> or tool-call tokens (the tags are text; its calls
     // <TOOLCALL>[{"name": ..., "arguments": ...}]</TOOLCALL>), and its template switches thinking with "/think" /
@@ -790,6 +797,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
                                    : std::string();
   logi("engine ready: %s, context %d, %d slots, %s%s%s%s", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots),
        mode.c_str(), looped.c_str(), kf_src.empty() ? "" : (", KFlash (" + kf_src + ")").c_str(), vision_ ? ", images on" : "");
+  if (ink2_ && Inkling2::fast_profile_available())
+    logi("profile precise: --profile fast turns on faster Inkling-2-Mini kernels (outputs can move slightly; docs/profiles.md)");
   disk_start();  // the SSD prefix cache (engine_disk.cpp): its files open in the background
 }
 
@@ -1363,11 +1372,13 @@ int model_context_limit(const std::string& model_dir) {
   if (!j.is_object()) return 0;
   // the language model's config where it has one of its own (the Qwen3.5 family: text_config; Bolt: llm_config)
   static const nlohmann::json none;
-  for (const char* k : {"text_config", "llm_config", ""}) {
-    const nlohmann::json& c = !*k ? j : j.contains(k) ? j[k] : none;
-    if (c.is_object() && c.contains("max_position_embeddings") && c["max_position_embeddings"].is_number_integer()) {
-      const long long n = c["max_position_embeddings"].get<long long>();
-      return n > 0 ? int(std::min<long long>(n, INT_MAX)) : 0;
+  for (const char* field : {"max_position_embeddings", "model_max_length"}) {
+    for (const char* k : {"text_config", "llm_config", ""}) {
+      const nlohmann::json& c = !*k ? j : j.contains(k) ? j[k] : none;
+      if (c.is_object() && c.contains(field) && c[field].is_number_integer()) {
+        const long long n = c[field].get<long long>();
+        return n > 0 ? int(std::min<long long>(n, INT_MAX)) : 0;
+      }
     }
   }
   return 0;
@@ -1643,10 +1654,9 @@ void Engine::verify_masks(const GrammarMatcher& gm, const GrammarState& at, Seq&
 
 void Engine::member_masks(const BatchJob& j, int P, int rows) {
   Seq& s = *j.slot->seq;
-  if (j.gm && *j.g_on) verify_masks(*j.gm, *j.gst, s, P, rows, nullptr, rows);
-  else if (j.tc && j.tc->armed())
-    j.tc->fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), P, rows, nullptr, rows);
-  else memset(s.mask.ptr(), 0xff, size_t(rows) * size_t(s.mask_words) * 4);
+  think_member_masks(
+      j.gm && *j.g_on, [&] { verify_masks(*j.gm, *j.gst, s, P, rows, nullptr, rows); }, j.tc, s.mask.as<uint32_t>(),
+      size_t(s.mask_words), s.tokens(), P, rows);
 }
 
 // ---- batched decode ----
@@ -2379,6 +2389,8 @@ Ink2Effort resolve_inkling2_effort(const ChatRequest& r) {
     if (it == effort_map.end()) throw std::runtime_error("Unknown reasoning_effort: " + raw);
     return {key, it->second};
   };
+  // Explicit thinking_control.hard_cap == 0 outranks an explicit reasoning_effort, while thinking_budget == 0 still ranks below it.
+  if (r.think_cap == 0) return {"none", "0"};
   if (r.template_kwargs.contains("reasoning_effort") && !r.template_kwargs["reasoning_effort"].is_null()) {
     const ojson& re = r.template_kwargs["reasoning_effort"];
     if (re.is_string()) return apply_str(re.get<std::string>());
@@ -2386,7 +2398,7 @@ Ink2Effort resolve_inkling2_effort(const ChatRequest& r) {
     throw std::runtime_error("reasoning_effort must be a string or number");
   }
   if (!r.effort.empty()) return apply_str(r.effort);
-  if (r.thinking_budget == 0 || r.think_cap == 0) return {"none", "0"};
+  if (r.thinking_budget == 0) return {"none", "0"};
   if (r.template_kwargs.contains("enable_thinking") && r.template_kwargs["enable_thinking"].is_boolean() &&
       !r.template_kwargs["enable_thinking"].get<bool>())
     return {"none", "0"};
@@ -2813,7 +2825,8 @@ Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
       if (!s.busy) return &s;
     return nullptr;
   }
-  if (best_lcp < 64) {
+  // Keep a slot when the request extends all of its live rows, even when that exact prefix is shorter than 64 rows.
+  if (should_allocate_new_conversation(size_t(best_lcp), best->tokens.size(), prompt.size())) {
     // Nothing worth reusing: a new conversation. It takes an empty slot, else one holding a one-off
     // (a conversation never continued, like an agent's title or commit-message request), and only
     // then a continued conversation; least recently used first within each. So one-offs never evict
@@ -3011,10 +3024,11 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   std::unique_ptr<GrammarMatcher> gm;
   if (r.grammar) {
     std::string why;
-    if (ink2_)
-      why = "structured output grammar is not supported with Inkling-2 yet";
-    else if (grammar_calls(*r.grammar) && (tc_open_ < 0 || tc_close_ < 0))
+    if (grammar_calls(*r.grammar) && (tc_open_ < 0 || tc_close_ < 0))
       why = "this model has no <tool_call> / </tool_call> tokens: its replies cannot be held to tool calls";
+    else if (grammar_calls(*r.grammar) && ink2_)
+      why = "Inkling-2 writes its tool calls in its own JSON markup, which the tool-call grammar does not hold yet: "
+            "send tool_choice \"auto\" and non-strict tools";
     else if (grammar_calls(*r.grammar) && (flint_ || hy4_))
       why = std::string(flint_ ? "Flint" : "Hy4-flash") +
             " writes its tool calls in GLM's markup, which the tool-call grammar does not hold yet: send "
@@ -3369,25 +3383,42 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   // masks as structured output (whose masks begin at </think>, so the two never mask the same row). Clover's own
   // decoding modes (no drafter) apply their generation_config controls instead.
   ThinkControl tc;
+  bool think_off_enforced = false;  // Inkling-2 with thinking off: the cap of 0 below, not one the request set
   {
-    const int cap = think_cap_of(r.think_cap, r.thinking_budget);
+    int cap = think_cap_of(r.think_cap, r.thinking_budget);
+    // Inkling-2 reads "Thinking effort level: 0" as a hint and reasons anyway in most replies (a few hundred characters
+    // before the answer: every thinking-off run of `kapitsa bench` on Inkling-2-Mini ended in `length` with its 512
+    // tokens spent on reasoning), so thinking off (effort none, enable_thinking false, a numeric effort of 0) is
+    // enforced as a cap of 0 there, as thinking_control.hard_cap 0 does: <|content_thinking|> is forbidden where the
+    // reply starts. A cap the request set stays as it is.
+    if (ink2_ && cap < 0) {
+      const std::string level = inkling2_thinking_level(r);
+      if (level == "none" || level == "0") cap = 0, think_off_enforced = true;
+    }
     // (thinking turned off: no reasoning to cap, and a control waiting for a <think> would keep the request out of
     // batches for its whole reply. A template that opens the reasoning all the same, thinking off or not, still gets
     // it capped: for a cap of 0, the close is then its first token.)
     const ojson& kw = r.template_kwargs;
     const bool think_off =
         kw.contains("enable_thinking") && kw["enable_thinking"].is_boolean() && !kw["enable_thinking"].get<bool>();
-    if (cap >= 0 && think_close_ >= 0 && !clover_own && (!think_off || think)) {
+    // Inkling-2's "Thinking effort level: 0" is a prompt hint rather than a closed think tag, so a requested cap
+    // still arms in kPre there (disarming at <|content_text|> if the model skips thinking, or enforcing the cap if
+    // it still opens <|content_thinking|>).
+    if (cap >= 0 && think_close_ >= 0 && !clover_own && (!think_off || think || ink2_)) {
       std::vector<int> forced = r.think_close_text.empty() ? std::vector<int>() : tok_.encode(r.think_close_text);
       forced.push_back(think_close_);  // (ThinkControl::start shortens it to fit the cap, think_close_for)
-      const bool on_call = r.think_end_on_tool_call >= 0 ? r.think_end_on_tool_call > 0 : !r.tools.empty();
+      const bool on_call =
+          r.think_end_on_tool_call >= 0 ? r.think_end_on_tool_call > 0 : !(r.tools.empty() && r.deferred_tools.empty());
       tc.start(cap, std::move(forced), think_open_, think_close_, on_call ? tc_open_ : -1, think, &think_space_);
       if (!s.mask) {  // (the grammar's width, TokenTable::words(): a later structured-output request reuses the buffer)
         s.mask_words = (std::max(model_->vocab(), tok_.vocab_size()) + 31) / 32;
         s.mask = g.alloc(size_t(kf::kMaxRows) * size_t(s.mask_words) * 4, "grammar_mask");
       }
-      if (think && tc.near(1)) {  // a cap of 0: the prompt's last chunk samples the first token, </think> (or the text)
-        tc.fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), 0, 1, nullptr, 1);
+      // a cap of 0: on any model whose template leaves `<think>` to the model, the prompt's last chunk masks token 0
+      // (`</think>` when already in_think, or forbidding `open` in kPre so the model cannot open reasoning on token 0),
+      // unless a row-0 structured-output grammar already owns `s.mask` (`gm && g_on`)
+      if (!(gm && g_on) && tc.near(1) &&
+          tc.fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), 0, 1, nullptr, 1) > 0) {
         s.mask_rows = 1;
         s.mask_event = nullptr;
       }
@@ -3842,10 +3873,12 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
     const char* v = getenv("NI_THINK_TOOLCALLS");
     return !(v && v[0] == '0' && v[1] == 0);
   }();
+  // The tools a call may name: the deferred ones too, which the model calls from their definitions in the conversation
+  const ojson call_tools = r.call_tools();
   // (Nemotron-H, Dory and Flint: the whitespace before </think> stays in the reasoning, as their templates render
   // returned turns, unless the template writes a newline of its own there: think_ws_; the Nano 9B v2's tags as text;
   // Flint's calls in GLM's markup)
-  OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
+  OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !call_tools.empty(), call_tools,
                       ink2_ ? false : think_tools,
                       ((nh_ != nullptr || dory_ != nullptr || flint_ != nullptr) && think_ws_) || ink2_ != nullptr,
                       text_tags_,
@@ -4003,15 +4036,14 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   };
   // ... and its thinking budget's, the same rows: those past the cap force the close
   auto tc_masks = [&](int P, int rows, bool tree) {
-    const int* t = tree ? dfl_->tree_desc() : nullptr;
-    return tc.fill(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), P, rows, t ? t + kf::kPar : nullptr,
-                   t ? std::clamp(t[kf::kN], 1, rows) : rows);
+    return tc.fill_cycle(s.mask.as<uint32_t>(), size_t(s.mask_words), s.tokens(), P, rows,
+                         tree ? dfl_->tree_desc() : nullptr);
   };
   // Thinking budget: DFlash2 cycles (KFlash trees and chains) and the constrained loop mask their rows near the cap.
   // The other loops (LiLiCorr, Dory, n-gram, MTP, plain steps) hand over to the constrained loop in time: the rest of
   // the reply is plain steps there, slower but exact.
   const bool dfl_loop = !clover_own && !g_direct && !lili_ && dfl_ && !full_steps;
-  if (tc.on() && !g_direct && !dfl_loop) tc_rows = spec_loop ? kf::kMaxRows + 1 : 2;
+  if (tc.on() && !g_direct && !dfl_loop) tc_rows = think_handover_rows(spec_loop);
   // (a cap that close: the constrained loop from the first token, as the hand-over could come too late)
   const bool tc_direct = tc_rows > 0 && tc.near(tc_rows);  // (near: from the first forced position, think_close_for)
   if (tc_direct) tc_rows = 0;
@@ -4875,8 +4907,10 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   if (tc.on()) {
     res.think_forced = tc.forced();
     res.think_tokens = tc.count();
-    logi("chat: thinking budget %d: %d reasoning tokens%s%s", tc.cap(), tc.count(), tc.forced() ? ", close forced" : "",
-         tc_direct || tc_handed ? " (plain steps from the hand-over)" : "");
+    // (thinking off enforced on Inkling-2: logged only when the model opened its reasoning all the same)
+    if (!think_off_enforced || tc.count() > 0)
+      logi("chat: thinking budget %d: %d reasoning tokens%s%s", tc.cap(), tc.count(), tc.forced() ? ", close forced" : "",
+           tc_direct || tc_handed ? " (plain steps from the hand-over)" : "");
     if (tc.unmasked() > 0)  // (the mask is sized from the vocabulary, so this is a bug if it happens)
       logi("warning: thinking budget: %d forced rows could not be masked (token id past the mask width)",
            tc.unmasked());

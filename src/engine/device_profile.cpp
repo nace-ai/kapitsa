@@ -67,6 +67,7 @@ bool model_class_matches(ModelClass c, const ModelFacts& m) {
     case ModelClass::kQwen35Shape: return qwen35_shape(m);
     case ModelClass::kQwen35A3b: return qwen35_a3b(m);
     case ModelClass::kQwen27bDense: return qwen27b_dense(m);
+    case ModelClass::kInkling2: return m.inkling2;
   }
   return false;
 }
@@ -74,6 +75,11 @@ bool model_class_matches(ModelClass c, const ModelFacts& m) {
 namespace {
 
 const DefaultRow kDefaults[] = {
+    // Inkling-2 architecture, all Macs. Automatic fast selection keeps the member eligibility below unchanged:
+    // tensor prefill needs matrix units; Q8 dense packing runs on every Apple Silicon GPU. Evidence and the
+    // quantization-relative quality gate: bench/results/inkling-fast-default-20261124/README.md.
+    {"ink2_profile_fast", Knob::kProfileFast, ModelClass::kInkling2, DefaultScope::kAll, nullptr, "on", 0, 0, false,
+     "Inkling-2; automatic fast profile (explicit precise wins)", true},
     // Mixed 4/5-bit 9B uses the matrix path. The SIMD packed-coefficient path accepts only 4-bit weights.
     // #493 keeps the legacy pack on non-matrix Macs; this is a format policy, not an M3/M4 speed measurement.
     {"qwen9b_q4", Knob::kQwen9bQ4, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 0, 0, false,
@@ -162,6 +168,18 @@ const DefaultRow kDefaults[] = {
     // unchanged; 1,024 rows against precise: 86 top-1 flips, mean KL 0.137, inside its bar (MLX on the same pack).
     {"a4_qtm_fast", Knob::kA4QtmFast, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 56, 58, false,
      "M5 Max; fast profile only", true},
+    // Fast profile only (docs/profiles.md): Inkling-2-Mini prefill GEMMs (BF16 dense + grouped NVFP4/MXFP8 MoE) on
+    // Apple10+ matrix units (src/kernels/tensor/ink2_t.metal, NI_INK2_TENSOR). Mac mini M6, chunk 512, interleaved:
+    // 512 tok 70.4 -> 493.7/495.3 tok/s (+603%), 2048 tok 67.4 -> 382.6 tok/s (+468%); 8-window logit_dump against
+    // precise: step passes --reorder (2 near-tie flips / 192, mean KL 1.03e-3), prefill 0 flips / 8 (mean KL 3.60e-3).
+    {"ink2_tensor_pf", Knob::kInk2TensorPf, ModelClass::kOther, DefaultScope::kMatrix, nullptr, "on", 468, 603, false,
+     "Mac mini M6; fast profile only", true},
+    // Fast profile only (docs/profiles.md): Inkling-2-Mini load-time Q8_0 packing for BF16 dense projections and
+    // unembed (NI_INK2_Q8). All Apple Silicon (uses scalar/SIMD + simdgroup_half8x8 kernels): M6 32 GB decode
+    // 20.25 -> 26.17 tok/s (+29.2%), resident text weights 18.89 -> 17.85 GB (-1.04 GB); M5 Pro 48 GB decode
+    // +20-22%, prefill +8-16%; 192 step rows 1 flip, mean KL 2.0e-3 (within the fast fallback bar).
+    {"ink2_q8_fast", Knob::kInk2Q8Fast, ModelClass::kOther, DefaultScope::kAll, nullptr, "on", 20, 29, false,
+     "Mac mini M6 (+29.2%, -1.04 GB), M5 Pro (+20-22%); fast profile only", true},
 };
 
 bool guard_matches(const char* id, const DeviceProfile& dev) {
@@ -195,6 +213,7 @@ DeviceProfile resolve_device(const DeviceFacts& f) {
 }
 
 ModelClass resolve_model(const ModelFacts& m) {
+  if (m.inkling2) return ModelClass::kInkling2;
   if (qwen35_a3b(m)) return ModelClass::kQwen35A3b;
   if (qwen35_shape(m)) return ModelClass::kQwen35Shape;
   if (qwen27b_dense(m)) return ModelClass::kQwen27bDense;
@@ -216,6 +235,7 @@ const char* model_class_name(ModelClass m) {
     case ModelClass::kQwen35A3b: return "qwen35-a3b";
     case ModelClass::kQwen35Shape: return "qwen35-shape";
     case ModelClass::kQwen27bDense: return "qwen-27b-dense";
+    case ModelClass::kInkling2: return "inkling2";
     case ModelClass::kOther: return "other";
   }
   return "other";
@@ -230,12 +250,17 @@ bool default_on(Knob k, const DeviceProfile& d, const ModelFacts& m) {
   return false;
 }
 
+Profile default_profile(const DeviceProfile& d, const ModelFacts& m) {
+  return default_on(Knob::kProfileFast, d, m) ? Profile::kFast : Profile::kPrecise;
+}
+
 int default_count() { return int(sizeof(kDefaults) / sizeof(kDefaults[0])); }
 
 const DefaultRow& default_at(int i) { return kDefaults[i]; }
 
 bool default_matches(const DefaultRow& row, const DeviceProfile& dev) {
   switch (row.scope) {
+    case DefaultScope::kAll: return true;
     case DefaultScope::kAneBuiltinNonMatrix:
       return dev.ane && ane_builtin_share(dev.name) && dev.chip != ChipClass::kMatrix && dev.chip != ChipClass::kWide;
     case DefaultScope::kLegacy: return dev.chip == ChipClass::kLegacy;
@@ -253,6 +278,7 @@ namespace {
 const char* scope_name(const DefaultRow& row) {
   if (row.scope == DefaultScope::kName) return row.chip_name ? row.chip_name : "name";
   switch (row.scope) {
+    case DefaultScope::kAll: return "all";
     case DefaultScope::kAneBuiltinNonMatrix: return "ane-builtin-nonmatrix";
     case DefaultScope::kLegacy: return "legacy";
     case DefaultScope::kSimd: return "simd";

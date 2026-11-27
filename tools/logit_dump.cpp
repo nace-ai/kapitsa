@@ -611,6 +611,8 @@ int main(int argc, char** argv) {
                            : "8 rows";
     if (o.name == "verify" && q && tree && q->config().moe) meta["moe_exact"] = moe_exact;
     if (o.name == "batch") meta["batch"] = {{"members", members}, {"rows", member_rows}};
+    const Profile selected = ink2 ? ink2->effective_profile() : profile();
+    meta["profile"] = selected == Profile::kFast ? "fast" : "precise";
     meta["prefill_chunk"] = m.prefill_chunk();
     meta["ane"] = {{"chunks", ane.chunks}, {"evals", ane.evals}, {"reruns", ane.reruns}};
     if (dory) meta["dory"] = {{"loops", dory->default_loops()}, {"kv", loop_kv_name(dory->kv_mode())}};

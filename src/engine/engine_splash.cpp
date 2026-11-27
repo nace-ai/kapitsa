@@ -295,7 +295,8 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     splash::ThinkingBudget tb;
     tb.tokens = uint32_t(c.at);
     for (int t : c.tokens) tb.end.push_back(uint32_t(t));
-    const bool on_call = r.think_end_on_tool_call >= 0 ? r.think_end_on_tool_call > 0 : !r.tools.empty();
+    const bool on_call =
+        r.think_end_on_tool_call >= 0 ? r.think_end_on_tool_call > 0 : !(r.tools.empty() && r.deferred_tools.empty());
     tb.also_ends = uint32_t(on_call && tc_open_ >= 0 ? tc_open_ : think_close_);
     q.thinking = tb;
   }
@@ -327,8 +328,9 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     return res;
   }
 
-  OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools, true, false,
-                      text_tags_, CallFormat::QwenXml);
+  const ojson call_tools = r.call_tools();  // (the deferred tools too)
+  OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !call_tools.empty(), call_tools,
+                      true, false, text_tags_, CallFormat::QwenXml);
   StopFilter stop_filter(r.stop);
   std::string finish;
   int gen = 0;

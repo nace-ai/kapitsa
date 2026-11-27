@@ -31,7 +31,11 @@ struct LiveDecode {
 
 struct ChatRequest {
   ojson messages = ojson::array();
-  ojson tools = ojson::array();
+  ojson tools = ojson::array();           // the tools the prompt declares
+  // Tools marked "defer_loading": true (Anthropic's and OpenAI's tool search): left out of the prompt, which a client
+  // keeps the same as it loads them by putting their definitions in the conversation, so the cached prefix stays.
+  // A call to one is parsed and typed by its schema, and the grammar knows it, as for a declared tool (call_tools).
+  ojson deferred_tools = ojson::array();
   ojson template_kwargs = ojson::object(); // e.g. enable_thinking, reasoning_effort
   int max_tokens = 8192;
   float temperature = 0.6f;
@@ -70,6 +74,14 @@ struct ChatRequest {
   // Structured output (src/engine/grammar.h: a JSON schema, any JSON object, tool calls the request forces or strict
   // tools): what the reply must follow after its reasoning, or null. The engine samples each token under its mask.
   std::shared_ptr<const Grammar> grammar;
+
+  // Every tool a call may name: the declared ones, then the deferred ones
+  ojson call_tools() const {
+    if (deferred_tools.empty()) return tools;
+    ojson all = tools;
+    for (const auto& t : deferred_tools) all.push_back(t);
+    return all;
+  }
 };
 
 struct ToolCall {

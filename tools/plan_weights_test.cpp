@@ -5,6 +5,11 @@
 // weights are written). Needs no GPU and loads no model.
 //   plan_weights_test [--keep]
 #include "hub/hub.h"
+#include <nlohmann/json.hpp>
+
+namespace ni::hub::detail {
+nlohmann::ordered_json catalog_gguf_metadata(const nlohmann::ordered_json& imported, const GgufFile& g);
+}
 
 #include <fcntl.h>
 #include <mach-o/dyld.h>
@@ -26,13 +31,22 @@ namespace hub = ni::hub;
 extern char** environ;
 
 static int failures = 0;
+static int passes = 0;
+static int skips = 0;
 static bool keep = false;
 
 static void check(bool c, const std::string& what) {
   if (!c) {
     ++failures;
     std::printf("FAIL: %s\n", what.c_str());
+  } else {
+    ++passes;
   }
+}
+
+static int result() {
+  std::printf("plan weights: %d checks passed, %d failed, %d branches skipped\n", passes, failures, skips);
+  return failures ? 1 : 0;
 }
 
 static void write_file(const std::string& path, const std::string& text) {
@@ -101,8 +115,129 @@ static bool says_planned(const std::string& report, const std::string& name) {
          report.find("/" + name + ": not downloaded: planned from its headers") != std::string::npos;
 }
 
+static void check_native_plan() {
+  const int before = failures;
+  std::string dir = (fs::temp_directory_path() / "kapitsa-native-plan-XXXXXX").string();
+  if (!mkdtemp(dir.data())) {
+    check(false, "create a native plan fixture");
+    return;
+  }
+  const fs::path root = dir;
+  auto fixture = [&](const std::string& name) {
+    const std::string d = dir + "/" + name;
+    fs::create_directories(d);
+    write_file(d + "/config.json", "{}");
+    return d;
+  };
+  const std::string split = fixture("language-model");
+  write_file(split + "/model.safetensors.index.json",
+             "{\"weight_map\":{\"language_model.model.embed_tokens.weight\":"
+             "\"model-language-model-00001-of-00002.safetensors\",\"language_model.lm_head.weight\":"
+             "\"model-language-model-00002-of-00002.safetensors\",\"vision_tower.weight\":"
+             "\"model-vision-model-00001-of-00002.safetensors\"}}");
+  const std::string first = split + "/model-language-model-00001-of-00002.safetensors";
+  const std::string second = split + "/model-language-model-00002-of-00002.safetensors";
+  sparse_file(first, 256 << 10);
+  sparse_file(second, 256 << 10);
+  check(!hub::plan_has_model(split), "language-model shard headers alone have no model");
+  sparse_file(split + "/model-vision-model-00001-of-00002.safetensors", 3 << 20);
+  check(!hub::plan_has_model(split), "vision weights beside language-model headers have no language model");
+  sparse_file(second, 3 << 20);
+  check(hub::plan_has_model(split), "a later language-model shard holding weights has the model");
+  sparse_file(split + "/mtp.safetensors", 256 << 10);
+  check(hub::plan_has_model(split), "a language-model shard stays downloaded beside an MTP header");
+  const std::string mtp = fixture("mtp-only");
+  sparse_file(mtp + "/mtp.safetensors", 3 << 20);
+  check(!hub::plan_has_model(mtp), "an MTP head alone has no model");
+  for (const std::string name : {"model.safetensors", "weights.safetensors", "model-00001-of-00002.safetensors",
+                                 "00001-of-00002.safetensors"}) {
+    const std::string d = fixture(name);
+    sparse_file(d + "/" + name, 256 << 10);
+    check(!hub::plan_has_model(d), name + " header alone has no model");
+    sparse_file(d + "/" + name, 3 << 20);
+    check(hub::plan_has_model(d), name + " holding weights has the model");
+  }
+  if (!keep) fs::remove_all(root);
+  std::printf("Native plan presence: %d failure(s)\n", failures - before);
+}
+
+static void check_catalog_gguf_metadata() {
+  using J = nlohmann::ordered_json;
+  const int before = failures;
+  const hub::GgufFile catalog{"pinned.gguf", "catalog-digest", 4096};
+  const J sources = J::array({{{"path", "original.gguf"}, {"size", 4096}}});
+  const J conversions{{"Q4_K", 2}};
+  for (const bool retained : {false, true}) {
+    J imported{{"gguf", {{"files", sources}, {"conversions", conversions}, {"importer_field", "preserve"}}}};
+    if (retained) imported["gguf"]["retained"] = true;
+    const J metadata = hub::detail::catalog_gguf_metadata(imported, catalog);
+    check(metadata.value("retained", false) == retained, "catalog keeps the importer's retained status");
+    check(metadata.contains("files") && metadata["files"] == sources, "catalog keeps the importer's GGUF sources");
+    check(metadata.contains("importer_field") && metadata["importer_field"] == "preserve",
+          "catalog keeps other importer GGUF metadata");
+    check(metadata.at("conversions") == conversions, "catalog keeps converted GGUF conversion counts");
+    check(metadata.at("path") == catalog.path && metadata.at("sha256") == catalog.sha256 &&
+              metadata.at("size") == catalog.size,
+          "catalog adds its pinned GGUF provenance");
+  }
+  std::printf("Catalog GGUF metadata: %d failure(s)\n", failures - before);
+}
+
+static void check_gguf_plan() {
+  std::string dir = (fs::temp_directory_path() / "kapitsa-gguf-plan-XXXXXX").string();
+  if (!mkdtemp(dir.data())) {
+    check(false, "create a GGUF plan fixture");
+    return;
+  }
+  const fs::path root = dir;
+  fs::create_directories(root / ".kapitsa");
+  const std::string config = "{\"model_type\":\"inkling2_loop\",\"gguf_file\":\"model.gguf\"}";
+  write_file(dir + "/config.json", config);
+  sparse_file(dir + "/model.gguf", 64ull << 20);
+  check(!hub::plan_has_model(dir), "a full-sized sparse GGUF without a manifest is only a plan");
+
+  const std::string files = "\"files\":[{\"path\":\"config.json\",\"size\":" + std::to_string(config.size());
+  const std::string retained = "{\"gguf\":{\"retained\":true},";
+  const std::string manifest = dir + "/.kapitsa/manifest.json";
+  write_file(manifest, retained + files + "}]}");
+  check(!hub::plan_has_model(dir), "a metadata-only manifest does not certify retained GGUF weights");
+  const std::string listed = files + "},{\"path\":\"model.gguf\",\"size\":67108864}]}";
+  write_file(manifest, "{" + listed);
+  check(!hub::plan_has_model(dir), "a listed sparse GGUF without the retained marker is only a plan");
+  write_file(manifest, "{\"gguf\":{\"retained\":false}," + listed);
+  check(!hub::plan_has_model(dir), "a false retained marker does not certify GGUF weights");
+  sparse_file(dir + "/model.gguf", 0);
+  write_file(manifest, retained + files + "},{\"path\":\"model.gguf\",\"size\":0}]}");
+  check(!hub::plan_has_model(dir), "a retained marker cannot certify an empty GGUF");
+  sparse_file(dir + "/model.gguf", 64ull << 20);
+  const std::string complete = retained + listed;
+  write_file(manifest, complete);
+  check(hub::plan_has_model(dir), "a completed retained-GGUF import has its model");
+  auto catalog_manifest = nlohmann::ordered_json::parse(complete);
+  catalog_manifest["gguf"] = hub::detail::catalog_gguf_metadata(catalog_manifest, {"pinned.gguf", "catalog-digest", 67108864});
+  write_file(manifest, catalog_manifest.dump());
+  check(hub::plan_has_model(dir), "catalog provenance preserves a completed retained-GGUF plan's model");
+  write_file(dir + "/config.json", "{\"model_type\":\"inkling2_loop\",\"gguf_file\":\"other.gguf\"}");
+  check(!hub::plan_has_model(dir), "the configured GGUF must be listed in the completed manifest");
+  write_file(dir + "/config.json", config);
+  sparse_file(dir + "/model.gguf", (64ull << 20) - 1);
+  check(!hub::plan_has_model(dir), "a shortened retained GGUF does not complete its manifest");
+  fs::remove(root / "model.gguf");
+  check(!hub::plan_has_model(dir), "a missing retained GGUF does not complete its manifest");
+  sparse_file(dir + "/model.gguf", 64ull << 20);
+  fs::remove(root / "config.json");
+  check(!hub::plan_has_model(dir), "a retained GGUF without its listed metadata is incomplete");
+  write_file(manifest, "{");
+  check(!hub::plan_has_model(dir), "a malformed retained-GGUF manifest is incomplete");
+  if (!keep) fs::remove_all(root);
+  std::printf("GGUF plan presence: %d failure(s)\n", failures);
+}
+
 int main(int argc, char** argv) {
   keep = argc > 1 && std::string(argv[1]) == "--keep";
+  check_gguf_plan();
+  check_native_plan();
+  check_catalog_gguf_metadata();
   // the CLI beside this test's own binary (build/plan_weights_test -> build/kapitsa)
   char exe[4096] = {0};
   uint32_t size = sizeof exe;
@@ -126,8 +261,9 @@ int main(int argc, char** argv) {
     }
   }
   if (config.empty() || index.empty() || index_shards(index).empty()) {
+    ++skips;
     std::printf("SKIP: no downloaded catalog model to make a plan of (its config.json and index are the fixture)\n");
-    return 0;
+    return result();
   }
   const std::string root = (fs::temp_directory_path() / ("k1187-plans-" + std::to_string(::getpid()))).string();
   fs::remove_all(root);
@@ -220,6 +356,7 @@ int main(int argc, char** argv) {
 
   // the doctor line, end to end
   if (!fs::exists(kapitsa_bin)) {
+    ++skips;
     std::printf("SKIP: the doctor line (%s is not built)\n", kapitsa_bin.c_str());
   } else {
     const std::string log = home + "/doctor.txt";
@@ -248,5 +385,5 @@ int main(int argc, char** argv) {
   if (keep) std::printf("kept %s\n", root.c_str());
   else fs::remove_all(root);
   if (failures == 0) std::printf("PASS: a plan has its model only when its weights are in it\n");
-  return failures == 0 ? 0 : 1;
+  return result();
 }
