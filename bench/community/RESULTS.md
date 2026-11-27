@@ -55,7 +55,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [MacBook Pro (14-inch, 2021) · M1 Pro 14-core GPU · 16 GB](#macbook-pro-14-inch-2021--m1-pro-14-core-gpu--16-gb) | 7 |
 | [MacBook Pro (14-inch, 2021) · M1 Pro 14-core GPU · 32 GB](#macbook-pro-14-inch-2021--m1-pro-14-core-gpu--32-gb) | 2 |
 | [MacBook Pro (16-inch, 2021) · M1 Max 32-core GPU · 32 GB](#macbook-pro-16-inch-2021--m1-max-32-core-gpu--32-gb) | 8 |
-| [MacBook Pro (16-inch, 2021) · M1 Max 32-core GPU · 64 GB](#macbook-pro-16-inch-2021--m1-max-32-core-gpu--64-gb) | 7 |
+| [MacBook Pro (16-inch, 2021) · M1 Max 32-core GPU · 64 GB](#macbook-pro-16-inch-2021--m1-max-32-core-gpu--64-gb) | 8 |
 | [Mac mini (M1, 2020) · M1 8-core GPU · 16 GB](#mac-mini-m1-2020--m1-8-core-gpu--16-gb) | 1 |
 
 ## Mac Studio (2026) · M5 Max 32-core GPU · 36 GB
@@ -970,6 +970,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-11-26](results/kapitsa-bench-2026-11-26-m1-max-qwen3.8-27b-6bit-d5a6a4.json) | 36.7 tok/s | 39.2 tok/s | 239 tok/s | 223 tok/s | 0.32 s | 0.35 s | 27.2 GB | pass | KFlash | 0.2.40 | 26.6.2 | – |
 | [2026-10-25](results/kapitsa-bench-2026-10-25-m1-max-qwen3.8-27b-6bit-a58dbf.json) | 36.0 tok/s ⚠ | 38.4 tok/s ⚠ | 104 tok/s | 104 tok/s ⚠ | 0.36 s | 0.36 s ⚠ | 26.3 GB | pass | KFlash | 0.2.16 | 27.0.1 | contention (decode, decode_greedy, prefill_16000) |
 | [2026-10-19](results/kapitsa-bench-2026-10-19-m1-max-qwen3.8-27b-6bit-8cb92e.json) | 38.5 tok/s | 35.3 tok/s | 93 tok/s | 87 tok/s ⚠ | 0.34 s | 0.37 s ⚠ | 26.0 GB | pass | DFlash2 | 0.1.37 | 26.6.2 | contention (prefill_16000) |
 
