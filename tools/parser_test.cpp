@@ -175,6 +175,92 @@ int main(int argc, char** argv) {
   const std::string read_b = call("read_file", param("path", "b.txt"));
   const std::string read_3 = call("read_file", param("path", "notes/step3.txt"));
 
+  // A nameless Qwen call stays raw text; a valid call after it must still be returned, at every token boundary.
+  {
+    const auto bytes = byte_ids(tok);
+    for (const std::string& name : {std::string(""), std::string(" "), std::string("\t"),
+                                    std::string("\r\n"), std::string(" \t\r\n ")}) {
+      const std::string bad = call(name, param("path", "a.txt"));
+      for (bool following : {false, true}) for (bool think_tools : {false, true}) for (size_t cut : {0u, 1u, 5u}) {
+        const std::string text = bad + (following ? read_a : "");
+        const auto ids = cut ? cut_ids(tok, text, cut, bytes) : tok.encode(text);
+        Out out = run_ids(tok, ids, think_tools, false, true, kTools, false, CallFormat::QwenXml);
+        check(out.reasoning.empty() && out.content == bad &&
+                  calls_str(out.calls) == (following ? R"([read_file{"path":"a.txt"}])" : "[]"),
+              "nameless Qwen call preserved: " + ojson(name).dump() + " cut=" + std::to_string(cut) +
+                  " following=" + std::to_string(following) + " think_tools=" + std::to_string(think_tools), show(out));
+      }
+      Out off = run(tok, "Plan:\n" + bad, false), on = run(tok, "Plan:\n" + bad, true);
+      check(on.calls.empty() && same_result(off, on), "nameless Qwen call stays reasoning: " + ojson(name).dump(), show(on));
+    }
+  }
+
+  // A call without its <tool_call> (the 24 GB Macs' 35b:16gb never writes it, #1277) is the reply's call when it is the
+  // whole reply: it starts with <function=, ends with </function></tool_call>, names a tool of the request, and only
+  // whitespace follows. Everything else stays the text the model wrote. Same result at every token boundary.
+  {
+    const auto bytes = byte_ids(tok);
+    const std::string body = "<function=run_shell>\n<parameter=command>\nls -la\n</parameter>\n</function>\n";
+    const std::string valid = body + "</tool_call>";
+    const std::string want_call = R"([run_shell{"command":"ls -la"}])";
+    auto rtrim = [](std::string t) {
+      t.resize(t.find_last_not_of(" \n\r\t") + 1);
+      return t;
+    };
+    struct Lenient {
+      const char* name;
+      std::string text;
+      bool in_think;
+      bool ended;
+      bool call;  // returned as a call (else the text as written)
+    };
+    const std::vector<Lenient> lenient = {
+        {"thinking off", valid, false, true, true},
+        {"after </think>", "Plan.\n</think>\n\n" + valid, true, true, true},
+        {"whitespace around", "\n \n" + valid + "\n\n", false, true, true},
+        {"call is the first text, prose as the next reply", "Use <function=run_shell> to run it.", false, true, false},
+        {"prose before the call", "I will list the files.\n\n" + valid, false, true, false},
+        {"no </tool_call>", body, false, true, false},
+        {"no </function>", "<function=run_shell>\n<parameter=command>\nls\n</tool_call>", false, true, false},
+        {"undeclared name", "<function=nope>\n<parameter=command>\nls\n</parameter>\n</function>\n</tool_call>", false, true, false},
+        {"nameless", "<function=>\n<parameter=command>\nls\n</parameter>\n</function>\n</tool_call>", false, true, false},
+        {"text after the call", valid + "\nDone.", false, true, false},
+        {"two calls", valid + "\n" + valid, false, true, false},
+        {"two calls, one </tool_call>", "<function=run_shell>\n<parameter=command>\nls\n</parameter>\n</function>\n" + body, false, true, false},
+        {"two calls of two tools, one </tool_call>", "<function=read_file>\n<parameter=path>\na.txt\n</parameter>\n</function>\n" + body, false, true, false},
+        {"cut by max_tokens", valid, false, false, false},
+        {"a prefix of <function= and more", "<fund raising>", false, true, false},
+        {"<function= and the answer ends", "<function=", false, true, false},
+        {"</tool_call> alone", "</tool_call>", false, true, false},
+        {"the opener written", "<tool_call>\n" + body + "</tool_call>", false, true, true},
+    };
+    for (auto& c : lenient) for (bool think_tools : {false, true}) for (size_t cut : {0u, 1u, 2u, 3u, 5u, 7u}) {
+      const auto ids = cut ? cut_ids(tok, c.text, cut, bytes) : tok.encode(c.text);
+      Out out = run_ids(tok, ids, think_tools, c.in_think, c.ended, kTools, false, CallFormat::QwenXml);
+      const bool ok = c.call ? out.content.empty() && calls_str(out.calls) == want_call
+                             : out.calls.empty() && out.content == rtrim(c.text.substr(c.text.find("</think>") == std::string::npos
+                                                                                      ? 0 : c.text.find("</think>") + 8));
+      check(ok && (c.in_think || out.reasoning.empty()),
+            std::string("call without its opener: ") + c.name + " cut=" + std::to_string(cut) +
+                " think_tools=" + std::to_string(think_tools), show(out));
+    }
+    // streaming: the call's text never reaches the content, and a reply that is text streams its text whole
+    Out sp = run(tok, valid, true, false);
+    bool leaked = false;
+    for (auto& d : sp.deltas)
+      if (d.content.find("<function=") != std::string::npos || d.content.find("</tool_call>") != std::string::npos)
+        leaked = true;
+    size_t shown = 0;
+    for (auto& d : sp.deltas) shown += !d.content.empty() || !d.reasoning.empty() || !d.tool_calls.empty();
+    check(!leaked && shown == 1, "call without its opener: one delta, no markup in the content", show(sp));
+    // no tools in the request: the reply is text
+    Out none = run(tok, valid, true, false, true, ojson::array());
+    check(none.calls.empty() && none.content == valid, "call without its opener: no tools in the request, text", show(none));
+    // Glm markup is not looked at
+    Out glm = run_ids(tok, tok.encode(valid), false, false, true, kTools, false, CallFormat::Glm);
+    check(glm.calls.empty() && glm.content == valid, "call without its opener: GLM format unchanged", show(glm));
+  }
+
   // Turns without a call inside the reasoning: the stream is identical with and without the switch.
   struct Same {
     const char* name;
@@ -340,9 +426,35 @@ int main(int argc, char** argv) {
        glm_call("read_file", glm_arg("path", "123") + glm_arg("start_line", "five")) +
            glm_call("search", glm_arg("note", "[1, 2]") + glm_arg("other", "7")),
        false, "", "", R"([read_file{"path":"123","start_line":"five"}, search{"note":[1,2],"other":"7"}])"},
+      {"issue 1400 form A, doubled first key opener",
+       "<tool_call>write<arg_key><arg_key>content</arg_key><arg_value># Handoff ...\nnext line\n</arg_value>"
+       "<arg_key>path</arg_key><arg_value>.handoff.md</arg_value></tool_call>",
+       false, "", "", R"([write{"content":"# Handoff ...\nnext line\n","path":".handoff.md"}])"},
+      {"issue 1400 form B, a valueless key then a repeated key",
+       "<tool_call>edit<arg_key>path</arg_key><arg_value>{worktree}/scripts/test_x.py</arg_value>"
+       "<arg_key>oldString</arg_key><arg_value>...</arg_value><arg_key>newString</arg_key><arg_value>...</arg_value>"
+       "<arg_key>oldString_is_replace</arg_key><arg_key>path</arg_key>"
+       "<arg_value>{worktree}/scripts/test_x.py</arg_value></tool_call>",
+       false, "", "",
+       R"([edit{"path":"{worktree}/scripts/test_x.py","oldString":"...","newString":"..."}])"},
       {"two calls", glm_a + glm_call("read_file", glm_arg("path", "b.txt") + glm_arg("start_line", "5")), false, "", "",
        R"([read_file{"path":"a.txt"}, read_file{"path":"b.txt","start_line":5}])"},
       {"a call without arguments", glm_call("get_time"), false, "", "", "[get_time{}]"},
+      {"a key without a value is dropped", "<tool_call>read_file<arg_key>path</arg_key></tool_call>",
+       false, "", "", "[read_file{}]"},
+      {"a trailing valueless key preserves earlier arguments",
+       glm_call("read_file", glm_arg("path", "a.txt") + "<arg_key>start_line</arg_key> \n"),
+       false, "", "", R"([read_file{"path":"a.txt"}])"},
+      {"several valueless keys before a tripled opener",
+       glm_call("read_file", "<arg_key>unused</arg_key>\n<arg_key>start_line</arg_key> "
+                            "<arg_key><arg_key>" + glm_arg("path", "a.txt")),
+       false, "", "", R"([read_file{"path":"a.txt"}])"},
+      {"a valueless duplicate does not erase a value",
+       glm_call("read_file", glm_arg("path", "a.txt") + "<arg_key>path</arg_key>"),
+       false, "", "", R"([read_file{"path":"a.txt"}])"},
+      {"a valued duplicate keeps the last value",
+       glm_call("read_file", glm_arg("path", "a.txt") + glm_arg("path", "b.txt")),
+       false, "", "", R"([read_file{"path":"b.txt"}])"},
       {"GLM-4.5's newlines between the elements and the calls",
        "<tool_call>read_file\n<arg_key>path</arg_key>\n<arg_value>a.txt</arg_value>\n<arg_key>start_line</arg_key>\n"
        "<arg_value>5</arg_value>\n</tool_call>\n<tool_call>get_time\n</tool_call>\n",
@@ -370,7 +482,7 @@ int main(int argc, char** argv) {
            {"no name", glm_call("", glm_arg("path", "a.txt"))},
            {"an empty call", glm_call("")},
            {"a value left open", "<tool_call>read_file<arg_key>path</arg_key><arg_value>a.txt</tool_call>"},
-           {"a key without a value", "<tool_call>read_file<arg_key>path</arg_key></tool_call>"},
+           {"a key left open", "<tool_call>read_file<arg_key>path</tool_call>"},
            {"text between a key and its value",
             glm_call("read_file", "<arg_key>path</arg_key> is <arg_value>a</arg_value>")},
            {"text after a value", glm_call("read_file", glm_arg("path", "a.txt") + " and more")},

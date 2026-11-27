@@ -1,0 +1,14 @@
+{
+  "base": {
+    "commit": "934a6d72f2a393b6987baf0b98ebe5a9e07d69be",
+    "tree": "b4473a0c8015316779043b138f438ec07650921c",
+    "archive_sha256": "8d7bae769387954f3e61d5d72828bfe5d716e8a1d9587e538848fe4dfdd21f4f",
+    "archive_bytes": 44471546
+  },
+  "candidate": {
+    "commit": "dd166319cc746fd439beb77119416e610f9acf63",
+    "tree": "0155a5611cf93833769da85f5a7877dcb670bfaa",
+    "archive_sha256": "07908b058a7844c7b1dc1ef31ebff575cdf6799724b7159114991f73da9c9085",
+    "archive_bytes": 44527191
+  }
+}

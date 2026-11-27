@@ -1,0 +1,20 @@
+[
+  {
+    "file": "src/hub/fetch.cpp",
+    "upstream_blob": "2ffba715fbefd859d3c0401334c52fffda44cd06",
+    "candidate_blob": "2ffba715fbefd859d3c0401334c52fffda44cd06",
+    "identical": true
+  },
+  {
+    "file": "src/server/main.cpp",
+    "upstream_blob": "35fa25a58a0a4823851ae00ba1ee2a729d60a8ec",
+    "candidate_blob": "35fa25a58a0a4823851ae00ba1ee2a729d60a8ec",
+    "identical": true
+  },
+  {
+    "file": "tests/test_server.py",
+    "upstream_blob": "be044ed5362e02630b5355e1913ed57e8fd0a4e1",
+    "candidate_blob": "be044ed5362e02630b5355e1913ed57e8fd0a4e1",
+    "identical": true
+  }
+]

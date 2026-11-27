@@ -1,0 +1,8 @@
+started `/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/.venv/bin/python -m mlx_lm.server --model /Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/models/qwen3.5-9b-bf16 --host 127.0.0.1 --port 18778` (pid 45079, log /Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-m4-long-bf16-resume/bf16-reasoning.jsonl.server.log)
+server ready after 14 s
+long-reasoning: 4 problems x 1 samples, 0 already graded, 4 to run; bf16-m3 at http://127.0.0.1:18778/v1, max_tokens 32768, parallel 1 -> /Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-m4-long-bf16-resume/bf16-reasoning.jsonl
+[1/4] test/counting_and_probability/181.json #0: right (19), 28452 tokens, 36.6 tok/s; 1/1 right so far, 781s
+[2/4] test/geometry/702.json #0: right (160), 15985 tokens, 37.12 tok/s; 2/2 right so far, 1213s
+[3/4] test/counting_and_probability/282.json #0: right (1/2), 23178 tokens, 36.77 tok/s; 3/3 right so far, 1844s
+[4/4] test/prealgebra/1044.json #0: wrong (None), cut short, 32768 tokens, 36.43 tok/s; 3/4 right so far, 2746s
+done: 3/4 right

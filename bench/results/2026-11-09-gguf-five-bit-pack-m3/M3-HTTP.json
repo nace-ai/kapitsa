@@ -1,0 +1,39 @@
+{
+  "format": "Explicitly privacy-filtered derived summary; not raw execution logs.",
+  "source_reference": "66a5f3bc473df9af8b72ded9090c3a8acc16a43e",
+  "source_candidate": "90e10efce8462ede4c756ca77ccdb1510f4e9faf",
+  "setup": {
+    "chip": "M3 Ultra",
+    "gpu_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "arms": {
+    "reference": {
+      "rc": 1,
+      "PASS": 54,
+      "FAIL": 1,
+      "failure": "Queued chat stream keepalive fixture expected two keepalives; only one arrived before the first content token.",
+      "first_chunk_s": 0.002502918243408203,
+      "keepalive_s": [
+        15.109174728393555
+      ],
+      "first_content_s": 23.672838926315308
+    },
+    "candidate": {
+      "rc": 1,
+      "PASS": 54,
+      "FAIL": 1,
+      "failure": "Queued chat stream keepalive fixture expected two keepalives; only one arrived before the first content token.",
+      "first_chunk_s": 0.002621889114379883,
+      "keepalive_s": [
+        15.061944007873535
+      ],
+      "first_content_s": 23.538455963134766
+    }
+  },
+  "assessment": "Both sources fail the same unchanged test: it requires two keepalives around15s/30s but first content arrived around23.5s. This is observed baseline failure, not a proven packer regression. No HTTP all-pass claim; not repaired within this CPU packing change.",
+  "source_test": "tests/test_server.py at source_reference and source_candidate, queued keepalive fixture",
+  "original_logs": "Privately retained unchanged; this is an explicitly selected derived summary."
+}

@@ -1,0 +1,16 @@
+{
+  "label": "35b-http-candidate",
+  "argv": [
+    "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python3",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/tests/test_server.py",
+    "http://127.0.0.1:49730"
+  ],
+  "cwd": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate",
+  "started_at": "2026-11-07T13:58:53.734891+00:00",
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/home-35b-http-candidate"
+  }
+}

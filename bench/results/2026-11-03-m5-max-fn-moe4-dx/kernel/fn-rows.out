@@ -1,0 +1,81 @@
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] compiled the weight-format kernels in 10 ms
+hc_*3_b4 R=1 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b4 R=1 plain == one-row max rel err 0.00e+00
+hc_*3_b4 R=1 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b4 R=1 inject == one-row max rel err 0.00e+00
+hc_*3_b4 R=2 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b4 R=2 plain == one-row max rel err 0.00e+00
+hc_*3_b4 R=2 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b4 R=2 inject == one-row max rel err 0.00e+00
+hc_*3_b4 R=3 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b4 R=3 plain == one-row max rel err 0.00e+00
+hc_*3_b4 R=3 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b4 R=3 inject == one-row max rel err 0.00e+00
+hc_*3_b4 R=4 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b4 R=4 plain == one-row max rel err 0.00e+00
+hc_*3_b4 R=4 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b4 R=4 inject == one-row max rel err 0.00e+00
+hc_*3_b6 R=1 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b6 R=1 plain == one-row max rel err 0.00e+00
+hc_*3_b6 R=1 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b6 R=1 inject == one-row max rel err 0.00e+00
+hc_*3_b6 R=2 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b6 R=2 plain == one-row max rel err 0.00e+00
+hc_*3_b6 R=2 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b6 R=2 inject == one-row max rel err 0.00e+00
+hc_*3_b6 R=3 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b6 R=3 plain == one-row max rel err 0.00e+00
+hc_*3_b6 R=3 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b6 R=3 inject == one-row max rel err 0.00e+00
+hc_*3_b6 R=4 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b6 R=4 plain == one-row max rel err 0.00e+00
+hc_*3_b6 R=4 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b6 R=4 inject == one-row max rel err 0.00e+00
+hc_*3_b8 R=1 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b8 R=1 plain == one-row max rel err 0.00e+00
+hc_*3_b8 R=1 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b8 R=1 inject == one-row max rel err 0.00e+00
+hc_*3_b8 R=2 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b8 R=2 plain == one-row max rel err 0.00e+00
+hc_*3_b8 R=2 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b8 R=2 inject == one-row max rel err 0.00e+00
+hc_*3_b8 R=3 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b8 R=3 plain == one-row max rel err 0.00e+00
+hc_*3_b8 R=3 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b8 R=3 inject == one-row max rel err 0.00e+00
+hc_*3_b8 R=4 plain == one-row      max rel err 0.00e+00
+hc_up_mix4_b8 R=4 plain == one-row max rel err 0.00e+00
+hc_*3_b8 R=4 inject == one-row     max rel err 0.00e+00
+hc_up_mix4_b8 R=4 inject == one-row max rel err 0.00e+00
+qmvs_multi R=2 == qmv2_multi_r2    max rel err 0.00e+00
+qmvp_multi R=2 ~ qmv2_multi_r2     max rel err 2.35e-07
+qmvs_multi R=3 == qmv2_multi_r2    max rel err 0.00e+00
+qmvp_multi R=3 ~ qmv2_multi_r2     max rel err 1.42e-07
+qmvs_multi R=4 == qmv2_multi_r2    max rel err 0.00e+00
+qmvp_multi R=4 ~ qmv2_multi_r2     max rel err 1.55e-07
+qmvs_multi R=5 == qmv2_multi_r2    max rel err 0.00e+00
+qmvp_multi R=5 ~ qmv2_multi_r2     max rel err 1.52e-07
+qmvs_multi R=6 == qmv2_multi_r2    max rel err 0.00e+00
+qmvp_multi R=6 ~ qmv2_multi_r2     max rel err 1.67e-07
+qmvs_multi R=7 == qmv2_multi_r2    max rel err 0.00e+00
+qmvp_multi R=7 ~ qmv2_multi_r2     max rel err 1.84e-07
+qmvs_multi R=8 == qmv2_multi_r2    max rel err 0.00e+00
+qmvp_multi R=8 ~ qmv2_multi_r2     max rel err 1.77e-07
+qmvs R=4 == qmv3_b4_r2             max rel err 0.00e+00
+qmvs R=4 == qmv2_b4_g64_r4         max rel err 0.00e+00
+qmvs R=4 == qmvg_f6g64_r2          max rel err 0.00e+00
+qmvs R=4 == qmv3_b8_r2             max rel err 0.00e+00
+moe4_gate_up_d R=1 == moe4_gate_up max rel err 0.00e+00
+moe4_down_d R=1 == moe4_down       max rel err 0.00e+00
+moe4 R=1 == decode MoE per row     max rel err 0.00e+00
+moe4_gate_up_d R=2 == moe4_gate_up max rel err 0.00e+00
+moe4_down_d R=2 == moe4_down       max rel err 0.00e+00
+moe4 R=2 == decode MoE per row     max rel err 0.00e+00
+moe4_gate_up_d R=3 == moe4_gate_up max rel err 0.00e+00
+moe4_down_d R=3 == moe4_down       max rel err 0.00e+00
+moe4 R=3 == decode MoE per row     max rel err 0.00e+00
+moe4_gate_up_d R=4 == moe4_gate_up max rel err 0.00e+00
+moe4_down_d R=4 == moe4_down       max rel err 0.00e+00
+moe4 R=4 == decode MoE per row     max rel err 0.00e+00
+all kernels match

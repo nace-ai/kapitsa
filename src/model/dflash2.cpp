@@ -1,10 +1,15 @@
 #include "util/load_threads.h"
+#include "model/sampler.h"
 #include "model/affine_coeff_fixed.h"
+#include "model/dflash2_lowrank_cache.h"
 // DFlash2 block drafter: loading, load-time quantization, context ring and the drafting pass.
 // Kernels in src/kernels/spec_dflash.metal.
 // Techniques: MLX af4g64 quantization of the drafter at load, the per-row window bound of the draft
 // attention, exact-code MMA operands, a separate block K/V scratch.
 #include "model/dflash2.h"
+#include "engine/device_profile.h"
+#include "model/clover.h"
+#include "hub/hub.h"
 #include "model/kparams.h"
 #include "util/bf16.h"
 #include "util/log.h"
@@ -14,6 +19,7 @@
 #include <mach/mach.h>
 
 #include <algorithm>
+#include <arm_neon.h>
 #include <atomic>
 #include <cctype>
 #include <cmath>
@@ -28,9 +34,45 @@ namespace ni {
 extern const char* const kTensorKernelSource;
 using json = nlohmann::json;
 
+// Default for KFlash's history lane (#944): the Qwen3.6 35B-A3B shape on an M5-class Mac (matrix units), where the interleaved A/B
+// measured it faster on the M5 Pro. NI_KFLASH_HIST turns it off ("0") or sets its knobs on any model and Mac; unset takes this default. Other
+// targets and Macs without matrix units keep it off; the M5 and M5 Max take it by the class and have not run it. Clover-35B-A3B has the
+// same shape and drafter and stays out: with the lane and the selector update its sampled decode is slower (M5 Pro, interleaved, 6 of 6 pairs slower at temperature 0.6 (-4%), faster at 0 (+5%; #1094)).
+// KFlash's online selector update (NI_KFLASH_SELUPD=<lr>) on by default where the lanes shape matches (the 35B-A3B on an
+// M5-class Mac, with the history lane): learning rate 0.003, which the interleaved A/B on top of the history lane (#362) measured
+// faster in 3 of 3 rounds (x1.027, 1.028, 1.024 on the whole 19-turn session's write tok/s, outputs identical); 0.02 was
+// slower in 3 of 3 (x0.988, 0.993, 0.996). NI_KFLASH_SELUPD=0 turns it off; its fp32 masters take 0.5 GB, and only
+// where the KFlash trees run (the update rides the tree verify): not with NI_KFLASH=0 or NI_KFLASH_TREE=0.
+static constexpr bool kSelUpdDefault = true;
+static constexpr float kSelUpdLr = 0.003f;
+// The kflash_hist row of the device profile table is the default; the shape fill is the config plus whether this is
+// Clover (its instance type, or the config's model_type before it loads).
+static ModelFacts dfl_lanes_facts(const Qwen35Config& c, bool clover) {
+  ModelFacts f;
+  f.moe = c.moe;
+  f.hidden = c.hidden;
+  f.layers = c.layers;
+  f.experts = c.experts;
+  f.top_k = c.top_k;
+  f.moe_i = c.moe_I;
+  f.shared_i = c.shared_I;
+  f.clover = clover;
+  return f;
+}
+static bool dfl_lanes_default(const Qwen35& t) {
+  return default_on(Knob::kKflashHist, dfl_lanes_facts(t.config(), dynamic_cast<const Clover*>(&t) != nullptr));
+}
+bool DFlash2::lanes_default(const std::string& model_dir, const Qwen35Config& c) {
+  return default_on(Knob::kKflashHist, dfl_lanes_facts(c, Clover::is_model(model_dir)));
+}
+
+static int lowrank_request() {
+  const char* v = kenv("LOWRANK");
+  return v && *v ? atoi(v) : simd_gpu() ? 768 : 0;
+}
+
 static bool default_v8(size_t hidden, bool moe, bool head_q4) {
-  static const bool m1_max32 = Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32;
-  return hidden >= 2560 || (m1_max32 && hidden == 2048 && moe && head_q4);
+  return hidden >= 2560 || (m1_max_32() && hidden == 2048 && moe && head_q4);  // guard: CORE4 measured on M1 Max 32
 }
 
 // process physical footprint (what Activity Monitor / bench.py report), bytes
@@ -44,6 +86,7 @@ static double footprint_gb() {
 static Pipeline dpipe(const std::string& n) {
   static std::unordered_map<std::string, Pipeline> cache;
   auto it = cache.find(n);
+  if (it == cache.end() && n.rfind("qmt", 0) == 0) Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
   if (it == cache.end()) it = cache.emplace(n, Gpu::get().pipeline(n)).first;
   return it->second;
 }
@@ -121,12 +164,16 @@ static std::vector<std::string> config_problems(const json& c, const Qwen35Confi
   bool sliding = NL > 0 && c.contains("layer_types") && c["layer_types"].size() == size_t(NL);
   if (sliding)
     for (auto& lt : c["layer_types"]) sliding = sliding && lt == "sliding_attention";
-  check(sliding && window == DFlash2::kWin, "all layers sliding, window 2048");
+  // all layers sliding, over a window at least the ring's: a drafter trained past it (jzinno's Ornith draft has
+  // 4096) runs on the 2048-slot ring, as the v1 drafters do, and only its context past 2047 tokens sees fewer
+  // positions than it trained on (valid_lo keeps the attention from reading slots a gap left behind)
+  check(sliding && window >= DFlash2::kWin, "all layers sliding, a window of at least 2048");
   check(int(dc.value("conv_kernel_size", 0)) == 2, "conv taps 2");
   check(dc.value("conv_group_size", 0) == 16, "conv group 16");
   check(dc.value("selector_rank", 0) == DFlash2::kRank && dc.value("selector_top_k", 0) == DFlash2::kTopK,
         "selector rank 256 / top-k 16");
-  check(dc.value("block_size", 0) == DFlash2::kB, "block 8");
+  // the block a drafter was trained with: 8 (incoai's), or 16 (the block KFlash drafts with on a one-slot engine)
+  check(dc.value("block_size", 0) == DFlash2::kB || dc.value("block_size", 0) == 16, "block 8 or 16");
   // any theta: the inverse frequencies come from it at load (inv_freq_; incoai's Flash-Next draft has 1e4, the others 1e7)
   check(theta > 0 && rope_type == "default", "default rope");
   check(nq == 32 && nkv == 8 && hd == 128, "heads 32/8 x 128");
@@ -183,13 +230,12 @@ void DFlash2::load_config(const std::string& dir) {
     cfg_.trained_block = dc.value("block_size", 16);
     cfg_.trained_window = c.value("sliding_window", 0);
     cfg_.block = kB;
-    cfg_.window = kWin;
   } else {
     cfg_.block = dc["block_size"];
     cfg_.conv_gs = dc["conv_group_size"];
     cfg_.rank = dc["selector_rank"];
     cfg_.topk = dc["selector_top_k"];
-    cfg_.window = c.value("sliding_window", 0);
+    cfg_.trained_window = c.value("sliding_window", 0);
   }
   if (c.contains("rope_parameters")) cfg_.theta = float(c["rope_parameters"].value("rope_theta", 0.0));
   else cfg_.theta = float(c.value("rope_theta", 0.0));
@@ -215,16 +261,21 @@ void dfl_row_bf16(const QLinear& H, uint32_t row, uint16_t* out) {
   const uint16_t* S = H.s->buf.as<uint16_t>() + size_t(row) * (H.K / H.gs);
   const uint16_t* B = H.b->buf.as<uint16_t>() + size_t(row) * (H.K / H.gs);
   const uint32_t mask = (1u << H.bits) - 1u;
-  for (uint32_t k = 0; k < H.K; ++k) {
-    const uint32_t bit = k * uint32_t(H.bits), sh = bit % 32;
-    uint32_t v = W[bit / 32] >> sh;
-    if (sh + uint32_t(H.bits) > 32) v |= W[bit / 32 + 1] << (32 - sh);
-    out[k] = f32_to_bf16(bf16_to_f32(S[k / H.gs]) * float(v & mask) + bf16_to_f32(B[k / H.gs]));
+  // Coefficients are shared by every value in a quantization group.
+  for (uint32_t g0 = 0; g0 < H.K; g0 += H.gs) {
+    const float scale = bf16_to_f32(S[g0 / H.gs]), bias = bf16_to_f32(B[g0 / H.gs]);
+    const uint32_t end = std::min(g0 + uint32_t(H.gs), H.K);
+    for (uint32_t k = g0; k < end; ++k) {
+      const uint32_t bit = k * uint32_t(H.bits), sh = bit % 32;
+      uint32_t v = W[bit / 32] >> sh;
+      if (sh + uint32_t(H.bits) > 32) v |= W[bit / 32 + 1] << (32 - sh);
+      out[k] = f32_to_bf16(scale * float(v & mask) + bias);
+    }
   }
 }
 
-const Tensor* DFlash2::own(const Tensor& t, const char* label) {
-  Buffer b = Gpu::get().alloc(t.buf.size, label, /*tracked=*/false);
+const Tensor* DFlash2::own(const Tensor& t, const char* label, bool tracked) {
+  Buffer b = Gpu::get().alloc(t.buf.size, label, tracked);
   memcpy(b.ptr(), t.buf.ptr(), t.buf.size);
   owned_bufs_.push_back(b);
   resident_ += b.size;
@@ -246,10 +297,26 @@ void dfl_quantize_cpu(const std::vector<const uint16_t*>& rowp, uint32_t K, int 
       const uint16_t* src = rowp[n];
       for (uint32_t gi = 0; gi < gpr; ++gi) {
         float lo = 3.38953139e38f, hi = 0.0f;  // MLX starts from (Limits<bf16>::max, 0)
-        for (int k = 0; k < 64; ++k) {
-          v[k] = bf16_to_f32(src[gi * 64 + k]);
-          lo = std::min(lo, v[k]);
-          hi = std::max(hi, v[k]);
+        float32x4_t low = vdupq_n_f32(lo), high = vdupq_n_f32(hi);
+        uint16x4_t max_bits = vdup_n_u16(0);
+        for (int k = 0; k < 64; k += 4) {
+          const uint16x4_t bits = vld1_u16(src + gi * 64 + k);
+          const float32x4_t x = vreinterpretq_f32_u32(vshll_n_u16(bits, 16));
+          vst1q_f32(v + k, x);
+          low = vminq_f32(low, x);
+          high = vmaxq_f32(high, x);
+          max_bits = vmax_u16(max_bits, vand_u16(bits, vdup_n_u16(0x7fff)));
+        }
+        lo = vminvq_f32(low);
+        hi = vmaxvq_f32(high);
+        // Preserve the scalar scan's NaN handling and first-zero sign on exceptional groups.
+        if (vmaxv_u16(max_bits) >= 0x7f80 || lo == 0.0f || hi == 0.0f) {
+          lo = 3.38953139e38f;
+          hi = 0.0f;
+          for (int k = 0; k < 64; ++k) {
+            lo = std::min(lo, v[k]);
+            hi = std::max(hi, v[k]);
+          }
         }
         float scale = std::max((hi - lo) / n_bins, 1e-7f);
         const bool side = std::fabs(lo) > std::fabs(hi);
@@ -262,13 +329,17 @@ void dfl_quantize_cpu(const std::vector<const uint16_t*>& rowp, uint32_t K, int 
         S[size_t(n) * gpr + gi] = f32_to_bf16(scale);
         B[size_t(n) * gpr + gi] = f32_to_bf16(bias);
         uint32_t* wr = W + size_t(n) * wpr + gi * (64 * bits / 32);
-        const int per = 32 / bits;
+        const int per = 32 / bits;  // Callers pass 4 or 8 bits, so each word holds whole four-lane groups.
         for (int w = 0; w < 64 / per; ++w) {
           uint32_t word = 0;
-          for (int j = 0; j < per; ++j) {
-            float c = std::min(rnd((v[w * per + j] - bias) / scale), n_bins);
-            c = std::max(c, 0.0f);
-            word |= uint32_t(c) << (bits * j);
+          // Four independent codes at a time; keep the scalar scale/bias and both rounding modes.
+          const int32x4_t shifts = {0, bits, 2 * bits, 3 * bits};
+          for (int j = 0; j < per; j += 4) {
+            float32x4_t c = vdivq_f32(vsubq_f32(vld1q_f32(v + w * per + j), vdupq_n_f32(bias)),
+                                     vdupq_n_f32(scale));
+            c = even ? vrndiq_f32(c) : vrndaq_f32(c);
+            c = vmaxq_f32(vminq_f32(c, vdupq_n_f32(n_bins)), vdupq_n_f32(0.0f));
+            word |= vaddvq_u32(vshlq_u32(vcvtq_u32_f32(c), shifts)) << (bits * j);
           }
           wr[w] = word;
         }
@@ -294,7 +365,7 @@ void dfl_quantize_cpu(const std::vector<const uint16_t*>& rowp, uint32_t K, int 
 // scale = max((hi - lo) / n_bins, 1e-7) signed toward the larger-magnitude edge, rescaled so the
 // edge is exact, bias = edge; codes = min(round((w - bias) / scale), n_bins) in IEEE fp32 with
 // round-half-away; scale/bias stored as bf16 RNE). MLX's CPU backend rounds halves to even
-// instead (NI_DFLASH_QROUND=even reproduces that one).
+// instead (NI_KFLASH_QROUND=even reproduces that one).
 QLinear DFlash2::quantize(const std::vector<const Tensor*>& parts, const char* label, const std::vector<uint32_t>& perm) {
   const uint32_t K = uint32_t(parts[0]->shape[1]);
   uint32_t N = 0;
@@ -310,7 +381,7 @@ QLinear DFlash2::quantize(const std::vector<const Tensor*>& parts, const char* l
   Buffer wq = g.alloc(size_t(N) * wpr * 4, label, false);
   Buffer sc = g.alloc(size_t(N) * gpr * 2, label, false);
   Buffer bi = g.alloc(size_t(N) * gpr * 2, label, false);
-  static const bool even = getenv("NI_DFLASH_QROUND") && std::string(getenv("NI_DFLASH_QROUND")) == "even";
+  static const bool even = kenv("QROUND") && std::string(kenv("QROUND")) == "even";
   std::vector<const uint16_t*> rowp(N);
   {
     uint32_t r = 0;
@@ -356,16 +427,21 @@ QLinear DFlash2::row_view(const QLinear& src, uint32_t r0, uint32_t n) {
 static bool dfl_tw_supported();  // below: the drafter's GEMMs through Metal 4 tensor_ops
 
 bool DFlash2::rows16_tensor_ok() const {
-  const char* av = getenv("NI_DFLASH_ATTN");
+  const char* av = kenv("ATTN");
   const bool fused_attn = !(av && std::string(av) == "scalar") && !(v8_knobs().dfl & 1);
   bool tw = !cfg_.v1 && fused_attn && dfl_tw_supported() && v8_knobs().tw && !(v8_knobs().dfl & (32 | 128));
   for (const DLayer& L : layers_)
     for (const QLinear* q : {&L.q, &L.kv, &L.o, &L.gate, &L.up, &L.down})
       tw = tw && q->q4() && q->gs == 64 && q->K % 64 == 0;
+  // The draft head's GEMM runs on the same path: the reduced head keeps the target head's format (an 8-bit copy when
+  // that has no 4/8-bit group-64 kernels), so a target whose head is 8-bit (a GGUF import: Swift-1.5's lm_head is 8-bit
+  // group 64) cannot draft a 16-row block ("a GEMM (K 5120) needs the tensor path", #967) and keeps the 8-row one.
+  // Before build_head the head is the target's own; after it, the reduced copy.
+  tw = tw && (head_n_ ? head_sub_ : tg_.lm_head()).q4();
   return tw;
 }
 
-// The KFlash tree default is the trees on every target, as it has been since #187. NI_DFLASH_CAP=<n> (the F74
+// The KFlash tree default is the trees on every target, as it has been since #187. NI_KFLASH_CAP=<n> (the F74
 // verify-cost decomposition's verify-depth cap) opts into the capped-chain path instead: trees need
 // verify_depth() == block() - 1, so a genuinely capped depth cannot run them, and every env read must see the
 // same answer, else the 16-row auto block is picked for a lattice no capped verify can tree. Only a genuine cap
@@ -381,20 +457,20 @@ bool DFlash2::rows16_tensor_ok() const {
 // shipping-binary sweep (4K AND 32K, ids match, ABBA >= 8) settles it. A genuine cap below the full depth
 // keeps the chains and the 8-row plan even where the trees are explicitly asked -- a capped verify cannot tree
 // the lattice (set_tree keeps the trees only at the full depth), and rows16_auto_ok / plan_block_rows read the
-// same answer; an explicit NI_DFLASH_VERIFY overrides the cap here as it overrides the depth below, and with the
-// cap unset or a no-op, NI_KFLASH / NI_DFLASH_TREE decide as before. (The Nemotron-H
+// same answer; an explicit NI_KFLASH_VERIFY overrides the cap here as it overrides the depth below, and with the
+// cap unset or a no-op, NI_KFLASH / NI_KFLASH_TREE decide as before. (The Nemotron-H
 // side, in Engine, keeps its own default.)
 static bool kf_tree_default(int full) {
-  // NI_DFLASH_VERIFY set: the cap does not decide the trees. The depth the verify asked for is the depth that
+  // NI_KFLASH_VERIFY set: the cap does not decide the trees. The depth the verify asked for is the depth that
   // runs (the constructor below), and a cap dropping the trees under it would silently chain an asked-for tree
   // -- CAP=2 + VERIFY=7 wants the full-depth walk at 7 on an 8-row block, exactly the plan VERIFY=7 alone
   // gives (Cursor review 4368392777). VERIFY below the full depth chains anyway: set_tree's full-depth guard.
-  const char* vv = getenv("NI_DFLASH_VERIFY");
-  const char* cv = getenv("NI_DFLASH_CAP");
+  const char* vv = kenv("VERIFY");
+  const char* cv = kenv("CAP");
   const int c = cv && *cv ? atoi(cv) : 0;
   if (!(vv && *vv) && c >= 1 && c < full)
     return false;  // a genuine cap: a capped verify cannot tree the lattice, knobs or not
-  const char* tv = getenv("NI_DFLASH_TREE");
+  const char* tv = kenv("TREE");
   if (tv && *tv) return atoi(tv) != 0;
   const char* kf = getenv("NI_KFLASH");
   if (kf && *kf) return atoi(kf) != 0;
@@ -402,19 +478,27 @@ static bool kf_tree_default(int full) {
 }
 
 bool DFlash2::rows16_auto_ok() const {
-  // the same conditions the load-time gate below refuses NI_DFLASH_BLOCK=16 under, read from the environment here
+  // the same conditions the load-time gate below refuses NI_KFLASH_BLOCK=16 under, read from the environment here
   // because set_tree() runs after the block must be known: trees on, and a walk deep enough to use all 16 rows (a
   // 15-row lattice is what the block drafts; set_tree keeps the tree only where verify_depth() == block() - 1)
   if (!tg_.block_drafter_ok() || !tg_.verify_tree_ok() || !tg_.verify_wide_ok()) return false;
   if (!kf_tree_default(15)) return false;  // the 16-row block's full depth
-  const char* vv = getenv("NI_DFLASH_VERIFY");
+  const char* vv = kenv("VERIFY");
   if (vv && *vv && atoi(vv) < 15) return false;
   return rows16_tensor_ok();
 }
 
+// The online selector update rides the tree verify, which set_tree() leaves on only at the block's full depth: not with the
+// trees off (kf_tree_default), and not with an explicit NI_KFLASH_VERIFY below the 8-row block's full depth of 7, which
+// keeps kf_tree_default true and runs the chain (see its VERIFY comment). The constructor and the plan read the same answer.
+static bool selupd_tree_runs() {
+  const char* vv = kenv("VERIFY");
+  return kf_tree_default(DFlash2::kB - 1) && !(vv && *vv && atoi(vv) < DFlash2::kB - 1);
+}
+
 DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) : tg_(target), dir_(dir) {
   const double t0 = now_ms(), fp0 = footprint_gb();
-  bits_ = bits ? bits : (getenv("NI_DFLASH_BITS") ? atoi(getenv("NI_DFLASH_BITS")) : 4);
+  bits_ = bits ? bits : (kenv("BITS") ? atoi(kenv("BITS")) : 4);
   if (bits_ != 4 && bits_ != 8) fatal("DFlash2: bits must be 4 or 8 (got %d)", bits_);
   load_config(dir);
   if (!supports(tg_)) fatal("DFlash2: the target's embedding / LM head format is not supported");
@@ -435,8 +519,48 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     hnorm_ = own(expect("hidden_norm.weight", {H}), "dfl_norm");
     norm_ = own(expect("norm.weight", {H}), "dfl_norm");
     if (!v1) {
-      cbA_ = own(expect("candidate_selector.predecessor_codebook", {V, kRank}), "dfl_codebook");
-      cbB_ = own(expect("candidate_selector.successor_codebook", {V, kRank}), "dfl_codebook");
+      // NI_KFLASH_SELUPD=<lr>: the codebooks the GPU rewrites after each tree verify (dfl_sel_update) are tracked
+      // buffers, so the next drafting pass's reads wait for the writes; with it off they stay untracked, as before
+      const char* su = kenv("SELUPD");
+      selupd_lr_ = su && *su ? float(atof(su)) : kSelUpdDefault && dfl_lanes_default(tg_) ? kSelUpdLr : 0.0f;
+      if (!(selupd_lr_ > 0.0f)) selupd_lr_ = 0.0f;
+      if (selupd_lr_ > 0.0f && !selupd_tree_runs()) {  // the update runs in the tree verify: chains never reach it
+        logi("KFlash: online selector update off (no KFlash trees: NI_KFLASH=0, NI_KFLASH_TREE=0, a depth cap or "
+             "NI_KFLASH_VERIFY below 7)");
+        selupd_lr_ = 0.0f;
+      }
+      const char* st = kenv("SELUPD_TAU");
+      if (st && *st && atof(st) > 0) selupd_tau_ = float(atof(st));
+      const bool upd = selupd_lr_ > 0.0f;
+      cbA_ = own(expect("candidate_selector.predecessor_codebook", {V, kRank}), "dfl_codebook", upd);
+      cbB_ = own(expect("candidate_selector.successor_codebook", {V, kRank}), "dfl_codebook", upd);
+      if (upd) {  // fp32 masters of both codebooks: 2 x V x 256 x 4 B (about 0.5 GB at V = 248K), only when asked for
+        const size_t n = size_t(V) * kRank;
+        selupd_A_ = Gpu::get().alloc(n * 4, "dfl_selupd_A");
+        selupd_B_ = Gpu::get().alloc(n * 4, "dfl_selupd_B");
+        owned_bufs_.push_back(selupd_A_);
+        owned_bufs_.push_back(selupd_B_);
+        resident_ += selupd_A_.size + selupd_B_.size;
+        for (int c = 0; c < 2; ++c) {
+          const uint16_t* src = (c ? cbB_ : cbA_)->buf.as<uint16_t>();
+          uint32_t* dst = (c ? selupd_B_ : selupd_A_).as<uint32_t>();
+          for (size_t i = 0; i < n; ++i) dst[i] = uint32_t(src[i]) << 16;  // bf16 -> fp32 is exact
+        }
+        logi("KFlash: online selector update on (lr %g, tau %g; fp32 masters %.0f MB; %s, NI_KFLASH_SELUPD=0 turns it off)",
+             selupd_lr_, selupd_tau_, 2.0 * double(n) * 4 / 1048576.0, su && *su ? "NI_KFLASH_SELUPD" : "default");
+      }
+    }
+    // the history lane: NI_KFLASH_HIST=0 off, <nmin>,<nmax>,<cap> on with those knobs, unset: the default's 3,8,4 where
+    // dfl_lanes_default says so
+    const char* h = kenv("HIST");
+    const bool hist_env = h && *h;
+    if (hist_env ? strcmp(h, "0") != 0 : dfl_lanes_default(tg_)) {
+      int a = 3, b = 8, c = 4;
+      if (hist_env && sscanf(h, "%d,%d,%d", &a, &b, &c) < 1) a = 3;
+      hist_nmin_ = std::clamp(a, 1, 8); hist_nmax_ = std::clamp(b, hist_nmin_, 8); hist_cap_ = std::clamp(c, 1, 7);
+      hist_ = true;
+      logi("KFlash: history lane on (n %d..%d, up to %d tokens; %s, NI_KFLASH_HIST=0 turns it off)", hist_nmin_,
+           hist_nmax_, hist_cap_, hist_env ? "NI_KFLASH_HIST" : "default");
     }
     // k|v of every layer stacked: one GEMM projects a committed context row for all layers.
     std::vector<const Tensor*> kv_parts;
@@ -495,101 +619,109 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     for (size_t i = 0; i < cfg_.target_layers.size(); ++i) hk->slot[cfg_.target_layers[i]] = int(i);
     hk->ld = uint32_t(cfg_.target_layers.size() * cfg_.H);
   }
-  // The block, before anything is sized (alloc_buffers() and the reduced head read the rows): NI_DFLASH_BLOCK says 8 or
+  // The block, before anything is sized (alloc_buffers() and the reduced head read the rows): NI_KFLASH_BLOCK says 8 or
   // 16, `auto` and unset leave it to the default. Engine asks for 16 on a single-slot engine, where the wider block's
   // cost is paid back by the deeper lattice it drafts (one weight read drafts 15 guesses instead of 7) and there is no
   // batched cycle to lose; a target, a drafter or a knob that takes the drafting pass off the tensor path keeps 8 rows.
   {
-    const char* v = getenv("NI_DFLASH_BLOCK");
+    const char* v = kenv("BLOCK");
     const bool said = v && *v && std::string(v) != "auto";  // `auto`: the default, one slot or not
     if (said) {
       block_ = atoi(v);
-      if (block_ != kB && block_ != 16) fatal("NI_DFLASH_BLOCK=%s: 8, 16 or auto", v);
+      if (block_ != kB && block_ != 16) fatal("NI_KFLASH_BLOCK=%s: 8, 16 or auto", v);
     } else if (rows16 && rows16_auto_ok()) {
       block_ = 16;
-      logi("DFlash2: 16-row drafting block (one slot: the drafter drafts 15 guesses per weight read and the tree verify "
-           "runs 16 rows; NI_DFLASH_BLOCK=8 keeps 8)");
+      logi("KFlash: 16-row drafting block (one slot, or any slot count on the matrix class: the drafter drafts 15 guesses "
+           "per weight read and the tree verify runs 16 rows; NI_KFLASH_BLOCK=8 keeps 8)");
     }
-    const char* vv = getenv("NI_DFLASH_VERIFY");
-    // The verify-depth default is the full block depth, as before; NI_DFLASH_CAP=<n> (the F74 depth cap) opts into
-    // a capped chain path, and NI_DFLASH_VERIFY=<n> overrides both. Only a genuine cap engages: a CAP at or above
+    const char* vv = kenv("VERIFY");
+    // The verify-depth default is the full block depth, as before; NI_KFLASH_CAP=<n> (the F74 depth cap) opts into
+    // a capped chain path, and NI_KFLASH_VERIFY=<n> overrides both. Only a genuine cap engages: a CAP at or above
     // the full depth of the block that runs leaves that block at full depth with the trees (kf_tree_default above
     // reads the same answer) -- but the 16-row choice reads kf_tree_default(15), so any cap below 15 keeps the
     // 8-row block, trees at depth 7, and 7..14 is not the same machine state as the cap unset; only at or above
     // 15 is it a no-op outright -- and below the full depth the CAP is
-    // the same axis as the existing NI_DFLASH_VERIFY -- a capped depth is always a chain, because set_tree keeps
-    // the trees only at the full depth. The shipping default changes only where the pre-registered shipping-binary
+    // the same axis as the existing NI_KFLASH_VERIFY -- a capped depth is always a chain, because set_tree keeps
+    // the trees only at the full depth. The shipping default changes only when the pre-registered shipping-binary
     // sweep (4K AND 32K, ids match, ABBA >= 8) says so (docs/kflash.md, ledger rulings v2). The batched cycle
     // (Engine::batch_cycle under the KfBatch budget) keeps its own rows -- a batch amortizes the per-row weight
     // read that a deeper verify pays.
-    const char* cv = getenv("NI_DFLASH_CAP");
+    const char* cv = kenv("CAP");
     const int c = cv && *cv ? atoi(cv) : 0;
     const bool capped = !(vv && *vv) && c >= 1 && c < block_ - 1;
     vdepth_ = std::clamp(vv && *vv ? atoi(vv) : capped ? c : block_ - 1, 1, block_ - 1);
     if (cv && *cv && !(vv && *vv)) {
       if (capped)
-        logi("DFlash2: NI_DFLASH_CAP -- verify depth %d, chain drafts (the F74 depth cap, opt-in; measured basis "
-             "and the pending sweep in docs/kflash.md; NI_DFLASH_VERIFY=n overrides)",
+        logi("KFlash: NI_KFLASH_CAP -- verify depth %d, chain drafts (the F74 depth cap, opt-in; measured basis "
+             "and the pending sweep in docs/kflash.md; NI_KFLASH_VERIFY=n overrides)",
              vdepth_);
       else
-        logi("DFlash2: NI_DFLASH_CAP=%s is not below the full depth %d of this block: ignored -- full depth with "
+        logi("KFlash: NI_KFLASH_CAP=%s is not below the full depth %d of this block: ignored -- full depth with "
              "the trees (any cap below 15 keeps the 8-row block, trees at depth 7; only at or above 15 is the cap "
              "a no-op, the 16-row choice untouched)", cv, block_ - 1);
     }
   }
-  alloc_buffers();
-  {  // reduced draft head (default on): NI_DFLASH_HEAD=n rows (0 = the full vocabulary)
-    const char* v = getenv("NI_DFLASH_HEAD");
+  {  // reduced draft head (default on): NI_KFLASH_HEAD=n rows (0 = the full vocabulary)
+    const char* v = kenv("HEAD");
     if (v && *v) build_head(atoi(v), true);
     else build_head(0, false);
   }
+  alloc_buffers();
+  {
+    // The low-rank shortlist head (SlimSpec, arXiv 2605.10453, without training: build_lowrank): the reduced head's
+    // 4-bit GEMM (98,304 rows, 134 MB per drafting pass) becomes a rank-768 one (40 MB) whose chunk top-16s the
+    // head's own rows rescore. On the 10-core M4, 4B: drafting pass -0.75 ms, tok/cycle unchanged on 7 prompts (the
+    // shortlist holds the true top 16's probability mass to 0.9999). Default on kSimd (#393);
+    // NI_KFLASH_LOWRANK=r sets the rank (a multiple of 64; 0: the full head)
+    const int r = lowrank_request();
+    if (r > 0 && v8_ && cfg_.v1) build_lowrank(uint32_t(r));
+  }
   load_v8_packed_coeff();
   Gpu::get().make_resident(owned_bufs_);
-  // Dynamic verify depth on MoE targets (default tau 0.5, NI_DFLASH_DYN=tau overrides, 0 = off): the expert
+  // Dynamic verify depth on MoE targets (default tau 0.5, NI_KFLASH_DYN=tau overrides, 0 = off): the expert
   // union, the 35B verify's main cost, shrinks with the rows (35B, 512 tokens: code +7%, prose +20% over
   // verifying all 7; tau 0.4-0.7 swept). Dense targets read every weight once whatever the row count, so
   // there it would only cost acceptance.
   dyn_tau_ = tg_.config().moe ? 0.5f : 0.0f;
-  if (const char* v = getenv("NI_DFLASH_DYN")) dyn_tau_ = tg_.config().moe ? float(atof(v)) : 0.0f;
+  if (const char* v = kenv("DYN")) dyn_tau_ = tg_.config().moe ? float(atof(v)) : 0.0f;
   // T > 0 uses an exact rule (dfl_depth): default tau 0.3 (offline replay, 35B T = 0.6, 4 prompts x 6 seeds: 0.25 /
-  // 0.3 / 0.35 within 0.4%); NI_DFLASH_DYN_T overrides. NI_DFLASH_DYN_RULE=2: the earlier T > 0 rule (exclusive
+  // 0.3 / 0.35 within 0.4%); NI_KFLASH_DYN_T overrides. NI_KFLASH_DYN_RULE=2: the earlier T > 0 rule (exclusive
   // product of the walk's q; 35B code_35b 512, T = 0.6: 139.2 tok/s without, 149.4 / 147.8 / 140.3 at 0.3 / 0.5 / 0.7)
-  // Rule 0 is the default on the M5 (Apple10), where it was measured; other Macs keep rule 2, which they were tuned
-  // with, until it is measured there.
+  // Rule 0 is the default on the M5 (Apple10); other Macs keep rule 2 today.
   dyn_tau_t_ = dyn_tau_ > 0 ? 0.3f : 0.0f;
-  dyn_rule_ = Gpu::get().apple10() ? 0u : 2u;
-  if (const char* v = getenv("NI_DFLASH_DYN_RULE")) {  // rule 1 is biased at T > 0 (dflash_accept_test only)
+  dyn_rule_ = matrix_units() ? 0u : 2u;
+  if (const char* v = kenv("DYN_RULE")) {  // rule 1 is biased at T > 0 (dflash_accept_test only)
     const int r = atoi(v);
-    if (r != 0 && r != 2) fatal("NI_DFLASH_DYN_RULE=%s: 0 or 2 (rule 1 is biased at T > 0, for tests only)", v);
+    if (r != 0 && r != 2) fatal("NI_KFLASH_DYN_RULE=%s: 0 or 2 (rule 1 is biased at T > 0, for tests only)", v);
     dyn_rule_ = uint32_t(r);
   }
-  if (const char* v = getenv("NI_DFLASH_DYN_T")) dyn_tau_t_ = tg_.config().moe ? float(atof(v)) : 0.0f;
+  if (const char* v = kenv("DYN_T")) dyn_tau_t_ = tg_.config().moe ? float(atof(v)) : 0.0f;
   if (dyn_tau_ <= 0) dyn_tau_t_ = 0.0f;
-  // The downward depth gate (M3, opt-in): NI_DFLASH_GATE=<p>[:<win>] caps each cycle's verify depth at the
+  // The downward depth gate (M3, opt-in): NI_KFLASH_GATE=<p>[:<win>] caps each cycle's verify depth at the
   // first proposal position whose rolling marginal acceptance -- the fraction of the last <win> cycles
   // (default 64) where position i was accepted among the cycles where tau kept it -- fell below the
   // break-even fraction p -- e.g. 0.215, the corrected break-even accepted tokens per extra verify row
   // (ledger §2.16 as corrected through §2.32-E: the clean 6.9 ms/row slope, under which p3 = 0.273 clears
   // and positions 5-7 do not; p was fitted from the same marginal statistic). It needs the dynamic depth
-  // (an MoE target, NI_DFLASH_DYN > 0): the statistic conditions on what tau kept. Downward only -- the
+  // (an MoE target, NI_KFLASH_DYN > 0): the statistic conditions on what tau kept. Downward only -- the
   // cap never exceeds verify_depth(). Off by default until the pre-registered trace gate (multi-seed,
   // tau-conditional p_i on the shipping binary) says tau itself keeps enough negative-value rows for the
   // cap to pay. See DepthGate in dflash2.h.
-  if (const char* v = getenv("NI_DFLASH_GATE"); v && *v) {
+  if (const char* v = kenv("GATE"); v && *v) {
     if (dyn_tau_ > 0) {
       gate_p_ = std::clamp(float(atof(v)), 0.0f, 1.0f);
       if (const char* c = strchr(v, ':')) gate_win_ = std::clamp(atoi(c + 1), DepthGate::kMinN, DepthGate::kWin);
       if (gate_p_ > 0)
-        logi("DFlash2: NI_DFLASH_GATE -- downward depth gate, break-even %.3f, window %d cycles (a per-cycle cap "
+        logi("KFlash: NI_KFLASH_GATE -- downward depth gate, break-even %.3f, window %d cycles (a per-cycle cap "
              "from the rolling marginal acceptance of the tau-kept positions; downward only)",
              gate_p_, gate_win_);
     } else {
-      logi("DFlash2: NI_DFLASH_GATE ignored (it needs the dynamic depth: an MoE target with NI_DFLASH_DYN > 0)");
+      logi("KFlash: NI_KFLASH_GATE ignored (it needs the dynamic depth: an MoE target with NI_KFLASH_DYN > 0)");
     }
   }
-  if (const char* v = getenv("NI_DFLASH_GATE_TRACE")) gate_trace_ = atoi(v) != 0;
-  if (const char* v = getenv("NI_DFLASH_EXACT_MOE")) exact_moe_ = atoi(v) != 0;
-  if (const char* v = getenv("NI_DFLASH_QT")) walk_tf_ = std::max(0.0f, float(atof(v)));
+  if (const char* v = kenv("GATE_TRACE")) gate_trace_ = atoi(v) != 0;
+  if (const char* v = kenv("EXACT_MOE")) exact_moe_ = atoi(v) != 0;
+  if (const char* v = kenv("QT")) walk_tf_ = std::max(0.0f, float(atof(v)));
   // KFlash on every target. The budget's cache key: this model, drafter, bit depth, drafting block and chip (a 16-row
   // block drafts a deeper lattice and verifies wider rows, so its learned capacity must not be the 8-row block's).
   {
@@ -599,6 +731,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     for (char& c : key)
       if (!isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '.') c = '_';
     kf_budget_ = std::make_unique<KfBudget>(key);
+    kf_budget_->set_hist_lane(hist_);
     // batched decode (Engine::batch_cycle): the rows of a batch's verify by the same rule; NI_BATCH_KF_FLOOR=1: every
     // member verifies at least one draft
     const char* fl = getenv("NI_BATCH_KF_FLOOR");
@@ -610,19 +743,19 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // NI_KFLASH_ROWS=<list of 8, 16, 32> restricts the dense counts (e.g. "8" = M1's single tile, "16" = always 16 rows)
     const bool moe = tg_.config().moe;
     // the row counts: one 8-row tile on the dense targets that cannot run wide verifies, 8 | 16 | 32 where they can and
-    // the knobs (NI_KFLASH, NI_DFLASH_TREE, NI_KFLASH_ROWS) allow them (Qwen35::kf_dense_rows, which plan() reads too,
+    // the knobs (NI_KFLASH, NI_KFLASH_TREE, NI_KFLASH_ROWS) allow them (Qwen35::kf_dense_rows, which plan() reads too,
     // and which rejects a bad NI_KFLASH_ROWS)
     uint32_t allowed = moe ? (1u << kB) - 1 : Qwen35::kf_dense_rows(tg_.config());
     // One rule on every target (here and on Nemotron-H): trees, unless a knob keeps the chains -- NI_KFLASH=0,
-    // NI_DFLASH_TREE=0, or a genuine F74 depth cap NI_DFLASH_CAP=<n> below the full depth (kf_tree_default()
+    // NI_KFLASH_TREE=0, or a genuine F74 depth cap NI_KFLASH_CAP=<n> below the full depth (kf_tree_default()
     // above), which cannot run them.
     set_tree(kf_tree_default(block_ - 1));
     // The downward depth gate caps a chain's dynamic depth: encode_cycle_verify returns from its tree branch
     // before the gate code, so an asked-for gate under the (default) trees would log as engaged and then never
     // observe, cap or trace. Say so here, at load, where tree_ is final (set_tree has no later callers).
     if (gate_p_ > 0 && tree_)
-      logi("DFlash2: NI_DFLASH_GATE is inert while the KFlash trees are on (it caps the chain's dynamic depth): "
-           "add NI_KFLASH=0 or NI_DFLASH_TREE=0 to run it");
+      logi("KFlash: NI_KFLASH_GATE is inert while the KFlash trees are on (it caps the chain's dynamic depth): "
+           "add NI_KFLASH=0 or NI_KFLASH_TREE=0 to run it");
     if (const char* r = getenv("NI_KFLASH_ROWS"); r && *r && !moe) {
       uint32_t want = 0;
       for (const char* c = r; *c;) {
@@ -637,18 +770,18 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // and the block's own width comes in whatever NI_KFLASH_ROWS asked for
     if (block() > kB) {
       if (!tree_)
-        fatal("NI_DFLASH_BLOCK=%d needs KFlash trees (NI_KFLASH=1 or NI_DFLASH_TREE=1; a genuine NI_DFLASH_CAP "
-              "below the full depth decides over them -- unset it, or set NI_DFLASH_VERIFY to the full depth)",
+        fatal("NI_KFLASH_BLOCK=%d needs KFlash trees (NI_KFLASH=1 or NI_KFLASH_TREE=1; a genuine NI_KFLASH_CAP "
+              "below the full depth decides over them -- unset it, or set NI_KFLASH_VERIFY to the full depth)",
               block());
-      if (!tg_.verify_wide_ok()) fatal("NI_DFLASH_BLOCK=%d: this target has no wide tree verify", block());
+      if (!tg_.verify_wide_ok()) fatal("NI_KFLASH_BLOCK=%d: this target has no wide tree verify", block());
       // and the drafting pass itself must run on the matrix units: a 16-row block drafts its two tiles with the pair
       // kernel and the tensor-path GEMMs, and has no 8-row fallback (encode_draft_impl and enc_qmm8 fatal otherwise).
       // Said here, while the model loads, not on the first request. The knobs that take the drafting pass or the
       // attention off that path (V8Knobs::dfl bit 1, the old attention; bit 128, the MLP's own qmm8_gu; and
-      // NI_DFLASH_ATTN=scalar) count as missing too, so they are refused here rather than on the first cycle.
+      // NI_KFLASH_ATTN=scalar) count as missing too, so they are refused here rather than on the first cycle.
       if (!rows16_tensor_ok())
-        fatal("NI_DFLASH_BLOCK=%d: the drafting pass on a 16-row block needs the tensor path and the fused attention "
-              "(not the v1 drafter, the matrix units on, 4-bit group-64 projections, no NI_DFLASH_ATTN=scalar or "
+        fatal("NI_KFLASH_BLOCK=%d: the drafting pass on a 16-row block needs the tensor path and the fused attention "
+              "(not the v1 drafter, the matrix units on, 4-bit group-64 projections, no NI_KFLASH_ATTN=scalar or "
               "V8Knobs::dfl 1 / 128)", block());
       allowed |= 1u << (block() - 1);
       allowed &= ~(1u << (kB - 1));
@@ -664,14 +797,15 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // which measured 69.3 tok/s against 90.6 on this Mac, is not a decision the block leaves open)
     if (block() > kB) kf_budget_->pin_wide();
     // the 8-row block of a drafter loaded with 16 rows (set_block): its own budget (the 8-row block's file), one 8-row
-    // tile, the full depth, as NI_DFLASH_BLOCK=8 has them. NI_DFLASH_NARROW: by default on the M5 Max, where it was
-    // measured; 1 on any Mac a 16-row block runs on, 0 never
-    const char* nv = getenv("NI_DFLASH_NARROW");
-    const bool narrow = nv && *nv ? atoi(nv) != 0 : Gpu::get().name().find("M5 Max") != std::string::npos;
+    // tile, the full depth, as NI_KFLASH_BLOCK=8 has them. NI_KFLASH_NARROW: by default on the wide class (the
+    // 40-core M5 Max); 1 on any Mac a 16-row block runs on, 0 never
+    const char* nv = kenv("NARROW");
+    const bool narrow = nv && *nv ? atoi(nv) != 0 : default_on(Knob::kKflashNarrow, ModelFacts{});
     if (block() > kB && tree_ && narrow) {
       std::string key8 = key;
       if (const size_t at = key8.find("-blk16"); at != std::string::npos) key8.erase(at, 6);
       kf_budget_alt_ = std::make_unique<KfBudget>(key8);
+      kf_budget_alt_->set_hist_lane(hist_);
       kf_budget_alt_->set_rows(1u << (kB - 1), kB);
       kf_budget_alt_->set_wide(false);
       tree_rows_alt_ = kB;
@@ -685,23 +819,97 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     }
   }
   if (dyn_tau_ > 0 && !tree_)
-    logi("DFlash2: dynamic verify depth, tau %.3f (T = 0) / %.3f (T > 0)", dyn_tau_, dyn_tau_t_);
+    logi("KFlash: dynamic verify depth, tau %.3f (T = 0) / %.3f (T > 0)", dyn_tau_, dyn_tau_t_);
   if (cfg_.v1)
     logi("DFlash drafter (v1) %s: blocks of %d rows (trained %d), context window %d positions (trained %d)",
          dir.c_str(), kB, cfg_.trained_block, kCtxKeep, cfg_.trained_window);
+  // a drafter trained past this pipeline's ring says so once, beside the v1 note above
+  if (cfg_.trained_window > kWin) logi("DFlash2 drafter %s: ring %d positions (trained %d)", dir.c_str(), kWin, cfg_.trained_window);
   logi("DFlash2 drafter %s: %d layers, hidden %d, %d-bit projections, %.2f GB resident (process footprint %+.2f GB), "
        "loaded in %.0f ms", dir.c_str(), cfg_.NL, cfg_.H, bits_, resident_ / 1e9, footprint_gb() - fp0, now_ms() - t0);
 }
 
+bool dfl_lowrank_factors(const uint32_t* w, const uint16_t* sc, const uint16_t* bi, uint32_t N, uint32_t K, uint32_t r,
+                         std::vector<float>& A, std::vector<float>& P);
+void dfl_lowrank_rows(const uint32_t* w, const uint16_t* sc, const uint16_t* bi, uint32_t K, uint32_t r,
+                      const std::vector<float>& P, const std::vector<uint32_t>& order, std::vector<uint16_t>& out);
+
+void DFlash2::build_lowrank(uint32_t r) {
+  const QLinear& hq = head_sub_;
+  const uint32_t K = uint32_t(cfg_.H);
+  if (!head_n_ || !hq.q4() || hq.K != K || head_n_ % 2048 || K % 64 || r % 64 || r >= K) return;
+  const double t0 = now_ms();
+  std::vector<float> A, P;
+  // A complete head identity also invalidates the old coefficient-only cache names. Hashing the Q4 bytes with
+  // SHA256 is faster than extending the byte-at-a-time FNV loop over the whole head.
+  const std::string name = "dflash2-lowrank-" + dfl_lowrank_cache_key(hq.w->buf.as<uint32_t>(),
+      hq.s->buf.as<uint16_t>(), hq.b->buf.as<uint16_t>(), head_n_, K, r) + ".bin";
+  const std::string dir = hub::home_dir() + "/kflash", path = dir + "/" + name;
+  const size_t n = size_t(r) * K;
+  bool cached = false;
+  if (std::ifstream f{path, std::ios::binary}) {
+    A.resize(n);
+    P.resize(n);
+    f.read(reinterpret_cast<char*>(A.data()), std::streamsize(n * 4));
+    f.read(reinterpret_cast<char*>(P.data()), std::streamsize(n * 4));
+    cached = bool(f) && f.gcount() == std::streamsize(n * 4);
+  }
+  if (!cached) {
+    if (!dfl_lowrank_factors(hq.w->buf.as<uint32_t>(), hq.s->buf.as<uint16_t>(), hq.b->buf.as<uint16_t>(), head_n_, K,
+                             r, A, P))
+      return;
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    const std::string tmp = path + ".tmp";
+    {
+      std::ofstream f(tmp, std::ios::binary);
+      f.write(reinterpret_cast<const char*>(A.data()), std::streamsize(n * 4));
+      f.write(reinterpret_cast<const char*>(P.data()), std::streamsize(n * 4));
+    }
+    std::filesystem::rename(tmp, path, ec);
+  }
+  const double t1 = now_ms();
+  // shortlist position j = head row (j % 2048) x chunks + j / 2048: each 2048-wide top-16 chunk (dfl_top16) strides
+  // over the whole head, where id order would pack the likely tokens into the first chunks
+  const uint32_t nc = head_n_ / 2048;
+  std::vector<uint32_t> order(head_n_);
+  for (uint32_t j = 0; j < head_n_; ++j) order[j] = (j % 2048) * nc + j / 2048;
+  std::vector<uint16_t> brows;
+  dfl_lowrank_rows(hq.w->buf.as<uint32_t>(), hq.s->buf.as<uint16_t>(), hq.b->buf.as<uint16_t>(), K, r, P, order, brows);
+  Gpu& g = Gpu::get();
+  Buffer ab = g.alloc(size_t(r) * K * 2, "dfl_lr_a_bf16", false);
+  for (size_t i = 0; i < A.size(); ++i) ab.as<uint16_t>()[i] = f32_to_bf16(A[i]);
+  Buffer bb = g.alloc(brows.size() * 2, "dfl_lr_b_bf16", false);
+  memcpy(bb.ptr(), brows.data(), bb.size);
+  const Tensor ta{ab, DType::BF16, {int64_t(r), int64_t(K)}}, tb{bb, DType::BF16, {int64_t(head_n_), int64_t(r)}};
+  lrA_ = quantize({&ta}, "dfl_lr_a");
+  lrB_ = quantize({&tb}, "dfl_lr_b");
+  g.release(ab);
+  g.release(bb);
+  lr_perm_ = g.alloc(size_t(head_n_) * 4, "dfl_lr_perm", false);
+  memcpy(lr_perm_.ptr(), order.data(), lr_perm_.size);
+  owned_bufs_.push_back(lr_perm_);
+  lr_y_ = g.alloc(size_t(8) * r * 4, "dfl_lr_y");
+  lr_xh_ = g.alloc(size_t(16) * r * 2, "dfl_lr_xh");
+  lr_xs_ = g.alloc(size_t(r) / 64 * 8 * 4, "dfl_lr_xs");
+  resident_ += lr_perm_.size + lr_y_.size + lr_xh_.size + lr_xs_.size;
+  lr_r_ = r;
+  logi("KFlash: low-rank shortlist head r=%u (factors %s in %.0f ms, rows %.0f ms)", r, cached ? "cached" : "computed",
+       t1 - t0, now_ms() - t1);
+}
+
 void DFlash2::load_v8_packed_coeff() {
-  if (!v8_ || bits_ != 4 || !cfg_.v1 || cfg_.H != 2560 || cfg_.I != 9216 || cfg_.NL != 6 ||
+  if (!v8_ || bits_ != 4 || !cfg_.v1 || cfg_.H != tg_.config().hidden || cfg_.I != tg_.config().dense_I || cfg_.NL != 6 ||
       !Qwen35::v8_packed_coeff_on(tg_.config())) return;
   const double start = now_ms();
   size_t bytes = 0, count = 0, compressed = 0, blocks = 0;
-  auto pack = [&](const QLinear& q, Qwen35::PackedCoeffBuffers& out) {
+  auto pack = [&](const QLinear& q, Qwen35::PackedCoeffBuffers& out, uint32_t ks = 0) {
     if (!q || !q.q4() || q.exl3 || q.q20 || !q.N || !q.K || q.K % 64) return;
-    const auto image = pack_affine_packed_coeff(q.w->buf.as<uint32_t>(), q.s->buf.as<uint16_t>(),
-                                               q.b->buf.as<uint16_t>(), q.N, q.K / 64);
+    auto image = pack_affine_packed_coeff(q.w->buf.as<uint32_t>(), q.s->buf.as<uint16_t>(),
+                                          q.b->buf.as<uint16_t>(), q.N, q.K / 64);
+    out.ks = ks ? ks : Qwen35::v8_packed_ks(q.K);
+    out.rg = out.ks ? Qwen35::v8_packed_rg(q.N) : 1u;
+    if (out.ks) interleave_packed_slices(image, q.N, q.K / 64, out.ks, out.rg);
     out.payload = Gpu::get().alloc(image.words.size() * 4, "dfl_packed_coeff_payload", false);
     owned_bufs_.push_back(out.payload);
     memcpy(out.payload.ptr(), image.words.data(), out.payload.size);
@@ -713,12 +921,24 @@ void DFlash2::load_v8_packed_coeff() {
     ++count;
   };
   for (DLayer& l : layers_) {
+    if (cfg_.H == 4096) { pack(l.down, l.down_packed); continue; }
     pack(l.gate, l.gate_packed);
     pack(l.up, l.up_packed);
     pack(l.down, l.down_packed);
+    pack(l.q, l.q_packed);
+    pack(l.kv, l.kv_packed);
+    pack(l.o, l.o_packed);
   }
-  // A full head uses the target's existing image; only the reduced copy belongs to the drafter.
-  if (head_n_) pack(head_sub_, head_packed_);
+  if (cfg_.H != 4096) {
+    pack(kv_all_, kv_all_packed_);
+    // the ring commit's fc (K = 8 x 2560): 8 k-slices (the packed GEMM's most; enc_qmm8 runs a given image at 8)
+    static const bool fc_env = !getenv("NI_DFL_FC_PACK") || atoi(getenv("NI_DFL_FC_PACK")) != 0;
+    if (fc_env && fc_.K / 64 >= 256 && (fc_.K / 64 / 2) % 8 == 0) pack(fc_, fc_packed_, 8u);
+    // A full head uses the target's existing image; only the reduced copy belongs to the drafter.
+    // (with the low-rank shortlist the head's rows are only rescored, from their plain layout: no image)
+    if (head_n_ && !lr_r_) pack(head_sub_, head_packed_);
+    if (lr_r_) pack(lrA_, lrA_packed_);
+  }
   resident_ += bytes;
   logi("NI_V8_PACKED_COEFF_NF1: packed %zu static draft projections, %.1f MiB in %.0f ms; compressed %zu/%zu blocks",
        count, double(bytes) / (1024 * 1024), now_ms() - start, compressed, blocks);
@@ -726,7 +946,7 @@ void DFlash2::load_v8_packed_coeff() {
 
 void DFlash2::alloc_buffers() {
   Gpu& g = Gpu::get();
-  const size_t H = cfg_.H, I = cfg_.I, V = cfg_.vocab, G4 = 4 * (cfg_.H / cfg_.conv_gs);
+  const size_t H = cfg_.H, I = cfg_.I, G4 = 4 * (cfg_.H / cfg_.conv_gs);
   const size_t nH = cfg_.target_layers.size() * H;
   const size_t Kx = std::max({nH, size_t(4096), H, I});
   const size_t KV = size_t(cfg_.NL) * 2048;
@@ -749,10 +969,11 @@ void DFlash2::alloc_buffers() {
   Vb_ = g.alloc(8 * B * 128 * 4, "dfl_Vb");
   part_o_ = g.alloc(size_t(max_splits_) * 32 * B * 128 * 4, "dfl_part_o");
   part_ml_ = g.alloc(size_t(max_splits_) * 32 * B * 2 * 4, "dfl_part_ml");
+  const size_t Vd = head_rows();
   u_ = g.alloc(B * H * 4, "dfl_u");
-  logits_ = g.alloc(B * V * 4, "dfl_logits");
+  logits_ = g.alloc(B * Vd * 4, "dfl_logits");
   sel_ = g.alloc(B * kRank * 4, "dfl_sel");
-  const size_t ntg = (V + 2047) / 2048;
+  const size_t ntg = (Vd + 2047) / 2048;
   tk_v_ = g.alloc(D * ntg * 16 * 4, "dfl_tk_v");
   tk_i_ = g.alloc(D * ntg * 16 * 4, "dfl_tk_i");
   cand_v_ = g.alloc(D * 16 * 4, "dfl_cand_v");
@@ -763,20 +984,20 @@ void DFlash2::alloc_buffers() {
   walk_s_ = g.alloc(D * 16 * 4, "dfl_walk_s");
   qprob_ = g.alloc(D * 16 * 4, "dfl_qprob");
   walk_k_ = g.alloc(B * 4, "dfl_walk_k");
-  dist_id_ = g.alloc(B * 32 * 4, "dfl_dist_id");
-  dist_p_ = g.alloc(B * 32 * 4, "dfl_dist_p");
+  dist_id_ = g.alloc(B * kTopkMax * 4, "dfl_dist_id");  // (dfl_dist_rows' kDflDistW per row)
+  dist_p_ = g.alloc(B * kTopkMax * 4, "dfl_dist_p");
   dist_keep_ = g.alloc(B * 4, "dfl_dist_keep");
   acc_ = g.alloc(16, "dfl_acc");
   memset(acc_.ptr(), 0, acc_.size);
   {
-    // the target's 8-row verify GEMMs for the drafter's projections (NI_DFLASH_V8=0/1 overrides): the 27B's drafter
+    // the target's 8-row verify GEMMs for the drafter's projections (NI_KFLASH_V8=0/1 overrides): the 27B's drafter
     // (H 5120) and the 4B's (H 2560: 4-bit 4B, code / prose, 178.2 -> 179.8 / 142.1 -> 144.2 tok/s); the 35B's
-    // (H 2048) keeps dfl_qmm8 except for the measured 32-core M1 Max 4-bit MoE case
-    const char* v = getenv("NI_DFLASH_V8");
+    // (H 2048) keeps dfl_qmm8 except for the 32-core M1 Max 4-bit MoE case
+    const char* v = kenv("V8");
     v8_ = B == 8 && (v && *v ? atoi(v) != 0 : default_v8(H, tg_.config().moe, tg_.lm_head().q4()));
   }
   if (v8_) {
-    v8t_ = g.alloc(8 * H * 2, "dfl_v8_table");
+    v8t_ = g.alloc(8 * std::max<size_t>({H, 4096, nH}) * 2, "dfl_v8_table");  // (H, the attention output, the fc input)
     v8h_ = g.alloc(8 * I * 2, "dfl_v8_h");
     v8hs_ = g.alloc(I / 64 * 8 * 4, "dfl_v8_hs");
     resident_ += v8t_.size + v8h_.size + v8hs_.size;
@@ -801,25 +1022,29 @@ void DFlash2::alloc_buffers() {
   y8_ = g.alloc(B * H * 4, "dfl_y8");
   c8_ = g.alloc(B * H * 4, "dfl_c8");
   kv8_ = g.alloc(B * KV * 4, "dfl_kv8");
-  cdbg_ = g.alloc(size_t(kCtxKeep) * H * 4, "dfl_c");
   memset(capt_.ptr(), 0, capt_.size);
   for (Buffer* b : {&h_, &n_, &xh_, &xs_, &xh2_, &xs2_, &hh_, &gu_g_, &gu_u_, &hs_, &dyn_, &q_, &kv_, &Q_, &Kb_, &Vb_, &part_o_, &part_ml_, &u_,
                     &logits_, &sel_, &tk_v_, &tk_i_, &cand_v_, &cand_i_, &edges_, &walk_s_, &qprob_, &walk_k_, &capt_,
-                    &y8_, &c8_, &kv8_, &cdbg_, &rope_cs_, &dist_id_, &dist_p_, &dist_keep_, &acc_, &kdyn_, &gst_,
+                    &y8_, &c8_, &kv8_, &rope_cs_, &dist_id_, &dist_p_, &dist_keep_, &acc_, &kdyn_, &gst_,
                     &tree_buf_, &kf_clq_, &kf_tok_, &kf_next_, &kf_live_})
     resident_ += b->size;
+}
+
+void DFlash2::set_debug(bool on) {
+  debug_ = on;
+  if (on && !cdbg_) cdbg_ = Gpu::get().alloc(size_t(kCtxKeep) * size_t(cfg_.H) * 4, "dfl_c");
 }
 
 void DFlash2::build_head(int n_req, bool explicit_n) {
   const uint32_t V = uint32_t(cfg_.vocab);
   const QLinear& H = tg_.lm_head();
-  // The ranking: NI_DFLASH_HEAD_IDS=<file> (uint32 token ids, most useful first, e.g. counts from a corpus), else
+  // The ranking: NI_KFLASH_HEAD_IDS=<file> (uint32 token ids, most useful first, e.g. counts from a corpus), else
   // Kapitsa's own: token id order, which for the byte-level BPE tokenizer is its merge order, a frequency proxy
   // (the same idea as the MTP draft head). Id order needs more rows than a frequency ranking: at 65536 it drafts
   // worse (27B code_27b 512: 4.52 tok/cycle vs 4.78 for the full head), at 98304 it covers 99.8-100% of the
   // generated tokens and drafts like the full head (tok/cycle equal on code / p700 / prose, both models).
   std::vector<uint32_t> ranked;
-  const char* path = getenv("NI_DFLASH_HEAD_IDS");
+  const char* path = kenv("HEAD_IDS");
   if (path && *path) {
     if (std::ifstream f{path, std::ios::binary}) {
       f.seekg(0, std::ios::end);
@@ -827,7 +1052,7 @@ void DFlash2::build_head(int n_req, bool explicit_n) {
       f.seekg(0);
       f.read(reinterpret_cast<char*>(ranked.data()), std::streamsize(ranked.size() * 4));
     }
-    if (ranked.empty()) logi("DFlash2: NI_DFLASH_HEAD_IDS=%s holds no token ids; the draft head uses id order", path);
+    if (ranked.empty()) logi("KFlash: NI_KFLASH_HEAD_IDS=%s holds no token ids; the draft head uses id order", path);
   }
   if (!explicit_n) n_req = ranked.empty() ? kHeadRowsIdOrder : kHeadRows;
   // a head without 4/8-bit group-64 kernels on the drafter's path gets an 8-bit copy (the full one if asked)
@@ -882,7 +1107,7 @@ void DFlash2::build_head(int n_req, bool explicit_n) {
     head_sub_.bits = 8;
     head_sub_.gs = 64;
     head_n_ = N;
-    logi("DFlash2: draft head of %u of %u ids as an 8-bit copy of the %s LM head (%s), %.0f MB", head_n_, V,
+    logi("KFlash: draft head of %u of %u ids as an 8-bit copy of the %s LM head (%s), %.0f MB", head_n_, V,
          format_name(H.bits, H.gs).c_str(), ranked.empty() ? "id order = BPE merge order" : path,
          (w.size + sc.size + bi.size) / 1e6);
     return;
@@ -910,7 +1135,7 @@ void DFlash2::build_head(int n_req, bool explicit_n) {
   head_sub_.b = &owned_.back();
   head_sub_.N = uint32_t(ids.size());
   head_n_ = uint32_t(ids.size());
-  logi("DFlash2: reduced draft head, %u of %u ids (%s), %.0f MB", head_n_, V,
+  logi("KFlash: reduced draft head, %u of %u ids (%s), %.0f MB", head_n_, V,
        ranked.empty() ? "id order = BPE merge order" : path, (w.size + sc.size + bi.size) / 1e6);
 }
 
@@ -930,28 +1155,32 @@ bool DFlash2::tensor_path_ok() {
   return dfl_tw_supported() && v8_knobs().tw && !(v8_knobs().dfl & (1 | 32 | 128));
 }
 
-int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* block_env, bool tw_ok) {
-  const char* v = block_env ? block_env : getenv("NI_DFLASH_BLOCK");
+int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* block_env, bool tw_ok, bool multi16) {
+  const char* v = block_env ? block_env : kenv("BLOCK");
   if (v && *v && std::string(v) != "auto")  // 8 or 16; anything else fatals when the drafter loads
     return atoi(v) == 16 ? 16 : kB;
-  // The default, and the same conditions the load refuses NI_DFLASH_BLOCK=16 under, as far as they can be read
+  // The default, and the same conditions the load refuses NI_KFLASH_BLOCK=16 under, as far as they can be read
   // without the drafter: a one-slot engine on a dense target, trees on, a walk deep enough for all 16 rows, and the
   // matrix units with the fused attention the drafting pass needs (tw_ok, which the caller fills from its GPU and its
   // knobs). What is left out is the drafter's own weights (a v1 drafter, projections that are not 4-bit group 64), so
   // on such a drafter this is an upper bound: the plan reserves 16 rows and the load keeps 8, ~30 MB on the 27B. A MoE
-  // target has no wide verify, and a multi-slot engine co-decodes requests, so both keep the 8-row tile.
-  if (slots != 1 || target.moe) return kB;
+  // target has no wide verify, so it keeps the 8-row tile. A multi-slot engine co-decodes requests in 8-row batched
+  // passes; with multi16 (the device profile's kflash_block16 row: the matrix class) it drafts 16 rows anyway and its
+  // requests take turns (Engine::batch_rows), which measured faster for one session and for two at once.
+  if (target.moe || (slots != 1 && !multi16)) return kB;
   if (!kf_tree_default(15)) return kB;  // the 16-row block's full depth
-  const char* vv = getenv("NI_DFLASH_VERIFY");
+  const char* vv = kenv("VERIFY");
   if (vv && *vv && atoi(vv) < 15) return kB;
-  const char* av = getenv("NI_DFLASH_ATTN");
+  const char* av = kenv("ATTN");
   if (av && std::string(av) == "scalar") return kB;
   if (!tw_ok) return kB;
   return 16;
 }
 
+bool DFlash2::multi_slot16_default() { return default_on(Knob::kKflashBlock16, ModelFacts{}); }
+
 size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, size_t head_row_bytes,
-                           size_t* per_slot, size_t* at_prefill, int block_rows) {
+                           size_t* per_slot, size_t* at_prefill, int block_rows, bool lanes) {
   namespace fs = std::filesystem;
   json c;
   if (std::ifstream f(dir + "/config.json"); f) {
@@ -964,7 +1193,7 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
   const size_t H = c.value("hidden_size", 2048), NL = c.value("num_hidden_layers", 5), I = c.value("intermediate_size", 6144),
                V = c.value("vocab_size", 248320), nT = dc.contains("target_layer_ids") ? dc["target_layer_ids"].size() : 5,
                gs = dc.value("conv_group_size", 16);
-  const size_t bits = getenv("NI_DFLASH_BITS") ? size_t(atoi(getenv("NI_DFLASH_BITS"))) : 4;
+  const size_t bits = kenv("BITS") ? size_t(atoi(kenv("BITS"))) : 4;
   auto ends = [](const std::string& a, const char* b) {
     const size_t n = strlen(b);
     return a.size() >= n && a.compare(a.size() - n, n, b) == 0;
@@ -998,38 +1227,66 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
     }
   }
   // alloc_buffers(), term for term, at the rows the block drafts: Bk rows, Tk 8-row tiles, Dk lattice depth
+  const char* hv = kenv("HEAD");
+  const char* ids = kenv("HEAD_IDS");
+  const size_t req = hv && *hv ? size_t(std::max(0, atoi(hv))) : ids && *ids ? size_t(kHeadRows) : size_t(kHeadRowsIdOrder);
+  const size_t special0 = target.eos.empty() ? V : std::min<size_t>(V, size_t(*std::min_element(target.eos.begin(), target.eos.end())));
+  const size_t Vd = (req > 0 && req < V) ? std::max(req, V - special0) : V;
   const size_t nH = nT * H, Kx = std::max({nH, size_t(4096), H, I}), KV = NL * 2048, G4 = 4 * (H / std::max<size_t>(gs, 1)),
-               ntg = (V + 2047) / 2048, Bk = size_t(std::max(block_rows, int(kB))), Tk = Bk / 8, Dk = Bk - 1;
+               ntg = (Vd + 2047) / 2048, Bk = size_t(std::max(block_rows, int(kB))), Tk = Bk / 8, Dk = Bk - 1;
   size_t b = 5 * Bk * H * 4 + 2 * Bk * I * 4 + 16 * Tk * Kx * 2 + Tk * Kx / 64 * 8 * 4 + 16 * Tk * H * 2 + Tk * H / 64 * 8 * 4 +
              16 * Tk * I * 2 + Tk * I / 64 * 8 * 4 + Bk * G4 * 4 + Bk * 4096 * 4 + Bk * 2048 * 4 + 32 * Bk * 128 * 4 +
-             2 * 8 * Bk * 128 * 4 + 32 * (32 * Bk * 128 * 4 + 32 * Bk * 2 * 4) + Bk * V * 4 + Bk * kRank * 4 +
-             2 * Dk * ntg * 16 * 4 + 8 * nH * 2 + Bk * KV * 4 + size_t(kCtxKeep) * H * 4 + (64 << 10);
-  const char* v8 = getenv("NI_DFLASH_V8");
+             2 * 8 * Bk * 128 * 4 + 32 * (32 * Bk * 128 * 4 + 32 * Bk * 2 * 4) + Bk * Vd * 4 + Bk * kRank * 4 +
+             2 * Dk * ntg * 16 * 4 + 8 * nH * 2 + Bk * KV * 4 + (64 << 10);
+  const char* v8 = kenv("V8");
   // A native 4-bit group-64 head row includes its packed codes, scales and biases.
   const bool head_q4 = head_row_bytes == size_t(target.hidden) / 2 + size_t(target.hidden) / 64 * 4;
   const bool use_v8 = v8 && *v8 ? atoi(v8) != 0 : default_v8(H, target.moe, head_q4);
-  const bool packed_v8 = Bk == 8 && use_v8 && bits == 4 && H == 2560 && I == 9216 && NL == 6 &&
-                         c.value("architectures", json::array()) == json::array({"DFlashDraftModel"}) &&
+  const bool v1 = c.value("architectures", json::array()) == json::array({"DFlashDraftModel"});
+  const bool packed_v8 = Bk == 8 && use_v8 && bits == 4 && H == size_t(target.hidden) &&
+                         I == size_t(target.dense_I) && NL == 6 && v1 &&
                          Qwen35::v8_packed_coeff_on(target);
   auto packed_bytes = [](size_t N, size_t K) {
     const size_t blocks = ((N + 15) / 16) * ((K / 64 + 1) / 2);
     // All-raw upper bound, including aligned raw slabs and the separate header array.
     return (((blocks * 272 + 31) & ~size_t(31)) + blocks * 33) * 4;
   };
-  if (use_v8)
-    b += 8 * H * 2 + 8 * I * 2 + I / 64 * 8 * 4;
-  if (packed_v8) w += NL * (2 * packed_bytes(I, H) + packed_bytes(H, I));
+  if (Bk == 8 && use_v8)
+    b += 8 * std::max({H, size_t(4096), nH}) * 2 + 8 * I * 2 + I / 64 * 8 * 4;
+  if (packed_v8) {
+    w += NL * ((H == 4096 ? 0 : 2 * packed_bytes(I, H)) + packed_bytes(H, I));
+    if (H != 4096) {
+      // load_v8_packed_coeff(): per-layer q/kv/o, the stacked context KV, and the optional ring-commit fc.
+      w += NL * (packed_bytes(4096, H) + packed_bytes(2048, H) + packed_bytes(H, 4096));
+      w += packed_bytes(NL * 2048, H);
+      const bool fc = !getenv("NI_DFL_FC_PACK") || atoi(getenv("NI_DFL_FC_PACK")) != 0;
+      if (fc && nH / 64 >= 256 && (nH / 64 / 2) % 8 == 0) w += packed_bytes(H, nH);
+    }
+  }
   // build_head(): rows of the target's LM head (the ranked or id-order rows plus every id from the first
   // end-of-sequence id on)
   {
-    const char* hv = getenv("NI_DFLASH_HEAD");
-    const char* ids = getenv("NI_DFLASH_HEAD_IDS");
+    const char* hv = kenv("HEAD");
+    const char* ids = kenv("HEAD_IDS");
     const size_t req = hv && *hv ? size_t(std::max(0, atoi(hv))) : ids && *ids ? size_t(kHeadRows) : size_t(kHeadRowsIdOrder);
     const size_t special0 = target.eos.empty() ? V : std::min<size_t>(V, size_t(*std::min_element(target.eos.begin(), target.eos.end())));
     if (req > 0 && req < V) {
       const size_t rows = std::max(req, V - special0);
       b += rows * (head_row_bytes + 4);
-      if (packed_v8 && head_q4) w += packed_bytes(rows, H);
+      // build_lowrank() retains the original reduced head for rescoring and adds two quantized factors.
+      const int r = lowrank_request();
+      const bool lr = Bk == 8 && use_v8 && v1 && head_q4 && H % 64 == 0 && rows % 2048 == 0 &&
+                      r > 0 && size_t(r) < H && r % 64 == 0;
+      size_t head_extra = packed_v8 && head_q4 && H != 4096 ? packed_bytes(rows, H) : 0;
+      if (lr) {
+        size_t factors = (size_t(r) * H + rows * size_t(r)) * bits / 8 +
+                         (size_t(r) * (H / 64) + rows * (size_t(r) / 64)) * 4;
+        factors += rows * 4 + 8 * size_t(r) * 4 + 16 * size_t(r) * 2 + size_t(r) / 64 * 8 * 4;
+        if (packed_v8 && H != 4096) factors += packed_bytes(size_t(r), H);
+        // A failed factorization keeps the full packed head; reserve enough for either outcome.
+        head_extra = std::max(head_extra, factors);
+      }
+      w += head_extra;
     }
   }
   b += size_t(4) << 20;  // the target's 8-row verify scratch (Qwen35::v8_alloc): ~1-3 MB
@@ -1059,6 +1316,11 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
     const size_t row = C + size_t(target.lin_hv) * (target.lin_dk + target.lin_dv + 1);
     if (per_slot) *per_slot += lin * extra * row * 4;
   }
+  // the online selector update's fp32 masters (see the constructor): off when NI_KFLASH_SELUPD says so or sets no rate
+  const char* su = kenv("SELUPD");
+  const bool selupd = (su && *su ? atof(su) > 0 : lanes && kSelUpdDefault) && selupd_tree_runs();  // as the constructor
+  const bool v1_drafter = c.value("architectures", json::array()) == json::array({"DFlashDraftModel"});
+  if (selupd && !v1_drafter) w += 2 * V * kRank * 4;
   return w + b + pf;
 }
 
@@ -1155,18 +1417,18 @@ void DFlash2::dbg(Encoder& e, const std::string& name, const Buffer& src, size_t
 }
 
 // The drafter's 4-bit GEMMs on the core before dfl_q8_run4: dfl_q8_run4 (two groups per step, the next step's loads
-// first, subnormal codes) is measured on M5 and the 32-core M1 Max. Other Macs
-// keep the earlier core; NI_DFLASH_CORE4=1 / 0 forces the new / earlier one.
+// first, subnormal codes) is measured on M5 and the 32-core M1 Max (guard row, #393).
+// NI_KFLASH_CORE4=1 / 0 forces the new / earlier one.
 static bool dfl_old4() {
-  static const bool old = getenv("NI_DFLASH_CORE4") ? atoi(getenv("NI_DFLASH_CORE4")) == 0
-      : !(Gpu::get().apple10() || (Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32));
+  static const bool old = kenv("CORE4") ? atoi(kenv("CORE4")) == 0
+      : !(matrix_units() || m1_max_32());  // guard: CORE4 measured on M5 and M1 Max 32
   return old;
 }
 
 // K split (bench_qmm8 sweep, M4 Pro): no split once there are >= 1024 threadgroups (LM head) on its 20 GPU cores,
 // ~51 per core (Gpu::core_count); otherwise the largest split that leaves every simdgroup >= 8 groups of 64.
 static uint32_t dfl_qmm8_ks(uint32_t rbs_total, uint32_t K, int ks_req) {
-  static const int ks_env = getenv("NI_DFLASH_KS") ? atoi(getenv("NI_DFLASH_KS")) : 0;
+  static const int ks_env = kenv("KS") ? atoi(kenv("KS")) : 0;
   static const uint32_t many = 1024u * uint32_t(std::max(1, Gpu::get().core_count())) / 20u;
   uint32_t ks = 1;
   if (ks_req > 0) ks = uint32_t(ks_req);
@@ -1191,8 +1453,8 @@ void dfl_enc_qmm8(Encoder& e, const std::vector<DflSeg8>& segs, const Buffer& xh
   }
   const uint32_t ks = dfl_qmm8_ks(rbs_total, K, ks_req);
   p.ks = ks;
-  // NI_DFLASH_RF=2: 16 weight rows per simdgroup (the X gather shared by two fragments)
-  static const int rf_env = getenv("NI_DFLASH_RF") ? atoi(getenv("NI_DFLASH_RF")) : 1;
+  // NI_KFLASH_RF=2: 16 weight rows per simdgroup (the X gather shared by two fragments)
+  static const int rf_env = kenv("RF") ? atoi(kenv("RF")) : 1;
   const uint32_t rf = (rf_req ? rf_req : rf_env) == 2 ? 2 : 1;
   const uint32_t rbs = 8 / ks * rf;  // 8-row blocks per threadgroup
   uint32_t tg = 0;
@@ -1223,8 +1485,8 @@ void dfl_enc_qmm8_gu(Encoder& e, const QLinear& g, const QLinear& u, const Buffe
                      const Buffer& hh, const Buffer& hs, int ks_req) {
   if (g.N != u.N || g.K != u.K || g.bits != u.bits || g.N % 64) fatal("enc_qmm8_gu: shapes");
   // K split inside the 64-column threadgroup (8 row blocks x ks simdgroups); default: the largest
-  // of 1/2/4 that keeps >= 8 groups per simdgroup (NI_DFLASH_GU_KS overrides)
-  static const int ks_env = getenv("NI_DFLASH_GU_KS") ? atoi(getenv("NI_DFLASH_GU_KS")) : 0;
+  // of 1/2/4 that keeps >= 8 groups per simdgroup (NI_KFLASH_GU_KS overrides)
+  static const int ks_env = kenv("GU_KS") ? atoi(kenv("GU_KS")) : 0;
   uint32_t ks = ks_req > 0 ? uint32_t(ks_req) : ks_env > 0 ? uint32_t(ks_env) : 0;
   if (!ks) {
     ks = 1;
@@ -1254,7 +1516,7 @@ void dfl_enc_qmm8_gu(Encoder& e, const QLinear& g, const QLinear& u, const Buffe
 // if the target has not yet), V8Knobs::tw on and V8Knobs::dfl bit 32 off (the drafter alone back on dfl_qmm8)
 static bool dfl_tw_supported() {
   static const bool ok = [] {
-    if (Gpu::get().apple_family() < 10) return false;
+    if (!matrix_units()) return false;
     if (__builtin_available(macOS 26.0, *)) {
       Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
       return Gpu::get().pipeline("qmm8t_b4_nt16", false).pso != nullptr;
@@ -1285,7 +1547,14 @@ void DFlash2::enc_qmm8(Encoder& e, const std::vector<DflSeg8>& segs, const Buffe
   uint32_t Ntot = 0;
   for (auto& sg : segs) Ntot += sg.L->N;
   const uint32_t gpr = K / 64;
-  const int nt = ((Ntot + 15) / 16 > 8192 || gpr > 64) ? 32 : 16;
+  // 32 weight rows a simdgroup for grids past 8192 threadgroups of 16 (the target's rule), and for K > 4096 on narrow
+  // outputs (N <= 4096: the 35B drafter's down projection, 2048 x 6144); 16 otherwise. The 27B drafter's projections
+  // (K 5120 and 17408, N 5120 to 98304) on 16-row simdgroups: its 16-row drafting pass 4.40 -> 3.93 ms, the 8-row one on
+  // these GEMMs (NI_KFLASH_V8=0) 3.14 -> 3.07, M5 Max (ni_run, per-cycle A/B, the same tokens). NI_DFL_NT=0: the previous
+  // rule (32 for every K > 4096)
+  static const bool nt_old = getenv("NI_DFL_NT") && std::string(getenv("NI_DFL_NT")) == "0";
+  const bool fat = (Ntot + 15) / 16 > 8192 || (gpr > 64 && (nt_old || Ntot <= 4096));
+  const int nt = fat ? 32 : 16;
   uint32_t ks = gpr > 32 && gpr <= 64 ? 4 : 8;
   while (ks > 1 && gpr < ks) ks /= 2;
   const bool pf = nt == 32 || gpr > 32;
@@ -1373,9 +1642,22 @@ void DFlash2::enc_qmm8_cp(Encoder& e, const QLinear& L, const Tensor* base, cons
   }
 }
 
-// Prefill-size GEMM (context commit of the prompt): the target's prefill kernels, half X rows.
+// Prefill-size GEMM (context commit of the prompt): the target's prefill kernels, half X rows. 4-bit group-64 weights
+// at 64 rows or more take the target's tensor tile (qmt_m64_n64) where it runs (qmt_on(): the M5 family on macOS 26):
+// the 35B's commit of a 4K prompt, fc_ (2048 x 16384) and kv_all_ (12288 x 2048) on 512-row blocks, ran on the original
+// simdgroup kernels at 12-13 TFLOP/s (the tile: 41-44). Only the drafter's context moves (the K reduction's order): the target's
+// outputs are the verify's, so its tokens do not change.
 void DFlash2::enc_qmm_rows(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M) {
   const bool big = M >= 64;
+  if (big && qmt_on() && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
+    const uint32_t bm = qmt128_for(M) ? 128 : 64;  // the 128-row tile: the same bits (NI_QMT128)
+    e.use(dpipe(bm == 128 ? "qmt_m128_n64" : "qmt_m64_n64"));
+    kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, 0u, uint32_t(L.gs), 0, 0};
+    e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
+    e.val(5, p);
+    e.dispatch((L.N + 63) / 64, (uint32_t(M) + bm - 1) / bm, 1, 128);
+    return;
+  }
   const int BM = big ? 64 : 32, BN = big ? 64 : 32;
   const std::string n = "qmm_b" + std::to_string(L.bits) + (big ? "_m64_n64" : "_m32_n32");
   e.use(dpipe(n));
@@ -1438,8 +1720,8 @@ void DFlash2::encode_prefill_commit(Encoder& e, DFlashSeq& d) {
   // (with d.ctx == start the gap, if any, lies below n - 2047 and is never visible anyway)
   if (d.ctx < pf_n_ - pf_rows_) d.valid_lo = std::max(d.valid_lo, pf_n_ - pf_rows_);
   // Short prompts: 8-row chunks through the 8-row GEMM (it streams each weight once per 8 rows at
-  // ~180 GB/s; the prefill GEMM pays 64-row tiles). NI_DFLASH_PF8 = largest row count for this path.
-  static const int pf8_env = getenv("NI_DFLASH_PF8") ? atoi(getenv("NI_DFLASH_PF8")) : 256;
+  // ~180 GB/s; the prefill GEMM pays 64-row tiles). NI_KFLASH_PF8 = largest row count for this path.
+  static const int pf8_env = kenv("PF8") ? atoi(kenv("PF8")) : 256;
   if (pf_rows_ <= (pf8_ >= 0 ? pf8_ : pf8_env)) {
     for (int c0 = 0; c0 < pf_rows_; c0 += kB) {
       const int cn = std::min(kB, pf_rows_ - c0);
@@ -1482,9 +1764,11 @@ void DFlash2::encode_prefill_commit(Encoder& e, DFlashSeq& d) {
     }
     enc_qmm_rows(e, fc_, xph_, yph_, cn);
     {
-      kp::DflNorm p{H, cfg_.eps, 16.0f, 1u};
+      kp::DflNorm p{H, cfg_.eps, 16.0f, debug_ ? 1u : 0u};
       e.use(dpipe("dfl_rows_norm_half"));
-      e.buf(0, yph_); e.buf(1, hnorm_->buf); e.buf(2, cph_); e.buf(3, cdbg_, size_t(c0) * H * 4);
+      e.buf(0, yph_); e.buf(1, hnorm_->buf); e.buf(2, cph_);
+      if (debug_) e.buf(3, cdbg_, size_t(c0) * H * 4);
+      else e.buf(3, yph_);
       e.val(4, p);
       e.dispatch(uint32_t(cn), 1, 1, 256);
     }
@@ -1525,10 +1809,10 @@ void DFlash2::set_block(int rows) {
 }
 
 void DFlash2::set_tree(bool on) {
-  // NI_DFLASH_VERIFY below 7 keeps the chain
+  // NI_KFLASH_VERIFY below 7 keeps the chain
   tree_ = on && tg_.block_drafter_ok() && tg_.verify_tree_ok() && verify_depth() == block() - 1;
   if (on && !tree_)
-    logi("DFlash2: tree drafting needs all 8 verify rows and the 8-row verify's attn8m and split GDN paths; the chain "
+    logi("KFlash: tree drafting needs all 8 verify rows and the 8-row verify's attn8m and split GDN paths; the chain "
          "stays");
   if (tree_) logi("KFlash: tree drafting on the DFlash2 lattice (budget cache %s)", kf_budget_ ? "on" : "off");
 }
@@ -1575,7 +1859,7 @@ void DFlash2::encode_accept_rows(Encoder& e, Seq& s, DFlashSeq& d, int P, int K,
                                  uint32_t n) {
   if (K < 1 || K > kB - 1 || sp.temperature <= 0) fatal("DFlash2 accept_rows: K=%d T=%g", K, sp.temperature);
   const size_t R = size_t(K) + 1;
-  kp::DflDist dp{n, uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)), sp.temperature, sp.top_p};
+  kp::DflDist dp{n, topk_k(sp), sp.temperature, sp.top_p};
   e.use(dpipe("dfl_dist_rows"));
   e.buf(0, tg_.verify_cand_vals().view(size_t(r0) * n * 4, R * n * 4));
   e.buf(1, tg_.verify_cand_ids().view(size_t(r0) * n * 4, R * n * 4));
@@ -1618,27 +1902,39 @@ void DFlash2::enc_commit_from(Encoder& e, DFlashSeq& d, int m, const Buffer& src
     e.buf(4, gst_);
     e.dispatch(B, (nH / 64 + 7) / 8, 1, 256);
   }
-  const float fs = tw_for({{&fc_, y8_, H, 1.0f}}, nH) ? 16.0f : 1.0f;  // (see encode_prefill_commit)
-  enc_qmm8(e, {{&fc_, y8_, H, 16.0f / fs}}, xh_, xs_, nH, nH, int(BT));
+  // the packed verify GEMM (no output scale: the norm takes the 16, as on the tensor path)
+  const bool fcp = v8_ && fc_packed_ && BT == 1 && size_t(nH) * 16 <= v8t_.size;
+  const float fs = fcp || tw_for({{&fc_, y8_, H, 1.0f}}, nH) ? 16.0f : 1.0f;  // (see encode_prefill_commit)
+  if (fcp) {
+    enc_to_v8(e, xh_, nH, v8t_);
+    tg_.enc_qmm8(e, {{&fc_, y8_, H, false, fc_packed_}}, 8, v8t_, xs_);
+  } else {
+    enc_qmm8(e, {{&fc_, y8_, H, 16.0f / fs}}, xh_, xs_, nH, nH, int(BT));
+  }
   {
-    kp::DflNorm p{H, cfg_.eps, fs, 1u};
+    kp::DflNorm p{H, cfg_.eps, fs, debug_ ? 1u : 0u};
     e.use(dpipe("dfl_norm_x8"));
-    e.buf(0, y8_); e.buf(1, hnorm_->buf); e.buf(2, cdbg_); e.buf(3, xh_); e.buf(4, xs_);
+    e.buf(0, y8_); e.buf(1, hnorm_->buf); e.buf(2, debug_ ? cdbg_ : y8_); e.buf(3, xh_); e.buf(4, xs_);
     e.val(5, p);
     e.dispatch(B, 1, 1, 256);
   }
-  enc_qmm8(e, {{&kv_all_, kv8_, uint32_t(cfg_.NL) * 2048, 1.0f}}, xh_, xs_, H, H, int(BT));
+  if (v8_ && kv_all_packed_ && BT == 1) {  // the target's packed verify GEMM (the X8 table permuted to the verify's)
+    enc_to_v8(e, xh_, H, v8t_);
+    tg_.enc_qmm8(e, {{&kv_all_, kv8_, uint32_t(cfg_.NL) * 2048, false, kv_all_packed_}}, 8, v8t_, xs_);
+  } else {
+    enc_qmm8(e, {{&kv_all_, kv8_, uint32_t(cfg_.NL) * 2048, 1.0f}}, xh_, xs_, H, H, int(BT));
+  }
   enc_commit_kv(e, d, kv8_, gpu ? -1 : m, d.ctx);
   if (!gpu) d.ctx += m;
 }
 
 void dfl_attn_plan(int P, uint32_t max_splits, uint32_t min_chunk, uint32_t* lo, uint32_t* chunk, uint32_t* nsplit,
                    int valid_lo) {
-  static const uint32_t env = getenv("NI_DFLASH_ATTN_CHUNK") ? uint32_t(atoi(getenv("NI_DFLASH_ATTN_CHUNK"))) : 0;
+  static const uint32_t env = kenv("ATTN_CHUNK") ? uint32_t(atoi(kenv("ATTN_CHUNK"))) : 0;
   *lo = P > DFlash2::kCtxKeep ? uint32_t(P - DFlash2::kCtxKeep) : 0u;
   if (valid_lo > 0 && uint32_t(valid_lo) > *lo) *lo = std::min(uint32_t(valid_lo), uint32_t(P));
   const uint32_t L = uint32_t(P) - *lo;
-  // min_chunk 0 (and no NI_DFLASH_ATTN_CHUNK): the smallest multiple of 32 keys that needs at most max_splits
+  // min_chunk 0 (and no NI_KFLASH_ATTN_CHUNK): the smallest multiple of 32 keys that needs at most max_splits
   // splits (dfl_attn_geom's plan for a GPU-side P)
   const uint32_t mc = std::max<uint32_t>(32, min_chunk ? min_chunk : env ? env : ((L + max_splits - 1) / max_splits + 31) / 32 * 32);
   uint32_t ns = std::max<uint32_t>(1, std::min<uint32_t>(max_splits, (L + mc - 1) / mc));
@@ -1706,7 +2002,15 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
   dfl_attn_plan(P, old_attn ? uint32_t(max_splits_) : splits, old_attn ? 256u : 0u, &lo, &chunk, &nsplit, d.valid_lo);
   if (gpu) {  // the kernels derive the plan from the GPU-side P: [max(P - 2047, valid_lo), P)
     lo = uint32_t(std::max(d.valid_lo, 0));
-    chunk = old_attn ? kGpuChunk : 0u;  // 0: dfl_attn_geom's plan (at most `nsplit` splits)
+    // NI_KFLASH_ATTN_MINC: splits of at least this many context keys (the default plan: the most splits of >= 32 keys).
+    // 128 on kSimd (#393; measured on the 10-core M4, whose few cores the 16 short splits of a short context leave
+    // waiting on the reduce: the 4B's drafting pass 5.86 -> 5.75 ms after an 85-token prompt, server decode
+    // 144.9 -> 145.4 tok/s); from 2048 keys on (the window) the plans agree
+    static const uint32_t minc = [] {
+      if (const char* v = kenv("ATTN_MINC")) return uint32_t(atoi(v));
+      return simd_gpu() ? 128u : 0u;
+    }();
+    chunk = old_attn ? kGpuChunk : minc > 32 ? (0x80000000u | (minc + 31) / 32 * 32) : 0u;  // 0: dfl_attn_geom's plan
     nsplit = old_attn ? (kCtxKeep + kGpuChunk - 1) / kGpuChunk : splits;  // the grid; empty splits exit
   }
   const kp::DflConv cp{H, G, cfg_.eps};
@@ -1736,13 +2040,22 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     const Buffer& ah = v1 ? xh_ : xh2_;
     const Buffer& as = v1 ? xs_ : xs2_;
     dbg(e, "a" + sfx, ah, size_t(8) * H * 2);
-    if (!(skip & 8192)) enc_qmm8(e, {{&Ly.q, q_, 4096, 1.0f}, {&Ly.kv, kv_, 2048, 1.0f}}, ah, as, H, H, int(BT));
+    // the v1 drafter on the packed-coefficient image (NI_V8_PACKED_COEFF_NF1): its q|kv and o projections through the
+    // target's packed verify GEMM, as its MLP and head (the X8 table permuted to the verify's)
+    const bool pq = v1 && v8_ && Ly.q_packed && Ly.kv_packed && Ly.o_packed && BT == 1;
+    if (skip & 8192) {
+    } else if (pq) {
+      enc_to_v8(e, ah, H, v8t_);
+      tg_.enc_qmm8(e, {{&Ly.q, q_, 4096, false, Ly.q_packed}, {&Ly.kv, kv_, 2048, false, Ly.kv_packed}}, 8, v8t_, as);
+    } else {
+      enc_qmm8(e, {{&Ly.q, q_, 4096, 1.0f}, {&Ly.kv, kv_, 2048, 1.0f}}, ah, as, H, H, int(BT));
+    }
     // simdgroup-matrix attention by default (35B full window: 3.60 vs 4.52 ms per pass);
-    // NI_DFLASH_ATTN=scalar selects the fp32 scalar kernel
-    static const bool mma_env = !(getenv("NI_DFLASH_ATTN") && std::string(getenv("NI_DFLASH_ATTN")) == "scalar");
+    // NI_KFLASH_ATTN=scalar selects the fp32 scalar kernel
+    static const bool mma_env = !(kenv("ATTN") && std::string(kenv("ATTN")) == "scalar");
     const bool mma = attn_variant_ ? attn_variant_ == 2 : mma_env;
     const bool fused = mma && !old_attn && !debug_;  // debug_ keeps Q / Kb / Vb for the dumps
-    if (!fused && B > 8) fatal("DFlash2 block %u: the fused attention only (no NI_DFLASH_ATTN=scalar / debug)", B);
+    if (!fused && B > 8) fatal("DFlash2 block %u: the fused attention only (no NI_KFLASH_ATTN=scalar / debug)", B);
     if (!fused) {
       kp::DflQk p{uint32_t(P), cfg_.eps, 4096, 2048};
       e.use(dpipe("dfl_qk_prep"));
@@ -1783,7 +2096,12 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
       }
     }
     dbg(e, "o" + sfx, xh_, size_t(8) * 4096 * 2);
-    proj({{&Ly.o, u_, H, 1.0f}}, 4096);
+    if (pq && !(skip & 8192)) {
+      enc_to_v8(e, xh_, 4096, v8t_);
+      tg_.enc_qmm8(e, {{&Ly.o, u_, H, false, Ly.o_packed}}, 8, v8t_, xs_);
+    } else {
+      proj({{&Ly.o, u_, H, 1.0f}}, 4096);
+    }
     dbg(e, "u" + sfx, u_, size_t(8) * H * 4);
     if (v1) {
       res_norm(Ly.post_w);
@@ -1849,6 +2167,18 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
   const QLinear& head = draft_head();
   const uint32_t Vd = draft_vocab();  // draft logit columns: the vocabulary or the reduced head
   if (skip & 4096) {
+  } else if (v1 && lr_r_ && v8_ && B == 8) {
+    // the low-rank shortlist head (build_lowrank): logits ~ (x A) B^T, in the shortlist's strided row order; the
+    // chunks' top-16 are rescored exactly below
+    enc_to_v8(e, xh_, H, v8t_);
+    tg_.enc_qmm8(e, {{&lrA_, lr_y_, lr_r_, false, lrA_packed_}}, 8, v8t_, xs_);
+    kp::DflTop pr{lr_r_, 0, 0};
+    e.use(dpipe("dfl_x8_from_f32"));
+    e.buf(0, lr_y_); e.buf(1, lr_xh_); e.buf(2, lr_xs_);
+    e.val(3, pr);
+    e.dispatch(8, (lr_r_ / 64 + 7) / 8, 1, 256);
+    enc_to_v8(e, lr_xh_, lr_r_, v8t_);
+    tg_.enc_qmm8(e, {{&lrB_, logits_, Vd, false}}, 8, v8t_, lr_xs_);
   } else if (v1) {  // no candidate selector
     if (v8_) {
       enc_to_v8(e, xh_, H, v8t_);
@@ -1863,9 +2193,9 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     enc_qmm8(e, {{&head, logits_, Vd, 1.0f}, {&sel_w_, sel_, uint32_t(kRank), 1.0f}}, xh_, xs_, H, H, int(BT));
   }
   const uint32_t ntg = (Vd + 2047) / 2048;
-  static const bool old_topk = getenv("NI_DFLASH_TOPK") && atoi(getenv("NI_DFLASH_TOPK")) == 0;
+  static const bool old_topk = kenv("TOPK") && atoi(kenv("TOPK")) == 0;
   if (old_topk) {  // reference path: 16 rounds of threadgroup argmax per stage
-    if (head_n_) fatal("NI_DFLASH_TOPK=0 needs the full draft head (NI_DFLASH_HEAD=0)");
+    if (head_n_) fatal("NI_KFLASH_TOPK=0 needs the full draft head (NI_KFLASH_HEAD=0)");
     kp::TopkStage ts{V, 16, 2048};
     e.use(dpipe("topk_stage1_rows"));
     e.buf(0, logits_, size_t(V) * 4); e.buf(1, tk_v_); e.buf(2, tk_i_);
@@ -1882,8 +2212,20 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     e.use(dpipe("dfl_top16"));
     e.buf(0, logits_, size_t(Vd) * 4); e.buf(1, head_n_ ? head_ids_ : tk_i_); e.buf(2, tk_v_); e.buf(3, tk_i_);
     e.val(4, p1);
-    e.val(5, no);
+    const bool lr = lr_r_ && v1 && v8_ && B == 8 && !(skip & 4096);
+    const uint32_t pos_ids = 0;  // the low-rank shortlist: positions, which dfl_lr_rescore maps
+    if (lr) e.val(5, pos_ids);
+    else e.val(5, no);
     e.dispatch(ntg, D, 1, 256);
+    if (lr) {  // the shortlist's exact logits (the head's 4-bit rows, x fp32) and token ids
+      kp::DflTop pr{H, ntg * 16, 0};
+      e.use(dpipe("dfl_lr_rescore"));
+      // (stage 1's rows are the logits' rows 1..)
+      e.buf(0, n_, size_t(H) * 4); e.buf(1, head_sub_.w->buf); e.buf(2, head_sub_.s->buf); e.buf(3, head_sub_.b->buf);
+      e.buf(4, head_ids_); e.buf(5, lr_perm_); e.buf(6, tk_v_); e.buf(7, tk_i_);
+      e.val(8, pr);
+      e.dispatch((ntg * 16 + 7) / 8, D, 1, 256);
+    }
     kp::DflTop p2{ntg * 16, ntg * 16, 1};
     e.use(dpipe("dfl_top16"));  // every dispatch sets its pipeline (NI_PROFILE splits encoders)
     e.buf(0, tk_v_); e.buf(1, tk_i_); e.buf(2, cand_v_); e.buf(3, cand_i_);
@@ -1903,6 +2245,14 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
       e.use(dpipe("dfl_kf_table"));
       e.buf(0, cand_i_); e.buf(1, cand_v_); e.buf(2, edges_); e.buf(3, kf_clq_); e.buf(4, kf_tok_);
       e.dispatch(D * 16, 1, 1, 32);
+      if (hist_) {  // #316: the history lane (dfl_hist) edits the children tables the builder reads
+        const kp::DflHist hp{Pk, uint32_t(hist_nmin_), uint32_t(hist_nmax_), uint32_t(hist_cap_), 16384u, kf::kHistLq, 0u, 0u};
+        e.use(dpipe("dfl_hist"));
+        e.buf(0, s.tok); e.buf(1, cand_i_); e.buf(2, kf_clq_); e.buf(3, kf_tok_);
+        e.val(4, hp);
+        e.buf(5, gst_);
+        e.dispatch(1, 1, 1, 256);
+      }
       KfParams kp{};
       kf_budget_->write(kp);
       // the verify's capacity this cycle: the budget's (8, or the widest count when the per-cycle choice among them
@@ -1918,7 +2268,11 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
       // the GPU-driven anchor: the builder's P is unknown to the host, so the tokens' base comes from the drafter state
       // (kf_build reads P from its params: the host passes P; a GPU-driven pass passes the sentinel and the kernel reads
       // gst) -- see kf_build_gpu below
-      const kp::KfBuild bp{16u, Pk, 0u, 0u};
+      // NI_KFLASH_DFS (default on for dense targets on kSimd, #393): a full tree's
+      // rows in depth-first order (kf_dfs_reorder: about half the Gated DeltaNet replays of jumping rows)
+      static const int dfs_env = getenv("NI_KFLASH_DFS") ? atoi(getenv("NI_KFLASH_DFS")) : -1;
+      const uint32_t dfs = (dfs_env < 0 ? !tg_.config().moe && simd_gpu() : dfs_env != 0) ? 1u : 0u;
+      const kp::KfBuild bp{16u, Pk, 0u, dfs};
       e.use(dpipe(gpu ? "kf_build_gpu" : "kf_build"));
       e.buf(0, kf_clq_); e.buf(1, kf_tok_); e.buf(2, kf_next_);
       e.val(3, kp);
@@ -1942,7 +2296,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
 
 void DFlash2::encode_dist(Encoder& e, int R, const SamplingParams& sp) {
   if (R < 1 || R > kB || sp.temperature <= 0) fatal("DFlash2 dist: R=%d T=%g", R, sp.temperature);
-  kp::DflDist dp{tg_.verify_candidates(sp), uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)), sp.temperature,
+  kp::DflDist dp{tg_.verify_candidates(sp), topk_k(sp), sp.temperature,
                  sp.top_p};
   e.use(dpipe("dfl_dist_rows"));
   e.buf(0, tg_.verify_cand_vals()); e.buf(1, tg_.verify_cand_ids()); e.buf(2, dist_id_); e.buf(3, dist_p_);
@@ -1997,6 +2351,16 @@ void DFlash2::encode_cycle_verify(Encoder& e, Seq& s, int P, int K, const Sampli
     e.val(4, ap);
     e.buf(5, kf_live_); e.buf(6, s.pend_path); e.buf(7, gst_);
     e.dispatch(1, 1, 1, 32);
+    // #316 idea 3: this cycle's draft (sel_, cand_i_, cand_v_: the next drafting half is committed after this verify) against
+    // what the verify accepted; not a grammar-masked cycle's (its acceptance is distorted, as for the budget's observe())
+    if (selupd_lr_ > 0.0f && s.mask_rows == 0) {
+      struct SelUpd { float lr, tau; uint32_t nslots, V; } up{selupd_lr_, selupd_tau_, uint32_t(block() - 1), uint32_t(cfg_.vocab)};
+      e.use(dpipe("dfl_sel_update"));
+      e.buf(0, cand_i_); e.buf(1, cand_v_); e.buf(2, sel_); e.buf(3, s.tok); e.buf(4, tree_buf_); e.buf(5, gst_);
+      e.buf(6, selupd_A_); e.buf(7, selupd_B_); e.buf(8, cbA_->buf); e.buf(9, cbB_->buf);
+      e.val(10, up);
+      e.dispatch(1, 1, 1, 256);
+    }
     tg_.encode_kv_tree_compact(e, s, P, tree_buf_);
     s.pend_tree = true;
     gst_tree_ = true;

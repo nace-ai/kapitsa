@@ -1,0 +1,22 @@
+# IQ4_NL CPU lookup validation
+
+This folder contains explicitly selected, sanitized derived evidence for reference production commit `f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f` and candidate production commit `b9c67e691a5669545eca880f3e75111f9ce87dd0`. Evidence-only commits do not change those production identities. Private originals and provenance remain outside this folder; these files are not raw execution archives.
+
+Published candidate production source is `315fec8d35af49cbf639a4b095acea229dfc6052`. [The source mapping](PUBLIC-SOURCE-MAPPING.json) records that only commit author/committer metadata was sanitized from measured candidate `b9c67e691a5669545eca880f3e75111f9ce87dd0`; both commits have the same complete source/test Git tree `639bcfb7c7a04cb932d0b1938f60b34f90fa4fa0`. Original measurements, binary versions and digests retain the measured commit. No source, tests, driver or measurement payload changed, and no later rebuilt binary is claimed byte-identical to the measured binaries.
+
+The change vectorizes the existing finite, disjoint arm64 IQ4_NL CPU table lookup while preserving exact FP32 products. Scalar nonfinite, overlap and non-arm64 behavior remains. Metal, formats, profiles and environment switches are unchanged. [The common CPU evidence](common/README.md) reports all 128 original passes per chip, with warm row-time reductions of 58.31–73.54% on M4 Pro and 78.56–78.70% on M3 Ultra. The metric is the CPU row decoder, not total loading or inference throughput. Absolute cross-chip timings have no established causal explanation.
+
+The original model phases completed on both chips. The table preserves completed-run scope and failures; completion does not mean every gate passed.
+
+| Setup | Numerical rows per arm | Fixed complete request/content matched cohorts | Native flag counts A1/B1/A2/B2 | HTTP reference ; candidate |
+| --- | --- | --- | --- | --- |
+| M4 | 584 | 6/6 | 1/1/0/1 | 49 PASS / 0 FAIL ; 49 PASS / 0 FAIL |
+| M3 | 584 | 6/6 | 1/1/0/1 | 48 PASS / 1 FAIL ; 48 PASS / 1 FAIL |
+
+[The M4 model records](m4/model-import-output.json) and [M3 model records](m3/model-import-output.json) contain own-source/binary identities, complete imported-payload checks, all finite literal logits/input checks and explicit-zero summaries. [M4 fixed](m4/fixed.json) and [M3 fixed](m3/fixed.json) preserve every original row, complete source-derived request SHA, generated-content SHA, rate, warning and invalid result. The sampled seed-3 repetition warning remains, with identical repeated content across the reference and candidate legs. Original native repetition warnings and HTTP failures remain in [M4 native](m4/native.json), [M3 native](m3/native.json), [M4 HTTP](m4/http.json) and [M3 HTTP](m3/http.json); no full-suite or universal API PASS is claimed.
+
+Default native/fixed runtime runs did use embedded MTP depth 4. The numerical supplied-sequence tree verification is teacher-forced and does not independently qualify freely drafted MTP numerics. Explicit-zero CLI bounds cover step/verify/batch, 192 rows each; the 8 prefill rows have an independent finite/full-byte/scored-input gate, while their CLI summary has no additional numeric bounds. The fixed hashes cover six sampled/greedy decode cohorts; prefill/cached text and random native transcripts are not byte-compared by that gate. Cached timings do not establish matched-input performance from counts alone. These measurements do not establish overall inference acceleration or universal no-regression.
+
+[Actual M4 tokenizer](m4-tokenizer/actual-tokenizer-CPU.json) and [M3 tokenizer](m3-tokenizer/actual-tokenizer-CPU.json) cover offline parser, structured-output and grammar-mask checks on the independently imported metadata, with protected source/core binary/tokenizer identities preserved. [CPU failures](common/CPU-FAILURES.json) retain the unchanged raw-U8 loader assertion failures and the compile-only gather correction. [The exact measured CPU driver](common/iq4_nl_rows.cpp) and [derived reproduction examples](common/REPRODUCE.md) describe the method; placeholder examples are not original command logs.
+
+Generic MLX4-bit Qwen3.5 and Qwen3.6MoE recommended setups were not run. No matching imported-IQ4_NL floor is asserted or modified. Trained PLE, separately qualified freely drafted MTP numerics and whole import/loading speed remain unverified. Only necessary hardware configuration, public model/source/binary identities, actual methods and real results are included.

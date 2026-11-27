@@ -1,0 +1,5 @@
+{
+  "issue": "Local evidence hashing/copying started after B1 entered; no GPU work but filesystem/CPU load may overlap this ABAB",
+  "action": "Retain all legs, do not use for headline; repeat full ABAB after packaging is idle",
+  "time_recorded": 1794003319.454697
+}

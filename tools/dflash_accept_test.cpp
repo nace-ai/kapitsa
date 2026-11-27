@@ -1,7 +1,7 @@
 // S1: exactness of the on-GPU acceptance on synthetic inputs,
 // no model needed. (Cases are numbered in order: the chain's, then the tree's.)
 //   dflash_accept_test [trials=40000] [K=3]
-//   dflash_accept_test --cpu   (the budgets' checks alone, no GPU: KfBudget's fit, cache and costs, KfBatch)
+//   dflash_accept_test --cpu   (the budgets' checks alone, no GPU: KfBudget's fit and its unlock, cache and costs, KfBatch)
 // 1. dfl_dist_rows against a CPU transcription of the plain sampler's distribution (sample_stage2_rows:
 //    top-k ordered (value desc, id asc), top-p on the untempered probabilities, tempered on the kept
 //    prefix) on random candidate lists, including ties.
@@ -127,10 +127,11 @@ struct Dist {
   std::vector<int> id;
   std::vector<float> p;
 };
-enum Regime { kRandom, kEqual, kDisjoint, kPoint, kMixed, kBias };
+enum Regime { kRandom, kEqual, kDisjoint, kPoint, kMixed, kBias, kWide };
+constexpr int kW = 64;        // dfl_dist_rows' row width (kDflDistW; sampler.h's kTopkMax)
 const char* regime_name(int r) {
   static const char* n[] = {"random p, random q", "q = p", "q disjoint from p", "point masses", "mixed (p(d)=0, flat q)",
-                            "depth-sensitive"};
+                            "depth-sensitive", "wide p (33-64 tokens)"};
   return n[r];
 }
 
@@ -152,9 +153,11 @@ Dist p_of(const std::vector<int>& prefix, int regime) {
     d.p = {0.5f, 0.5f};
     return d;
   }
-  int ns = regime == kPoint ? 1 + int(r() % 2) : 1 + int(r() % 10);
-  std::vector<int> u(kV);
-  for (int i = 0; i < kV; ++i) u[i] = i;
+  // kWide: a top-k above 32 (the second half of dfl_accept's lanes), ids from a 64-token universe of its own
+  const int nv = regime == kWide ? kW : kV;
+  int ns = regime == kPoint ? 1 + int(r() % 2) : regime == kWide ? 33 + int(r() % 32) : 1 + int(r() % 10);
+  std::vector<int> u(nv);
+  for (int i = 0; i < nv; ++i) u[i] = i;
   std::shuffle(u.begin(), u.end(), r);
   std::vector<float> w(ns);
   float tot = 0;
@@ -244,8 +247,8 @@ struct Slot {
   std::vector<int> cand;    // [7 * 16]
   std::vector<float> qp;    // [7 * 16]
   std::vector<int> wk;      // [8]
-  std::vector<int> did;     // [8 * 32]
-  std::vector<float> dp;    // [8 * 32]
+  std::vector<int> did;     // [8 * kW]
+  std::vector<float> dp;    // [8 * kW]
 };
 
 // Inputs of one cycle with the anchor at position P (tokens[P] = anchor, proposals at P+1..): the
@@ -256,15 +259,15 @@ void fill(Slot& s, const std::vector<int>& prefix, int P, int K, int regime, std
   s.cand.assign(7 * 16, -3);
   s.qp.assign(7 * 16, 0.0f);
   s.wk.assign(8, 0);
-  s.did.assign(8 * 32, -1);
-  s.dp.assign(8 * 32, 0.0f);
+  s.did.assign(8 * kW, -1);
+  s.dp.assign(8 * kW, 0.0f);
   std::vector<int> pre = prefix;
   chain->clear();
   for (int i = 0; i <= K; ++i) {
     const Dist p = p_of(pre, regime);
     for (size_t j = 0; j < p.id.size(); ++j) {
-      s.did[i * 32 + j] = p.id[j];
-      s.dp[i * 32 + j] = p.p[j];
+      s.did[i * kW + j] = p.id[j];
+      s.dp[i * kW + j] = p.p[j];
     }
     if (i == K) break;
     const Dist q = q_of(pre, regime, p);
@@ -667,6 +670,166 @@ int fit_check(uint64_t salt) {
     printf("[fit] alpha %.2f beta %.2f from 2048 records drawn with alpha %.2f beta %.2f: %s\n", a, b, ta, tb,
            ok ? "PASS" : "FAIL");
   }
+  return bad ? 1 : 0;
+}
+
+// The calibration's unlock (KfBudget::refit_tick): a cache whose depth 2 reads alpha -8, beta 0.1 (a fit that keeps the
+// depth's nodes out of every tree, so no record comes to correct it) and depth 3 alpha -1.5, beta 0.6 (pessimistic, not
+// locked: 0.46 at q 0.9) loaded, then cycles that give neither a record: depth 2 moves back toward the identity, a step
+// every kStale cycles, until a node of q 0.9 has a 10% chance; depth 3 is left alone; records again (drawn at alpha
+// -0.5, beta 0.8) fit depth 2 to them; depth 1, given records every cycle, keeps its fit.
+int unlock_check(uint64_t salt) {
+  std::mt19937_64 r(7 + salt);
+  std::uniform_real_distribution<float> ul(-4.0f, -0.01f), u01(0.0f, 1.0f);
+  int bad = 0;
+  auto check = [&](bool ok, const char* what, float a, float b) {
+    printf("[unlock] %s: alpha %.2f beta %.2f: %s\n", what, a, b, ok ? "PASS" : "FAIL");
+    bad += !ok;
+  };
+  auto draw = [&](float ta, float tb, float* lq, uint8_t* hit) {
+    *lq = ul(r);
+    *hit = u01(r) < 1.0f / (1.0f + std::exp(-(ta + tb * KfBudget::logit_q(*lq))));
+  };
+  const char* t = getenv("TMPDIR");
+  std::string dir = std::string(t && *t ? t : "/tmp") + "/kf_unlock_XXXXXX";
+  if (!mkdtemp(dir.data())) {
+    printf("[unlock] no temporary folder: FAIL\n");
+    return 1;
+  }
+  const char* h = getenv("KAPITSA_HOME");
+  const std::string old_home = h ? h : "";
+  setenv("KAPITSA_HOME", dir.c_str(), 1);
+  const std::string kdir = dir + "/kflash", file = kdir + "/u.json";
+  mkdir(kdir.c_str(), 0755);
+  {
+    nlohmann::json j;
+    j["cost_of"] = "cycle GPU ms";
+    j["build"] = KfBudget::build();  // (a cache another build wrote is not loaded)
+    std::vector<double> cost(kf::kMaxRows + 1, 0.0);
+    for (int n = 1; n <= 8; ++n) cost[size_t(n)] = 7.0 + n;
+    j["cost"] = cost;
+    std::vector<float> a(kf::kMaxRows + 1, 0.0f), b(kf::kMaxRows + 1, 1.0f);
+    a[2] = -8.0f;
+    b[2] = 0.1f;
+    a[3] = -1.5f;
+    b[3] = 0.6f;
+    j["alpha"] = a;
+    j["beta"] = b;
+    std::ofstream(file) << j.dump();
+  }
+  {
+    KfBudget b("u");
+    b.set_rows(0xffu, 8);
+    float a[4], be[4];
+    b.calibration(a, be, 4);
+    check(a[2] == -8.0f && be[2] == 0.1f, "depth 2 as the cache holds it", a[2], be[2]);
+    // 256 cycles whose trees give depth 1 records (drawn at alpha -0.3, beta 0.9) and depth 2 none
+    std::vector<int32_t> tree(kf::kWords, 0);
+    tree[kf::kN] = 2;
+    for (int c = 0; c < 256; ++c) {
+      tree[kf::kNrec] = 4;
+      for (int i = 0; i < 4; ++i) {
+        float lq;
+        uint8_t hit;
+        draw(-0.3f, 0.9f, &lq, &hit);
+        tree[kf::kRecDep + i] = 1;
+        memcpy(&tree[kf::kRecLq + i], &lq, 4);
+        tree[kf::kRecHit + i] = hit;
+      }
+      b.observe(tree.data(), 10.0);
+    }
+    b.calibration(a, be, 4);
+    const float p9 = 1.0f / (1.0f + std::exp(-(a[2] + be[2] * 2.1972246f)));
+    check(a[2] == -2.0f && std::fabs(be[2] - 0.775f) < 1e-4f && p9 > 0.1f,
+          "depth 2 after 256 cycles without a record: halved twice, until a node of q 0.9 has 10%", a[2], be[2]);
+    check(a[3] == -1.5f && be[3] == 0.6f, "depth 3 (pessimistic, not locked), no record: left alone", a[3], be[3]);
+    check(std::fabs(a[1] + 0.3f) < 0.35f && std::fabs(be[1] - 0.9f) < 0.3f,
+          "depth 1, records every cycle (drawn at -0.30, 0.90): its fit kept", a[1], be[1]);
+    // depth 2 records again, drawn at alpha -0.5, beta 0.8
+    for (int c = 0; c < 128; ++c) {
+      tree[kf::kNrec] = 8;
+      for (int i = 0; i < 8; ++i) {
+        float lq;
+        uint8_t hit;
+        draw(i < 4 ? -0.3f : -0.5f, i < 4 ? 0.9f : 0.8f, &lq, &hit);
+        tree[kf::kRecDep + i] = i < 4 ? 1 : 2;
+        memcpy(&tree[kf::kRecLq + i], &lq, 4);
+        tree[kf::kRecHit + i] = hit;
+      }
+      b.observe(tree.data(), 10.0);
+    }
+    b.calibration(a, be, 4);
+    check(std::fabs(a[2] + 0.5f) < 0.35f && std::fabs(be[2] - 0.8f) < 0.3f,
+          "depth 2 given records again (drawn at -0.50, 0.80): fit to them", a[2], be[2]);
+  }  // (the destructor saves)
+  // the batched path: the greedy budget reached only through records() (KfBatch::observe), never observe()
+  auto poison = [&](const std::string& f, const char* cost_of) {
+    nlohmann::json j;
+    j["cost_of"] = cost_of;
+    j["build"] = KfBudget::build();
+    j["cost"] = std::vector<double>(kf::kMaxRows + 1, 0.0);
+    std::vector<float> a(kf::kMaxRows + 1, 0.0f), b(kf::kMaxRows + 1, 1.0f);
+    a[2] = -8.0f;
+    b[2] = 0.1f;
+    j["alpha"] = a;
+    j["beta"] = b;
+    std::ofstream(f) << j.dump();
+  };
+  poison(file, "cycle GPU ms");
+  {
+    KfBudget b("u");
+    b.set_rows(0xffu, 8);
+    for (int c = 0; c < 256; ++c) {
+      int dep[4];
+      float lq[4];
+      uint8_t hit[4];
+      for (int i = 0; i < 4; ++i) dep[i] = 1, draw(-0.3f, 0.9f, &lq[i], &hit[i]);
+      b.records(dep, lq, hit, 4);
+    }
+    float a[3], be[3];
+    b.calibration(a, be, 3);
+    check(a[2] == -2.0f && std::fabs(be[2] - 0.775f) < 1e-4f,
+          "records() alone (a batched server's greedy budget), 256 calls: depth 2 relaxed as on observe", a[2], be[2]);
+  }
+  poison(file, "cycle GPU ms");
+  {
+    KfBudget b("u");
+    b.set_rows(0xffu, 8);
+    KfBatch kb("");
+    KfBatch::Member m[2];
+    for (int g = 0; g < 2; ++g)
+      for (int p = 0; p < KfBatch::kDrafts; ++p) m[g].lc[p] = -0.5f;
+    const int k[2] = {0, 0}, acc[2] = {0, 0};
+    for (int c = 0; c < 256; ++c) kb.observe(m, 2, k, acc, 10.0, &b);
+    float a[3], be[3];
+    b.calibration(a, be, 3);
+    check(a[2] == -2.0f && std::fabs(be[2] - 0.775f) < 1e-4f,
+          "batched cycles of greedy members that verify no draft (no records): still ticks, depth 2 relaxed", a[2], be[2]);
+  }
+  // KfBatch's own calibration (its sampled members), loaded locked at depth 2: cycles of a sampled member that give
+  // depth 1 records alone
+  const std::string bfile = kdir + "/ub.json";
+  poison(bfile, "x");
+  {
+    KfBatch kb("ub");
+    KfBatch::Member m[2];
+    for (int g = 0; g < 2; ++g) {
+      m[g].sampled = true;
+      for (int p = 0; p < KfBatch::kDrafts; ++p) m[g].lc[p] = -0.5f;
+    }
+    const int k[2] = {1, 1}, acc[2] = {1, 0};
+    for (int c = 0; c < 256; ++c) kb.observe(m, 2, k, acc, 10.0, nullptr);
+    float a[3], be[3];
+    kb.calibration(a, be, 3);
+    check(a[2] == -2.0f && std::fabs(be[2] - 0.775f) < 1e-4f,
+          "KfBatch's sampled calibration, locked at depth 2, no record there: relaxed the same way", a[2], be[2]);
+  }
+  unlink(bfile.c_str());
+  unlink(file.c_str());
+  rmdir(kdir.c_str());
+  rmdir(dir.c_str());
+  if (h) setenv("KAPITSA_HOME", old_home.c_str(), 1);
+  else unsetenv("KAPITSA_HOME");
   return bad ? 1 : 0;
 }
 
@@ -1092,7 +1255,7 @@ int batch_check(uint64_t salt) {
 int main(int argc, char** argv) {
   // --cpu: the budgets' checks alone (no GPU): the calibration fit, the cache, the costs, the batch budget
   if (argc > 1 && !strcmp(argv[1], "--cpu")) {
-    int fails = fit_check(0) + cache_check() + cost_check() + batch_check(0);
+    int fails = fit_check(0) + unlock_check(0) + cache_check() + cost_check() + batch_check(0);
     printf(fails ? "FAILED: %d\n" : "ALL PASSED\n", fails);
     return fails ? 1 : 0;
   }
@@ -1104,10 +1267,11 @@ int main(int argc, char** argv) {
   int fails = 0;
 
   // ---- 1. dfl_dist_rows vs the CPU transcription of sample_stage2_rows ----
-  {
-    const uint32_t R = 8, n = 122 * 20, Kk = 20;
+  // (top_k 20 over 122 lists of 2048; 48 and 64 over 61 lists of 4096, sampler.h's topk_chunk)
+  for (const auto [Kk, n] : {std::pair<uint32_t, uint32_t>{20, 122 * 20}, {48, 61 * 48}, {64, 61 * 64}}) {
+    const uint32_t R = 8;
     Buffer cv = g.alloc(size_t(R) * n * 4), ci = g.alloc(size_t(R) * n * 4);
-    Buffer did = g.alloc(R * 32 * 4), dp = g.alloc(R * 32 * 4), dk = g.alloc(R * 4);
+    Buffer did = g.alloc(R * kW * 4), dp = g.alloc(R * kW * 4), dk = g.alloc(R * 4);
     std::mt19937_64 r(7);
     for (uint32_t row = 0; row < R; ++row)
       for (uint32_t i = 0; i < n; ++i) {
@@ -1134,7 +1298,7 @@ int main(int argc, char** argv) {
         for (uint32_t i = 0; i < n; ++i) c[i] = {cv.as<float>()[row * n + i], ci.as<uint32_t>()[row * n + i]};
         std::sort(c.begin(), c.end(),
             [](auto& a, auto& b) { return a.first > b.first || (a.first == b.first && a.second < b.second); });
-        float probs[32], tot = 0;
+        float probs[kW], tot = 0;
         for (uint32_t q = 0; q < Kk; ++q) {
           probs[q] = std::exp(c[q].first - c[0].first);
           tot += probs[q];
@@ -1155,15 +1319,15 @@ int main(int argc, char** argv) {
         }
         if (dk.as<uint32_t>()[row] != keep) ++id_bad;
         for (uint32_t q = 0; q < keep; ++q) {
-          if (uint32_t(did.as<int>()[row * 32 + q]) != c[q].second) ++id_bad;
-          const double ref = probs[q] / kt, got = dp.as<float>()[row * 32 + q];
+          if (uint32_t(did.as<int>()[row * kW + q]) != c[q].second) ++id_bad;
+          const double ref = probs[q] / kt, got = dp.as<float>()[row * kW + q];
           max_rel = std::max(max_rel, std::fabs(got - ref) / ref);
         }
       }
     }
     const bool ok = id_bad == 0 && max_rel < 1e-5;
-    printf("[dist] dfl_dist_rows vs CPU sampler distribution, 3 settings x 8 rows: %d id/keep mismatches, max rel. "
-           "prob error %.2e: %s\n", id_bad, max_rel, ok ? "PASS" : "FAIL");
+    printf("[dist] dfl_dist_rows vs CPU sampler distribution, top_k %u, 3 settings x 8 rows: %d id/keep mismatches, "
+           "max rel. prob error %.2e: %s\n", Kk, id_bad, max_rel, ok ? "PASS" : "FAIL");
     if (!ok) ++fails;
   }
 
@@ -1179,11 +1343,12 @@ int main(int argc, char** argv) {
                              {kRandom, 7, 1.0f},     {kMixed, 7, 1.0f},
                              {kRandom, 3, 0.6f, 0.1f}, {kRandom, 7, 1.0f, 0.05f}, {kMixed, 7, 0.6f, 0.2f},
                              {kEqual, 7, 0.6f, 0.3f},  {kBias, 3, 0.6f, 0.3f},       {kBias, 3, 0.6f, 0.3f, 1},
-                             {kBias, 3, 0.6f, 0.3f, 2}, {kMixed, 7, 0.6f, 0.2f, 2}};
+                             {kBias, 3, 0.6f, 0.3f, 2}, {kMixed, 7, 0.6f, 0.2f, 2},
+                             {kWide, Kmain, 0.6f},      {kWide, 7, 1.0f}};
   Pipeline acc = g.pipeline("dfl_accept"), dep = g.pipeline("dfl_depth");
   const int B = 4096;  // trials per command buffer
   Buffer tok = g.alloc(size_t(B) * 16 * 4), cand = g.alloc(size_t(B) * 112 * 4), qp = g.alloc(size_t(B) * 112 * 4);
-  Buffer wk = g.alloc(size_t(B) * 8 * 4), did = g.alloc(size_t(B) * 256 * 4), dp = g.alloc(size_t(B) * 256 * 4);
+  Buffer wk = g.alloc(size_t(B) * 8 * 4), did = g.alloc(size_t(B) * 8 * kW * 4), dp = g.alloc(size_t(B) * 8 * kW * 4);
   Buffer res = g.alloc(size_t(B) * 4 * 4), samp = g.alloc(64), scratch = g.alloc(64), kd = g.alloc(size_t(B) * 16);
   Buffer ws = g.alloc(size_t(B) * 112 * 4);  // the walk's scores: log q, so softmax(S_j) = q_j (dfl_depth)
   for (size_t ci = 0; ci < cases.size(); ++ci) {
@@ -1205,8 +1370,8 @@ int main(int argc, char** argv) {
         memcpy(qp.as<float>() + i * 112, s.qp.data(), 112 * 4);
         for (int j = 0; j < 112; ++j) ws.as<float>()[i * 112 + j] = s.qp[j] > 0 ? std::log(s.qp[j]) : -1e30f;
         memcpy(wk.as<int>() + i * 8, s.wk.data(), 32);
-        memcpy(did.as<int>() + i * 256, s.did.data(), 256 * 4);
-        memcpy(dp.as<float>() + i * 256, s.dp.data(), 256 * 4);
+        memcpy(did.as<int>() + i * 8 * kW, s.did.data(), 8 * kW * 4);
+        memcpy(dp.as<float>() + i * 8 * kW, s.dp.data(), 8 * kW * 4);
       };
       auto run = [&](int count, uint32_t P, const std::vector<uint32_t>& seed) {
         auto e = g.begin();
@@ -1222,7 +1387,7 @@ int main(int argc, char** argv) {
           kp::DflAccept ap{P, uint32_t(cs.K), cs.temp, seed[i], cs.tau > 0 ? 1u : 0u};
           e->use(acc);
           e->buf(0, tok, size_t(i) * 64);
-          e->buf(1, samp); e->buf(2, did, size_t(i) * 1024); e->buf(3, dp, size_t(i) * 1024);
+          e->buf(1, samp); e->buf(2, did, size_t(i) * 8 * kW * 4); e->buf(3, dp, size_t(i) * 8 * kW * 4);
           e->buf(4, cand, size_t(i) * 448); e->buf(5, qp, size_t(i) * 448); e->buf(6, wk, size_t(i) * 32);
           e->buf(7, res, size_t(i) * 16);
           e->val(8, ap);
@@ -1300,6 +1465,7 @@ int main(int argc, char** argv) {
   if (only < 0 || only >= int(cases.size()))
     fails += tree_cases(trials, salt, only < 0 ? -1 : only - int(cases.size()));
   if (only < 0) fails += fit_check(salt);
+  if (only < 0) fails += unlock_check(salt);
   if (only < 0) fails += cache_check();
   if (only < 0) fails += cost_check();
   if (only < 0) fails += batch_check(salt);

@@ -1,0 +1,476 @@
+{
+  "started_at": "2026-11-06T19:31:01.988108+00:00",
+  "commands": [
+    {
+      "label": "compile-gather-base",
+      "argv": [
+        "/usr/bin/clang++",
+        "-DKAPITSA_GIT=\"01b4c6d6\"",
+        "-DKAPITSA_VERSION=\"0.2.31\"",
+        "-I/Users/bytedance/kapitsa-ngram-affine-20261107/base/src",
+        "-I/Users/bytedance/kapitsa-ngram-affine-20261107/base/include",
+        "-I/Users/bytedance/kapitsa-ngram-affine-20261107/base/third_party",
+        "-O3",
+        "-std=gnu++20",
+        "-arch",
+        "arm64",
+        "-mmacosx-version-min=14.0",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/ngram-gather-1927.cpp",
+        "-c",
+        "-o",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/base.o"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build",
+      "exit": 0,
+      "elapsed_s": 1.4685108661651611
+    },
+    {
+      "label": "link-gather-base",
+      "argv": [
+        "/usr/bin/c++",
+        "-O3",
+        "-arch",
+        "arm64",
+        "-mmacosx-version-min=14.0",
+        "-Wl,-search_paths_first",
+        "-Wl,-headerpad_max_install_names",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/base.o",
+        "-o",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/gather-base",
+        "libnaceinfer.a",
+        "-framework",
+        "Metal",
+        "-framework",
+        "Foundation",
+        "-framework",
+        "CoreFoundation",
+        "-framework",
+        "IOSurface",
+        "-framework",
+        "IOKit",
+        "-framework",
+        "ImageIO",
+        "-framework",
+        "CoreGraphics",
+        "-framework",
+        "Security",
+        "-framework",
+        "SystemConfiguration",
+        "-framework",
+        "Accelerate"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build",
+      "exit": 0,
+      "elapsed_s": 0.15084099769592285
+    },
+    {
+      "label": "compile-gather-candidate",
+      "argv": [
+        "/usr/bin/clang++",
+        "-DKAPITSA_GIT=\"8c0a7ec3\"",
+        "-DKAPITSA_VERSION=\"0.2.31\"",
+        "-I/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/src",
+        "-I/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/include",
+        "-I/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/third_party",
+        "-O3",
+        "-std=gnu++20",
+        "-arch",
+        "arm64",
+        "-mmacosx-version-min=14.0",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/ngram-gather-1927.cpp",
+        "-c",
+        "-o",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/candidate.o"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build",
+      "exit": 0,
+      "elapsed_s": 1.4110419750213623
+    },
+    {
+      "label": "link-gather-candidate",
+      "argv": [
+        "/usr/bin/c++",
+        "-O3",
+        "-arch",
+        "arm64",
+        "-mmacosx-version-min=14.0",
+        "-Wl,-search_paths_first",
+        "-Wl,-headerpad_max_install_names",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/candidate.o",
+        "-o",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/gather-candidate",
+        "libnaceinfer.a",
+        "-framework",
+        "Metal",
+        "-framework",
+        "Foundation",
+        "-framework",
+        "CoreFoundation",
+        "-framework",
+        "IOSurface",
+        "-framework",
+        "IOKit",
+        "-framework",
+        "ImageIO",
+        "-framework",
+        "CoreGraphics",
+        "-framework",
+        "Security",
+        "-framework",
+        "SystemConfiguration",
+        "-framework",
+        "Accelerate"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build",
+      "exit": 0,
+      "elapsed_s": 0.1421351432800293
+    },
+    {
+      "label": "gather-0-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/gather-base",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/corpus-base.json",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/gather-0-base.f32"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+      "exit": 0,
+      "elapsed_s": 1.8925187587738037
+    },
+    {
+      "label": "gather-1-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/gather-candidate",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/corpus-base.json",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/gather-1-candidate.f32"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+      "exit": 0,
+      "elapsed_s": 1.125488042831421
+    },
+    {
+      "label": "gather-2-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/gather-base",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/corpus-base.json",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/gather-2-base.f32"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+      "exit": 0,
+      "elapsed_s": 0.7425739765167236
+    },
+    {
+      "label": "gather-3-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/gather-candidate",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/corpus-base.json",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/gather-3-candidate.f32"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+      "exit": 0,
+      "elapsed_s": 0.6890110969543457
+    },
+    {
+      "label": "logits-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/logit_dump",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/logits-base",
+        "--paths",
+        "step,verify"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107/base",
+      "exit": 0,
+      "elapsed_s": 32.01952290534973
+    },
+    {
+      "label": "logits-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/logit_dump",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/logits-candidate",
+        "--paths",
+        "step,verify",
+        "--from",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/logits-base"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate",
+      "exit": 0,
+      "elapsed_s": 31.833725214004517
+    },
+    {
+      "label": "logit-compare",
+      "argv": [
+        "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/tools/logit_compare.py",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/logits-base",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/logits-candidate"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+      "exit": 0,
+      "elapsed_s": 1.2311129570007324
+    },
+    {
+      "label": "greedy-0-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/ni_run",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "@/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/chat-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--dump-all-logits",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/greedy-0-base.f32"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+      "exit": 0,
+      "elapsed_s": 11.8944411277771
+    },
+    {
+      "label": "greedy-0-base-decode",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/real-rows-1857/probe-candidate",
+        "decode",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/greedy-0-base.ids.json",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/greedy-0-base.text.json"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+      "exit": 0,
+      "elapsed_s": 0.33085012435913086
+    },
+    {
+      "label": "greedy-1-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/ni_run",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "@/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/chat-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--dump-all-logits",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/greedy-1-candidate.f32"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+      "exit": 0,
+      "elapsed_s": 11.681259632110596
+    },
+    {
+      "label": "greedy-1-candidate-decode",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/real-rows-1857/probe-candidate",
+        "decode",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/greedy-1-candidate.ids.json",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/greedy-1-candidate.text.json"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+      "exit": 0,
+      "elapsed_s": 0.2706460952758789
+    },
+    {
+      "label": "greedy-2-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/ni_run",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "@/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/chat-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--dump-all-logits",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/greedy-2-base.f32"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+      "exit": 0,
+      "elapsed_s": 11.536729097366333
+    },
+    {
+      "label": "greedy-2-base-decode",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/real-rows-1857/probe-candidate",
+        "decode",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/greedy-2-base.ids.json",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/greedy-2-base.text.json"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+      "exit": 0,
+      "elapsed_s": 0.32935285568237305
+    },
+    {
+      "label": "greedy-3-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/ni_run",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "@/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/chat-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--dump-all-logits",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/greedy-3-candidate.f32"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+      "exit": 0,
+      "elapsed_s": 11.547889232635498
+    },
+    {
+      "label": "greedy-3-candidate-decode",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/real-rows-1857/probe-candidate",
+        "decode",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/greedy-3-candidate.ids.json",
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/greedy-3-candidate.text.json"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+      "exit": 0,
+      "elapsed_s": 0.27037787437438965
+    }
+  ],
+  "results": [
+    {
+      "label": "gather-0-base",
+      "bytes": 42291200,
+      "sha256": "e56df7ca49dcedff883d134779453f39ad855ee6a4bc1698a92a7b209f4e4c53",
+      "finite": true,
+      "nonzero_values": 9856932,
+      "byte_equal": true
+    },
+    {
+      "label": "gather-1-candidate",
+      "bytes": 42291200,
+      "sha256": "e56df7ca49dcedff883d134779453f39ad855ee6a4bc1698a92a7b209f4e4c53",
+      "finite": true,
+      "nonzero_values": 9856932,
+      "byte_equal": true
+    },
+    {
+      "label": "gather-2-base",
+      "bytes": 42291200,
+      "sha256": "e56df7ca49dcedff883d134779453f39ad855ee6a4bc1698a92a7b209f4e4c53",
+      "finite": true,
+      "nonzero_values": 9856932,
+      "byte_equal": true
+    },
+    {
+      "label": "gather-3-candidate",
+      "bytes": 42291200,
+      "sha256": "e56df7ca49dcedff883d134779453f39ad855ee6a4bc1698a92a7b209f4e4c53",
+      "finite": true,
+      "nonzero_values": 9856932,
+      "byte_equal": true
+    },
+    {
+      "path": "prefill",
+      "bytes": 7946240,
+      "sha256": "444fb1fb136d9df8f3eb41645cda6399d8eb1c290018f33e100573b1254e06f6",
+      "finite": true,
+      "nonzero_values": 1986560,
+      "byte_equal": true,
+      "records": 8
+    },
+    {
+      "path": "step",
+      "bytes": 190709760,
+      "sha256": "c49e22ec61f712b5839f75c3c02bd1c0da1bcfc4993982be4b29c608881a1bf2",
+      "finite": true,
+      "nonzero_values": 47677438,
+      "byte_equal": true,
+      "records": 192
+    },
+    {
+      "path": "verify",
+      "bytes": 190709760,
+      "sha256": "c49e22ec61f712b5839f75c3c02bd1c0da1bcfc4993982be4b29c608881a1bf2",
+      "finite": true,
+      "nonzero_values": 47677438,
+      "byte_equal": true,
+      "records": 192
+    },
+    {
+      "label": "greedy-0-base",
+      "bytes": 254279680,
+      "sha256": "454b852e0b9eb0c899d5f46c9eda99a77e90bbf64cabd337eabccd370b5f22bc",
+      "finite": true,
+      "nonzero_values": 63569919,
+      "tokens": 256,
+      "eos_count": 0,
+      "text_nonempty": true,
+      "all_ids_equal": true,
+      "byte_equal": true
+    },
+    {
+      "label": "greedy-1-candidate",
+      "bytes": 254279680,
+      "sha256": "454b852e0b9eb0c899d5f46c9eda99a77e90bbf64cabd337eabccd370b5f22bc",
+      "finite": true,
+      "nonzero_values": 63569919,
+      "tokens": 256,
+      "eos_count": 0,
+      "text_nonempty": true,
+      "all_ids_equal": true,
+      "byte_equal": true
+    },
+    {
+      "label": "greedy-2-base",
+      "bytes": 254279680,
+      "sha256": "454b852e0b9eb0c899d5f46c9eda99a77e90bbf64cabd337eabccd370b5f22bc",
+      "finite": true,
+      "nonzero_values": 63569919,
+      "tokens": 256,
+      "eos_count": 0,
+      "text_nonempty": true,
+      "all_ids_equal": true,
+      "byte_equal": true
+    },
+    {
+      "label": "greedy-3-candidate",
+      "bytes": 254279680,
+      "sha256": "454b852e0b9eb0c899d5f46c9eda99a77e90bbf64cabd337eabccd370b5f22bc",
+      "finite": true,
+      "nonzero_values": 63569919,
+      "tokens": 256,
+      "eos_count": 0,
+      "text_nonempty": true,
+      "all_ids_equal": true,
+      "byte_equal": true
+    }
+  ],
+  "input_scope": "Shared pinned weights, covered corpus and generated-token fixture only. All outputs below freshly computed with this PR's own full libraries; no other PR outputs count as its reference.",
+  "source": {
+    "base": {
+      "head": "01b4c6d69fbe69e862c00358f88c94a363129592",
+      "library_sha256": "00bc65909437c8c3516c8ac488f2d2038e9c9c771b6e66fb94ec0ff3ed41f9eb",
+      "ni_run_sha256": "cdbfe5c36f6bb5c4e5bf3215b468ddb28d554e0841a98fc272e24e6e368fea6c",
+      "logit_dump_sha256": "b95fcece9c9b1cfc13a72546a451b9f829e0bf6a05214e870baa2b6a105ce284"
+    },
+    "candidate": {
+      "head": "8c0a7ec3bf72623f6c7f92524ef229f3643a9e67",
+      "library_sha256": "f59fb8fa36218c85c2a6722f1da12f55649c906cb1030cc34cd07f7aa0dd3932",
+      "ni_run_sha256": "eac045c1dd81a3a86472eccd968edc3847c2503f9f803b5eb14026fdefdb8ff0",
+      "logit_dump_sha256": "9f21286bf65eeefae5e415aacc3e357f68b1b56f0190b8ca4304a870ce682f49"
+    }
+  },
+  "coverage": {
+    "corpus": {
+      "required_rows": 83302,
+      "missing_rows": 0,
+      "all_row_bytes_rechecked": true,
+      "ordered_row_digest": "2a980066952074fd22cec306c2d741cff4022ba22eedc2ec012dca805dce6229"
+    },
+    "fixed_generation": {
+      "required_rows": 3655,
+      "missing_rows": 0,
+      "all_row_bytes_rechecked": true,
+      "ordered_row_digest": "1c5529f5ac1e7f6ece2517396963c67cab95bfd65da7afd6899af19204e874f5"
+    }
+  },
+  "comparator_exit": 0
+}

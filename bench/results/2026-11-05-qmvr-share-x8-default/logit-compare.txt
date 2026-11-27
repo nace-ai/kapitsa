@@ -1,0 +1,19 @@
+prefill: 8 records (qwen3.6-35b-a3b-oq4e-mtp)
+  reference: 0.2.29 (8a1e67a6), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_DFLASH":"0"}
+  candidate: 0.2.29 (c27f9e26), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_DFLASH":"0"}
+  every row bitwise identical
+batch: 192 records (qwen3.6-35b-a3b-oq4e-mtp)
+  reference: 0.2.29 (8a1e67a6), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_DFLASH":"0"}
+  candidate: 0.2.29 (c27f9e26), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_DFLASH":"0"}
+  every row bitwise identical
+  PASS (flags)
+step: 192 records (qwen3.6-35b-a3b-oq4e-mtp)
+  reference: 0.2.29 (8a1e67a6), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_DFLASH":"0"}
+  candidate: 0.2.29 (c27f9e26), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_DFLASH":"0"}
+  every row bitwise identical
+  PASS (flags)
+verify: 192 records (qwen3.6-35b-a3b-oq4e-mtp)
+  reference: 0.2.29 (8a1e67a6), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_DFLASH":"0"}
+  candidate: 0.2.29 (c27f9e26), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_DFLASH":"0"}
+  every row bitwise identical
+  PASS (flags)

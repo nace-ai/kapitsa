@@ -1,0 +1,72 @@
+{
+  "name": "cancel-reply",
+  "progress": [
+    {
+      "total": 15223,
+      "cache": 2051,
+      "processed": 2051,
+      "time_ms": 0
+    },
+    {
+      "total": 15223,
+      "cache": 2051,
+      "processed": 3933,
+      "time_ms": 854
+    },
+    {
+      "total": 15223,
+      "cache": 2051,
+      "processed": 5815,
+      "time_ms": 1755
+    },
+    {
+      "total": 15223,
+      "cache": 2051,
+      "processed": 7697,
+      "time_ms": 2655
+    },
+    {
+      "total": 15223,
+      "cache": 2051,
+      "processed": 9579,
+      "time_ms": 3615
+    },
+    {
+      "total": 15223,
+      "cache": 2051,
+      "processed": 11461,
+      "time_ms": 4636
+    },
+    {
+      "total": 15223,
+      "cache": 2051,
+      "processed": 13342,
+      "time_ms": 5656
+    },
+    {
+      "total": 15223,
+      "cache": 2051,
+      "processed": 15223,
+      "time_ms": 6658
+    }
+  ],
+  "text": "The `forward` method of the `XcodecSemanticEncoderBlock` class iterates through a list of residual units to process the input hidden state, applies a",
+  "reasoning": "",
+  "cancelled": false,
+  "usage": {
+    "prompt_tokens": 15223,
+    "completion_tokens": 32,
+    "total_tokens": 15255,
+    "prompt_tokens_details": {
+      "cached_tokens": 2051
+    },
+    "kapitsa": {
+      "prefill_ms": 6718.3,
+      "kflash": {
+        "source": "DFlash2",
+        "cycles": 10
+      }
+    }
+  },
+  "finish_reason": "length"
+}

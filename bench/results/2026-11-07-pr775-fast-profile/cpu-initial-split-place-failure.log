@@ -1,0 +1,2 @@
+FAIL /Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/candidate-fast/tools/split_place_test.cpp:143: layer_bytes: the head's own tensors, the MTP head's: 8000000
+FAIL (1 failed)

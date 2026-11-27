@@ -1,0 +1,22 @@
+[kapitsa] read 19.51 GB of weights in 1004 ms (19.4 GB/s)
+[kapitsa] Hugging Face checkpoint layout (conv1d [C, 1, 4], RMSNorm weights read as 1 + w)
+[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)
+[kapitsa] no MTP head in ~/models/clover-35b-a3b-4bit; speculative decoding off
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] compiled kernels in 2814 ms
+[kapitsa] prewarmed 96 prefill pipelines in 2817 ms
+[kapitsa] loaded ~/models/clover-35b-a3b-4bit: 40 layers, MoE, 19.5 GB mapped in 3932 ms; weights 4-bit group 64 100%, 8-bit group 64 0%
+[kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
+[kapitsa] NI_PF_GROUPED: prefill on a grouped encoder (independent projections and expert GEMMs overlap)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] compiled the tensor kernels in 841 ms
+[kapitsa] NI_MOE_QTM: routed expert GEMMs on tensor_ops (qmtm_gu_m64_n64, qmtm_dn_m64_n64, 64-row tiles)
+[kapitsa] NI_QMT6: 6-bit g64 dense prefill GEMMs on tensor_ops (qmt6_m64_n64), M >= 64
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+prefill rep 0: 4096 tok in 1523.36 ms (GPU 665.60 ms)
+prefill rep 1: 4096 tok in 657.67 ms (GPU 655.97 ms)
+prefill rep 2: 4096 tok in 657.45 ms (GPU 655.87 ms)
+mean GPU time per step: 4.79 ms (7 steps)
+prompt 4096 tok in 657 ms (6229.7 tok/s); decode 7 tok in 35 ms (201.5 tok/s)
+ids: 271 4068 220 17 25 45265 369 2250

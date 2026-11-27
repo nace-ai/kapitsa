@@ -1,0 +1,122 @@
+kapitsa bench: 27b-stock-4bit 4-bit on MacBook Pro (16-inch, 2026): Apple M5 Pro, 20-core GPU, 48 GB, macOS 26.5.2, quick
+warning: Another Kapitsa is running (pid 40110): its model's memory and any requests it serves skew the numbers.
+warning: Another Kapitsa is running (pid 40109): its model's memory and any requests it serves skew the numbers.
+warning: Another Kapitsa is running (pid 40108): its model's memory and any requests it serves skew the numbers.
+warning: Another Kapitsa is running (pid 40107): its model's memory and any requests it serves skew the numbers.
+warning: Another Kapitsa is running (pid 40106): its model's memory and any requests it serves skew the numbers.
+Left out of the server, as the harness does: NI_DFLASH, NI_LOCK_HELD
+Starting the server on 127.0.0.1:61447 (log ~/.kapitsa/logs/bench-61447-ctx32768.log)
+[?2026h  ✓ Loaded 27b-stock-4bit  ·  4-bit in 6.7s  ·  KFlash speculative decodi…
+[?2026lReady after 6.7s: KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)
+Warm-up done in 7.5s
+GPU quiet after 18s
+  decode T=0.6: 69.51 tok/s (512 tok, finish="length")
+  decode T=0.6: 80.99 tok/s (512 tok, finish="length")
+  decode T=0.6: 76.98 tok/s (512 tok, finish="length")
+decode T=0.6: median 76.98 tok/s over 3/3 valid, accepted drafts 64.35 tok/s (83.6% of tokens)
+  decode T=0: 80.68 tok/s (512 tok, finish="length")
+  decode T=0: 82.76 tok/s (512 tok, finish="length")
+  decode T=0: 84.68 tok/s (512 tok, finish="length")
+decode T=0: median 82.76 tok/s over 3/3 valid, accepted drafts 70.16 tok/s (84.8% of tokens)
+prefill 4000: 4135 tok, 636 tok/s; cached TTFT median 0.22 s (103 tok/s on the uncached suffix)
+tools: pass
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "quick",
+  "time_utc": "2026-11-09T18:44:20Z",
+  "kapitsa": {
+    "version": "0.2.32",
+    "commit": "d132a2cc"
+  },
+  "mac": {
+    "identifier": "Mac17,8",
+    "name": "MacBook Pro (16-inch, M5 Pro or M5 Max)",
+    "year": 2026,
+    "chip": "Apple M5 Pro",
+    "cpu_cores": 18,
+    "gpu_cores": 20,
+    "memory_gb": 48,
+    "macos": "26.5.2",
+    "macos_build": "25F84"
+  },
+  "model": {
+    "name": "27b-stock-4bit",
+    "title": "27b-stock-4bit",
+    "variant": null,
+    "precision": "4-bit",
+    "catalog": false,
+    "revision": null,
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "dflash2",
+    "drafter_kind": "DFlash2",
+    "drafter_source": "dflash2",
+    "drafter_reason": "found in the model's folder"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 3,
+    "greedy_runs": 3,
+    "sizes": [
+      4000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 76.98,
+      "runs_tps": [
+        69.51,
+        80.99,
+        76.98
+      ],
+      "median_accepted_draft_tps": 64.35,
+      "median_accepted_draft_share": 0.8359
+    },
+    "decode_greedy": {
+      "median_tps": 82.76,
+      "runs_tps": [
+        80.68,
+        82.76,
+        84.68
+      ],
+      "median_accepted_draft_tps": 70.16,
+      "median_accepted_draft_share": 0.8477
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4135,
+        "ttft_s": 6.5004,
+        "tps": 636.1,
+        "followup_s": [
+          0.2227,
+          0.2268,
+          0.2181
+        ],
+        "followup_median_s": 0.2227,
+        "followup_suffix_tps": 103.3
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 19.4
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "high",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.12,
+    "gpu_other_max_pct": 0.91,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [],
+  "invalid": []
+}
+Saved runs/27b-stock-1/bench.json

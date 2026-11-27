@@ -8,3 +8,5 @@ cmake-build-*/
 internal/
 __pycache__/
 .ruff_cache/
+docs/site/leaderboard-data.js
+.vercel

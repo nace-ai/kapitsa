@@ -1,0 +1,15 @@
+Redacted derived transcript; path substitutions only, not the raw execution log.
+prefill: 8 records (q4-k-flint)
+  reference: 0.2.33 (2e308aea), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.33 (0c34e239), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+step: 192 records (q4-k-flint)
+  reference: 0.2.33 (2e308aea), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.33 (0c34e239), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+  PASS (flags)
+verify: 192 records (q4-k-flint)
+  reference: 0.2.33 (2e308aea), verify "8 rows", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.33 (0c34e239), verify "8 rows", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+  PASS (flags)

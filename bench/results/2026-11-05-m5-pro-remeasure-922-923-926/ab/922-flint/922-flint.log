@@ -1,0 +1,9 @@
+round 0 old: ms_step 30.38, gpu_ms_step 30.37 | quiet True after 18.3 s, foreign GPU mean 0.58% max 2.88%, load 1.99 -> 2.20 (waited 165 s), AC True -> True, clean False
+round 0 new: ms_step 29.67, gpu_ms_step 29.66 | quiet True after 18.6 s, foreign GPU mean 0.13% max 0.99%, load 1.94 -> 1.85 (waited 145 s), AC True -> True, clean False
+round 1 new: ms_step 29.95, gpu_ms_step 29.94 | quiet True after 18.6 s, foreign GPU mean 0.77% max 2.13%, load 1.84 -> 1.73 (waited 0 s), AC True -> True, clean False
+round 1 old: ms_step 30.31, gpu_ms_step 30.31 | quiet True after 18.6 s, foreign GPU mean 0.14% max 1.2%, load 1.58 -> 1.97 (waited 0 s), AC True -> True, clean False
+round 2 old: ms_step 30.61, gpu_ms_step 30.6 | quiet True after 18.6 s, foreign GPU mean 3.23% max 12.77%, load 1.99 -> 2.42 (waited 0 s), AC True -> True, clean False
+round 2 new: ms_step 29.72, gpu_ms_step 29.72 | quiet True after 41.3 s, foreign GPU mean 0.14% max 0.76%, load 1.86 -> 2.12 (waited 65 s), AC True -> True, clean False
+round 3 new: ms_step 30.09, gpu_ms_step 30.08 | quiet True after 18.4 s, foreign GPU mean 5.24% max 9.05%, load 1.90 -> 2.34 (waited 630 s), AC True -> True, clean False
+round 3 old: ms_step 30.23, gpu_ms_step 30.22 | quiet False after 900.1 s, foreign GPU mean 5.45% max 8.2%, load 1.95 -> 2.12 (waited 65 s), AC False -> True, clean False
+clean rounds: 0 of 4

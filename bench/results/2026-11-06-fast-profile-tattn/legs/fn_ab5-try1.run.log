@@ -1,0 +1,28 @@
+20:09:45 waiting for load 6.71
+20:10:00 waiting for load 5.52
+20:10:15 waiting for load 4.66
+20:10:31 waiting for load 4.08
+20:11:56 1 32K arm=P rc=0 load 3.55->1.96 ok+mempressure prompt 32768 tok in 47617 ms (688.2 tok/s); spec decode D=2: 127 tok in 3445 ms (36.9 tok/s), 62 cycles, 2.05 tok/cycle, accepted/drafted 0.
+20:12:42 2 32K arm=F rc=0 load 1.96->3.15 ok prompt 32768 tok in 39306 ms (833.7 tok/s); spec decode D=2: 127 tok in 3467 ms (36.6 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+20:13:29 3 32K arm=F rc=0 load 3.15->1.99 ok prompt 32768 tok in 39036 ms (839.4 tok/s); spec decode D=2: 127 tok in 3501 ms (36.3 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+20:14:18 4 32K arm=P rc=0 load 1.99->2.13 ok prompt 32768 tok in 42368 ms (773.4 tok/s); spec decode D=2: 127 tok in 3336 ms (38.1 tok/s), 62 cycles, 2.05 tok/cycle, accepted/drafted 0.
+20:15:05 5 32K arm=F rc=0 load 2.13->3.10 ok prompt 32768 tok in 39634 ms (826.8 tok/s); spec decode D=2: 127 tok in 3418 ms (37.2 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+20:15:55 6 32K arm=P rc=0 load 3.10->2.28 ok prompt 32768 tok in 42402 ms (772.8 tok/s); spec decode D=2: 127 tok in 3370 ms (37.7 tok/s), 62 cycles, 2.05 tok/cycle, accepted/drafted 0.
+20:16:47 7 32K arm=P rc=0 load 2.28->2.52 ok prompt 32768 tok in 45060 ms (727.2 tok/s); spec decode D=2: 127 tok in 3324 ms (38.2 tok/s), 62 cycles, 2.05 tok/cycle, accepted/drafted 0.
+20:17:35 8 32K arm=F rc=0 load 2.52->1.84 ok+mempressure prompt 32768 tok in 40590 ms (807.3 tok/s); spec decode D=2: 127 tok in 3616 ms (35.1 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+20:19:25 9 64K arm=P rc=0 load 1.84->2.65 ok+mempressure prompt 65000 tok in 102673 ms (633.1 tok/s); spec decode D=2: 127 tok in 3125 ms (40.6 tok/s), 52 cycles, 2.44 tok/cycle, accepted/drafted 0
+/Users/alisheramantay/Documents/nace/k363/fn_ab5.sh: line 34: 69907 Terminated: 15          env $E $B $M @$K/fn-long-$P.ids 128 0 --spec 2 > $O/$i-$P-$arm.out 2>&1
+20:20:26 10 64K arm=F rc=143 load 2.65->2.51 void-guard(swap 8461M disk 49G t 60s) 
+/Users/alisheramantay/Documents/nace/k363/fn_ab5.sh: line 34: 70864 Terminated: 15          env $E $B $M @$K/fn-long-$P.ids 128 0 --spec 2 > $O/$i-$P-$arm.out 2>&1
+20:20:27 11 64K arm=F rc=143 load 2.51->2.51 void-guard(swap 8461M disk 49G t 0s) 
+/Users/alisheramantay/Documents/nace/k363/fn_ab5.sh: line 34: 70956 Terminated: 15          env $E $B $M @$K/fn-long-$P.ids 128 0 --spec 2 > $O/$i-$P-$arm.out 2>&1
+20:20:27 12 64K arm=P rc=143 load 2.47->2.47 void-guard(swap 8453M disk 49G t 0s) 
+/Users/alisheramantay/Documents/nace/k363/fn_ab5.sh: line 34: 71049 Terminated: 15          env $E $B $M @$K/fn-long-$P.ids 128 0 --spec 2 > $O/$i-$P-$arm.out 2>&1
+20:20:28 13 64K arm=F rc=143 load 2.47->2.47 void-guard(swap 8453M disk 49G t 0s) 
+/Users/alisheramantay/Documents/nace/k363/fn_ab5.sh: line 34: 71141 Terminated: 15          env $E $B $M @$K/fn-long-$P.ids 128 0 --spec 2 > $O/$i-$P-$arm.out 2>&1
+20:20:28 14 64K arm=P rc=143 load 2.47->2.47 void-guard(swap 8453M disk 49G t 0s) 
+/Users/alisheramantay/Documents/nace/k363/fn_ab5.sh: line 34: 71233 Terminated: 15          env $E $B $M @$K/fn-long-$P.ids 128 0 --spec 2 > $O/$i-$P-$arm.out 2>&1
+20:20:28 15 64K arm=P rc=143 load 2.47->2.47 void-guard(swap 8453M disk 49G t 0s) 
+/Users/alisheramantay/Documents/nace/k363/fn_ab5.sh: line 34: 71352 Terminated: 15          env $E $B $M @$K/fn-long-$P.ids 128 0 --spec 2 > $O/$i-$P-$arm.out 2>&1
+20:20:29 16 64K arm=F rc=143 load 2.47->2.47 void-guard(swap 8453M disk 49G t 0s) 
+20:20:29 QDONE

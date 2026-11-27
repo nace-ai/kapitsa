@@ -1,0 +1,26 @@
+[
+  {
+    "tag": "base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-research/build/logit_dump",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/logits-base"
+    ],
+    "exit": 0,
+    "head": "d65a0afa35a176e1ecd1107f176a1b4028753f1d",
+    "binary_sha256": "078fc7f2dff0c2cda480d46cde41fe369d3dd9b16d535bc062ba6a8bef02b203"
+  },
+  {
+    "tag": "range",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-range-neon/build/logit_dump",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/logits-range",
+      "--from",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/logits-base"
+    ],
+    "exit": 0,
+    "head": "09b7f4f8ca420ed16713a5066b007eefcc716e7a",
+    "binary_sha256": "847b8ebfd1c691174df8e727ca9a1b4e855e7ad36c4532ffb976963b6b35f721"
+  }
+]

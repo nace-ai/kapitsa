@@ -1,0 +1,49 @@
+{
+  "kind": "Hashes of explicitly redacted derived public files, not private originals",
+  "files": {
+    "M3-API-NATIVE.json": {
+      "bytes": 16243,
+      "sha256": "b69f528522c8c22801ea9f4fd9a9f39f2dbfc99a09d35d381d30f8ecfb128332"
+    },
+    "M3-FIXED.json": {
+      "bytes": 34103,
+      "sha256": "088eae39c5edcdf7f530cf79cc1b5ccebda6dd1f7e6da1d6361a4bdafe327f04"
+    },
+    "M3-IDENTITY.json": {
+      "bytes": 10371,
+      "sha256": "9112537ae810bfc01d34cd08b1f73083b4ce2794d5af72088c548ae418427ff0"
+    },
+    "M3-IMPORT.json": {
+      "bytes": 13783,
+      "sha256": "ae5a4ce00aa41e14786b9b1e13e3105a071188f1c366a7a1e10b3da034ad0bf4"
+    },
+    "M3-NUMERICAL.json": {
+      "bytes": 14993,
+      "sha256": "2dd10bb0f9dc3d4548e50aa05e848f863a5ec650be7c6a57dace66bb5c6f914a"
+    },
+    "M4-API-NATIVE.json": {
+      "bytes": 15427,
+      "sha256": "1bd03567ae7c98aa34d758df44528f1026b5e8f7f400e7ea134725228d629be5"
+    },
+    "M4-FIXED.json": {
+      "bytes": 34114,
+      "sha256": "fa08da70b6e8e2ae7f8d9d3c050cdb7d0e6f18617b97da271ec6466736a9bb81"
+    },
+    "M4-IDENTITY.json": {
+      "bytes": 9984,
+      "sha256": "5cf5b3e374450f32141a7ff2746d9332faea2e0afc6c2a1c9f3db479884dff96"
+    },
+    "M4-IMPORT.json": {
+      "bytes": 13782,
+      "sha256": "875bdf6dc596aa58841d14b5b05a3472570acdc45e37d74f8bd61b6c1b3533dd"
+    },
+    "M4-NUMERICAL.json": {
+      "bytes": 15016,
+      "sha256": "e94973b8c54bb8229f083e4ab480fc180056435811bfcec84e0e877ffff91e6b"
+    },
+    "README.md": {
+      "bytes": 7689,
+      "sha256": "64489b42fb0b12aeada9009a4cb4e9ca43474ac617129efb313eff7d9853856d"
+    }
+  }
+}

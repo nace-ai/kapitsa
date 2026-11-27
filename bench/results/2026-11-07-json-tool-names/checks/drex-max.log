@@ -1,0 +1,25 @@
+........read model.safetensors (5 tensors)
+.GGUF v3: 3 tensors, 0 metadata KVs
+arch: None name: None
+.read model.safetensors (3 tensors)
+read model.safetensors (3 tensors)
+read model.safetensors (3 tensors)
+.read model.safetensors (1 tensors)
+read model.safetensors (2 tensors)
+read model.safetensors (2 tensors)
+read model.safetensors (2 tensors)
+GGUF v3: 1 tensors, 0 metadata KVs
+arch: None name: None
+GGUF v3: 2 tensors, 0 metadata KVs
+arch: None name: None
+GGUF v3: 2 tensors, 0 metadata KVs
+arch: None name: None
+...GGUF v3: 1 tensors, 0 metadata KVs
+arch: None name: None
+GGUF v3: 1 tensors, 0 metadata KVs
+arch: None name: None
+.
+----------------------------------------------------------------------
+Ran 15 tests in 1.418s
+
+OK

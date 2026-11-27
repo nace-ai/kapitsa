@@ -1,0 +1,45 @@
+{
+  "source": "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-rebase-3f3b",
+  "files": [
+    {
+      "file": "logits-fast/batch/logits.f32",
+      "bytes": 190709760,
+      "sha256": "7bfe152245e4c8ffb2f551bd278ac5c8f0c5d04b4163868a84ec0db265618694"
+    },
+    {
+      "file": "logits-fast/prefill/logits.f32",
+      "bytes": 7946240,
+      "sha256": "4ce8ab999318a9f11ed6befc08e9ba521655e661cc02675e8e4564a133973684"
+    },
+    {
+      "file": "logits-fast/step/logits.f32",
+      "bytes": 190709760,
+      "sha256": "e45b254d5351aca1fbb8f35e9966436a77829278208e7833db8f8b64a974f00b"
+    },
+    {
+      "file": "logits-fast/verify/logits.f32",
+      "bytes": 190709760,
+      "sha256": "8e65f1dd82724421c6bd7a7314938963548e5343fcab21dfcea5124a40b6b8d1"
+    },
+    {
+      "file": "logits-precise/batch/logits.f32",
+      "bytes": 190709760,
+      "sha256": "066e7c596dc04d18bd3b1b7c1cb43f8059bc8e45c5841a8048caeb039895dc26"
+    },
+    {
+      "file": "logits-precise/prefill/logits.f32",
+      "bytes": 7946240,
+      "sha256": "ef1c3b40ee3c48605e75d5abfb214ddb79c700632990d7ce70c5d2979374f21e"
+    },
+    {
+      "file": "logits-precise/step/logits.f32",
+      "bytes": 190709760,
+      "sha256": "2bfba1cff4849f4ba2ac3d681d0743f52ac00a61594ed57bcab846034c1b8764"
+    },
+    {
+      "file": "logits-precise/verify/logits.f32",
+      "bytes": 190709760,
+      "sha256": "b70dd0514767becd9e84a479c7817da5c4c80dcc21df7a06fc5b18459b8ba1b2"
+    }
+  ]
+}

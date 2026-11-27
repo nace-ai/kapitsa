@@ -1402,3 +1402,55 @@ NI_HC_UP_MIX2(hc_up_mix2_b8, 8)
   }
   if (lane == p.k) wts[r * (p.k + 1) + p.k] = sigmoid(shared[r]);
 }
+
+
+// Batched router: peel the first selection, whose maximum also normalizes the selected weights.
+[[kernel]] void moe_topk512_rows(const device float* logits [[buffer(0)]], const device float* shared [[buffer(1)]],
+                            device uint* idx [[buffer(2)]], device float* wts [[buffer(3)]],
+                            constant TopkParams& p [[buffer(4)]], uint r [[threadgroup_position_in_grid]],
+                            uint lane [[thread_index_in_simdgroup]]) {
+  const device float4* l4 = (const device float4*)(logits + r * 512 + lane * 16);
+  const float4 a = l4[0], b = l4[1], c = l4[2], d = l4[3];
+  float v[16] = {a.x, a.y, a.z, a.w, b.x, b.y, b.z, b.w, c.x, c.y, c.z, c.w, d.x, d.y, d.z, d.w};
+  float first = -INFINITY;
+  uint first_i = 0xffffffffu;
+  for (uint i = 0; i < 16; ++i)
+    if (v[i] > first) {
+      first = v[i];
+      first_i = lane * 16 + i;
+    }
+  const float g0 = simd_max(first);
+  const uint win0 = simd_min(first == g0 ? first_i : 0xffffffffu);
+  float mx = g0;
+  float total = 0.0f;  // the full softmax denominator (no renormalization only)
+  if (!p.norm) {
+    mx = v[0];
+    for (uint i = 1; i < 16; ++i) mx = max(mx, v[i]);
+    mx = simd_max(mx);
+    for (uint i = 0; i < 16; ++i) total += metal::precise::exp(v[i] - mx);
+    total = simd_sum(total);
+  }
+  uint taken = win0 / 16 == lane ? 1u << (win0 % 16) : 0u;
+  float sel = metal::precise::exp(g0 - mx), my_w = sel;
+  uint my_i = win0;
+  for (uint q = 1; q < p.k; ++q) {
+    float best = -INFINITY;
+    uint bi = 0xffffffffu;
+    for (uint i = 0; i < 16; ++i)
+      if (!(taken & (1u << i)) && v[i] > best) {
+        best = v[i];
+        bi = lane * 16 + i;
+      }
+    const float g = simd_max(best);
+    const uint win = simd_min(best == g ? bi : 0xffffffffu);
+    if (win / 16 == lane) taken |= 1u << (win % 16);
+    const float e = metal::precise::exp(g - mx);
+    sel += e;
+    if (lane == q) my_w = e, my_i = win;
+  }
+  if (lane < p.k) {
+    idx[r * p.k + lane] = my_i;
+    wts[r * (p.k + 1) + lane] = my_w / (p.norm ? sel : total);
+  }
+  if (lane == p.k) wts[r * (p.k + 1) + p.k] = sigmoid(shared[r]);
+}

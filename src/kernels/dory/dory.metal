@@ -377,6 +377,36 @@ struct DoryRedGateP {
   out[size_t(r) * p.Hq * kDD + i] = (num / den) * (1.0f / (1.0f + metal::precise::exp(-gv)));
 }
 
+[[kernel]] void dory_attn_reduce_gate_shared(const device float* part_o [[buffer(0)]],
+                                      const device float* part_ml [[buffer(1)]],
+                                      const device float* g [[buffer(2)]],
+                                      const device float* sg2 [[buffer(3)]],
+                                      device float* out [[buffer(4)]],
+                                      constant DoryRedGateP& p [[buffer(5)]],
+                                      uint2 tg [[threadgroup_position_in_grid]],
+                                      uint d [[thread_index_in_threadgroup]],
+                                      uint lane [[thread_index_in_simdgroup]]) {
+  // The host selects this kernel for 16 to 64 splits; keep each dimension's sums in their original order.
+  const uint h = tg.x, r = tg.y;
+  const size_t base = (size_t(r) * p.Hq + h) * p.nchunks;
+  const float m0 = lane < p.nchunks ? part_ml[(base + lane) * 2] : -INFINITY;
+  const float m1 = lane + 32 < p.nchunks ? part_ml[(base + lane + 32) * 2] : -INFINITY;
+  const float M = simd_max(max(m0, m1));
+  const float w0 = m0 == -INFINITY ? 0.0f : metal::precise::exp(m0 - M);
+  const float w1 = m1 == -INFINITY ? 0.0f : metal::precise::exp(m1 - M);
+  float num = 0.0f, den = 0.0f;
+  for (uint c = 0; c < p.nchunks; ++c) {
+    const float mc = part_ml[(base + c) * 2];
+    if (mc == -INFINITY) continue;
+    const float w = simd_broadcast(c < 32 ? w0 : w1, c % 32);
+    num += w * part_o[(base + c) * kDD + d];
+    den += w * part_ml[(base + c) * 2 + 1];
+  }
+  const uint i = h * kDD + d;
+  const float gv = (g[size_t(r) * p.g_ld + i] * p.sg) * sg2[i];
+  out[size_t(r) * p.Hq * kDD + i] = (num / den) * (1.0f / (1.0f + metal::precise::exp(-gv)));
+}
+
 // ---- row kernels ----
 struct DoryRowP {
   uint D;

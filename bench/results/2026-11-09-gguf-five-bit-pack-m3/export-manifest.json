@@ -1,0 +1,14 @@
+{
+  "format": "Hashes of explicitly filtered public copies; private raw archives are not published.",
+  "files": {
+    "M3-DEFAULT-FIXED.json": "264d6fe8ee193b5eaddfb6bad7473c505f2f77dd73d34945772c8029cdbaf5b6",
+    "M3-IMPORT.json": "21e06a2520002c030c4d546f1a0a188dfe01ae2f864270c9db68395ac9fd96f4",
+    "M3-HTTP.json": "ad9898b4c906a020794176e5310f8360d89a5bec41fdda58d2338347fb79ac94",
+    "cold-only-driver.cpp": "f80e74dc531d9151a7c21e2fdc741c1d9f5ce1c4c5d5fc962bde8f2ac5e19a12",
+    "README.md": "ba7b3d43ff6890bf331050e7cf35685fa30273adaf5a0796b7a7dd62a64e98f5",
+    "M3-COLD-RECOVERY.json": "d7a475107de3a603cda728a3f164813637b5b66a82d36b034635eff69e17e0fa",
+    "M3-NUMERICAL.json": "d230624a5deb9c741c63cc8f7917771725c56d3eb510e4413dd3acbe1d6590af",
+    "M3-DEFAULT-NATIVE.json": "914dc38b79fa5861cee89c0a865aaebf0024b124975c9514e27d9c73e186b160",
+    "M3-BUILDS.json": "5aff71fff6776c91b821d975452dea91db890ddc42c8af4a73662536fc1722ae"
+  }
+}

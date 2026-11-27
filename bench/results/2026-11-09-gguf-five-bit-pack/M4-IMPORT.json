@@ -1,0 +1,209 @@
+{
+  "source_candidate": "90e10efce8462ede4c756ca77ccdb1510f4e9faf",
+  "source_reference": "66a5f3bc473df9af8b72ded9090c3a8acc16a43e",
+  "fresh_reference_import_rc": 0,
+  "fresh_candidate_import_rc": 0,
+  "reference_retention": {
+    "method": "Reference conversion executed once; every file was compared completely to a separately retained copy before using the identical bytes. New manifest was retained unchanged; no earlier test result is relabeled.",
+    "original_control_failure": 1,
+    "cause": "Initial retained manifest had a different import name and file order; validation stopped. Explicit recovery copied the new manifest and reused only fully byte-compared files.",
+    "repeated_completed_imports_or_builds": 0,
+    "fresh_redundant_files_cleanup_completed": true
+  },
+  "import_comparison": {
+    "converted_weight_config_tokenizer_bytes_equal": true,
+    "all_files_raw_bytes_equal": true,
+    "manifest_order_only_differences": [],
+    "files_with_complete_literal_byte_comparison": [
+      ".kapitsa/manifest.json",
+      "chat_template.jinja",
+      "config.json",
+      "generation_config.json",
+      "model.safetensors",
+      "model.safetensors.index.json",
+      "mtp.safetensors",
+      "tokenizer.json",
+      "tokenizer_config.json"
+    ],
+    "inventories": {
+      "reference": [
+        {
+          "path": ".kapitsa/manifest.json",
+          "bytes": 1194,
+          "sha256": "da3d8a85ed850f78a91a16b0150f8b73bbba02f5cd27798948c9e161d007e1cc"
+        },
+        {
+          "path": "chat_template.jinja",
+          "bytes": 7756,
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+          "path": "config.json",
+          "bytes": 7606,
+          "sha256": "b63bc4b651baec6ad0e6d6b997d42275df7a3b2c17441bda8c74635d99040faf"
+        },
+        {
+          "path": "generation_config.json",
+          "bytes": 51,
+          "sha256": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 3222879600,
+          "sha256": "d8a1b1e0a06e4c97f937d0535f53fae412515c311abfaaf7a41e932f6e217ede"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "bytes": 68845,
+          "sha256": "78c58ba33448de276b4a1248cc9702f3215e0a78a2caf49c834256730490fc1b"
+        },
+        {
+          "path": "mtp.safetensors",
+          "bytes": 128152856,
+          "sha256": "8fa3db39cdec6fbc1f946f29b24468f6b457d1c8fa8278ee164587da07c327a4"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 9089350,
+          "sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 12388,
+          "sha256": "0b99b211f407646a3515f39fa06159ae80431cf46267a9b48778a8e1f0da1381"
+        }
+      ],
+      "candidate": [
+        {
+          "path": ".kapitsa/manifest.json",
+          "bytes": 1194,
+          "sha256": "da3d8a85ed850f78a91a16b0150f8b73bbba02f5cd27798948c9e161d007e1cc"
+        },
+        {
+          "path": "chat_template.jinja",
+          "bytes": 7756,
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+          "path": "config.json",
+          "bytes": 7606,
+          "sha256": "b63bc4b651baec6ad0e6d6b997d42275df7a3b2c17441bda8c74635d99040faf"
+        },
+        {
+          "path": "generation_config.json",
+          "bytes": 51,
+          "sha256": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 3222879600,
+          "sha256": "d8a1b1e0a06e4c97f937d0535f53fae412515c311abfaaf7a41e932f6e217ede"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "bytes": 68845,
+          "sha256": "78c58ba33448de276b4a1248cc9702f3215e0a78a2caf49c834256730490fc1b"
+        },
+        {
+          "path": "mtp.safetensors",
+          "bytes": 128152856,
+          "sha256": "8fa3db39cdec6fbc1f946f29b24468f6b457d1c8fa8278ee164587da07c327a4"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 9089350,
+          "sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 12388,
+          "sha256": "0b99b211f407646a3515f39fa06159ae80431cf46267a9b48778a8e1f0da1381"
+        }
+      ]
+    },
+    "source_backed_format_checks": {
+      "reference": {
+        "global": {
+          "bits": 5,
+          "group_size": 64,
+          "mode": "affine"
+        },
+        "measured_module": "language_model.model.layers.0.mlp.up_proj",
+        "effective_measured_module": {
+          "bits": 5,
+          "group_size": 64,
+          "mode": "affine"
+        },
+        "packed_tensors": {
+          "weight": {
+            "dtype": "U32",
+            "shape": [
+              9216,
+              400
+            ],
+            "payload_bytes": 14745600
+          },
+          "scales": {
+            "dtype": "BF16",
+            "shape": [
+              9216,
+              40
+            ],
+            "payload_bytes": 737280
+          },
+          "biases": {
+            "dtype": "BF16",
+            "shape": [
+              9216,
+              40
+            ],
+            "payload_bytes": 737280
+          }
+        }
+      },
+      "candidate": {
+        "global": {
+          "bits": 5,
+          "group_size": 64,
+          "mode": "affine"
+        },
+        "measured_module": "language_model.model.layers.0.mlp.up_proj",
+        "effective_measured_module": {
+          "bits": 5,
+          "group_size": 64,
+          "mode": "affine"
+        },
+        "packed_tensors": {
+          "weight": {
+            "dtype": "U32",
+            "shape": [
+              9216,
+              400
+            ],
+            "payload_bytes": 14745600
+          },
+          "scales": {
+            "dtype": "BF16",
+            "shape": [
+              9216,
+              40
+            ],
+            "payload_bytes": 737280
+          },
+          "biases": {
+            "dtype": "BF16",
+            "shape": [
+              9216,
+              40
+            ],
+            "payload_bytes": 737280
+          }
+        }
+      }
+    },
+    "format_scope": "Global format and measured trunk ffn_up only; other per-module/MTP formats are not asserted to be 5-bit."
+  },
+  "model_output_completed": true,
+  "default_bench_completed": true,
+  "method_note": "Privacy-filtered derived phase summary. Imports are correctness evidence, not a total import speed measurement."
+}

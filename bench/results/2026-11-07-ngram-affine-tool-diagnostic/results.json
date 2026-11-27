@@ -1,0 +1,3260 @@
+{
+  "started_at": "2026-11-07T00:13:36.148024+00:00",
+  "arms": [
+    {
+      "arm": 0,
+      "tag": "base",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/kapitsa-full-table-20261107/model-full",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "52847",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "32768",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-full-table-20261107/followup-2357/diagnostic-1022/home-0",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1"
+      },
+      "cases": [
+        {
+          "label": "0-base-default-0",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": false,
+          "original_response": {
+            "reasoning": "",
+            "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nawk 'END{print \"record count:\", NR}' /etc/hosts",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 599,
+              "completion_tokens": 31,
+              "total_tokens": 630,
+              "prompt_tokens_details": {
+                "cached_tokens": 576
+              },
+              "kapitsa": {
+                "prefill_ms": 137.0,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 11
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": 0.6049227714538574
+          },
+          "extended_limit_pass": false,
+          "extra_rounds": 2,
+          "final_response": {
+            "reasoning": "",
+            "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nawk 'END{print \"record count:\", NR}' /etc/hosts",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 599,
+              "completion_tokens": 31,
+              "total_tokens": 630,
+              "prompt_tokens_details": {
+                "cached_tokens": 576
+              },
+              "kapitsa": {
+                "prefill_ms": 137.0,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 11
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": 0.6049227714538574
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && tail -c 1 /etc/hosts | od -c\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"tail -c 1 /etc/hosts | od -c; echo \\\"---\\\"; awk 'END{print NR}' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nawk 'END{print \"record count:\", NR}' /etc/hosts",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "0-base-default-1",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": true,
+          "original_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.2,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 21
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13432097434997559
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 1,
+          "final_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.2,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 21
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13432097434997559
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "0-base-default-2",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": false,
+          "original_response": {
+            "reasoning": "",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_D7Zv8gXj9StvuwhBLry79AhM",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l < /etc/hosts; wc -c < /etc/hosts\"}"
+                },
+                "index": 0
+              }
+            ],
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 583,
+              "completion_tokens": 43,
+              "total_tokens": 626,
+              "prompt_tokens_details": {
+                "cached_tokens": 560
+              },
+              "kapitsa": {
+                "prefill_ms": 136.7,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 18
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": null
+          },
+          "extended_limit_pass": false,
+          "extra_rounds": 3,
+          "final_response": {
+            "reasoning": "",
+            "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\necho \"bytes: $(wc -c < /etc/hosts)\"; echo \"lines(newline-terminated): $(wc -l < /etc/hosts)\"",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 644,
+              "completion_tokens": 50,
+              "total_tokens": 694,
+              "prompt_tokens_details": {
+                "cached_tokens": 625
+              },
+              "kapitsa": {
+                "prefill_ms": 124.2,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 20
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": 0.9694459438323975
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && tail -c 1 /etc/hosts | xxd\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"tail -c 1 /etc/hosts | od -c\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l < /etc/hosts; wc -c < /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\necho \"bytes: $(wc -c < /etc/hosts)\"; echo \"lines(newline-terminated): $(wc -l < /etc/hosts)\"",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "0-base-default-3",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": true,
+          "original_response": {
+            "reasoning": "",
+            "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.6,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 22
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.1346900463104248
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 1,
+          "final_response": {
+            "reasoning": "",
+            "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.6,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 22
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.1346900463104248
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "0-base-greedy",
+          "controls": {
+            "temperature": 0,
+            "seed": 11
+          },
+          "initial_call_valid": true,
+          "original_limit_pass": true,
+          "original_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`\n\nNote: the last line does not end with a trailing newline, but it is still counted as a line (both `wc -l` and `awk` confirm a total of 3 lines).",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 580,
+              "completion_tokens": 99,
+              "total_tokens": 679,
+              "prompt_tokens_details": {
+                "cached_tokens": 557
+              },
+              "kapitsa": {
+                "prefill_ms": 140.3,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 38
+                }
+              }
+            },
+            "chunks": 95,
+            "t_first": 0.14043593406677246
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 2,
+          "final_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`\n\nNote: the last line does not end with a trailing newline, but it is still counted as a line (both `wc -l` and `awk` confirm a total of 3 lines).",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 580,
+              "completion_tokens": 99,
+              "total_tokens": 679,
+              "prompt_tokens_details": {
+                "cached_tokens": 557
+              },
+              "kapitsa": {
+                "prefill_ms": 140.3,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 38
+                }
+              }
+            },
+            "chunks": 95,
+            "t_first": 0.14043593406677246
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"awk 'END{print NR}' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`\n\nNote: the last line does not end with a trailing newline, but it is still counted as a line (both `wc -l` and `awk` confirm a total of 3 lines).",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "0-base-seed11",
+          "controls": {
+            "temperature": 0.7,
+            "seed": 11
+          },
+          "initial_call_valid": true,
+          "original_limit_pass": false,
+          "original_response": {
+            "reasoning": "",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_6hSIhVDcpKfEdC4wgyHJkhVA",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"cat /etc/hosts; echo \\\"[end-of-file-marker]\\\"\"}"
+                },
+                "index": 0
+              }
+            ],
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 618,
+              "completion_tokens": 39,
+              "total_tokens": 657,
+              "prompt_tokens_details": {
+                "cached_tokens": 595
+              },
+              "kapitsa": {
+                "prefill_ms": 137.0,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 15
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": null
+          },
+          "extended_limit_pass": false,
+          "extra_rounds": 3,
+          "final_response": {
+            "reasoning": "",
+            "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nls -la /etc/hosts; echo \"---\"; wc -c /etc/hosts; echo \"---\"; awk 'END{print NR}' /etc/hosts",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 679,
+              "completion_tokens": 49,
+              "total_tokens": 728,
+              "prompt_tokens_details": {
+                "cached_tokens": 656
+              },
+              "kapitsa": {
+                "prefill_ms": 132.0,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 19
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": 0.936143159866333
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts | tail -1 && echo \\\"\\\" && tail -c 1 /etc/hosts | od -c | head -2\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"tail -c 1 /etc/hosts | od -c | head -2; echo \\\"exit: $?\\\"\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"cat /etc/hosts; echo \\\"[end-of-file-marker]\\\"\"}"
+                }
+              ]
+            },
+            {
+              "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nls -la /etc/hosts; echo \"---\"; wc -c /etc/hosts; echo \"---\"; awk 'END{print NR}' /etc/hosts",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "0-base-seed29",
+          "controls": {
+            "temperature": 0.7,
+            "seed": 29
+          },
+          "initial_call_valid": true,
+          "original_limit_pass": true,
+          "original_response": {
+            "reasoning": "",
+            "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 135.1,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 22
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13515806198120117
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 1,
+          "final_response": {
+            "reasoning": "",
+            "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 135.1,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 22
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13515806198120117
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "arm": 1,
+      "tag": "candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/kapitsa-full-table-20261107/model-full",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "52900",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "32768",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-full-table-20261107/followup-2357/diagnostic-1022/home-1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1"
+      },
+      "cases": [
+        {
+          "label": "1-candidate-default-0",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": true,
+          "original_response": {
+            "reasoning": "",
+            "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.2,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 22
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13431811332702637
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 1,
+          "final_response": {
+            "reasoning": "",
+            "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.2,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 22
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13431811332702637
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "1-candidate-default-1",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": false,
+          "original_response": {
+            "reasoning": "",
+            "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nxxd /etc/hosts",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 580,
+              "completion_tokens": 22,
+              "total_tokens": 602,
+              "prompt_tokens_details": {
+                "cached_tokens": 557
+              },
+              "kapitsa": {
+                "prefill_ms": 139.1,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 8
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": 0.4798130989074707
+          },
+          "extended_limit_pass": false,
+          "extra_rounds": 2,
+          "final_response": {
+            "reasoning": "",
+            "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nxxd /etc/hosts",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 580,
+              "completion_tokens": 22,
+              "total_tokens": 602,
+              "prompt_tokens_details": {
+                "cached_tokens": 557
+              },
+              "kapitsa": {
+                "prefill_ms": 139.1,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 8
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": 0.4798130989074707
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"od -c /etc/hosts | tail -3\"}"
+                }
+              ]
+            },
+            {
+              "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nxxd /etc/hosts",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "1-candidate-default-2",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": false,
+          "original_response": {
+            "reasoning": "",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_LyxouV9rVYVaosM8GK3D6LrH",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"stat -f \\\"%z bytes\\\" /etc/hosts; awk 'END{print NR}' /etc/hosts\"}"
+                },
+                "index": 0
+              }
+            ],
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 591,
+              "completion_tokens": 49,
+              "total_tokens": 640,
+              "prompt_tokens_details": {
+                "cached_tokens": 568
+              },
+              "kapitsa": {
+                "prefill_ms": 138.4,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 19
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": null
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 6,
+          "final_response": {
+            "reasoning": "",
+            "content": "**The file `/etc/hosts` has 3 lines.**\n\nContents:\n\n```\n127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n```\n\n| Line | Entry | Purpose |\n|------|-------|---------|\n| 1 | `127.0.0.1 localhost` | IPv4 loopback |\n| 2 | `255.255.255.255 broadcasthost` | Limited broadcast address |\n| 3 | `::1 localhost` | IPv6 loopback |\n\nThis was confirmed both by reading the file directly and by `wc -l`, which reported `3 /etc/hosts`.\n\n**Note:** During my verification, several follow-up shell commands (`tail`, `xxd`, `stat`, `awk`, and even a plain `echo`) all returned the identical output `3 /etc/hosts`, which appears to be a tool/environment glitch rather than genuine command output. My answer rests on the direct file read, which clearly shows three content lines.",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 857,
+              "completion_tokens": 239,
+              "total_tokens": 1096,
+              "prompt_tokens_details": {
+                "cached_tokens": 807
+              },
+              "kapitsa": {
+                "prefill_ms": 217.1,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 98
+                }
+              }
+            },
+            "chunks": 223,
+            "t_first": 0.21710419654846191
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && tail -c 1 /etc/hosts | od -c | head -2\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"tail -c 1 /etc/hosts | xxd\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"stat -f \\\"%z bytes\\\" /etc/hosts; awk 'END{print NR}' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"echo test-output-check\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"echo \\\"newline test\\\"\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\",\"max_lines\":100}"
+                }
+              ]
+            },
+            {
+              "content": "**The file `/etc/hosts` has 3 lines.**\n\nContents:\n\n```\n127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n```\n\n| Line | Entry | Purpose |\n|------|-------|---------|\n| 1 | `127.0.0.1 localhost` | IPv4 loopback |\n| 2 | `255.255.255.255 broadcasthost` | Limited broadcast address |\n| 3 | `::1 localhost` | IPv6 loopback |\n\nThis was confirmed both by reading the file directly and by `wc -l`, which reported `3 /etc/hosts`.\n\n**Note:** During my verification, several follow-up shell commands (`tail`, `xxd`, `stat`, `awk`, and even a plain `echo`) all returned the identical output `3 /etc/hosts`, which appears to be a tool/environment glitch rather than genuine command output. My answer rests on the direct file read, which clearly shows three content lines.",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "1-candidate-default-3",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": false,
+          "original_response": {
+            "reasoning": "",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_eXTXZ7IPUorsDuz3vsHmG3vk",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"cat -A /etc/hosts; echo \\\"---\\\"; awk 'END{print NR}' /etc/hosts\"}"
+                },
+                "index": 0
+              }
+            ],
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 583,
+              "completion_tokens": 48,
+              "total_tokens": 631,
+              "prompt_tokens_details": {
+                "cached_tokens": 560
+              },
+              "kapitsa": {
+                "prefill_ms": 136.5,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 18
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": null
+          },
+          "extended_limit_pass": false,
+          "extra_rounds": 8,
+          "final_response": {
+            "reasoning": "",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_WU8I92guGtPKLzrxRkqzISRn",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -c < /etc/hosts\"}"
+                },
+                "index": 0
+              }
+            ],
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 950,
+              "completion_tokens": 34,
+              "total_tokens": 984,
+              "prompt_tokens_details": {
+                "cached_tokens": 931
+              },
+              "kapitsa": {
+                "prefill_ms": 127.5,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 12
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": null
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && tail -c 1 /etc/hosts | xxd\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"tail -c 1 /etc/hosts | od -c\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"cat -A /etc/hosts; echo \\\"---\\\"; awk 'END{print NR}' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l < /etc/hosts; awk 'END{print NR}' /etc/hosts; wc -c < /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"awk 'END{print NR}' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -c < /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l < /etc/hosts; wc -c < /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l < /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -c < /etc/hosts\"}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "1-candidate-greedy",
+          "controls": {
+            "temperature": 0,
+            "seed": 11
+          },
+          "initial_call_valid": true,
+          "original_limit_pass": true,
+          "original_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`\n\nNote: the last line does not end with a trailing newline, but it is still counted as a line (both `wc -l` and `awk` confirm a total of 3 lines).",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 580,
+              "completion_tokens": 99,
+              "total_tokens": 679,
+              "prompt_tokens_details": {
+                "cached_tokens": 557
+              },
+              "kapitsa": {
+                "prefill_ms": 140.3,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 38
+                }
+              }
+            },
+            "chunks": 95,
+            "t_first": 0.1403489112854004
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 2,
+          "final_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`\n\nNote: the last line does not end with a trailing newline, but it is still counted as a line (both `wc -l` and `awk` confirm a total of 3 lines).",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 580,
+              "completion_tokens": 99,
+              "total_tokens": 679,
+              "prompt_tokens_details": {
+                "cached_tokens": 557
+              },
+              "kapitsa": {
+                "prefill_ms": 140.3,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 38
+                }
+              }
+            },
+            "chunks": 95,
+            "t_first": 0.1403489112854004
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"awk 'END{print NR}' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`\n\nNote: the last line does not end with a trailing newline, but it is still counted as a line (both `wc -l` and `awk` confirm a total of 3 lines).",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "1-candidate-seed11",
+          "controls": {
+            "temperature": 0.7,
+            "seed": 11
+          },
+          "initial_call_valid": true,
+          "original_limit_pass": false,
+          "original_response": {
+            "reasoning": "",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_m57K2cPVCFCkTotSbAoqaiam",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"cat /etc/hosts; echo \\\"[end-of-file-marker]\\\"\"}"
+                },
+                "index": 0
+              }
+            ],
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 618,
+              "completion_tokens": 39,
+              "total_tokens": 657,
+              "prompt_tokens_details": {
+                "cached_tokens": 595
+              },
+              "kapitsa": {
+                "prefill_ms": 137.5,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 15
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": null
+          },
+          "extended_limit_pass": false,
+          "extra_rounds": 3,
+          "final_response": {
+            "reasoning": "",
+            "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nls -la /etc/hosts; echo \"---\"; wc -c /etc/hosts; echo \"---\"; awk 'END{print NR}' /etc/hosts",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 679,
+              "completion_tokens": 49,
+              "total_tokens": 728,
+              "prompt_tokens_details": {
+                "cached_tokens": 656
+              },
+              "kapitsa": {
+                "prefill_ms": 132.0,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 19
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": 0.9385600090026855
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts | tail -1 && echo \\\"\\\" && tail -c 1 /etc/hosts | od -c | head -2\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"tail -c 1 /etc/hosts | od -c | head -2; echo \\\"exit: $?\\\"\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"cat /etc/hosts; echo \\\"[end-of-file-marker]\\\"\"}"
+                }
+              ]
+            },
+            {
+              "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nls -la /etc/hosts; echo \"---\"; wc -c /etc/hosts; echo \"---\"; awk 'END{print NR}' /etc/hosts",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "1-candidate-seed29",
+          "controls": {
+            "temperature": 0.7,
+            "seed": 29
+          },
+          "initial_call_valid": true,
+          "original_limit_pass": true,
+          "original_response": {
+            "reasoning": "",
+            "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.2,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 22
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13428902626037598
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 1,
+          "final_response": {
+            "reasoning": "",
+            "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.2,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 22
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13428902626037598
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "arm": 2,
+      "tag": "base",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/kapitsa-full-table-20261107/model-full",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "52976",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "32768",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-full-table-20261107/followup-2357/diagnostic-1022/home-2",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1"
+      },
+      "cases": [
+        {
+          "label": "2-base-default-0",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": false,
+          "original_response": {
+            "reasoning": "",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_9TaEgo4cdZVA3HpnnE4YudnN",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"cat /etc/hosts | od -c | tail -5\"}"
+                },
+                "index": 0
+              }
+            ],
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 583,
+              "completion_tokens": 39,
+              "total_tokens": 622,
+              "prompt_tokens_details": {
+                "cached_tokens": 560
+              },
+              "kapitsa": {
+                "prefill_ms": 136.9,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 14
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": null
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 5,
+          "final_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n```\n127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n```\n\nThis was confirmed both by reading the file directly and by counting with `wc -l` (which reported 3).",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 761,
+              "completion_tokens": 75,
+              "total_tokens": 836,
+              "prompt_tokens_details": {
+                "cached_tokens": 738
+              },
+              "kapitsa": {
+                "prefill_ms": 137.7,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 30
+                }
+              }
+            },
+            "chunks": 69,
+            "t_first": 0.13773012161254883
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && tail -c 1 /etc/hosts | xxd\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"tail -c 1 /etc/hosts | od -c\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"cat /etc/hosts | od -c | tail -5\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"echo \\\"test output\\\"; ls /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"awk 'END{print NR}' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The file `/etc/hosts` has **3 lines**:\n\n```\n127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n```\n\nThis was confirmed both by reading the file directly and by counting with `wc -l` (which reported 3).",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "2-base-default-1",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": false,
+          "original_response": {
+            "reasoning": "",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_3lKVQerIvDfYTD22Ky9hvPMU",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"awk 'END{print NR}' /etc/hosts\"}"
+                },
+                "index": 0
+              }
+            ],
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 583,
+              "completion_tokens": 37,
+              "total_tokens": 620,
+              "prompt_tokens_details": {
+                "cached_tokens": 560
+              },
+              "kapitsa": {
+                "prefill_ms": 137.2,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 13
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": null
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 5,
+          "final_response": {
+            "reasoning": "",
+            "content": "The shell tool appears to be returning a canned response, so I'll rely on the direct file read.\n\n**Answer:** `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`\n\nNote: I also tried several shell commands (`wc -l`, `awk`, `cat -A`) to double-check, but the shell tool kept returning the same odd output (`3 /etc/hosts`), so the file read itself is the reliable source here \u2014 it showed three lines.",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 762,
+              "completion_tokens": 141,
+              "total_tokens": 903,
+              "prompt_tokens_details": {
+                "cached_tokens": 739
+              },
+              "kapitsa": {
+                "prefill_ms": 139.4,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 58
+                }
+              }
+            },
+            "chunks": 137,
+            "t_first": 0.13956594467163086
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && tail -c 1 /etc/hosts | xxd\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"tail -c 1 /etc/hosts | od -c\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"awk 'END{print NR}' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"echo test; awk 'END{print \\\"lines:\\\", NR}' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"cat -A /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The shell tool appears to be returning a canned response, so I'll rely on the direct file read.\n\n**Answer:** `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`\n\nNote: I also tried several shell commands (`wc -l`, `awk`, `cat -A`) to double-check, but the shell tool kept returning the same odd output (`3 /etc/hosts`), so the file read itself is the reliable source here \u2014 it showed three lines.",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "2-base-default-2",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": true,
+          "original_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.3,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 21
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13440990447998047
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 1,
+          "final_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.3,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 21
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13440990447998047
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "2-base-default-3",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": false,
+          "original_response": {
+            "reasoning": "",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_IB3tb5qTM2X59cnCQE3UEnme",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"awk 'END{print NR}' /etc/hosts\"}"
+                },
+                "index": 0
+              }
+            ],
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 589,
+              "completion_tokens": 37,
+              "total_tokens": 626,
+              "prompt_tokens_details": {
+                "cached_tokens": 570
+              },
+              "kapitsa": {
+                "prefill_ms": 124.7,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 13
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": null
+          },
+          "extended_limit_pass": false,
+          "extra_rounds": 8,
+          "final_response": {
+            "reasoning": "",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_YKqgFqMDqKPU0aZGB0wZKZNV",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"python3 << 'EOF'\\ndata = open('/etc/hosts','rb').read()\\nprint('bytes:', len(data))\\nprint('ends with newline:', data.endswith(b'\\\\n'))\\nprint('splitlines:', len(data.decode().splitlines()))\\nEOF\"}"
+                },
+                "index": 0
+              }
+            ],
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 1052,
+              "completion_tokens": 81,
+              "total_tokens": 1133,
+              "prompt_tokens_details": {
+                "cached_tokens": 1029
+              },
+              "kapitsa": {
+                "prefill_ms": 141.8,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 28
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": null
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts | tail -1\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l < /etc/hosts; awk 'END{print NR}' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"awk 'END{print NR}' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"tail -c 1 /etc/hosts | od -c | head -2\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"echo \\\"test\\\" && wc -l < /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"tail -c 1 /etc/hosts | od -An -c\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"python3 -c \\\"\\ndata = open('/etc/hosts','rb').read()\\nprint('bytes:', len(data))\\nprint('ends with newline:', data.endswith(b'\\\\n'))\\nprint('newline count:', data.count(b'\\\\n'))\\nprint('lines:', len(data.decode().splitlines()))\\n\\\"\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"python3 -c \\\"\\ndata = open('/etc/hosts','rb').read()\\nprint('bytes:', len(data))\\nprint('ends with newline:', data.endswith(b'\\\\n'))\\nprint('splitlines:', len(data.decode().splitlines()))\\n\\\" 2>&1\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"python3 << 'EOF'\\ndata = open('/etc/hosts','rb').read()\\nprint('bytes:', len(data))\\nprint('ends with newline:', data.endswith(b'\\\\n'))\\nprint('splitlines:', len(data.decode().splitlines()))\\nEOF\"}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "2-base-greedy",
+          "controls": {
+            "temperature": 0,
+            "seed": 11
+          },
+          "initial_call_valid": true,
+          "original_limit_pass": true,
+          "original_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`\n\nNote: the last line does not end with a trailing newline, but it is still counted as a line (both `wc -l` and `awk` confirm a total of 3 lines).",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 580,
+              "completion_tokens": 99,
+              "total_tokens": 679,
+              "prompt_tokens_details": {
+                "cached_tokens": 557
+              },
+              "kapitsa": {
+                "prefill_ms": 139.9,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 38
+                }
+              }
+            },
+            "chunks": 95,
+            "t_first": 0.13993215560913086
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 2,
+          "final_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`\n\nNote: the last line does not end with a trailing newline, but it is still counted as a line (both `wc -l` and `awk` confirm a total of 3 lines).",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 580,
+              "completion_tokens": 99,
+              "total_tokens": 679,
+              "prompt_tokens_details": {
+                "cached_tokens": 557
+              },
+              "kapitsa": {
+                "prefill_ms": 139.9,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 38
+                }
+              }
+            },
+            "chunks": 95,
+            "t_first": 0.13993215560913086
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"awk 'END{print NR}' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`\n\nNote: the last line does not end with a trailing newline, but it is still counted as a line (both `wc -l` and `awk` confirm a total of 3 lines).",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "2-base-seed11",
+          "controls": {
+            "temperature": 0.7,
+            "seed": 11
+          },
+          "initial_call_valid": true,
+          "original_limit_pass": false,
+          "original_response": {
+            "reasoning": "",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_oiUTckjuEIrou8uXMfaMQPpR",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"cat /etc/hosts; echo \\\"[end-of-file-marker]\\\"\"}"
+                },
+                "index": 0
+              }
+            ],
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 618,
+              "completion_tokens": 39,
+              "total_tokens": 657,
+              "prompt_tokens_details": {
+                "cached_tokens": 595
+              },
+              "kapitsa": {
+                "prefill_ms": 137.7,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 15
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": null
+          },
+          "extended_limit_pass": false,
+          "extra_rounds": 3,
+          "final_response": {
+            "reasoning": "",
+            "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nls -la /etc/hosts; echo \"---\"; wc -c /etc/hosts; echo \"---\"; awk 'END{print NR}' /etc/hosts",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 679,
+              "completion_tokens": 49,
+              "total_tokens": 728,
+              "prompt_tokens_details": {
+                "cached_tokens": 656
+              },
+              "kapitsa": {
+                "prefill_ms": 131.4,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 19
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": 0.9370009899139404
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts | tail -1 && echo \\\"\\\" && tail -c 1 /etc/hosts | od -c | head -2\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"tail -c 1 /etc/hosts | od -c | head -2; echo \\\"exit: $?\\\"\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"cat /etc/hosts; echo \\\"[end-of-file-marker]\\\"\"}"
+                }
+              ]
+            },
+            {
+              "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nls -la /etc/hosts; echo \"---\"; wc -c /etc/hosts; echo \"---\"; awk 'END{print NR}' /etc/hosts",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "2-base-seed29",
+          "controls": {
+            "temperature": 0.7,
+            "seed": 29
+          },
+          "initial_call_valid": true,
+          "original_limit_pass": true,
+          "original_response": {
+            "reasoning": "",
+            "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.6,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 22
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13459205627441406
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 1,
+          "final_response": {
+            "reasoning": "",
+            "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.6,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 22
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13459205627441406
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "arm": 3,
+      "tag": "candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/kapitsa-full-table-20261107/model-full",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "53052",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "32768",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-full-table-20261107/followup-2357/diagnostic-1022/home-3",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1"
+      },
+      "cases": [
+        {
+          "label": "3-candidate-default-0",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": false,
+          "original_response": {
+            "reasoning": "",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_WIYztM4Nkyr5OyqatgrKBxeh",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"od -c /etc/hosts | tail -5\"}"
+                },
+                "index": 0
+              }
+            ],
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 580,
+              "completion_tokens": 37,
+              "total_tokens": 617,
+              "prompt_tokens_details": {
+                "cached_tokens": 557
+              },
+              "kapitsa": {
+                "prefill_ms": 139.4,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 12
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": null
+          },
+          "extended_limit_pass": false,
+          "extra_rounds": 8,
+          "final_response": {
+            "reasoning": "",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_PA7kCUcWpq1GSv5k9uvqHQIZ",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -c < /etc/hosts | tr -d '\\\\n' && echo \\\"END\\\"\"}"
+                },
+                "index": 0
+              }
+            ],
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 935,
+              "completion_tokens": 46,
+              "total_tokens": 981,
+              "prompt_tokens_details": {
+                "cached_tokens": 916
+              },
+              "kapitsa": {
+                "prefill_ms": 125.8,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 17
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": null
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts | tail -1\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"cat -e /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"od -c /etc/hosts | tail -5\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"grep -c '' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -c /etc/hosts; awk 'END{print NR}' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l < /etc/hosts; echo \\\"exit:$?\\\"\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -c < /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -c < /etc/hosts | tr -d '\\\\n'; echo \\\" done\\\"\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -c < /etc/hosts | tr -d '\\\\n' && echo \\\"END\\\"\"}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "3-candidate-default-1",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": true,
+          "original_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.2,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 21
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13419198989868164
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 1,
+          "final_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.2,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 21
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13419198989868164
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "3-candidate-default-2",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": true,
+          "original_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.5,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 21
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13456010818481445
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 1,
+          "final_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.5,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 21
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13456010818481445
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "3-candidate-default-3",
+          "controls": {},
+          "initial_call_valid": true,
+          "original_limit_pass": true,
+          "original_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n```\n127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n```\n\nNote: `wc -l` reports 3, and an `awk` line count (which counts the final line even if it lacks a trailing newline) also confirms 3 lines.",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 584,
+              "completion_tokens": 89,
+              "total_tokens": 673,
+              "prompt_tokens_details": {
+                "cached_tokens": 561
+              },
+              "kapitsa": {
+                "prefill_ms": 140.4,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 35
+                }
+              }
+            },
+            "chunks": 82,
+            "t_first": 0.14049077033996582
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 2,
+          "final_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n```\n127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n```\n\nNote: `wc -l` reports 3, and an `awk` line count (which counts the final line even if it lacks a trailing newline) also confirms 3 lines.",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 584,
+              "completion_tokens": 89,
+              "total_tokens": 673,
+              "prompt_tokens_details": {
+                "cached_tokens": 561
+              },
+              "kapitsa": {
+                "prefill_ms": 140.4,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 35
+                }
+              }
+            },
+            "chunks": 82,
+            "t_first": 0.14049077033996582
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts | tail -5\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"awk 'END{print NR}' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The file `/etc/hosts` has **3 lines**:\n\n```\n127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n```\n\nNote: `wc -l` reports 3, and an `awk` line count (which counts the final line even if it lacks a trailing newline) also confirms 3 lines.",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "3-candidate-greedy",
+          "controls": {
+            "temperature": 0,
+            "seed": 11
+          },
+          "initial_call_valid": true,
+          "original_limit_pass": true,
+          "original_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`\n\nNote: the last line does not end with a trailing newline, but it is still counted as a line (both `wc -l` and `awk` confirm a total of 3 lines).",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 580,
+              "completion_tokens": 99,
+              "total_tokens": 679,
+              "prompt_tokens_details": {
+                "cached_tokens": 557
+              },
+              "kapitsa": {
+                "prefill_ms": 140.6,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 38
+                }
+              }
+            },
+            "chunks": 95,
+            "t_first": 0.14071917533874512
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 2,
+          "final_response": {
+            "reasoning": "",
+            "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`\n\nNote: the last line does not end with a trailing newline, but it is still counted as a line (both `wc -l` and `awk` confirm a total of 3 lines).",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 580,
+              "completion_tokens": 99,
+              "total_tokens": 679,
+              "prompt_tokens_details": {
+                "cached_tokens": 557
+              },
+              "kapitsa": {
+                "prefill_ms": 140.6,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 38
+                }
+              }
+            },
+            "chunks": 95,
+            "t_first": 0.14071917533874512
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"awk 'END{print NR}' /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The file `/etc/hosts` has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`\n\nNote: the last line does not end with a trailing newline, but it is still counted as a line (both `wc -l` and `awk` confirm a total of 3 lines).",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "3-candidate-seed11",
+          "controls": {
+            "temperature": 0.7,
+            "seed": 11
+          },
+          "initial_call_valid": true,
+          "original_limit_pass": false,
+          "original_response": {
+            "reasoning": "",
+            "content": "",
+            "tool_calls": [
+              {
+                "id": "call_Dkg9EWTW4pe21SYe7arDciwv",
+                "type": "function",
+                "function": {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"cat /etc/hosts; echo \\\"[end-of-file-marker]\\\"\"}"
+                },
+                "index": 0
+              }
+            ],
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 618,
+              "completion_tokens": 39,
+              "total_tokens": 657,
+              "prompt_tokens_details": {
+                "cached_tokens": 595
+              },
+              "kapitsa": {
+                "prefill_ms": 137.6,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 15
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": null
+          },
+          "extended_limit_pass": false,
+          "extra_rounds": 3,
+          "final_response": {
+            "reasoning": "",
+            "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nls -la /etc/hosts; echo \"---\"; wc -c /etc/hosts; echo \"---\"; awk 'END{print NR}' /etc/hosts",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 679,
+              "completion_tokens": 49,
+              "total_tokens": 728,
+              "prompt_tokens_details": {
+                "cached_tokens": 656
+              },
+              "kapitsa": {
+                "prefill_ms": 132.3,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 19
+                }
+              }
+            },
+            "chunks": 3,
+            "t_first": 0.9392111301422119
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts && echo \\\"---\\\" && cat -A /etc/hosts | tail -1 && echo \\\"\\\" && tail -c 1 /etc/hosts | od -c | head -2\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"tail -c 1 /etc/hosts | od -c | head -2; echo \\\"exit: $?\\\"\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"cat /etc/hosts; echo \\\"[end-of-file-marker]\\\"\"}"
+                }
+              ]
+            },
+            {
+              "content": "<tool_call>\n<function=run_shell>\n<parameter=command>\nls -la /etc/hosts; echo \"---\"; wc -c /etc/hosts; echo \"---\"; awk 'END{print NR}' /etc/hosts",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        },
+        {
+          "label": "3-candidate-seed29",
+          "controls": {
+            "temperature": 0.7,
+            "seed": 29
+          },
+          "initial_call_valid": true,
+          "original_limit_pass": true,
+          "original_response": {
+            "reasoning": "",
+            "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.9,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 22
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13504815101623535
+          },
+          "extended_limit_pass": true,
+          "extra_rounds": 1,
+          "final_response": {
+            "reasoning": "",
+            "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+            "tool_calls": [],
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 509,
+              "completion_tokens": 58,
+              "total_tokens": 567,
+              "prompt_tokens_details": {
+                "cached_tokens": 486
+              },
+              "kapitsa": {
+                "prefill_ms": 134.9,
+                "kflash": {
+                  "source": "MTP",
+                  "cycles": 22
+                }
+              }
+            },
+            "chunks": 56,
+            "t_first": 0.13504815101623535
+          },
+          "deterministic_signature": [
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "read_file",
+                  "arguments": "{\"path\":\"/etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "",
+              "reasoning": "",
+              "finish": "tool_calls",
+              "functions": [
+                {
+                  "name": "run_shell",
+                  "arguments": "{\"command\":\"wc -l /etc/hosts\"}"
+                }
+              ]
+            },
+            {
+              "content": "The `/etc/hosts` file has **3 lines**:\n\n1. `127.0.0.1 localhost`\n2. `255.255.255.255 broadcasthost`\n3. `::1 localhost`",
+              "reasoning": "",
+              "finish": "stop",
+              "functions": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "pr": 1022,
+  "scope": "Own PR tool-result discrepancy; original two-extra-round assertion retained. Additional rounds diagnose looping, not a replacement pass. Default requests retain unset temperature/seed; deterministic controls specify them.",
+  "table_identity": {
+    "bytes": 32000153976,
+    "sha256": "c8ab74bc343408cf3923d7d64b3698fbeb3e78c07ce7f85a650a8278731251d2",
+    "all_bytes_source_verified": true
+  },
+  "identities": {
+    "base": {
+      "source": "01b4c6d69fbe69e862c00358f88c94a363129592",
+      "binary_sha256": "1be379d5bccb647cc232b9be7b2a0f47038f325aa895a99970334f39cf604467",
+      "http_script_sha256": "4ef02e7091c2e863857af4f62b9eed2f8f9535164262cebb62274fa4f8587c25",
+      "version": "kapitsa 0.2.31 (01b4c6d6)"
+    },
+    "candidate": {
+      "source": "8c0a7ec3bf72623f6c7f92524ef229f3643a9e67",
+      "binary_sha256": "05ac700efab1d2a9b9e642583d12d858e506c81ad8b258125c7ca803fb4a7aa1",
+      "http_script_sha256": "4ef02e7091c2e863857af4f62b9eed2f8f9535164262cebb62274fa4f8587c25",
+      "version": "kapitsa 0.2.31 (8c0a7ec3)"
+    }
+  },
+  "memory_before": {
+    "reclaimable": 60905766912,
+    "swapout": 167968768
+  },
+  "last_memory": {
+    "reclaimable": 24561123328,
+    "swapout": 167968768
+  },
+  "deterministic_controls_identical": {
+    "{\"seed\": 11, \"temperature\": 0}": true,
+    "{\"seed\": 11, \"temperature\": 0.7}": true,
+    "{\"seed\": 29, \"temperature\": 0.7}": true
+  },
+  "status": "complete; inspect seeded equality and all original-limit failures before interpretation"
+}

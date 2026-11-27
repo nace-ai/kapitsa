@@ -1,14 +1,19 @@
 // GPU + Neural Engine split of the dense prefill FFN (NI_ANE). See src/ane/ffn_split.h.
 //
 //   NI_ANE=1            enable (dense models; the MoE path is unchanged)
+//   New 2048-channel inputs default to fast on non-matrix Macs; NI_ANE=1/0 overrides. Existing 2560 inputs stay on.
 //   NI_ANE_UNITS=<u>    ANE share in 512-channel units (default: calibration, else per-chip default)
-//   NI_ANE_MIN_ROWS=<r> smallest prefill chunk that splits (default: calibration, else 512)
+//   NI_ANE_MIN_ROWS=<r> smallest prefill chunk that splits (default: calibration, else 512; 1024 on some M1/M2, default_min_rows)
 //   NI_ANE_FNS=a,b,..   ANE program functions (rows); default every 128 rows from min_rows to 2048
 //   NI_ANE_VERIFY=0     skip the startup check (on by default)
 //   NI_ANE_FAULT=<l>    test: the ANE job of layer l of the first split chunk never starts
 //   NI_ANE_WAVE=0       the plain split (default: the two-half wavefront, for chunks >= 2 x the
 //                       smallest function; smaller chunks always run the plain split)
 #include "ane/ffn_split.h"
+#include "ane/proj_split.h"
+#include "engine/profile.h"
+#include "engine/device_profile.h"
+#include "ane/input_profile.h"
 #include "ane/slabs.h"
 #include "model/kparams.h"
 #include "model/qwen35.h"
@@ -65,7 +70,8 @@ bool Qwen35::ane_slabs(int T) const {
 
 bool Qwen35::ane_splits(int T) const {
   if (ane_slabs(T)) return true;
-  return ane_ && ane_on_ && !cfg_.moe && ane_->splits(T);
+  // past kMaxRows only as the two-half wavefront, each half within kMaxRows
+  return ane_ && ane_on_ && !cfg_.moe && ane_->splits(T) && (T <= int(ane::FfnSplit::kMaxRows) || ane_wave_rows(T) > 0);
 }
 
 void Qwen35::ane_begin_chunk(int T) {
@@ -77,7 +83,25 @@ bool Qwen35::ane_finish_chunk() {
   if (!ane_chunk_) return true;
   ane_chunk_ = false;
   double ms = 0;
-  const bool ok = ane_->finish_chunk(&ms);
+  bool ok = ane_->finish_chunk(&ms);
+  if (ane_proj_chunk_) {
+    ane_proj_chunk_ = false;
+    double pms = 0;
+    const bool pok = ane_proj_->finish_chunk(&pms);
+    if (pok) {
+      ane_stats_.ane_ms += pms;
+      ane_stats_.evals += ane_proj_->last_jobs();
+    } else {
+      // The FFN split retires with it: the engine reruns the chunk once and does not finish that rerun's split
+      // (engine.cpp), so the rerun must find no split at all. One projection fault costs the FFN split too, for the
+      // rest of the process, as an FFN fault does.
+      logi("NI_ANE_PROJ: the Neural Engine's input projections stopped (%s); the FFN split stops with them",
+           ane_proj_->reason().c_str());
+      ane_proj_.reset();
+      if (ok) ane_->retire("the Neural Engine's input projections of the same chunk failed");
+      ok = false;
+    }
+  }
   if (ok) {
     ane_stats_.ane_ms += ms;
     ane_stats_.evals += ane_->last_jobs();
@@ -91,6 +115,7 @@ bool Qwen35::ane_finish_chunk() {
 
 void Qwen35::ane_abort(const std::string& why) {
   if (ane_chunk_ && ane_) ane_->retire(why);
+  if (ane_proj_chunk_ && ane_proj_) ane_proj_->retire(why);
 }
 
 void Qwen35::init_ane() {
@@ -127,14 +152,17 @@ void Qwen35::init_ane() {
   ane::Calibration cal;
   const bool have_cal = ane::read_calibration(ane::machine_key(chip, mkey) + (share_wave ? "|wave" : ""), cal);
   // the GPU's share on the matrix units (enc_mlp_gpu_part_qmt) for 4-bit group 64 FFN weights: the M5 default share on
-  // the models it was measured on (mma_share_measured)
+  // the models that have one (mma_share_measured)
   bool mma = qmt_ready() && mma_share_measured(cfg_);
-  auto g64 = [](const QLinear& q) { return q.bits == 4 && q.gs == 64; };
-  for (const Layer& L : layers_) mma = mma && g64(L.mg) && g64(L.mu) && g64(L.md);  // as plan()'s ffn_mma
+  // every layer with a matrix-unit GPU part (ffn_share::matrix_unit_share, as plan()'s ffn_mma; enc_mlp_gpu_part_qmt
+  // dispatches by the same gpu_part); one layer on the generic kernels keeps the older share
+  std::vector<ffn_share::LayerFmt> fmts;
+  for (const Layer& L : layers_) fmts.push_back({ffn_fmt(L.mg), ffn_fmt(L.mu), ffn_fmt(L.md)});
+  mma = mma && ffn_share::matrix_unit_share(fmts, qmtf_formats());
   const uint32_t total = uint32_t(cfg_.dense_I / 512);
   uint32_t units = have_cal ? cal.units : ane::default_units(chip, Gpu::get().core_count(), total, share_wave, mma);
-  uint32_t min_rows = have_cal && cal.min_rows ? cal.min_rows : 512;
   if (getenv("NI_ANE_UNITS")) units = uint32_t(atoi(getenv("NI_ANE_UNITS")));
+  uint32_t min_rows = have_cal && cal.min_rows ? cal.min_rows : ane::default_min_rows(chip, Gpu::get().core_count(), units, total);
   if (getenv("NI_ANE_MIN_ROWS")) min_rows = uint32_t(atoi(getenv("NI_ANE_MIN_ROWS")));
   if (!units) {
     logi("NI_ANE: no calibration for %s (run ane_calib) and no default share; GPU only", chip.c_str());
@@ -150,7 +178,13 @@ void Qwen35::init_ane() {
   }
   const int fault = getenv("NI_ANE_FAULT") ? atoi(getenv("NI_ANE_FAULT")) : -1;
   const int lanes = wave ? 2 : 1;
-  ane_init_ = {units, min_rows, parse_rows(getenv("NI_ANE_FNS")), fault, lanes,
+  std::vector<uint32_t> fns = parse_rows(getenv("NI_ANE_FNS"));
+  // A default above 512 rows (default_min_rows: an M1 or M2 whose small chunks lose on the plain split) still builds
+  // the functions from 512 rows, so a 1024-2047-row chunk's wavefront halves have theirs. Without them the M1 Ultra
+  // ran a 1306-token prompt on the plain split: 5.36 s against 4.69 s on the GPU alone and 4.17 s with the halves.
+  if (fns.empty() && !have_cal && !getenv("NI_ANE_MIN_ROWS") && min_rows > 512)
+    for (uint32_t r = 512; r < ane::FfnSplit::kMaxRows; r += 128) fns.push_back(r);
+  ane_init_ = {units, min_rows, fns, fault, lanes,
                getenv("NI_ANE_UNITS") ? "NI_ANE_UNITS" : have_cal ? "calibration" : "default for this chip"};
   if (env_on("NI_ANE_ASYNC")) {
     // The server path: the ANE daemon compiles the program in the background (~40 s when it has
@@ -188,6 +222,8 @@ Qwen35::AnePlan Qwen35::ane_plan(const std::string& dir, const MemPlan& m) {
   if (!m.ffn_ane) return a.source = "FFN weight format not staged by the split; GPU", a;
   if (getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0")) return a.source = "NI_ANE=0", a;
   if (!ane::FfnSplit::rotate_simdgroups(uint32_t(m.hidden))) return a.source = "hidden size not supported", a;
+  if (!ane::input_profile_enabled(ane::FfnSplit::input_segment(uint32_t(m.hidden))))
+    return a.source = "ANE profile/device policy: GPU", a;
   if (const std::string& why = ane::unavailable(); !why.empty()) return a.source = "Neural Engine unavailable", a;
   const std::string chip = Gpu::get().name();
   const bool wave = !getenv("NI_ANE_WAVE") || env_on("NI_ANE_WAVE");
@@ -205,6 +241,17 @@ Qwen35::AnePlan Qwen35::ane_plan(const std::string& dir, const MemPlan& m) {
     return a;
   }
   a.bytes = ane::split_bytes(uint32_t(m.hidden), uint32_t(m.ffn), a.units, m.layers, wave ? 2 : 1) + m.slot_state / 3;
+  // the mixers' input projections (ane_proj_build): built for causal dense models with the wavefront. Counted when the
+  // switch is on; a build that then fails (startup check, compile) leaves this headroom unused until a reload.
+  if (const Qwen35Config c = read_config(dir); wave && proj_on(c, false)) {
+    if (c.causal && !c.moe) {
+      const uint32_t lin = uint32_t(2 * c.lin_hk * c.lin_dk + 2 * c.lin_hv * c.lin_dv);
+      const uint32_t att = uint32_t(2 * c.hq * c.head_dim + 2 * c.hkv * c.head_dim);
+      size_t rows = 0;
+      for (int i = 0; i < c.layers; ++i) rows += size_t(i) < c.is_linear.size() && c.is_linear[size_t(i)] ? lin : att;
+      a.bytes += ane::proj_bytes(uint32_t(m.hidden), std::max(lin, att), rows, 2);
+    }
+  }
   return a;
 }
 
@@ -217,6 +264,7 @@ bool Qwen35::ane_release() {
   if (!ane_) return false;
   logi("NI_ANE: releasing the Neural Engine split (%.0f MB) for KV cache; prefill runs on the GPU alone", ane_->metal_bytes() / 1e6);
   ane_.reset();
+  ane_proj_.reset();
   return true;
 }
 
@@ -233,6 +281,10 @@ void Qwen35::ane_finish_init() {
   const uint32_t units = ane_init_.units, min_rows = ane_init_.min_rows;
   const int fault = ane_init_.fault, lanes = ane_init_.lanes;
   if (!ane_rebuild(units, min_rows, ane_init_.fns, fault, lanes)) return;
+  if (cfg_.hidden % 2048 == 0)
+    logi("NI_ANE: %d-hidden FFN on the Neural Engine (%u-channel input segments; "
+         "W8A8 changes prefill numerics; NI_ANE=0 disables)", cfg_.hidden,
+         ane::FfnSplit::input_segment(uint32_t(cfg_.hidden)));
   const char* source = ane_init_.source;
   logi("NI_ANE: Neural Engine FFN split%s: %u/%d units (%u channels; GPU %u) from the %s, chunks >= %u rows; %s; "
        "%.1f MB Metal; ready in %.1f s",
@@ -243,9 +295,9 @@ void Qwen35::ane_finish_init() {
   if (!cfg_.causal && noncausal_slabs_on())
     logi("NI_ANE: a noncausal prefill pass splits its FFN with the Neural Engine in slabs of <= %u rows "
          "(NI_ANE_NONCAUSAL=0: GPU alone)", ane::FfnSplit::kMaxRows);
-  else if (tmax_ > int(ane::FfnSplit::kMaxRows))
-    logi("NI_ANE: prefill chunks of more than %u rows run on the GPU alone (prefill chunk is %d)", ane::FfnSplit::kMaxRows,
-         tmax_);
+  else if (tmax_ > int(lanes > 1 ? 2 * ane::FfnSplit::kMaxRows : ane::FfnSplit::kMaxRows))
+    logi("NI_ANE: prefill chunks of more than %u rows run on the GPU alone (prefill chunk is %d)",
+         lanes > 1 ? 2 * ane::FfnSplit::kMaxRows : ane::FfnSplit::kMaxRows, tmax_);
   if (env_on("NI_ANE_VERIFY") || !getenv("NI_ANE_VERIFY")) {
     const double t0 = now_ms();
     // the check runs whole chunks through the model's activation buffers: at most tmax_ rows
@@ -268,6 +320,7 @@ void Qwen35::ane_finish_init() {
     logi("NI_ANE: startup check %.2f%% of the ANE's part from the GPU alone (%zu functions, %.0f ms)", 100 * err,
          rows.size(), now_ms() - t0);
   }
+  ane_proj_build();
 }
 
 ane::FfnConfig Qwen35::ane_cfg(uint32_t units, uint32_t min_rows, const std::vector<uint32_t>& fn_rows, int fault_layer,
@@ -378,7 +431,11 @@ void Qwen35::enc_mlp_gpu_part(Encoder& e, const Layer& L, int T, uint32_t g, con
 int Qwen35::ane_wave_rows(int T) const {
   if (!ane_ || ane_->lanes() < 2) return 0;
   const int h = (T / 2 + 127) / 128 * 128;
-  if (h >= T || h < int(ane_->fn_rows().front()) || T - h < int(ane_->min_rows()) / 2) return 0;
+  // each half at least half the smallest function (the min rows built them, or a default min rows above it,
+  // init_ane): an M1 Ultra chunk of 1024-1151 rows otherwise ran the plain split, 5.08 s against 4.0 s
+  const int fn0 = int(ane_->fn_rows().front());
+  if (h >= T || h < fn0 || T - h < fn0 / 2) return 0;
+  if (h > int(ane::FfnSplit::kMaxRows) || T - h > int(ane::FfnSplit::kMaxRows)) return 0;
   return h;
 }
 
@@ -410,6 +467,126 @@ void Qwen35::enc_prefill_wave(Encoder& e, Seq& s, int pos0, int T, int h) {
   }
   A.join(e, 1, xB, TB);
   if (cap_) enc_capture(e, cfg_.layers - 1, pos0 + TA, TB, &xB);
+}
+
+// NI_ANE_PROJ: the wavefront with the token mixers' input projections on the Neural Engine as well (DeltaNet's in_proj
+// qkv + z, attention's q / k / v). Per layer i the Neural Engine runs I_A(i) F_B(i-1) I_B(i) F_A(i) (I: the input
+// projection, F: the FFN's share; half B a step behind half A, as in enc_prefill_wave). F_A(i) and F_B(i-1) find their
+// inputs ready two jobs ahead, so the GPU's own work (scans, attention, out / o projections, the FFN's GPU channels,
+// staging) runs beside them; an I job follows the F job it needs by the GPU's join, norm and pack. Each half's rows go
+// through the kernels of a chunk of its size.
+void Qwen35::enc_prefill_wave2(Encoder& e, Seq& s, int pos0, int T, int h) {
+  const int D = cfg_.hidden, TA = h, TB = T - h, NL = cfg_.layers;
+  const Buffer xA = x_.view(0, size_t(TA) * D * 4), xB = x_.view(size_t(TA) * D * 4, size_t(TB) * D * 4);
+  const uint32_t g = ane_->gpu_channels();
+  ane::FfnSplit& F = *ane_;
+  ane::ProjSplit& P = *ane_proj_;
+  ane_proj_chunk_ = true;
+  P.begin_chunk();
+  F.stage_layer(e, 0, 0);
+  P.stage_layer(e, 0, P.stage_set(0));
+  // layer i+1's projection weights, into the set layer i's jobs do not read (sets alternate by layer; I_A(i) is
+  // unpacked and I_B(i) reads layer i's set)
+  auto stage_next_proj = [&](int i) {
+    if (i + 1 < NL) P.stage_layer(e, i + 1, P.stage_set(i + 1));
+  };
+  auto launch_fb = [&](int j) {  // F_B(j): needs half B's mixer of layer j
+    enc_rows_half(e, xB, layers_[j].post_norm, xh_, TB, D);
+    F.pack(e, 1, xh_, TB);
+    F.launch(e, 1, j, TB);
+  };
+  auto finish_b = [&](int j) {  // half B's FFN of layer j: GPU channels, join
+    enc_mlp_gpu_part(e, layers_[j], TB, g, xB);
+    F.join(e, 1, xB, TB);
+    if (cap_) enc_capture(e, j, pos0 + TA, TB, &xB);  // layer j is complete in B's rows
+  };
+  // F_A(i), after half A's GPU channels of the FFN: they fill the Neural Engine's I_B(i), where the GPU has room,
+  // instead of the stretch to F_A's join, where it has none
+  auto launch_fa = [&](int i) {
+    enc_rows_half(e, xA, layers_[i].post_norm, xh_, TA, D);
+    F.pack(e, 0, xh_, TA);
+    enc_mlp_gpu_part(e, layers_[i], TA, g, xA);
+    F.launch(e, 0, i, TA);
+  };
+  for (int i = 0; i < NL; ++i) {
+    const Layer& L = layers_[i];
+    enc_mixer_in(e, i, L, TA, xA, 0);  // I_A(i)
+    if (L.linear) enc_gdn_ab(e, L, TA);
+    if (i > 0) launch_fb(i - 1);      // F_B(i-1)
+    enc_mixer_out(e, s, i, L, TA, xA, 0, pos0);
+    stage_next_proj(i);               // while F_B(i-1) runs: the GPU has room here
+    if (i > 0) finish_b(i - 1);
+    enc_mixer_in(e, i, L, TB, xB, 1);  // I_B(i)
+    if (L.linear) enc_gdn_ab(e, L, TB);
+    launch_fa(i);                     // F_A(i)
+    enc_mixer_out(e, s, i, L, TB, xB, 1, pos0 + TA);
+    if (i + 1 < NL) F.stage_layer(e, i + 1, (i + 1) & 1);
+    F.join(e, 0, xA, TA);
+    if (cap_) enc_capture(e, i, pos0, TA, &xA);  // layer i is complete in A's rows
+  }
+  launch_fb(NL - 1);
+  finish_b(NL - 1);
+}
+
+// A fast profile member (docs/profiles.md): it moves the 27B's logits past the M5-class floor's gate (decode paths'
+// mean KL 2.2e-4 against 1.18e-4, 0 top-1 flips), so precise keeps the projections on the GPU. Its class is the device
+// profile's ane_proj_fast row: the 27B on the Apple M6 (slower on the M5 Pro, whose GPU is faster; the 4B was over its bar). NI_ANE_PROJ=1 or 0 overrides
+// either profile (1 also outside the row's class). `log`: the fast profile's one line (profile_switch).
+bool Qwen35::proj_on(const Qwen35Config& c, bool log) {
+  ModelFacts f;
+  f.moe = c.moe, f.hidden = c.hidden, f.layers = c.layers;
+  const bool here = default_on(Knob::kAneProjFast, f);
+  if (log) return profile_switch("NI_ANE_PROJ", here, "the token mixers' input projections on the Neural Engine (NI_ANE_PROJ)");
+  if (const char* v = getenv("NI_ANE_PROJ"); v && *v) return strcmp(v, "0") != 0;
+  return profile() == Profile::kFast && here;
+}
+
+void Qwen35::ane_proj_build() {
+  ane_proj_.reset();
+  if (!proj_on(cfg_, true)) return;
+  if (!ane_ || ane_->lanes() < 2 || !cfg_.causal || cfg_.moe || !gdn_par_on()) return;
+  std::vector<ane::ProjLayer> pl(layers_.size());
+  for (size_t i = 0; i < layers_.size(); ++i) {
+    const Layer& L = layers_[i];
+    const std::vector<const QLinear*> qs = L.linear ? std::vector<const QLinear*>{&L.qkv, &L.z}
+                                                    : std::vector<const QLinear*>{&L.q, &L.k, &L.v};
+    for (const QLinear* q : qs) {
+      if (!format_supported(q->bits, q->gs)) {
+        logi("NI_ANE_PROJ: no Neural Engine input projections for %s weights", format_name(q->bits, q->gs).c_str());
+        return;
+      }
+      pl[i].parts.push_back({q->w->buf, q->s->buf, q->b->buf, q->N, q->K, q->bits, q->gs});
+    }
+  }
+  ane::ProjConfig pc;
+  pc.fn_rows = ane_->fn_rows();
+  pc.cache_dir = ane::cache_dir();
+  pc.model_key = ane::model_key(dir_);
+  pc.tag = "mixer-in";
+  const double t0 = now_ms();
+  try {
+    ane_proj_ = std::make_unique<ane::ProjSplit>(pc, std::move(pl));
+  } catch (const std::exception& ex) {
+    logi("NI_ANE_PROJ: Neural Engine in_proj unavailable (%s); the GPU runs it", ex.what());
+    return;
+  }
+  double err = -1;
+  try {
+    err = ane_proj_verify();
+  } catch (const std::exception& ex) {
+    logi("NI_ANE_PROJ: startup check failed (%s); the GPU runs the input projections", ex.what());
+    ane_proj_.reset();
+    return;
+  }
+  if (!(err <= 0.05)) {
+    logi("NI_ANE_PROJ: startup check: %.1f%% from the GPU's projections (> 5%%); the GPU runs them", 100 * err);
+    ane_proj_.reset();
+    return;
+  }
+  logi("NI_ANE_PROJ: token mixers' input projections (DeltaNet qkv + z, attention q / k / v; %u rows) on the Neural "
+       "Engine in wavefront chunks; %s; %.1f MB Metal; "
+       "ready in %.1f s, startup check %.2f%% from the GPU (fast profile; NI_ANE_PROJ=0: GPU)", ane_proj_->rows_out(),
+       ane_proj_->startup_note().c_str(), ane_proj_->metal_bytes() / 1e6, (now_ms() - t0) / 1000, 100 * err);
 }
 
 // NI_ANE_NONCAUSAL: layer li's FFN of a noncausal pass of T rows, slab by slab on lane 0 (the chunk began with the
@@ -631,4 +808,52 @@ double Qwen35::ane_bench_chunk(int T, int reps, bool split) {
   return median(ms);
 }
 
+}  // namespace ni
+
+namespace ni {
+// The startup check of ane_proj_: the first DeltaNet and the first attention layer, the smallest function's rows of
+// random post-norm-like input (unit variance, a few channels 8x: outliers the rotation must spread), the Neural Engine's
+// projections against the GPU's GEMMs. Returns the worse relative RMS error of the two layers (W8A8: ~1.3%).
+double Qwen35::ane_proj_verify() {
+  Gpu& g = Gpu::get();
+  ane::ProjSplit& P = *ane_proj_;
+  const int D = cfg_.hidden, T = std::min(int(P.fn_rows().front()), tmax_);
+  std::mt19937 r(20261115);
+  std::normal_distribution<float> nd(0.f, 1.f);
+  _Float16* xp = xh_.as<_Float16>();
+  for (size_t i = 0; i < size_t(T) * D; ++i) xp[i] = _Float16(nd(r) * ((i % D) % 97 == 3 ? 8.f : 1.f));
+  double worst = 0;
+  for (bool lin : {true, false}) {
+    int li = -1;
+    for (int i = 0; i < cfg_.layers && li < 0; ++i)
+      if (layers_[i].linear == lin) li = i;
+    if (li < 0) continue;
+    const Layer& L = layers_[li];
+    const std::vector<const QLinear*> qs = lin ? std::vector<const QLinear*>{&L.qkv, &L.z}
+                                               : std::vector<const QLinear*>{&L.q, &L.k, &L.v};
+    ScratchBufs bufs;
+    std::vector<Buffer> ref, got;
+    for (const QLinear* q : qs) {
+      ref.push_back(bufs.add(size_t(T) * q->N * 4, "proj check ref"));
+      got.push_back(bufs.add(size_t(T) * q->N * 4, "proj check ane"));
+    }
+    auto e = g.begin();
+    for (size_t k = 0; k < qs.size(); ++k) enc_qmm(*e, *qs[k], xh_, ref[k], T, false);
+    P.begin_chunk();
+    P.stage_layer(*e, li, P.stage_set(li));
+    P.pack(*e, 0, xh_, T);
+    P.launch(*e, 0, li, T);
+    e = g.begin();
+    P.unpack(*e, 0, li, got, T);
+    e->commit_and_wait();
+    if (!P.finish_chunk()) throw std::runtime_error(P.reason());
+    for (size_t k = 0; k < qs.size(); ++k) {
+      double d = 0, n = 0;
+      const float *a = got[k].as<float>(), *b = ref[k].as<float>();
+      for (size_t i = 0; i < size_t(T) * qs[k]->N; ++i) d += double(a[i] - b[i]) * (a[i] - b[i]), n += double(b[i]) * b[i];
+      worst = std::max(worst, std::sqrt(d / std::max(n, 1e-30)));
+    }
+  }
+  return worst;
+}
 }  // namespace ni

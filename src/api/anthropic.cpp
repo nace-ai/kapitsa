@@ -137,7 +137,18 @@ struct Prompt {
   bool leading = true;              // no user or assistant message yet
   ojson messages = ojson::array();  // after the leading system message
   ojson tools = ojson::array();
+  ojson deferred = ojson::array();  // the tools marked "defer_loading" (ChatRequest::deferred_tools)
 };
+
+// A tool out of the list it is in, declared or deferred
+void remove_tool(Prompt& pr, const std::string& name) {
+  for (ojson* list : {&pr.tools, &pr.deferred})
+    for (size_t i = 0; i < list->size(); ++i)
+      if ((*list)[i]["function"]["name"] == name) {
+        list->erase(list->begin() + long(i));
+        return;
+      }
+}
 
 void add_tool(Prompt& pr, const ojson& t) {
   const std::string name = str(t, "name");
@@ -147,12 +158,14 @@ void add_tool(Prompt& pr, const ojson& t) {
                                  ") left out: a server tool without an input_schema");
     return;
   }
-  for (auto& have : pr.tools)
+  ojson& list = deferred(t) ? pr.deferred : pr.tools;
+  for (auto& have : list)
     if (have["function"]["name"] == name) {
       have = function_of(t);
       return;
     }
-  pr.tools.push_back(function_of(t));
+  remove_tool(pr, name);  // (one of its name in the other list: the definition moves)
+  list.push_back(function_of(t));
 }
 
 // System text (a string or text blocks) without Claude Code's billing header block, which changes with every
@@ -176,12 +189,7 @@ std::string system_text(const ojson& c, Prompt& pr) {
       if (type == "tool_addition" && str(tool, "type") == "tool_definition" && tool.contains("definition")) {
         add_tool(pr, tool["definition"]);
       } else if (type == "tool_removal") {
-        const std::string name = str(tool, "name");
-        for (size_t i = 0; i < pr.tools.size(); ++i)
-          if (pr.tools[i]["function"]["name"] == name) {
-            pr.tools.erase(pr.tools.begin() + long(i));
-            break;
-          }
+        remove_tool(pr, str(tool, "name"));
       }
     } else if (!type.empty()) {
       log_once("system " + type, "anthropic: a " + type + " block in a system message left out");
@@ -275,7 +283,9 @@ ChatRequest messages_prompt(const ojson& body, bool* show_thinking) {
   if (!pr.system.empty()) r.messages.push_back({{"role", "system"}, {"content", pr.system}});
   for (auto& m : pr.messages) r.messages.push_back(std::move(m));
   r.tools = pr.tools;
-  if (body.contains("tool_choice") && str(body["tool_choice"], "type") == "none") r.tools = ojson::array();
+  r.deferred_tools = pr.deferred;
+  if (body.contains("tool_choice") && str(body["tool_choice"], "type") == "none")
+    r.tools = r.deferred_tools = ojson::array();
 
   // Thinking: on for "enabled" and "adaptive" (Claude Code's main loop), off for "disabled" and when absent, as
   // Anthropic's API does: Claude Code leaves it out of its short side requests (titles, classifiers), which then
@@ -289,10 +299,15 @@ ChatRequest messages_prompt(const ojson& body, bool* show_thinking) {
   // looped models (Engine::request_loops): thinking off (disabled, absent) 1 loop, a budget by its size, adaptive or
   // enabled without a budget the server's default; output_config.effort or a "loops" field first
   if (!think) r.thinking_budget = 0;
+  else if (th.contains("budget_tokens") && th["budget_tokens"].is_number_unsigned())
+    r.thinking_budget = int(std::min<uint64_t>(th["budget_tokens"].get<uint64_t>(), uint64_t(INT32_MAX)));
   else if (th.contains("budget_tokens") && th["budget_tokens"].is_number_integer())
     r.thinking_budget = int(std::clamp<int64_t>(th["budget_tokens"].get<int64_t>(), 0, INT32_MAX));
+  if (think && r.thinking_budget == 0) r.think_cap = 0;  // budget_tokens 0: a cap of 0 (thinking disabled is no cap)
   if (think && body.contains("output_config")) r.effort = str(body["output_config"], "effort");
   r.loops = request_loops_field(body);
+  // the thinking budget (src/engine/think_control.h): budget_tokens is its hard cap, thinking_control can set it too
+  request_think_field(body, r);
   // context_management keeping every turn's thinking (Claude Code: clear_thinking keep "all"): every assistant turn
   // is rendered with its reasoning (Qwen3.6's preserve_thinking), so the prompt of the next request continues what the
   // engine generated whatever comes after it
@@ -331,7 +346,8 @@ MessagesRequest messages_request(const ojson& body) {
       if (tc.contains("disable_parallel_tool_use") && tc["disable_parallel_tool_use"].is_boolean())
         spec.parallel = !tc["disable_parallel_tool_use"].get<bool>();
     }
-    if (!r.tools.empty() && body.contains("tools") && body["tools"].is_array())
+    const ojson call_tools = r.call_tools();
+    if (!call_tools.empty() && body.contains("tools") && body["tools"].is_array())
       for (const auto& t : body["tools"])
         if (t.is_object() && t.contains("strict") && t["strict"].is_boolean() && t["strict"].get<bool>() &&
             !str(t, "name").empty())
@@ -346,20 +362,24 @@ MessagesRequest messages_request(const ojson& body) {
       spec.strict = true;
       schema_format(*of, spec, "output_format");
     }
-    r.grammar = request_grammar(spec, r.tools, "output_format");
+    r.grammar = request_grammar(spec, call_tools, "output_format");
   }
   if (!r.messages.empty() && r.messages.back()["role"] == "assistant")
     bad("a final assistant message (a prefill of the reply) is not supported; end the messages with a user turn");
   if (body.contains("max_tokens")) {
-    if (!body["max_tokens"].is_number_integer() || body["max_tokens"].get<int64_t>() < 1)
+    const ojson& mt = body["max_tokens"];
+    if (mt.is_number_unsigned() && mt.get<uint64_t>() >= 1)
+      r.max_tokens = int(std::min<uint64_t>(mt.get<uint64_t>(), uint64_t(INT32_MAX)));
+    else if (mt.is_number_integer() && mt.get<int64_t>() >= 1)
+      r.max_tokens = int(std::min<int64_t>(mt.get<int64_t>(), INT32_MAX));
+    else
       bad("max_tokens: must be a positive integer");
-    r.max_tokens = int(std::min<int64_t>(body["max_tokens"].get<int64_t>(), INT32_MAX));
   } else {
     r.max_tokens = 32768;
   }
   if (body.contains("temperature") && body["temperature"].is_number()) r.temperature = body["temperature"];
   if (body.contains("top_p") && body["top_p"].is_number()) r.top_p = body["top_p"];
-  if (body.contains("top_k") && body["top_k"].is_number()) r.top_k = body["top_k"];
+  if (body.contains("top_k") && body["top_k"].is_number()) r.top_k = clamp_top_k(body["top_k"]);
   if (body.contains("stop_sequences") && body["stop_sequences"].is_array())
     for (const auto& s : body["stop_sequences"])
       if (s.is_string() && !s.get<std::string>().empty()) r.stop.push_back(s);
@@ -394,7 +414,7 @@ ojson messages_usage(const ChatResult& res) {
              {"cache_creation_input_tokens", 0},
              {"cache_read_input_tokens", res.cached_tokens},
              {"output_tokens", res.completion_tokens}};
-  if (res.loops > 0) u["kapitsa"] = kapitsa_usage(res);
+  if (ojson k = kapitsa_usage(res); !k.is_null()) u["kapitsa"] = k;
   return u;
 }
 

@@ -1,0 +1,59 @@
+{
+  "format": "Sanitized derived summary; not a raw execution transcript.",
+  "source": "ab796a55cc217373f9be8d0fc72e8b43e1050891",
+  "production_commit": "fe0409a96aef4472ff5795cd7f643f7b2ea07db2",
+  "build": "Explicit CMake Release configure; -O3 -std=gnu++20 -arch arm64 -mmacosx-version-min=14.0; NDEBUG absent.",
+  "version_output": "kapitsa 0.2.32 (ab796a55)\n",
+  "binary_sha256": {
+    "kapitsa": "41a08d1f3e5e94cba93d0da4d958ffe28d57aed50306dafcb6179c80af3205a2",
+    "load_error_test": "dc58d469ae18419e4c0d1478ef027625f2d1013b0d39268687231ba428cc5e6e"
+  },
+  "steps": [
+    {
+      "label": "configure",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:51.710343+00:00",
+      "ended_at": "2026-11-09T04:02:52.674234+00:00"
+    },
+    {
+      "label": "build",
+      "rc": 0,
+      "started_at": "2026-11-09T04:02:52.675141+00:00",
+      "ended_at": "2026-11-09T04:03:06.089462+00:00"
+    },
+    {
+      "label": "version",
+      "rc": 0,
+      "started_at": "2026-11-09T04:03:06.090758+00:00",
+      "ended_at": "2026-11-09T04:03:06.415548+00:00"
+    },
+    {
+      "label": "focused",
+      "rc": 0,
+      "started_at": "2026-11-09T04:03:06.417324+00:00",
+      "ended_at": "2026-11-09T04:03:06.772084+00:00"
+    },
+    {
+      "label": "load-error",
+      "rc": 1,
+      "started_at": "2026-11-09T04:03:06.773821+00:00",
+      "ended_at": "2026-11-09T04:03:07.217282+00:00"
+    },
+    {
+      "label": "prek",
+      "rc": 0,
+      "started_at": "2026-11-09T04:03:07.219557+00:00",
+      "ended_at": "2026-11-09T04:03:07.439809+00:00"
+    },
+    {
+      "label": "diff-check",
+      "rc": 0,
+      "started_at": "2026-11-09T04:03:07.440725+00:00",
+      "ended_at": "2026-11-09T04:03:07.456956+00:00"
+    }
+  ],
+  "focused_output": "split part count: 16 expected rejections, descriptor delta 0\nsplit tensor count: 16 expected rejections, descriptor delta 0\nPASS split metadata rejection, early errors, corrected reads and descriptor cleanup\n",
+  "full_load_error_result": "Exit 1 at after <= before + pages / 10 in unchanged raw-read cache check. All preceding GGUF controls, including both new 16-rejection zero-leak cohorts, passed. The separately built reference also failed this same cache threshold. The earlier candidate full loader run passed; all outcomes are retained.",
+  "root_cause_limit": "Cache-threshold variability and the separate updater observation are not diagnosed or fixed by this change.",
+  "GPU_or_inference_runs": []
+}

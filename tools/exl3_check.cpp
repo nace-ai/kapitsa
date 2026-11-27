@@ -1,6 +1,8 @@
 // The EXL3 routed-expert kernels (src/kernels/exl3moe.metal, src/model/moe_exl3.h) against the CPU reference:
 //  1. with Sushi's fixtures (its src/exl3/fixtures: 128 x 128 matrices made by its converter, each with `inner`, the
 //     weights exllamav3 decodes): exl3::decode_tile of every tile of the MCG ones equal to `inner`, bit for bit;
+//     also, the prefill's register fragments read back as weights against the CPU decoder, every even rate 16-64
+//     and every window 8-16, exactly (zero, all-one and random trellises, with output guards);
 //  2. random experts (D 512, I 256, 16 experts, top-4; random trellis words, suh and svh at the magnitudes real packs
 //     have) at rates n 16, 24, 32, 40, 48, 64 (K1-K4) and windows 16 and 15: exl3::enc_rows at 1, 3 and 8 rows and
 //     exl3::enc_prefill on moe_bucket3's tiles at 37 and 300 tokens, against exl3::project and the SwiGLU in fp32 (the
@@ -55,6 +57,61 @@ Buffer upload(const void* p, size_t bytes) {
   Buffer b = Gpu::get().alloc(bytes + 16);
   memcpy(b.ptr(), p, bytes);
   return b;
+}
+
+// Read the prefill's register fragments back as ordinary 16x16 weight tiles. Compare their half
+// bits with the independent CPU decoder, including every legal rate/window and the wrapping lanes.
+void mma_weights() {
+  Gpu& g = Gpu::get();
+  g.compile(R"METAL(
+[[kernel]] void exl3_mma_weights_check(const device uint* w [[buffer(0)]], device half* out [[buffer(1)]],
+                                      constant uint2& p [[buffer(2)]], uint t [[threadgroup_position_in_grid]],
+                                      uint lane [[thread_index_in_simdgroup]]) {
+  uint cw[8];
+  exl3_lane_cw(w + t * (p.x / 2), p.x, exl3_mma_lane(lane), cw);
+  for (uint kr = 0; kr < 2; ++kr) for (uint nc = 0; nc < 2; ++nc) {
+    const uint m = 2 * kr + 4 * nc;
+    simdgroup_half8x8 f;
+    f.thread_elements()[0] = half(exl3_mcg(cw[m] & p.y));
+    f.thread_elements()[1] = half(exl3_mcg(cw[m + 1] & p.y));
+    simdgroup_store(f, out + t * 256 + kr * 128 + nc * 8, 16, ulong2(0, 0), true);
+  }
+}
+)METAL");
+  std::mt19937 rng(17);
+  constexpr uint32_t tiles = 8;
+  size_t checked = 0, bad = 0;
+  for (uint32_t n = 16; n <= 64; n += 2) {
+    std::vector<uint16_t> tr(tiles * n);
+    for (size_t i = 0; i < tr.size(); ++i) tr[i] = i < n ? 0 : i < 2 * n ? 0xffff : uint16_t(rng());
+    Buffer w = upload(tr.data(), tr.size() * 2), raw = g.alloc(tiles * 256 * 2 + 128);
+    Buffer y = raw.view(64, tiles * 256 * 2);
+    for (uint32_t window = 8; window <= 16; ++window) {
+      memset(raw.ptr(), 0xa5, raw.size);
+      const uint32_t p[2] = {n, (1u << window) - 1};
+      auto e = g.begin();
+      e->use(g.pipeline("exl3_mma_weights_check"));
+      e->buf(0, w); e->buf(1, y); e->bytes(2, p, sizeof(p));
+      e->dispatch(tiles, 1, 1, 32);
+      e->commit_and_wait();
+      size_t mismatch = 0;
+      for (uint32_t t = 0; t < tiles; ++t) {
+        float ref[256];
+        exl3::decode_tile(tr.data() + t * n, n, window, ref);
+        for (uint32_t i = 0; i < 256; ++i) mismatch += y.as<uint16_t>()[t * 256 + i] != f2h(ref[i]);
+      }
+      for (size_t i = 0; i < 64; ++i)
+        mismatch += raw.as<uint8_t>()[i] != 0xa5 || raw.as<uint8_t>()[64 + y.size + i] != 0xa5;
+      if (mismatch) printf("FAILED MMA weights n %u window %u: %zu weight/guard mismatches\n", n, window, mismatch);
+      bad += mismatch;
+      checked += tiles * 256;
+    }
+    g.release(w);
+    g.release(raw);
+  }
+  printf("%s MMA weight fragments: %zu weights, all rates 16-64 and windows 8-16, %zu weight/guard mismatches\n",
+         bad ? "FAILED" : "ok", checked, bad);
+  g_fail += bad != 0;
 }
 
 // ---- 1. Sushi's fixtures ----
@@ -300,6 +357,7 @@ int main(int argc, char** argv) {
     else if (!strcmp(argv[i], "--pack")) pk = argv[++i];
   }
   if (!fix.empty()) fixtures(fix);
+  mma_weights();
   std::mt19937 rng(7);
   for (uint32_t n : {16u, 24u, 32u, 40u, 48u, 64u})
     for (uint32_t window : {16u, 15u}) {

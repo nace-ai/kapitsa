@@ -1,0 +1,63 @@
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] read 2.37 GB of weights in 365 ms (6.5 GB/s)
+[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)
+[kapitsa] read 0.24 GB of weights in 39 ms (6.1 GB/s)
+[kapitsa] MTP head loaded in 217 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 13 ms
+[kapitsa] prewarmed 93 prefill pipelines in 20 ms
+[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 663 ms; weights 4-bit group 64 100%
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (230 ms)
+[kapitsa] read 1.27 GB of weights in 195 ms (6.5 GB/s)
+[kapitsa] KFlash: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB
+[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)
+[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)
+[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.54 GB resident (process footprint +0.77 GB), loaded in 268 ms
+[kapitsa] DFlash2: prewarmed 117 pipelines in 2 ms
+[kapitsa] DFlash2: 0.537 GB allocated at load (planned 0.536 GB); 0.151 GB more for 1 slots' rings and 0.138 GB at the first prefill
+[kapitsa] sequence: recurrent state 53 MB, KV for 0 of 32768 tokens (0 MB)
+[kapitsa] GPU: Apple M3 Ultra, 60 cores
+[kapitsa] memory: 3.95 GB allocated (model, buffers, 1 slot's state), budget 80.2 GB (recommended working set 83.5 GB): KV room 76.21 GB = 2067250 tokens (36 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] images: Qwen3.5 ViT (24 blocks, width 1024, 16-pixel patches; images of 65536 to 1200000 pixels), 0.67 GB loaded on the first image
+[kapitsa] drafter: DFlash dflash2 (found in the model's folder)
+[kapitsa] engine ready: qwen3.5-4b-4bit, context 32768, 1 slots, KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2), images on
+[kapitsa] listening on http://127.0.0.1:8297
+Ready: chat at http://127.0.0.1:8297, API at http://127.0.0.1:8297/v1 (model "qwen3.5-4b-4bit"). Ctrl+C stops.
+[kapitsa] KV cache 0 -> 3072 positions (113 MB) in 0.2 ms
+[kapitsa] checkpoints: prompt diverges at 0 of 2067, none usable, prefill from 0
+[kapitsa] prefill chunk of 1034 rows: 2067 of 2067 left, chunk 2048 even
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+[kapitsa] prefill chunk of 1033 rows: 1033 of 2067 left, chunk 2048 even
+[kapitsa] checkpoints: query boundary at 2060 overwrites an empty one
+[kapitsa] KFlash: 4 cycles, 8.00 rows per cycle; cycles by rows 8:4; tokens per cycle expected 3.978, got 4.000; rate 0.3923 tok/ms; cost ms by rows 8:10.41; calibration (alpha, beta) by depth (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
+[kapitsa] dflash: 3.75 tokens/cycle over 4 cycles
+[kapitsa] chat: prompt 2067 (cached 0) in 995 ms (+2.0 ms template/tokenize; last chunk: encoded by 0.8 ms, GPU start +502.4 ms, GPU 492.0 ms, wake +0.2 ms), 16 tokens in 70 ms (214.9 tok/s), length, 3.75 tok/cycle, KFlash (DFlash2): 4 cycles
+[kapitsa] checkpoints: prompt diverges at 2063 of 2101, restored query checkpoint at 2060
+[kapitsa] prefill chunk of 41 rows: 41 of 2101 left, chunk 2048 even
+[kapitsa] checkpoints: query boundary at 2094 overwrites an empty one
+[kapitsa] KFlash: 8 cycles, 8.00 rows per cycle; cycles by rows 8:8; tokens per cycle expected 4.349, got 4.250; rate 0.4278 tok/ms; cost ms by rows 8:9.84; calibration (alpha, beta) by depth (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
+[kapitsa] dflash: 3.75 tokens/cycle over 8 cycles
+[kapitsa] chat: prompt 2101 (cached 2060) in 36 ms (+2.4 ms template/tokenize; last chunk: encoded by 1.0 ms, GPU start +3.0 ms, GPU 31.5 ms, wake +0.2 ms), 16 tokens in 42 ms (353.7 tok/s), length, 3.75 tok/cycle, KFlash (DFlash2): 4 cycles
+[kapitsa] KV cache 3072 -> 15360 positions (566 MB) in 21.3 ms
+[kapitsa] checkpoints: prompt diverges at 2084 of 15217, restored query checkpoint at 2060
+[kapitsa] prefill chunk of 1880 rows: 13157 of 15217 left, chunk 2048 even
+[kapitsa] prefill chunk of 1880 rows: 11277 of 15217 left, chunk 2048 even
+[kapitsa] prefill chunk of 1880 rows: 9397 of 15217 left, chunk 2048 even
+[kapitsa] checkpoints: cancelled prefill kept the completed checkpoint at 2060
+[kapitsa] chat: cancelled during prefill at 7700 of 15217 tokens after 2701 ms
+[kapitsa] prefill chunk of 1880 rows: 13157 of 15217 left, chunk 2048 even
+[kapitsa] prefill chunk of 1880 rows: 11277 of 15217 left, chunk 2048 even
+[kapitsa] prefill chunk of 1880 rows: 9397 of 15217 left, chunk 2048 even
+[kapitsa] prefill chunk of 1880 rows: 7517 of 15217 left, chunk 2048 even
+[kapitsa] prefill chunk of 1879 rows: 5637 of 15217 left, chunk 2048 even
+[kapitsa] prefill chunk of 1879 rows: 3758 of 15217 left, chunk 2048 even
+[kapitsa] prefill chunk of 1879 rows: 1879 of 15217 left, chunk 2048 even
+[kapitsa] checkpoints: query boundary at 15210 overwrites an empty one
+[kapitsa] KFlash: 12 cycles, 8.00 rows per cycle; cycles by rows 8:12; tokens per cycle expected 3.933, got 4.167; rate 0.3894 tok/ms; cost ms by rows 8:12.07; calibration (alpha, beta) by depth (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
+[kapitsa] dflash: 3.75 tokens/cycle over 12 cycles
+[kapitsa] chat: prompt 15217 (cached 2060) in 6717 ms (+1.9 ms template/tokenize; last chunk: encoded by 4635.3 ms, GPU start +1024.6 ms, GPU 1057.3 ms, wake +0.2 ms), 16 tokens in 77 ms (195.2 tok/s), length, 3.75 tok/cycle, KFlash (DFlash2): 4 cycles
+[kapitsa] checkpoints: prompt diverges at 15217 of 15217, restored query checkpoint at 15210
+[kapitsa] prefill chunk of 7 rows: 7 of 15217 left, chunk 2048 even
+[kapitsa] KFlash: 16 cycles, 8.00 rows per cycle; cycles by rows 8:16; tokens per cycle expected 3.726, got 4.125; rate 0.3744 tok/ms; cost ms by rows 8:11.83; calibration (alpha, beta) by depth (0.00, 1.00) (0.15, 1.99) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
+[kapitsa] dflash: 3.75 tokens/cycle over 16 cycles
+[kapitsa] chat: prompt 15217 (cached 15210) in 16 ms (+7.5 ms template/tokenize; last chunk: encoded by 0.8 ms, GPU start +4.0 ms, GPU 10.8 ms, wake +0.1 ms), 16 tokens in 51 ms (296.1 tok/s), length, 3.75 tok/cycle, KFlash (DFlash2): 4 cycles

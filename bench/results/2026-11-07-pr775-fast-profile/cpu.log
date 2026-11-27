@@ -1,0 +1,11 @@
+PASS api_test
+PASS prefix_cache_test
+PASS fn_store_test
+PASS fn_dflash_test
+PASS tokenizer_test
+PASS iq_layout_test
+PASS remote_test
+PASS cluster_test
+FAIL split_place_test (/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-fast/cpu/candidate-fast-0dae4e/3400e870/cpu-tests/split_place_test.log)
+PASS gemm_slices_test
+PASS ws_upgrade_test

@@ -1,0 +1,6 @@
+01:12:24 bin=/Users/alisheramantay/Documents/nace/kapitsa/.worktrees/k421-kquant/build/kapitsa sha=a72731c6b97c commit=7c511224 model=/Users/alisheramantay/Documents/nace/k421/packs/cat-9b-4bit order=[A B B A] macos=26.5.2
+01:13:09 1-A rc=0 load 2.95->2.79 ok power=ac serve_rss_end=6.3G serve_peak=6.29G kflash_lines=43 drafter_lines=29
+01:13:51 2-B rc=0 load 2.89->3.28 ok power=ac serve_rss_end=6.3G serve_peak=6.29G kflash_lines=43 drafter_lines=29
+01:14:33 3-B rc=0 load 3.28->3.41 ok power=ac serve_rss_end=6.3G serve_peak=6.29G kflash_lines=43 drafter_lines=29
+01:15:16 4-A rc=0 load 3.41->2.93 ok power=ac serve_rss_end=6.3G serve_peak=6.29G kflash_lines=43 drafter_lines=29
+01:15:16 LEGSDONE

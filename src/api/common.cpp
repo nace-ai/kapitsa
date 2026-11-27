@@ -1,6 +1,9 @@
 #include "api/common.h"
 #include "model/dory.h"
 
+#include <algorithm>
+#include <climits>
+#include <cstdint>
 #include <mutex>
 #include <random>
 
@@ -90,16 +93,72 @@ bool apply_effort(const std::string& effort, ojson& kwargs) {
   return true;
 }
 
+int clamp_top_k(const ojson& v) {
+  if (v.is_number_unsigned()) return int(std::min<uint64_t>(v.get<uint64_t>(), uint64_t(INT32_MAX)));
+  if (v.is_number_integer()) return int(std::clamp<int64_t>(v.get<int64_t>(), INT32_MIN, INT32_MAX));
+  const double d = v.get<double>();
+  if (std::isnan(d)) return 0;
+  if (d <= double(INT32_MIN)) return INT32_MIN;
+  if (d >= double(INT32_MAX)) return INT32_MAX;
+  return int(d);
+}
+
+uint32_t extract_seed_u32(const ojson& v) {
+  if (v.is_number_unsigned()) return uint32_t(v.get<uint64_t>());
+  if (v.is_number_integer()) return uint32_t(v.get<int64_t>());
+  const double d = v.get<double>();
+  if (!std::isfinite(d)) return 0;
+  const double m = std::fmod(d, 4294967296.0);
+  return uint32_t(int64_t(m < 0 ? m + 4294967296.0 : m));
+}
+
 int request_loops_field(const ojson& body) {
   if (!body.is_object() || !body.contains("loops") || body["loops"].is_null()) return 0;
   const ojson& v = body["loops"];
-  if (!v.is_number_integer() || v.get<int64_t>() < 1 || v.get<int64_t>() > Dory::kMaxLoops)
+  const bool valid = v.is_number_unsigned()
+                         ? v.get<uint64_t>() >= 1 && v.get<uint64_t>() <= uint64_t(Dory::kMaxLoops)
+                         : v.is_number_integer() && v.get<int64_t>() >= 1 && v.get<int64_t>() <= Dory::kMaxLoops;
+  if (!valid)
     throw ApiError(400, "invalid_request_error", "loops: a whole number from 1 to " + std::to_string(Dory::kMaxLoops), "",
                    "loops");
-  return int(v.get<int64_t>());
+  return v.get<int>();
 }
 
-ojson kapitsa_usage(const ChatResult& res) { return res.loops > 0 ? ojson{{"loops", res.loops}} : ojson(); }
+void request_think_field(const ojson& body, ChatRequest& r) {
+  if (!body.is_object() || !body.contains("thinking_control") || body["thinking_control"].is_null()) return;
+  const ojson& c = body["thinking_control"];
+  auto bad = [](const std::string& m, const std::string& param) {
+    throw ApiError(400, "invalid_request_error", "thinking_control." + m, "", "thinking_control." + param);
+  };
+  if (!c.is_object()) throw ApiError(400, "invalid_request_error", "thinking_control: an object", "", "thinking_control");
+  if (c.contains("hard_cap") && !c["hard_cap"].is_null()) {
+    const ojson& h = c["hard_cap"];
+    if (h.is_number_unsigned())
+      r.think_cap = int(std::min<uint64_t>(h.get<uint64_t>(), uint64_t(INT32_MAX)));
+    else if (h.is_number_integer() && h.get<int64_t>() >= 0)
+      r.think_cap = int(std::min<int64_t>(h.get<int64_t>(), INT32_MAX));
+    else
+      bad("hard_cap: a whole number of tokens, 0 or more", "hard_cap");
+  }
+  if (c.contains("close_text") && !c["close_text"].is_null()) {
+    if (!c["close_text"].is_string()) bad("close_text: a string", "close_text");
+    r.think_close_text = c["close_text"].get<std::string>();
+  }
+  if (c.contains("end_on_tool_call") && !c["end_on_tool_call"].is_null()) {
+    if (!c["end_on_tool_call"].is_boolean()) bad("end_on_tool_call: a boolean", "end_on_tool_call");
+    r.think_end_on_tool_call = c["end_on_tool_call"].get<bool>() ? 1 : 0;
+  }
+}
+
+ojson kapitsa_usage(const ChatResult& res) {
+  ojson u;
+  if (res.loops > 0) u["loops"] = res.loops;
+  // (reasoning_tokens: the capped block's, the first, its closing </think> included as the cap counts it: at most
+  // hard_cap, forced or not, src/engine/think_control.h. The API's own reasoning count covers every block.)
+  if (res.think_cap >= 0)
+    u["thinking"] = {{"hard_cap", res.think_cap}, {"reasoning_tokens", res.think_tokens}, {"forced", res.think_forced}};
+  return u;
+}
 
 void join_text(std::string& acc, const std::string& piece) {
   if (piece.empty()) return;
@@ -118,6 +177,23 @@ ojson arguments_object(const ojson& args) {
   }
   if (args.is_null()) return ojson::object();
   return ojson{{"arguments", dump(args)}};
+}
+
+bool deferred(const ojson& tool) {
+  return tool.is_object() && tool.contains("defer_loading") && tool["defer_loading"].is_boolean() &&
+         tool["defer_loading"].get<bool>();
+}
+
+bool take_deferred(ojson& tool) {
+  bool marked = false;
+  auto take = [&](ojson& j) {
+    if (!j.is_object() || !j.contains("defer_loading")) return;
+    marked = marked || deferred(j);
+    j.erase("defer_loading");
+  };
+  take(tool);
+  if (tool.is_object() && tool.contains("function")) take(tool["function"]);
+  return marked;
 }
 
 void schema_format(const ojson& f, OutputSpec& spec, const std::string& param) {

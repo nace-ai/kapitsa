@@ -1,0 +1,70 @@
+{
+  "commit": "9cca6b0d181d020cad9949eb002ba274baeaaf45",
+  "model": "/Users/bytedance/kapitsa-qmm9b-models-20261105/hub/models/qwen3.5-9b-4bit",
+  "files": [
+    {
+      "file": "chat_template.jinja",
+      "bytes": 7756,
+      "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+    },
+    {
+      "file": "config.json",
+      "bytes": 3331,
+      "sha256": "a96942cb6a8a1d3f1d17514d81a1925d04362a6a3233b389d13012211baaa9f8"
+    },
+    {
+      "file": "model-00001-of-00002.safetensors",
+      "bytes": 5349771292,
+      "sha256": "973cc1efdedb4d327993fb9c27865f0bcfd9015897d5f0ca9ffb6cda6a0768e5"
+    },
+    {
+      "file": "model-00002-of-00002.safetensors",
+      "bytes": 600449850,
+      "sha256": "597dae0ed72b60acc07382e8ea0cdb9509c54128e07b0eaa9cf4996373d5ca7d"
+    },
+    {
+      "file": "model.safetensors.index.json",
+      "bytes": 123592,
+      "sha256": "dd023913fb87cfdae27fb11dcf695117c925833796ccac3c64117d6652d8ff1e"
+    },
+    {
+      "file": "mtp.safetensors",
+      "bytes": 486582960,
+      "sha256": "5f7c656b3930220c704c52d6c9ad0ab82cacf8da4b66c2f2361cbc3acee25a1f"
+    },
+    {
+      "file": "preprocessor_config.json",
+      "bytes": 390,
+      "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516"
+    },
+    {
+      "file": "processor_config.json",
+      "bytes": 991,
+      "sha256": "45fc17c8dd2474af6b493b52483c26c0584b0082d368c480f9fa611e73070040"
+    },
+    {
+      "file": "tokenizer.json",
+      "bytes": 19989325,
+      "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+    },
+    {
+      "file": "tokenizer_config.json",
+      "bytes": 9187,
+      "sha256": "fa71760892f5c601d345e626ebd602055825a50beed7ee160709c95fffa475f0"
+    },
+    {
+      "file": "video_preprocessor_config.json",
+      "bytes": 385,
+      "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13"
+    },
+    {
+      "file": "vocab.json",
+      "bytes": 6722759,
+      "sha256": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003"
+    }
+  ],
+  "chip": "Apple M3 Ultra",
+  "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t26.4.1\nBuildVersion:\t\t25E253\n",
+  "sdk": "26.2\n",
+  "calibration_file_exists": false
+}

@@ -1,0 +1,221 @@
+{
+  "reference": "95a0a552fab5c359dd91b716e9936918d436d713",
+  "candidate_production": "7ece78ea37e6f68a2d35ff8fa5e20753645b84c7",
+  "model": {
+    "repo": "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8",
+    "revision": "3fe6dab75665a93884214ad4b1b95cf02717d081"
+  },
+  "record_kind": "Explicit curated export; original private records remain unchanged and verifiable",
+  "setups": {
+    "m3": {
+      "configuration": {
+        "chip": "Apple M3 Ultra",
+        "gpu_cores": 60,
+        "memory_gb": 96,
+        "macos": "26.4.1",
+        "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)"
+      },
+      "per_row_CPU": {
+        "reference_ns_per_row": 20722.576141357502,
+        "candidate_ns_per_row": 5360.773712157999,
+        "lower_latency_percent": 74.13075635196182
+      },
+      "HTTP": {
+        "reference": {
+          "rc": 1,
+          "PASS": 39,
+          "FAIL": 10,
+          "failure_test_names": [
+            "thinking: correct answer",
+            "tool call: read_file or run_shell on /etc/hosts",
+            "tool result: final answer mentions 3",
+            "non-stream tool call + int arg",
+            "thinking + tools: a call on /etc/hosts returned as a tool call",
+            "anthropic: non-streamed tool call (stop_reason tool_use, tool_use on /etc/hosts, usage)",
+            "anthropic stream: final answer mentions 3",
+            "responses stream: a function_call on /etc/hosts",
+            "responses: the tool loop's next request is answered (mentions 3)",
+            "in flight together: a 2K-token request sent during a long reply finishes first"
+          ]
+        },
+        "candidate": {
+          "rc": 1,
+          "PASS": 36,
+          "FAIL": 12,
+          "failure_test_names": [
+            "thinking: correct answer",
+            "tool call: read_file or run_shell on /etc/hosts",
+            "tool result: final answer mentions 3",
+            "next turn: answer",
+            "non-stream tool call + int arg",
+            "thinking + tools: a call on /etc/hosts returned as a tool call",
+            "anthropic: non-streamed tool call (stop_reason tool_use, tool_use on /etc/hosts, usage)",
+            "anthropic stream: final answer mentions 3",
+            "responses stream: a function_call on /etc/hosts",
+            "responses: the tool loop's next request is answered (mentions 3)",
+            "in flight together: a 2K-token request sent during a long reply finishes first",
+            "a client gone mid-stream: the request beside it is answered, the next one starts at once"
+          ],
+          "unexecuted_assertions": [
+            {
+              "test": "int argument is a JSON number",
+              "reason": "Returned tool arguments do not contain max_lines; conditional assertion not executed."
+            }
+          ]
+        }
+      },
+      "fixed": {
+        "matched_input_and_content_all_four_legs": true,
+        "decode_outputs": 24,
+        "tokens_each": 512,
+        "paired_middle_window_tps_delta_percent": [
+          -0.2595265723547624,
+          0.8306104424657956,
+          0.4925499339798245,
+          -0.15877978351316324,
+          1.1813076893917085,
+          0.937166229419617,
+          0.9527053944202057,
+          0.66431186727125,
+          1.6565865207178732,
+          1.545547751800913,
+          2.52576897265826,
+          0.1968955016288909
+        ],
+        "paired_delta_range_percent": [
+          -0.2595265723547624,
+          2.52576897265826
+        ],
+        "cold4K_ttft_s": [
+          1.862402708,
+          1.8719735,
+          1.878190916,
+          1.87987175
+        ],
+        "cache_flags_each_leg": [
+          [
+            "turn 1 finish_reason=length (engines may not cache a 'length' turn)"
+          ],
+          [
+            "turn 1 finish_reason=length (engines may not cache a 'length' turn)"
+          ],
+          [
+            "turn 1 finish_reason=length (engines may not cache a 'length' turn)"
+          ],
+          [
+            "turn 1 finish_reason=length (engines may not cache a 'length' turn)"
+          ]
+        ],
+        "prefill_and_cache_texts_byte_compared": false
+      },
+      "native_rc": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "native_flags": [
+        [],
+        [
+          "cached_4000: turn 1 finish_reason=length (engines may not cache a 'length' turn)"
+        ],
+        [
+          "cached_4000: turn 1 finish_reason=length (engines may not cache a 'length' turn)"
+        ],
+        [
+          "decode: repetition loop (distinct-4-gram 0.1016)"
+        ]
+      ],
+      "native_invalid": [
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    "m4": {
+      "configuration": {
+        "chip": "Apple M4 Pro",
+        "gpu_cores": 20,
+        "memory_gb": 48,
+        "macos": "15.7.1",
+        "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)"
+      },
+      "per_row_CPU": {
+        "reference_ns_per_row": 3196.1174011229996,
+        "candidate_ns_per_row": 599.0765991210001,
+        "lower_latency_percent": 81.25611409297711
+      },
+      "HTTP": {
+        "reference": {
+          "rc": 0,
+          "PASS": 49,
+          "FAIL": 0,
+          "failure_test_names": []
+        },
+        "candidate": {
+          "rc": 0,
+          "PASS": 49,
+          "FAIL": 0,
+          "failure_test_names": []
+        }
+      },
+      "fixed": {
+        "matched_input_and_content_all_four_legs": true,
+        "decode_outputs": 24,
+        "tokens_each": 512,
+        "paired_middle_window_tps_delta_percent": [
+          -0.06350159328553096,
+          -0.37816303381276173,
+          -0.5385554612476584,
+          -0.6734324119398116,
+          -0.7379474158509924,
+          0.056573747779653516,
+          0.6948916870603838,
+          0.26687469748758463,
+          -0.1329443154078902,
+          -0.35828290499424487,
+          0.23187035874114859,
+          0.6120806377730048
+        ],
+        "paired_delta_range_percent": [
+          -0.7379474158509924,
+          0.6948916870603838
+        ],
+        "cold4K_ttft_s": [
+          4.328863208,
+          4.327482167,
+          4.331045417,
+          4.329613042
+        ],
+        "cache_flags_each_leg": [
+          [],
+          [],
+          [],
+          []
+        ],
+        "prefill_and_cache_texts_byte_compared": false
+      },
+      "native_rc": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "native_flags": [
+        [],
+        [],
+        [
+          "decode: repetition loop (distinct-4-gram 0.0016)"
+        ],
+        []
+      ],
+      "native_invalid": [
+        [],
+        [],
+        [],
+        []
+      ]
+    }
+  }
+}

@@ -5,6 +5,7 @@
 #include <thread>
 #include "loader/safetensors.h"
 #include "metal/gpu.h"
+#include "model/ffn_share.h"
 #include "model/model.h"
 #include "model/moe_exl3.h"
 #include "model/moe_q20.h"
@@ -21,6 +22,7 @@ namespace ni {
 
 namespace ane {
 class FfnSplit;
+class ProjSplit;
 struct FfnConfig;
 struct FfnLayer;
 }
@@ -78,6 +80,12 @@ bool qmt6_on();
 // all (enc_qmm_large's q.on). Exported for Qwen4Exp's NI_HC_FUSE mix fold, whose host gate must match the
 // tensor-tile branch it replaces exactly.
 bool qmm_on();
+// The NI_QMT gate (defined in qwen35.cpp): the dense 4-bit group-64 prefill GEMMs on tensor ops (qmt_m64_n64).
+// Exported for DFlash2's context commit (enc_qmm_rows), which runs the same tile on the drafter's prompt rows.
+bool qmt_on();
+// The NI_QMT128 gate (defined in qwen35.cpp): whether a qmt GEMM of M rows takes the 128-row tile (qmt_m128_n64,
+// qmtg_m128_n64, qmt_m128_n64_ld: the 64-row tile's bits). Exported for DFlash2's context commit.
+bool qmt128_for(int M);
 
 struct Qwen35Config {
   int hidden = 0, layers = 0, vocab = 0;
@@ -180,6 +188,8 @@ class Qwen35 : public Model {
   explicit Qwen35(const std::string& model_dir, int prefill_chunk = 2048);
   ~Qwen35() override;
   const Qwen35Config& config() const { return cfg_; }
+  // whether NI_PF_WAVE is on for a model of this shape on this GPU (the engine picks its chunk by it)
+  static bool gpu_wave_default(int hidden, int layers, bool moe);
   int vocab() const override { return cfg_.vocab; }
   const std::vector<int>& eos_ids() const override { return cfg_.eos; }
 
@@ -230,6 +240,8 @@ class Qwen35 : public Model {
   void drop_kv(Seq& s) override;
   // Bytes of attention cache per position of a sequence (every attention layer and the MTP head, K + V)
   size_t kv_bytes_per_pos() const override;
+  // What growing s holds beside its new size while it copies (bytes): one copy batch's old buffers, at the least
+  size_t kv_grow_held(const Seq& s) const override;
   // Upper limit for Metal allocations (bytes) that reserve() and the Neural Engine split respect; 0 = none
   void set_mem_budget(size_t bytes) override { mem_budget_ = bytes; }
   size_t mem_budget() const { return mem_budget_; }
@@ -293,6 +305,9 @@ class Qwen35 : public Model {
   void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
                       Checkpoint* snap = nullptr, int snap_row = 0) override;
   int prefill_chunk() const override { return tmax_; }
+  // NI_PF_GROUPED: a prefill pass runs on a grouped encoder (independent dispatches overlap: enc_proj's projections,
+  // the routed and shared experts' GEMMs); a model that cannot take it in some configuration says no here.
+  virtual bool grouped_prefill() const;
   // NI_SHORTPF: checkpoints can be captured inside a prefill pass (encode_prefill's `snap`).
   bool can_snapshot() const override;
 
@@ -419,6 +434,8 @@ class Qwen35 : public Model {
   // s.pend_tree: the next pass (or encode_flush) folds tape rows pend_path[0 .. n_pend).
   void set_verify_tree(const Buffer* tree) { v8_tree_ = tree; }
   // the 8-row verify can run a tree (its attention on attn8m, the split GDN step)
+  // the lazy GDN fold's backlog folded into the recurrent states (encode_verify8 defers storing them)
+  void flush_backlog(Encoder& e, Seq& s);
   bool verify_tree_ok() const;
   // Tree verifies wider than 8 rows (16 or 32: 2 or 4 tiles of 8 rows; KFlash's size rule picks the rows per cycle):
   // encode_verify with a tree set and R = 16 or 32 encodes that capacity, and the GPU runs the tiles of the tree's live
@@ -430,10 +447,10 @@ class Qwen35 : public Model {
   bool verify_wide_ok() const;
   // The KFlash tree row counts a dense target's verifies may pick, bit n-1 set for n = 8, 16, 32: 8 alone, or 8 with 16
   // and 32 where the target runs wide verifies (verify_wide_ok) and the drafting pass's knobs (NI_KFLASH,
-  // NI_DFLASH_TREE, NI_KFLASH_ROWS) let them. DFlash2 picks its rows from it and plan() reserves the tape they need, so
+  // NI_KFLASH_TREE, NI_KFLASH_ROWS) let them. DFlash2 picks its rows from it and plan() reserves the tape they need, so
   // the sizes agree; a bad NI_KFLASH_ROWS is fatal here (before either).
   static uint32_t kf_dense_rows(const Qwen35Config& c);
-  // The rows a cached suffix's chain pass runs (NI_VPF_ROWS, else the measured default: 32 on a dense target at or
+  // The rows a cached suffix's chain pass runs (NI_VPF_ROWS, else the default: 32 on a dense target at or
   // above the weight floor the NI_VPF default uses, 8 elsewhere): plan() reserves the tape for them and the model
   // sizes its verify buffers for them at load. Kept apart from kf_dense_rows, which is the drafter's tree width: the
   // pass is the engine's own, not a decode cycle's, so it may be wider than anything the drafter drafts.
@@ -446,9 +463,12 @@ class Qwen35 : public Model {
   void set_tree_rows(int rows, bool drafting = false);
   int tree_rows() const { return tree_rows_; }
   // The widest tree verify the drafter itself asked for (set_tree_rows with drafting): its drafting block, where the
-  // target's own chain passes may run wider (pass_rows). NI_VPF's default is measured on a target whose drafter drafts
+  // target's own chain passes may run wider (pass_rows). NI_VPF's default is for a target whose drafter drafts
   // 16 rows, so the default keys on this and not on the capacity the pass raised.
   bool drafter_wide() const { return drafter_wide_; }
+  // A prefill pass of `rows` rows runs its dense GEMMs on the 64-row tensor tile (a dense model, the tile on, rows at
+  // or above NI_QMT_MIN's): the engine's NI_VPF default leaves such a suffix to the prefill path
+  bool tile_pass(int rows) const;
   // The rows one chain pass of a cached suffix runs (8, 16 or 32: vpf_pass_rows at load; a 24-row tail of a ladder
   // still runs inside the 32-row capacity).
   int pass_rows() const { return pass_rows_; }
@@ -460,8 +480,11 @@ class Qwen35 : public Model {
   // The 8-row verify GEMMs, for other 8-row passes (the DFlash2 drafter). Inputs are X8 tables
   // (verify8.metal layout: half operands in fragment order + per-64 group sums), R <= 8 live rows.
   static bool v8_packed_coeff_on(const Qwen35Config& c);
+  static uint32_t v8_packed_ks(uint32_t K);
+  static uint32_t v8_packed_rg(uint32_t N);  // block rows interleaved together (divides N / 16)  // the k-slices v8_plan gives a packed GEMM of this K (its record order)
   struct PackedCoeffBuffers {
     Buffer payload, headers;
+    uint32_t ks, rg;  // ks > 1: records interleaved for ks k-slices of rg block rows for this many k-slices (interleave_packed_slices)
     explicit operator bool() const { return bool(payload) && bool(headers); }
   };
   struct Seg8 {
@@ -500,6 +523,17 @@ class Qwen35 : public Model {
   virtual bool block_drafter_ok() const { return true; }
 
  protected:
+  // encode_prefill's pass on a grouped encoder when grouped_prefill() asks for it; the encoder's mode comes back after
+  struct GroupedPass {
+    Encoder& e;
+    const bool on;
+    GroupedPass(Encoder& enc, bool want) : e(enc), on(want && !enc.grouped()) {
+      if (on) e.set_grouped(true);
+    }
+    ~GroupedPass() {
+      if (on) e.set_grouped(false);
+    }
+  };
   // Subclasses (Qwen4Exp) that load the checkpoint themselves: members only, nothing read
   struct NoLoad {};
   Qwen35(const std::string& model_dir, int prefill_chunk, NoLoad);
@@ -537,6 +571,8 @@ class Qwen35 : public Model {
   // the Q2_0 kernels' slot-table twins run (prewarm list)
   virtual bool q20_arena() const { return false; }
   std::string tname(const std::string& canonical) const;
+  // config.json's quantization blocks for qlin (load_config's; models with their own config parsing call it)
+  static void load_quant_config(const std::string& dir);
   const Tensor* bf16_copy(const Tensor* t, float offset = 0.0f);
   void check_formats() const;
   void test_transforms();  // NI_DEQUANT / NI_REQUANT (tests: other formats from a 4-bit checkpoint)
@@ -592,9 +628,11 @@ class Qwen35 : public Model {
     bool add;
   };
   bool small_t(int T) const;
-  // this matrix's tensor_ops tile (qmtg_m64_n64 / qmt_m64_n64) covers a chunk of M >= 64 rows, so the short-prefill
-  // families are not the faster path there (sp_qmt_pref, NI_SP_QMT=0 restores the earlier preference)
+  // this matrix's tensor_ops tile (qmtg_m64_n64 / qmt_m64_n64) covers a chunk of M >= qmt_min_rows() rows, so the
+  // short-prefill families are not the faster path there (sp_qmt_pref, NI_SP_QMT=0 restores the earlier preference)
   bool sp_qmt_pref(const QLinear& L, int M) const;
+  // The fewest rows of a dense 4-bit GEMM on the tensor_ops tile (NI_QMT_MIN, qwen35.cpp)
+  int qmt_min_rows() const;
   bool qmms_ok(const QLinear& L) const;
   void enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int T);
   // enc_qmms over any T, in slices of at most 64 rows (NI_SHORTPF_EXACT)
@@ -630,11 +668,33 @@ class Qwen35 : public Model {
   // NI_ANE wavefront: the first half's rows (0 = not used for a chunk of T rows)
   int ane_wave_rows(int T) const;
   void enc_prefill_wave(Encoder& e, Seq& s, int pos0, int T, int h);
+  // NI_ANE_PROJ: the wavefront with the token mixers' input projections on the Neural Engine too (ane_proj_). Per layer
+  // the Neural Engine runs I_A(i), F_B(i-1), I_B(i), F_A(i) (I: input projection, F: FFN; half B a step behind half A).
+  void enc_prefill_wave2(Encoder& e, Seq& s, int pos0, int T, int h);
+  void enc_mixer_in(Encoder& e, int li, const Layer& L, int T, const Buffer& x, int lane);  // in-norm, pack, launch
+  void enc_gdn_ab(Encoder& e, const Layer& L, int T);  // DeltaNet's a / b from xh_ (GPU; tiny)
+  // unpack, then DeltaNet's scan and out_proj, or attention's (enc_attn_post)
+  void enc_mixer_out(Encoder& e, Seq& s, int li, const Layer& L, int T, const Buffer& x, int lane, int pos0);
+  void enc_attn_post(Encoder& e, Seq& s, int i, const Layer& L, int pos0, int T, const Buffer& xbuf);
+  bool gdn_par_on() const;
+  void ane_proj_build();
+  static bool proj_on(const Qwen35Config& c, bool log);  // NI_ANE_PROJ through the profile and ane_proj_fast
+  double ane_proj_verify();  // startup check: relative error against the GPU's projections
+  // NI_PF_WAVE: a MoE chunk in two halves on the GPU alone, half B's token mixer beside half A's MoE layer and half A's
+  // next mixer beside half B's MoE (Encoder tapes, play_pair): the first half's rows, 0 = not for a chunk of T rows
+  int gpu_wave_rows(int T) const;
+  void enc_prefill_gpu_wave(Encoder& e, Seq& s, int pos0, int T, int h);
+  Buffer xh2_, hh2_;  // the MoE chain's xh_ / hh_ while a mixer uses those (gpu_wave_rows)
   void enc_mlp_gpu_part(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x);
   // the same on the tensor_ops GEMMs (NI_QMT, 4-bit group 64); false: not applicable
   bool enc_mlp_gpu_part_qmt(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x);
   static bool qmt_ready();  // NI_QMT's tensor_ops GEMMs are on
-  // the M5 default share of the split (default_units' gpu_mma) applies to this model: measured on it (NI_ANE_MMA)
+  static ffn_share::Qmtf qmtf_formats();  // the formats NI_QMTF's tensor_ops GEMMs take in this process
+  // the kernels the split's GPU part runs layer L's FFN on (ffn_share::gpu_part: plan(), init_ane() and
+  // enc_mlp_gpu_part_qmt decide by it)
+  static ffn_share::Path ffn_gpu_part(const Layer& L);
+  static ffn_share::Fmt ffn_fmt(const QLinear& q);  // an affine projection's format ({} for GGUF blocks, Q2_0, EXL3)
+  // the M5 default share of the split (default_units' gpu_mma) applies to this model (NI_ANE_MMA)
   static bool mma_share_measured(const Qwen35Config& c);
   void enc_mlp_prefill_split(Encoder& e, int li, const Layer& L, int T, const Buffer& x);
   // A noncausal pass (Max) splits its FFN slab by slab (src/ane/slabs.h), any length >= min_rows; NI_ANE_NONCAUSAL=0: off
@@ -779,10 +839,17 @@ class Qwen35 : public Model {
   unsigned qmt_i8_next_ = 0;
   std::vector<Buffer> qmt_i8_retired_;
   std::pair<Buffer, Buffer> qmt_i8_scratch(size_t m, size_t k);
-  virtual void grow_kv(Seq& s, int cap);
+  // Grows s's attention caches to `cap` positions, copying in batches of at most batch_max bytes (kv_grow.h)
+  virtual void grow_kv(Seq& s, int cap, size_t batch_max = size_t(256) << 20);
+  // Bytes per position of the largest single attention cache buffer (one head group's K or V of one layer)
+  virtual size_t kv_unit_bytes_per_pos() const;
+  // Bytes the memory budget has left (SIZE_MAX without one)
+  size_t kv_room() const;
   void enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int old_cap, int new_cap);
 
   std::unique_ptr<ane::FfnSplit> ane_;
+  std::unique_ptr<ane::ProjSplit> ane_proj_;  // NI_ANE_PROJ (see enc_prefill_wave2)
+  bool ane_proj_chunk_ = false;               // the chunk being encoded runs it
   bool ane_chunk_ = false;  // the chunk being encoded runs the split
   bool ane_on_ = true;      // benchmarks: false runs the GPU alone
   AneStats ane_stats_;

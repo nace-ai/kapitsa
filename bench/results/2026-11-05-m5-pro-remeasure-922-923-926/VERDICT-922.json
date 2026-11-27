@@ -1,0 +1,414 @@
+{
+ "pr": "922",
+ "task": "#343",
+ "machine": "Apple M5 Pro",
+ "macos": "26.5.2",
+ "commits": {
+  "parent": "b210e9ab",
+  "merge": "f9e85aa7"
+ },
+ "what_was_timed": "Flint 4-bit 8-row verify (flint_bench --rows 8 --steps 128 --reps 3) and the moe4_unique kernel at Flash-Next's shape (D 2560, k 10)",
+ "headline_config_note": "PR headline config (Flash-Next 4-bit) cannot be measured on this Mac: the 4-bit pack is about 100 GB, the internal disk has 55 GiB free and the Mac has 48 GB of RAM",
+ "ab": [
+  {
+   "name": "922-flint",
+   "metric": "ms_step",
+   "old_median": 30.38,
+   "new_median": 29.72,
+   "faster_pct": 2.2207267833109112,
+   "pair_range_pct": [
+    1.2020033388981721,
+    2.9946164199192493
+   ],
+   "rounds": 3,
+   "clean_rounds": 0,
+   "used": "all AC pairs; rounds are not labelled clean because the 2 s foreign-GPU sampler gave no sample on short legs or load/foreign GPU was above the harness bar (see legs[].gpu)",
+   "argv": {
+    "old": [
+     "/Users/alisheramantay/Documents/nace/k343/wt-b210e9ab/build/flint_bench",
+     "/Users/alisheramantay/Documents/nace/kapitsa-m5pro/models/flint-4bit",
+     "--rows",
+     "8",
+     "--steps",
+     "128",
+     "--reps",
+     "3"
+    ],
+    "new": [
+     "/Users/alisheramantay/Documents/nace/k343/wt-f9e85aa7/build/flint_bench",
+     "/Users/alisheramantay/Documents/nace/kapitsa-m5pro/models/flint-4bit",
+     "--rows",
+     "8",
+     "--steps",
+     "128",
+     "--reps",
+     "3"
+    ]
+   },
+   "env": {
+    "old": {},
+    "new": {}
+   },
+   "bin_sha256": {
+    "old": "9d50dbce517cae9d09076f90ef910d2a70264395915a34987d014066d731de93",
+    "new": "e7b40c8b05e5428cc60909233f8932c4dd44fcb91c102d4ea79ffe4cb9c3de1a"
+   },
+   "legs": [
+    {
+     "round": 0,
+     "arm": "old",
+     "ms_step": 30.38,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.99,
+     "load1_after": 2.2,
+     "gpu": "foreign GPU mean 0.58% max 2.88%"
+    },
+    {
+     "round": 0,
+     "arm": "new",
+     "ms_step": 29.67,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.94,
+     "load1_after": 1.85,
+     "gpu": "foreign GPU mean 0.13% max 0.99%"
+    },
+    {
+     "round": 1,
+     "arm": "new",
+     "ms_step": 29.95,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.84,
+     "load1_after": 1.73,
+     "gpu": "foreign GPU mean 0.77% max 2.13%"
+    },
+    {
+     "round": 1,
+     "arm": "old",
+     "ms_step": 30.31,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.58,
+     "load1_after": 1.97,
+     "gpu": "foreign GPU mean 0.14% max 1.2%"
+    },
+    {
+     "round": 2,
+     "arm": "old",
+     "ms_step": 30.61,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.99,
+     "load1_after": 2.42,
+     "gpu": "foreign GPU mean 3.23% max 12.77%"
+    },
+    {
+     "round": 2,
+     "arm": "new",
+     "ms_step": 29.72,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.86,
+     "load1_after": 2.12,
+     "gpu": "foreign GPU mean 0.14% max 0.76%"
+    },
+    {
+     "round": 3,
+     "arm": "new",
+     "ms_step": 30.09,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.9,
+     "load1_after": 2.34,
+     "gpu": "foreign GPU mean 5.24% max 9.05%"
+    },
+    {
+     "round": 3,
+     "arm": "old",
+     "ms_step": 30.23,
+     "ac_before": false,
+     "ac_after": true,
+     "load1_before": 1.95,
+     "load1_after": 2.12,
+     "gpu": "foreign GPU mean 5.45% max 8.2%; GPU quiet-wait capped at 60 s (DSH visible / not quiet)"
+    }
+   ],
+   "verdict_words": "faster"
+  },
+  {
+   "name": "922-unique-R3",
+   "metric": "us_call",
+   "old_median": 18.485,
+   "new_median": 7.345000000000001,
+   "faster_pct": 151.66780122532333,
+   "pair_range_pct": [
+    59.79703356752535,
+    161.33879781420762
+   ],
+   "rounds": 4,
+   "clean_rounds": 0,
+   "used": "all AC pairs; rounds are not labelled clean because the 2 s foreign-GPU sampler gave no sample on short legs or load/foreign GPU was above the harness bar (see legs[].gpu)",
+   "argv": {
+    "old": [
+     "/Users/alisheramantay/Documents/nace/k343/wt-b210e9ab/build/moe4_time",
+     "moe4_unique",
+     "3",
+     "200",
+     "7"
+    ],
+    "new": [
+     "/Users/alisheramantay/Documents/nace/k343/wt-f9e85aa7/build/moe4_time",
+     "moe4_unique",
+     "3",
+     "200",
+     "7"
+    ]
+   },
+   "env": {
+    "old": {},
+    "new": {}
+   },
+   "bin_sha256": {
+    "old": "75d8bf31741dff66307ad24790934611e70243f86a03a0b7d32b5a803af9ab40",
+    "new": "a6cf6ed2ce1698dcd8e3ae7a205b7d1fa44c7dfc21bc51e3029a52893e4e0f59"
+   },
+   "legs": [
+    {
+     "round": 0,
+     "arm": "old",
+     "us_call": 17.84,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 2.38,
+     "load1_after": 2.38,
+     "gpu": "foreign GPU mean 4.06% max 4.06%"
+    },
+    {
+     "round": 0,
+     "arm": "new",
+     "us_call": 7.37,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 2.09,
+     "load1_after": 2.0,
+     "gpu": "foreign GPU mean 0.0% max 0%"
+    },
+    {
+     "round": 1,
+     "arm": "new",
+     "us_call": 7.32,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.77,
+     "load1_after": 1.77,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 1,
+     "arm": "old",
+     "us_call": 19.13,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.78,
+     "load1_after": 1.78,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 2,
+     "arm": "old",
+     "us_call": 15.17,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.66,
+     "load1_after": 1.66,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 2,
+     "arm": "new",
+     "us_call": 6.86,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.82,
+     "load1_after": 1.82,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 3,
+     "arm": "new",
+     "us_call": 12.81,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.95,
+     "load1_after": 1.95,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 3,
+     "arm": "old",
+     "us_call": 20.47,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.54,
+     "load1_after": 1.54,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    }
+   ],
+   "verdict_words": "faster"
+  },
+  {
+   "name": "922-unique-R4",
+   "metric": "us_call",
+   "old_median": 19.58,
+   "new_median": 10.815000000000001,
+   "faster_pct": 81.044845122515,
+   "pair_range_pct": [
+    76.84501845018453,
+    91.20370370370368
+   ],
+   "rounds": 4,
+   "clean_rounds": 0,
+   "used": "all AC pairs; rounds are not labelled clean because the 2 s foreign-GPU sampler gave no sample on short legs or load/foreign GPU was above the harness bar (see legs[].gpu)",
+   "argv": {
+    "old": [
+     "/Users/alisheramantay/Documents/nace/k343/wt-b210e9ab/build/moe4_time",
+     "moe4_unique",
+     "4",
+     "200",
+     "7"
+    ],
+    "new": [
+     "/Users/alisheramantay/Documents/nace/k343/wt-f9e85aa7/build/moe4_time",
+     "moe4_unique",
+     "4",
+     "200",
+     "7"
+    ]
+   },
+   "env": {
+    "old": {},
+    "new": {}
+   },
+   "bin_sha256": {
+    "old": "75d8bf31741dff66307ad24790934611e70243f86a03a0b7d32b5a803af9ab40",
+    "new": "a6cf6ed2ce1698dcd8e3ae7a205b7d1fa44c7dfc21bc51e3029a52893e4e0f59"
+   },
+   "legs": [
+    {
+     "round": 0,
+     "arm": "old",
+     "us_call": 19.99,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.41,
+     "load1_after": 1.41,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 0,
+     "arm": "new",
+     "us_call": 10.81,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.3,
+     "load1_after": 1.3,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 1,
+     "arm": "new",
+     "us_call": 10.8,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.61,
+     "load1_after": 1.61,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 1,
+     "arm": "old",
+     "us_call": 20.65,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 2.42,
+     "load1_after": 2.54,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 2,
+     "arm": "old",
+     "us_call": 19.17,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 2.29,
+     "load1_after": 2.18,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 2,
+     "arm": "new",
+     "us_call": 10.84,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 2.37,
+     "load1_after": 2.37,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 3,
+     "arm": "new",
+     "us_call": 10.82,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.64,
+     "load1_after": 1.64,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    },
+    {
+     "round": 3,
+     "arm": "old",
+     "us_call": 19.16,
+     "ac_before": true,
+     "ac_after": true,
+     "load1_before": 1.58,
+     "load1_after": 1.58,
+     "gpu": "foreign GPU not sampled (leg shorter than the 2 s sampler)"
+    }
+   ],
+   "verdict_words": "faster"
+  }
+ ],
+ "mlx_summary": {
+  "mlx_vlm_decode_tok_s": [
+   86.07,
+   94.14,
+   98.56
+  ],
+  "mlx_vlm_decode_median": 94.14,
+  "mlx_vlm_prefill_tok_s": [
+   425.0,
+   529.7,
+   756.7
+  ],
+  "kapitsa_flint_bench_decode_tok_s": [
+   125.5,
+   131.1,
+   130.6,
+   137.9,
+   138.2,
+   138.1
+  ],
+  "kapitsa_flint_bench_decode_median": 134.5,
+  "note": "flint_bench is the Kapitsa engine's own timer: 893-token corpus prompt, 128 greedy steps; mlx-vlm: same length, different text, 128 tokens, temperature 0, one process per run (cold load). Indicative only, not a harness leg."
+ },
+ "mlx": {
+  "model": "Flint 4-bit via mlx-vlm 0.7.11 (greedy, 4K-char prompt, 128 tokens; config patched in an APFS clone, U8 weights viewed as uint32)",
+  "runs": [
+   "RESULT prompt_tokens=893 prompt_tps=425.0 gen_tokens=128 gen_tps=86.07 peak_gb=23.21 wall_s=4.8",
+   "RESULT prompt_tokens=893 prompt_tps=529.7 gen_tokens=128 gen_tps=94.14 peak_gb=23.21 wall_s=4.4",
+   "RESULT prompt_tokens=893 prompt_tps=756.7 gen_tokens=128 gen_tps=98.56 peak_gb=23.21 wall_s=3.6"
+  ]
+ }
+}

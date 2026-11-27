@@ -17,7 +17,8 @@ Mac do not see each other's state.
 
 - **No GPU unless the task allows it.** `vk build`, `vk cli`, `vk cpu-tests` and `vk checks` stay on the CPU. Only
   `vk serve` and the steps of `references/output-check.md` load a model, and each holds `/tmp/kapitsa-gpu.lock` while
-  it does. `vk serve` fails at once if another process holds the lock. `logit_dump` and `kapitsa bench` queue for it.
+  it does. `vk serve` fails at once if another process holds the lock, and so does the `test_server_cli` entry of `vk cpu-tests`
+  (it takes the lock itself, so stop a running `vk serve` first). `logit_dump` and `kapitsa bench` queue for it.
   Never kill another session's lock holder.
 - **Work in a separate worktree** for anything you will build or commit: `git worktree add -b <branch>
   ../kapitsa-<topic> origin/main`. Do not modify another contributor's checkout.

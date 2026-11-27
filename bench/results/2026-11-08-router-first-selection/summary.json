@@ -1,0 +1,314 @@
+{
+  "captured_at": "2026-11-07T17:53:32.224816+00:00",
+  "base": "f22effb9bdda7fa17be5e4ce614383a35e1cc62a",
+  "production_source": "dc82cf0f39b942157e86b0cd5e518e5caed17e61",
+  "timing_checker": "13fe5470a11fe46d31166ed34fae218bb0da2677",
+  "reporting_checker": "dec964487d11821c8f4b5737b20ad64b974d0ac0",
+  "source_sha256": {
+    "src/kernels/qwen4.metal": "f71b9717dcbc042ca1aa9daa78ba66151e838f19fa111a4e0fac589a7059ab72",
+    "src/model/qwen4_exp_spec.cpp": "0195eab2764614c05509f49a358aa29b51475e8788c7112e9348bfaeabf75f41",
+    "tools/topk512_check.cpp": "7d8dd31dfc16496af0acdd8d9bac235292b04346acc8c27649747ca15384f9bd"
+  },
+  "original_kernel_file_prefix_unchanged": true,
+  "cpu_snapshot": "11 vk C++ entries passed; test_server.py --cli and remaining suite/supplementals still running or queued",
+  "numerics_per_device": "270 small validation +270 small safe-math validation +720 normal cases; zero failures",
+  "model_output_gate": "not run",
+  "inference_speed": "not measured",
+  "timing_medians": {
+    "M3 Ultra": [
+      {
+        "rows": 1,
+        "norm": 0,
+        "a_us": 5.1109135000000006,
+        "b_us": 5.5707699999999996,
+        "latency_reduction_pct": -8.99754026359474,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 1,
+        "norm": 1,
+        "a_us": 5.1027830000000005,
+        "b_us": 5.4407095000000005,
+        "latency_reduction_pct": -6.622396053290913,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 2,
+        "norm": 0,
+        "a_us": 5.3627395,
+        "b_us": 5.409332,
+        "latency_reduction_pct": -0.8688190056593381,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 2,
+        "norm": 1,
+        "a_us": 5.3436685,
+        "b_us": 5.043645,
+        "latency_reduction_pct": 5.614560484056974,
+        "comparison": "A/B"
+      },
+      {
+        "rows": 3,
+        "norm": 0,
+        "a_us": 5.3879269999999995,
+        "b_us": 5.396609,
+        "latency_reduction_pct": -0.16113804066018034,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 3,
+        "norm": 1,
+        "a_us": 5.2504755,
+        "b_us": 4.903936,
+        "latency_reduction_pct": 6.600154595521879,
+        "comparison": "A/B"
+      },
+      {
+        "rows": 4,
+        "norm": 0,
+        "a_us": 5.376597,
+        "b_us": 5.358159499999999,
+        "latency_reduction_pct": 0.34292136829301434,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 4,
+        "norm": 1,
+        "a_us": 5.26769,
+        "b_us": 4.948362,
+        "latency_reduction_pct": 6.062012001465533,
+        "comparison": "A/B"
+      },
+      {
+        "rows": 8,
+        "norm": 0,
+        "a_us": 5.2832764999999995,
+        "b_us": 5.3450955,
+        "latency_reduction_pct": -1.1700882965334225,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 8,
+        "norm": 1,
+        "a_us": 5.05439,
+        "b_us": 5.011495,
+        "latency_reduction_pct": 0.8486681874568358,
+        "comparison": "A/B"
+      },
+      {
+        "rows": 16,
+        "norm": 0,
+        "a_us": 5.3047640000000005,
+        "b_us": 5.2900795,
+        "latency_reduction_pct": 0.27681721561978456,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 16,
+        "norm": 1,
+        "a_us": 5.107821,
+        "b_us": 4.875178,
+        "latency_reduction_pct": 4.554642772328954,
+        "comparison": "A/B"
+      },
+      {
+        "rows": 32,
+        "norm": 0,
+        "a_us": 5.34977,
+        "b_us": 5.3635155,
+        "latency_reduction_pct": -0.25693627950360565,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 32,
+        "norm": 1,
+        "a_us": 5.2157925,
+        "b_us": 5.0574925,
+        "latency_reduction_pct": 3.0350133752444997,
+        "comparison": "A/B"
+      },
+      {
+        "rows": 64,
+        "norm": 0,
+        "a_us": 5.206571,
+        "b_us": 5.148303,
+        "latency_reduction_pct": 1.1191242758429643,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 64,
+        "norm": 1,
+        "a_us": 5.1460165,
+        "b_us": 5.0023575000000005,
+        "latency_reduction_pct": 2.7916544768171514,
+        "comparison": "A/B"
+      },
+      {
+        "rows": 256,
+        "norm": 0,
+        "a_us": 4.857711999999999,
+        "b_us": 4.861244,
+        "latency_reduction_pct": -0.07270912725991785,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 256,
+        "norm": 1,
+        "a_us": 4.722771,
+        "b_us": 4.529559000000001,
+        "latency_reduction_pct": 4.091072804503948,
+        "comparison": "A/B"
+      }
+    ],
+    "M4 Pro": [
+      {
+        "rows": 1,
+        "norm": 0,
+        "a_us": 3.1125665,
+        "b_us": 3.129435,
+        "latency_reduction_pct": -0.5419482603825632,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 1,
+        "norm": 1,
+        "a_us": 2.9779915,
+        "b_us": 2.987676,
+        "latency_reduction_pct": -0.3252024057154079,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 2,
+        "norm": 0,
+        "a_us": 3.0889335,
+        "b_us": 3.069931,
+        "latency_reduction_pct": 0.6151799642174272,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 2,
+        "norm": 1,
+        "a_us": 2.9935305000000003,
+        "b_us": 2.8429895,
+        "latency_reduction_pct": 5.028878108975354,
+        "comparison": "A/B"
+      },
+      {
+        "rows": 3,
+        "norm": 0,
+        "a_us": 3.132708,
+        "b_us": 3.1400375,
+        "latency_reduction_pct": -0.2339669065868799,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 3,
+        "norm": 1,
+        "a_us": 2.9387385000000004,
+        "b_us": 2.7847365,
+        "latency_reduction_pct": 5.24041182976982,
+        "comparison": "A/B"
+      },
+      {
+        "rows": 4,
+        "norm": 0,
+        "a_us": 3.169436,
+        "b_us": 3.191223,
+        "latency_reduction_pct": -0.6874093687331051,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 4,
+        "norm": 1,
+        "a_us": 3.0033700000000003,
+        "b_us": 2.87826,
+        "latency_reduction_pct": 4.1656539154350085,
+        "comparison": "A/B"
+      },
+      {
+        "rows": 8,
+        "norm": 0,
+        "a_us": 3.263079,
+        "b_us": 3.2139255,
+        "latency_reduction_pct": 1.5063533552206243,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 8,
+        "norm": 1,
+        "a_us": 3.1203995,
+        "b_us": 2.989245,
+        "latency_reduction_pct": 4.203131682337469,
+        "comparison": "A/B"
+      },
+      {
+        "rows": 16,
+        "norm": 0,
+        "a_us": 3.098152,
+        "b_us": 3.109929,
+        "latency_reduction_pct": -0.38012983223547625,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 16,
+        "norm": 1,
+        "a_us": 2.97551,
+        "b_us": 2.8290685,
+        "latency_reduction_pct": 4.921559665401897,
+        "comparison": "A/B"
+      },
+      {
+        "rows": 32,
+        "norm": 0,
+        "a_us": 3.162799,
+        "b_us": 3.1648965000000002,
+        "latency_reduction_pct": -0.06631784062154367,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 32,
+        "norm": 1,
+        "a_us": 3.0236254999999996,
+        "b_us": 2.898557,
+        "latency_reduction_pct": 4.136375354685951,
+        "comparison": "A/B"
+      },
+      {
+        "rows": 64,
+        "norm": 0,
+        "a_us": 3.219963,
+        "b_us": 3.2089235,
+        "latency_reduction_pct": 0.34284555443648834,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 64,
+        "norm": 1,
+        "a_us": 3.0489375,
+        "b_us": 2.9299774999999997,
+        "latency_reduction_pct": 3.901687063116266,
+        "comparison": "A/B"
+      },
+      {
+        "rows": 256,
+        "norm": 0,
+        "a_us": 5.3528825,
+        "b_us": 5.3408964999999995,
+        "latency_reduction_pct": 0.2239167401862474,
+        "comparison": "A/A"
+      },
+      {
+        "rows": 256,
+        "norm": 1,
+        "a_us": 5.0514779999999995,
+        "b_us": 4.674815000000001,
+        "latency_reduction_pct": 7.4564909517570666,
+        "comparison": "A/B"
+      }
+    ]
+  },
+  "raw_files": 125,
+  "raw_archive_sha256": "03189f7f3cc13d5e086609d58805e3565a53d8bcfcaff0b7fe84ca2953568957",
+  "_privacy_export": "Privacy-filtered derived export. Private environment identifiers and host resource records are omitted; measurements, outcomes and tested source/binary identities are retained. Modified commands are placeholder reproduction examples, not verbatim execution logs. Original bytes remain privately archived."
+}

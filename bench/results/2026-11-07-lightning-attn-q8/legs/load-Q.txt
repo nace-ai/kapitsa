@@ -1,0 +1,1 @@
+Nemotron-H: 52 layers (23 Mamba-2, 6 attention, 23 MoE), 18.18 GB of weights  (NVFP4 experts, FP8 Mamba, Q8_0 attention, NVFP4 head, BF16 embedding, F32 router)

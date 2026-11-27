@@ -1,0 +1,6 @@
+{
+  "commit": "3f3b3cef4b2e81138e072c86c8448247abfc21a4",
+  "binary_sha256": "6c39323635cc21410cd019e473cb8e8b55d3dd8106a49f45f75ae95327eb2a04",
+  "version": "kapitsa 0.2.31 (3f3b3cef)",
+  "scope": "Targeted APFS clone removal reproduction only; not full clean-main CPU suite"
+}

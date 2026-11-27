@@ -1,0 +1,193 @@
+{
+  "at": "2026-11-09T13:43:17.799738+00:00",
+  "evidence_type": "Explicitly redacted derived summary; not original execution logs",
+  "setup": {
+    "chip": "M5 Pro",
+    "GPU_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang17 clang-1700.0.13.5"
+  },
+  "legs": {
+    "A1": {
+      "source": "b1be7d4f644b3e58d56499404b38b46cf2d2a5ef",
+      "rc": 0,
+      "original_result_sha256": "af4cbad58081abaad6f886298bff3a02b6a2055ac0cde208a35a7635cdf20f85",
+      "decode": {
+        "median_tps": 142.05,
+        "runs_tps": [
+          142.05,
+          142.6,
+          140.85
+        ],
+        "median_accepted_draft_tps": 91.63,
+        "median_accepted_draft_share": 0.6426
+      },
+      "decode_greedy": {
+        "median_tps": 138.9,
+        "runs_tps": [
+          144.76,
+          138.9,
+          137.01
+        ],
+        "median_accepted_draft_tps": 87.9,
+        "median_accepted_draft_share": 0.6328
+      },
+      "prefill": [
+        {
+          "size": 4000,
+          "prompt_tokens": 4132,
+          "ttft_s": 1.991,
+          "tps": 2075.4,
+          "followup_s": [
+            0.0523,
+            0.0581,
+            0.0513
+          ],
+          "followup_median_s": 0.0523,
+          "followup_suffix_tps": 420.9
+        }
+      ],
+      "tool_calls": "pass",
+      "flags": [],
+      "invalid": []
+    },
+    "B1": {
+      "source": "d5589c4259b35a3bd5d5cc711b20975705118956",
+      "rc": 0,
+      "original_result_sha256": "357591a34a2092273c6cc2db93b6c80d500b69b372222af3ba548d6d2dccca66",
+      "decode": {
+        "median_tps": 129.19,
+        "runs_tps": [
+          138.55,
+          113.11,
+          129.19
+        ],
+        "median_accepted_draft_tps": 80.49,
+        "median_accepted_draft_share": 0.623
+      },
+      "decode_greedy": {
+        "median_tps": 133.78,
+        "runs_tps": [
+          139.93,
+          133.78,
+          133.74
+        ],
+        "median_accepted_draft_tps": 84.92,
+        "median_accepted_draft_share": 0.6348
+      },
+      "prefill": [
+        {
+          "size": 4000,
+          "prompt_tokens": 4134,
+          "ttft_s": 1.9759,
+          "tps": 2092.2,
+          "followup_s": [
+            0.0499,
+            0.0489,
+            0.051
+          ],
+          "followup_median_s": 0.0499,
+          "followup_suffix_tps": 440.7
+        }
+      ],
+      "tool_calls": "pass",
+      "flags": [],
+      "invalid": []
+    },
+    "A2": {
+      "source": "b1be7d4f644b3e58d56499404b38b46cf2d2a5ef",
+      "rc": 0,
+      "original_result_sha256": "22954ef841a68e46c1bb738513ba31d67700b9c455e8fbe43c6925b2d2523716",
+      "decode": {
+        "median_tps": 130.52,
+        "runs_tps": [
+          130.52,
+          134.0,
+          122.38
+        ],
+        "median_accepted_draft_tps": 80.81,
+        "median_accepted_draft_share": 0.6191
+      },
+      "decode_greedy": {
+        "median_tps": 133.14,
+        "runs_tps": [
+          131.72,
+          133.14,
+          142.26
+        ],
+        "median_accepted_draft_tps": 84.25,
+        "median_accepted_draft_share": 0.6328
+      },
+      "prefill": [
+        {
+          "size": 4000,
+          "prompt_tokens": 4134,
+          "ttft_s": 1.9867,
+          "tps": 2080.9,
+          "followup_s": [
+            0.0513,
+            0.0487,
+            0.0506
+          ],
+          "followup_median_s": 0.0506,
+          "followup_suffix_tps": 428.6
+        }
+      ],
+      "tool_calls": "pass",
+      "flags": [],
+      "invalid": []
+    },
+    "B2": {
+      "source": "d5589c4259b35a3bd5d5cc711b20975705118956",
+      "rc": 0,
+      "original_result_sha256": "3126adcb249ba05f31f145f58514734372fd24ce8c345f20068c31b9eabcf49b",
+      "decode": {
+        "median_tps": 132.57,
+        "runs_tps": [
+          130.54,
+          132.57,
+          135.31
+        ],
+        "median_accepted_draft_tps": 84.67,
+        "median_accepted_draft_share": 0.6387
+      },
+      "decode_greedy": {
+        "median_tps": 141.22,
+        "runs_tps": [
+          143.13,
+          141.22,
+          131.52
+        ],
+        "median_accepted_draft_tps": 92.67,
+        "median_accepted_draft_share": 0.6562
+      },
+      "prefill": [
+        {
+          "size": 4000,
+          "prompt_tokens": 4131,
+          "ttft_s": 1.9584,
+          "tps": 2109.3,
+          "followup_s": [
+            0.0531,
+            0.0593,
+            0.0533
+          ],
+          "followup_median_s": 0.0533,
+          "followup_suffix_tps": 414.5
+        }
+      ],
+      "tool_calls": "pass",
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.4635)"
+      ],
+      "invalid": []
+    }
+  },
+  "limitations": [
+    "Unequal request nonces/histories; not matched-input performance.",
+    "B1 sampled and greedy median rates are lower than A1; B2 has a repetition flag. All per-run values are retained; unequal inputs do not establish the cause or universal no-regression.",
+    "Prefill/cache text not byte-compared."
+  ],
+  "qualification_addendum": "Fixed-request ABAB and both HTTP arms have now completed; see LOCAL-FIXED.json and LOCAL-HTTP.json. Original native flags/rates are unchanged."
+}

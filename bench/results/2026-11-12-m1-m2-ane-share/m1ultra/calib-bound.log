@@ -1,0 +1,18 @@
+[kapitsa] read 15.13 GB of weights in 828 ms (18.3 GB/s)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k64_w12_m32_n64 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 12 ms
+[kapitsa] prewarmed 96 prefill pipelines in 14 ms
+[kapitsa] loaded /Users/ec2-user/.cache/kapitsa/models/qwen3.8-27b-4bit: 64 layers, dense, 15.1 GB mapped in 1071 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: no calibration for Apple M1 Ultra (run ane_calib) and no default share; GPU only
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k64_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+ane_calib --wave: Apple M1 Ultra, macOS 25G332, 2048-row prefill chunks, 1 reps (median)
+GPU alone: 7136 ms per chunk (287.0 tok/s)
+30 units: 6071 ms per chunk (337.4 tok/s, 1.18x the GPU alone); build 13.5 s
+32 units: 6230 ms per chunk (328.7 tok/s, 1.15x the GPU alone); build 14.8 s
+[kapitsa] NI_ANE: Neural Engine split unavailable (ANE compile failed: Error Domain=com.apple.appleneuralengine.compiler Code=1 "_ANECompiler : ANECCompile() FAILED" UserInfo={NSLocalizedDescription=_ANECompiler : ANECCompile() FAILED, NSUnderlyingError=0x88b0e4db0 {Error Domain=com.apple.appleneuralengine.compiler Code=1 "ANECCompile(/var/folders/lr/r001x7rs11b40qqw5k415yf40000gn/C/nace-infer-ane/31a7e18a398499d3/) FAILED: err=(
+    CompilationFailure
+)" UserInfo={NSLocalizedDescription=ANECCompile(/var/folders/lr/r001x7rs11b40qqw5k415yf40000gn/C/nace-infer-ane/31a7e18a398499d3/) FAILED: err=(
+    CompilationFailure
+)}}}); the GPU runs the prefill FFN alone
+best: 30 units, 6071 ms per 2048-row chunk vs 7136 GPU alone (1.18x)

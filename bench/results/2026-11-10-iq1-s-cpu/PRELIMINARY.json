@@ -1,0 +1,305 @@
+{
+  "kind": "Redacted derived CPU evidence, not raw logs. Private paths omitted; all timing samples retained.",
+  "source": {
+    "reference": "2d83bdbe028067c6c643a6527b6f5b63d411e24f",
+    "candidate": "ef11c72c7d16f44ada22d27a27a12f2a49a8d6fa",
+    "measurement_identity": "Standalone C++20 -O3 builds compiled before the production commit; quant.cpp content digests identify the measured source. These are not CLI inference measurements."
+  },
+  "setup": {
+    "chip": "M5 Pro",
+    "gpu_cores": 20,
+    "memory_GiB": 48,
+    "macos": "26.6.2",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "builds": {
+    "reference": {
+      "quant_cpp_sha256": "f09ffcfccefdb98365a8cdfd6e88fe3dc3bcb5436a729790eb663dcc0d117b59",
+      "driver_binary_sha256": "d79e86b60c1a54f588655d8f74ee4466abec9bf8a9a1f46d50b3569f3b45adb8"
+    },
+    "candidate": {
+      "quant_cpp_sha256": "a4202b49a4bbe87269d64148a8487c8388798a5f05026525aeeca36277d0f797",
+      "driver_binary_sha256": "408605c498974b6724bbcce54e6a36361f68b5023238d337ecfd24327f25a79a"
+    }
+  },
+  "driver_sha256": "0b110eba1c3b4fb64c19422d92a331d98a66e8ee387fb78efbea199bd6f595a6",
+  "stubs_sha256": "e03fc67f732fe0e2be5adf4d9880fad117619e556283d420ffcb68215bafe407",
+  "method": {
+    "rows": 1024,
+    "K": 1024,
+    "passes_per_leg": 16,
+    "order": [
+      "A1",
+      "B1",
+      "A2",
+      "B2"
+    ],
+    "output_bytes_compared_per_pass": 4194304,
+    "exclusive_gpu_lock": true,
+    "other_task_builds_and_GPU_runs_finished_before_measurements": true,
+    "claim": "CPU decoder row latency only; not import or inference speed. Warmup drift and all samples retained."
+  },
+  "synthetic": {
+    "input": {
+      "input_sha256": "eab6c52b94dfac1839f55bfa4d8d2e5c48992c38a7c8d00605decf55017c8f76",
+      "rows": 1024,
+      "K": 1024,
+      "bytes": 204800,
+      "source": "synthetic pattern byte[i]=(i*17+123)&255; each block half overwritten with 0x3555"
+    },
+    "legs": {
+      "A1": {
+        "ns_per_row": [
+          201.782227,
+          200.480469,
+          184.855469,
+          182.942383,
+          203.042969,
+          188.842773,
+          182.250977,
+          183.675781,
+          181.802734,
+          187.255859,
+          186.523438,
+          182.942383,
+          184.408203,
+          183.105469,
+          183.756836,
+          186.320312
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 184.631836
+      },
+      "B1": {
+        "ns_per_row": [
+          96.963867,
+          95.825195,
+          91.959961,
+          147.012695,
+          155.029297,
+          109.700195,
+          95.173828,
+          95.785156,
+          98.794922,
+          97.697266,
+          96.719727,
+          98.673828,
+          107.136719,
+          102.905273,
+          133.463867,
+          93.302734
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 98.185547
+      },
+      "A2": {
+        "ns_per_row": [
+          246.826172,
+          249.023438,
+          229.736328,
+          229.573242,
+          229.532227,
+          229.492188,
+          236.775391,
+          269.816406,
+          237.182617,
+          244.914062,
+          235.107422,
+          232.299805,
+          379.150391,
+          239.665039,
+          232.625,
+          247.029297
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 236.979004
+      },
+      "B2": {
+        "ns_per_row": [
+          88.378906,
+          83.700195,
+          85.164062,
+          85.286133,
+          124.023438,
+          87.077148,
+          91.918945,
+          96.191406,
+          128.78418,
+          83.374023,
+          87.321289,
+          83.251953,
+          88.09375,
+          90.657227,
+          88.704102,
+          92.041016
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 88.236328
+      }
+    },
+    "complete_output_bytes_equal": true
+  },
+  "model_rows": {
+    "repo": "Acnoryx/Airy",
+    "revision": "ba4ce94d5e7bcdd4997f4dbf6275848c99c7fbb5",
+    "filename": "gguf/Airy-0.8b-IQ1_S.gguf",
+    "file_bytes": 329943456,
+    "source_sha256": "8065a5ec831f74f8e38e12b219abb61aa564bf677b97c70cd049747bcda90711",
+    "architecture": "qwen35",
+    "IQ1_S_tensors": 153,
+    "tensor": "blk.0.attn_gate.weight",
+    "sample_sha256": "2677a86ec11247d9bf7be8fe1b7a3993c58b3d3a590a2f581e98541cf796ce74",
+    "legs": {
+      "A1": {
+        "ns_per_row": [
+          348.185547,
+          349.040039,
+          364.665039,
+          344.400391,
+          355.549805,
+          343.586914,
+          355.793945,
+          362.019531,
+          345.458984,
+          310.22168,
+          305.908203,
+          312.214844,
+          308.268555,
+          310.954102,
+          308.430664,
+          306.4375
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 343.9936525
+      },
+      "B1": {
+        "ns_per_row": [
+          115.31543,
+          113.40332,
+          106.729492,
+          113.729492,
+          107.217773,
+          109.944336,
+          112.751953,
+          105.306641,
+          106.892578,
+          108.724609,
+          116.333008,
+          99.203125,
+          98.591797,
+          98.428711,
+          100.911133,
+          98.429688
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 107.05517549999999
+      },
+      "A2": {
+        "ns_per_row": [
+          225.341797,
+          227.579102,
+          215.901367,
+          215.860352,
+          223.835938,
+          221.598633,
+          215.942383,
+          208.618164,
+          206.094727,
+          208.700195,
+          211.995117,
+          205.606445,
+          206.90918,
+          205.851562,
+          205.850586,
+          217.692383
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 213.92773449999999
+      },
+      "B2": {
+        "ns_per_row": [
+          87.524414,
+          85.774414,
+          85.246094,
+          89.314453,
+          82.519531,
+          84.838867,
+          81.90918,
+          89.152344,
+          85.245117,
+          81.542969,
+          82.641602,
+          82.316406,
+          85.042969,
+          88.867188,
+          85.81543,
+          81.950195
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 85.144043
+      }
+    },
+    "complete_output_bytes_equal": true
+  },
+  "checks": {
+    "oracle_cases_per_binary": 1597642,
+    "reference": "PASS",
+    "candidate": "PASS",
+    "UBSan": "PASS",
+    "guard_pages": "PASS",
+    "corrupted_grid_index_mutant": "rejected as expected",
+    "integrated_Release_build": "PASS",
+    "vk_cpu_tests_passed": 23,
+    "vk_cpu_tests_failed": 0,
+    "prek_all_files": "PASS",
+    "diff_check": "PASS"
+  },
+  "not_verified": [
+    "Full-model import and GPU output gate",
+    "Second chip setup",
+    "Import or whole-inference speedup",
+    "ASan",
+    "Non-AArch64 execution",
+    "Other model families"
+  ]
+}

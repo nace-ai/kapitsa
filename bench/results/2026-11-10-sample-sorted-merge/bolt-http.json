@@ -1,0 +1,253 @@
+{
+  "evidence_kind": "redacted derived evidence, not an original execution log",
+  "source_records": [
+    {
+      "record": "bolt-http-analysis.private.json",
+      "sha256": "33cd751b8e20c8e8fad0fab4acd4cc6c1c4b3cbf04c01588ba34dcd80854c15a"
+    },
+    {
+      "record": "bolt-http/A1-http-suite.log",
+      "sha256": "fe483d95ff82d9785df0bd7fcdc325ef24be7a6d3065c6442e492dcfcf526746"
+    },
+    {
+      "record": "bolt-http/B1-http-suite.log",
+      "sha256": "2462f51a2c4b082cf338e837169e8e1780489eb363b54bfca324c5e7ac81fff2"
+    }
+  ],
+  "data": {
+    "at": "2026-11-10T19:56:05.732453+00:00",
+    "scope": "12 actual 512-token sampled HTTP requests; complete request and content+reasoning JSON bytes compared literally per K across ABAB. Throughput uses first/last streamed chunks, not token timestamps.",
+    "sampling": {
+      "temperature": 0.7,
+      "top_p": 0.95,
+      "seed": 42,
+      "spec": 0
+    },
+    "http_suite": {
+      "A1": {
+        "receipt": {
+          "rc": 1,
+          "test_sha256": "b6c121bf587ed00526299cef2e57bac298c5d115abde3fec304126d8b68da75f"
+        },
+        "summary": [
+          "FAIL main slot survives side request  {\"prompt_tokens\": 514, \"completion_tokens\": 18, \"total_tokens\": 532, \"prompt_tokens_details\": {\"cached_tokens\": 0}, \"kapitsa\": {\"prefill_ms\": 1349.5, \"kflash\": {\"source\": \"none\", \"cycles\": 17}}}",
+          "FAIL one-offs keep the conversation in progress  {\"prompt_tokens\": 277, \"completion_tokens\": 29, \"total_tokens\": 306, \"prompt_tokens_details\": {\"cached_tokens\": 0}, \"kapitsa\": {\"prefill_ms\": 721.4, \"kflash\": {\"source\": \"none\", \"cycles\": 28}}}",
+          "FAIL a side request sent beside a first request does not evict it  {\"prompt_tokens\": 655, \"completion_tokens\": 14, \"total_tokens\": 669, \"prompt_tokens_details\": {\"cached_tokens\": 0}, \"kapitsa\": {\"prefill_ms\": 1553.4, \"kflash\": {\"source\": \"none\", \"cycles\": 13}}}",
+          "FAILED: 3"
+        ],
+        "counts": {
+          "PASS": 51,
+          "FAIL": 3,
+          "SKIP": 1
+        },
+        "skips": [
+          "SKIP in flight together: a 2K-token request sent during a long reply finishes first (--slots 1)"
+        ],
+        "failures": [
+          "FAIL main slot survives side request  {\"prompt_tokens\": 514, \"completion_tokens\": 18, \"total_tokens\": 532, \"prompt_tokens_details\": {\"cached_tokens\": 0}, \"kapitsa\": {\"prefill_ms\": 1349.5, \"kflash\": {\"source\": \"none\", \"cycles\": 17}}}",
+          "FAIL one-offs keep the conversation in progress  {\"prompt_tokens\": 277, \"completion_tokens\": 29, \"total_tokens\": 306, \"prompt_tokens_details\": {\"cached_tokens\": 0}, \"kapitsa\": {\"prefill_ms\": 721.4, \"kflash\": {\"source\": \"none\", \"cycles\": 28}}}",
+          "FAIL a side request sent beside a first request does not evict it  {\"prompt_tokens\": 655, \"completion_tokens\": 14, \"total_tokens\": 669, \"prompt_tokens_details\": {\"cached_tokens\": 0}, \"kapitsa\": {\"prefill_ms\": 1553.4, \"kflash\": {\"source\": \"none\", \"cycles\": 13}}}"
+        ]
+      },
+      "B1": {
+        "receipt": {
+          "rc": 1,
+          "test_sha256": "b6c121bf587ed00526299cef2e57bac298c5d115abde3fec304126d8b68da75f"
+        },
+        "summary": [
+          "FAIL main slot survives side request  {\"prompt_tokens\": 538, \"completion_tokens\": 16, \"total_tokens\": 554, \"prompt_tokens_details\": {\"cached_tokens\": 0}, \"kapitsa\": {\"prefill_ms\": 1376.9, \"kflash\": {\"source\": \"none\", \"cycles\": 15}}}",
+          "FAIL one-offs keep the conversation in progress  {\"prompt_tokens\": 277, \"completion_tokens\": 29, \"total_tokens\": 306, \"prompt_tokens_details\": {\"cached_tokens\": 0}, \"kapitsa\": {\"prefill_ms\": 720.8, \"kflash\": {\"source\": \"none\", \"cycles\": 28}}}",
+          "FAIL a side request sent beside a first request does not evict it  {\"prompt_tokens\": 655, \"completion_tokens\": 14, \"total_tokens\": 669, \"prompt_tokens_details\": {\"cached_tokens\": 0}, \"kapitsa\": {\"prefill_ms\": 1562.8, \"kflash\": {\"source\": \"none\", \"cycles\": 13}}}",
+          "FAILED: 3"
+        ],
+        "counts": {
+          "PASS": 51,
+          "FAIL": 3,
+          "SKIP": 1
+        },
+        "skips": [
+          "SKIP in flight together: a 2K-token request sent during a long reply finishes first (--slots 1)"
+        ],
+        "failures": [
+          "FAIL main slot survives side request  {\"prompt_tokens\": 538, \"completion_tokens\": 16, \"total_tokens\": 554, \"prompt_tokens_details\": {\"cached_tokens\": 0}, \"kapitsa\": {\"prefill_ms\": 1376.9, \"kflash\": {\"source\": \"none\", \"cycles\": 15}}}",
+          "FAIL one-offs keep the conversation in progress  {\"prompt_tokens\": 277, \"completion_tokens\": 29, \"total_tokens\": 306, \"prompt_tokens_details\": {\"cached_tokens\": 0}, \"kapitsa\": {\"prefill_ms\": 720.8, \"kflash\": {\"source\": \"none\", \"cycles\": 28}}}",
+          "FAIL a side request sent beside a first request does not evict it  {\"prompt_tokens\": 655, \"completion_tokens\": 14, \"total_tokens\": 669, \"prompt_tokens_details\": {\"cached_tokens\": 0}, \"kapitsa\": {\"prefill_ms\": 1562.8, \"kflash\": {\"source\": \"none\", \"cycles\": 13}}}"
+        ]
+      }
+    },
+    "results": [
+      {
+        "top_k": 8,
+        "request_literal_equal": true,
+        "output_literal_equal": true,
+        "output_bytes": 2510,
+        "request_sha256": "c5de75b2a3219852a93f3df1c04d9221513f14f896d6f0a1ae0c42171cccd7c9",
+        "output_sha256": "787c5146a4db1804679dca7508659b678a8821e05f7f60873817367d8cef596e",
+        "decode_tps_delta_pct": 0.3190442148514938,
+        "runs": [
+          {
+            "label": "A1",
+            "tokens": 512,
+            "finish": "length",
+            "ttft_s": 0.41796029200486373,
+            "decode_tps": 47.49260389199282,
+            "wall_s": 11.198766667002928,
+            "request_sha256": "c5de75b2a3219852a93f3df1c04d9221513f14f896d6f0a1ae0c42171cccd7c9",
+            "sha256": "787c5146a4db1804679dca7508659b678a8821e05f7f60873817367d8cef596e",
+            "binary_sha256": "f84c5f429bf45de6a34515c9c4b512b56bac1af3e1dab80b7a16644ed49abc9b"
+          },
+          {
+            "label": "B1",
+            "tokens": 512,
+            "finish": "length",
+            "ttft_s": 0.4113950840110192,
+            "decode_tps": 47.66390455448206,
+            "wall_s": 11.153415334003512,
+            "request_sha256": "c5de75b2a3219852a93f3df1c04d9221513f14f896d6f0a1ae0c42171cccd7c9",
+            "sha256": "787c5146a4db1804679dca7508659b678a8821e05f7f60873817367d8cef596e",
+            "binary_sha256": "2fb07ae2931964a4560f7a1ac60831d0b2b8cf368786601d9241fafa68979919"
+          },
+          {
+            "label": "A2",
+            "tokens": 512,
+            "finish": "length",
+            "ttft_s": 0.41161450000072364,
+            "decode_tps": 47.32550760569559,
+            "wall_s": 11.230378917010967,
+            "request_sha256": "c5de75b2a3219852a93f3df1c04d9221513f14f896d6f0a1ae0c42171cccd7c9",
+            "sha256": "787c5146a4db1804679dca7508659b678a8821e05f7f60873817367d8cef596e",
+            "binary_sha256": "f84c5f429bf45de6a34515c9c4b512b56bac1af3e1dab80b7a16644ed49abc9b"
+          },
+          {
+            "label": "B2",
+            "tokens": 512,
+            "finish": "length",
+            "ttft_s": 0.4149418750021141,
+            "decode_tps": 47.456718642571175,
+            "wall_s": 11.204215292003937,
+            "request_sha256": "c5de75b2a3219852a93f3df1c04d9221513f14f896d6f0a1ae0c42171cccd7c9",
+            "sha256": "787c5146a4db1804679dca7508659b678a8821e05f7f60873817367d8cef596e",
+            "binary_sha256": "2fb07ae2931964a4560f7a1ac60831d0b2b8cf368786601d9241fafa68979919"
+          }
+        ]
+      },
+      {
+        "top_k": 20,
+        "request_literal_equal": true,
+        "output_literal_equal": true,
+        "output_bytes": 2759,
+        "request_sha256": "692e24fff0afadff220c5b0d0832923c4b36695f45897dcbd8449ccde7185627",
+        "output_sha256": "a7c6014a3326086acfae9a88468ad1049903456b4f25f52a2039979c88ee11d7",
+        "decode_tps_delta_pct": -0.017516178283238926,
+        "runs": [
+          {
+            "label": "A1",
+            "tokens": 512,
+            "finish": "length",
+            "ttft_s": 0.047257416998036206,
+            "decode_tps": 47.63366116550144,
+            "wall_s": 10.7963191250019,
+            "request_sha256": "692e24fff0afadff220c5b0d0832923c4b36695f45897dcbd8449ccde7185627",
+            "sha256": "a7c6014a3326086acfae9a88468ad1049903456b4f25f52a2039979c88ee11d7",
+            "binary_sha256": "f84c5f429bf45de6a34515c9c4b512b56bac1af3e1dab80b7a16644ed49abc9b"
+          },
+          {
+            "label": "B1",
+            "tokens": 512,
+            "finish": "length",
+            "ttft_s": 0.046048667005379684,
+            "decode_tps": 47.63043369399446,
+            "wall_s": 10.795669667000766,
+            "request_sha256": "692e24fff0afadff220c5b0d0832923c4b36695f45897dcbd8449ccde7185627",
+            "sha256": "a7c6014a3326086acfae9a88468ad1049903456b4f25f52a2039979c88ee11d7",
+            "binary_sha256": "2fb07ae2931964a4560f7a1ac60831d0b2b8cf368786601d9241fafa68979919"
+          },
+          {
+            "label": "A2",
+            "tokens": 512,
+            "finish": "length",
+            "ttft_s": 0.04631729099492077,
+            "decode_tps": 47.486188657591285,
+            "wall_s": 10.828587208001409,
+            "request_sha256": "692e24fff0afadff220c5b0d0832923c4b36695f45897dcbd8449ccde7185627",
+            "sha256": "a7c6014a3326086acfae9a88468ad1049903456b4f25f52a2039979c88ee11d7",
+            "binary_sha256": "f84c5f429bf45de6a34515c9c4b512b56bac1af3e1dab80b7a16644ed49abc9b"
+          },
+          {
+            "label": "B2",
+            "tokens": 512,
+            "finish": "length",
+            "ttft_s": 0.04649062499811407,
+            "decode_tps": 47.4727547666205,
+            "wall_s": 10.831721166003263,
+            "request_sha256": "692e24fff0afadff220c5b0d0832923c4b36695f45897dcbd8449ccde7185627",
+            "sha256": "a7c6014a3326086acfae9a88468ad1049903456b4f25f52a2039979c88ee11d7",
+            "binary_sha256": "2fb07ae2931964a4560f7a1ac60831d0b2b8cf368786601d9241fafa68979919"
+          }
+        ]
+      },
+      {
+        "top_k": 32,
+        "request_literal_equal": true,
+        "output_literal_equal": true,
+        "output_bytes": 2759,
+        "request_sha256": "3aa8f35c70651ea4f566603adf006f8273fee807d0710757f05c5cd780ee1876",
+        "output_sha256": "a7c6014a3326086acfae9a88468ad1049903456b4f25f52a2039979c88ee11d7",
+        "decode_tps_delta_pct": -0.0684891824422551,
+        "runs": [
+          {
+            "label": "A1",
+            "tokens": 512,
+            "finish": "length",
+            "ttft_s": 0.04549645799852442,
+            "decode_tps": 47.55928052578052,
+            "wall_s": 10.81116320801084,
+            "request_sha256": "3aa8f35c70651ea4f566603adf006f8273fee807d0710757f05c5cd780ee1876",
+            "sha256": "a7c6014a3326086acfae9a88468ad1049903456b4f25f52a2039979c88ee11d7",
+            "binary_sha256": "f84c5f429bf45de6a34515c9c4b512b56bac1af3e1dab80b7a16644ed49abc9b"
+          },
+          {
+            "label": "B1",
+            "tokens": 512,
+            "finish": "length",
+            "ttft_s": 0.04575487499823794,
+            "decode_tps": 47.40911084269144,
+            "wall_s": 10.84540270800062,
+            "request_sha256": "3aa8f35c70651ea4f566603adf006f8273fee807d0710757f05c5cd780ee1876",
+            "sha256": "a7c6014a3326086acfae9a88468ad1049903456b4f25f52a2039979c88ee11d7",
+            "binary_sha256": "2fb07ae2931964a4560f7a1ac60831d0b2b8cf368786601d9241fafa68979919"
+          },
+          {
+            "label": "A2",
+            "tokens": 512,
+            "finish": "length",
+            "ttft_s": 0.04638820799300447,
+            "decode_tps": 47.384878803018076,
+            "wall_s": 10.851703124993946,
+            "request_sha256": "3aa8f35c70651ea4f566603adf006f8273fee807d0710757f05c5cd780ee1876",
+            "sha256": "a7c6014a3326086acfae9a88468ad1049903456b4f25f52a2039979c88ee11d7",
+            "binary_sha256": "f84c5f429bf45de6a34515c9c4b512b56bac1af3e1dab80b7a16644ed49abc9b"
+          },
+          {
+            "label": "B2",
+            "tokens": 512,
+            "finish": "length",
+            "ttft_s": 0.04637937499501277,
+            "decode_tps": 47.4700220076062,
+            "wall_s": 10.832221874996321,
+            "request_sha256": "3aa8f35c70651ea4f566603adf006f8273fee807d0710757f05c5cd780ee1876",
+            "sha256": "a7c6014a3326086acfae9a88468ad1049903456b4f25f52a2039979c88ee11d7",
+            "binary_sha256": "2fb07ae2931964a4560f7a1ac60831d0b2b8cf368786601d9241fafa68979919"
+          }
+        ]
+      }
+    ],
+    "no_overall_speedup_claim": true,
+    "server_configuration": {
+      "slots": 1,
+      "context": 8192,
+      "disk_cache": 0,
+      "spec": 0
+    }
+  }
+}

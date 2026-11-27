@@ -1,0 +1,269 @@
+{
+  "evidence_kind": "Explicitly sanitized derived public report; original commands, receipts and logs remain privately verifiable",
+  "source_reference": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+  "source_candidate": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+  "environment": {
+    "chip": "M4 Pro",
+    "GPU_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "model": {
+    "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "filename": "Qwen_Qwen3.5-4B-IQ4_NL.gguf",
+    "bytes": 2775541728,
+    "sha256": "f007c3dbf67df668354d37ae13d87fd5789059704977959187e8342aec03b66f"
+  },
+  "flag_export": "Repetition warnings retain exact wording. Private execution warnings are explicitly sanitized to qualitative technical descriptions; original wording/counters/app metadata remain private.",
+  "legs": {
+    "A1": {
+      "arm": "reference",
+      "source": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+      "actual_rc": 0,
+      "decoding": "Default precise MTP depth4/KFlash",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "results": {
+        "decode": {
+          "median_tps": 119.69,
+          "runs_tps": [
+            123.34,
+            119.69,
+            117.45
+          ],
+          "median_accepted_draft_tps": 74.8,
+          "median_accepted_draft_share": 0.625
+        },
+        "decode_greedy": {
+          "median_tps": 126.67,
+          "runs_tps": [
+            126.67,
+            116.57,
+            130.13
+          ],
+          "median_accepted_draft_tps": 81.64,
+          "median_accepted_draft_share": 0.6445
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4134,
+            "ttft_s": 2.4098,
+            "tps": 1715.5,
+            "followup_s": [
+              0.0505,
+              0.0635,
+              0.0463
+            ],
+            "followup_median_s": 0.0505,
+            "followup_suffix_tps": 431.6
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.3887)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.4512)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.4694)",
+        "decode_greedy: Execution-quality warning; affected timing is not performance qualification.",
+        "decode_greedy: Execution contention warning; affected timing is not performance qualification."
+      ],
+      "invalid": [],
+      "flag_count": 5,
+      "timing_qualification": "Original native timings retained; execution-quality/repetition warnings mean these are not evidence of general inference gains or no regression."
+    },
+    "B1": {
+      "arm": "candidate",
+      "source": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+      "actual_rc": 0,
+      "decoding": "Default precise MTP depth4/KFlash",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "results": {
+        "decode": {
+          "median_tps": 125.25,
+          "runs_tps": [
+            100.48,
+            125.92,
+            125.25
+          ],
+          "median_accepted_draft_tps": 79.75,
+          "median_accepted_draft_share": 0.6348
+        },
+        "decode_greedy": {
+          "median_tps": 129.55,
+          "runs_tps": [
+            135.51,
+            129.55,
+            124.01
+          ],
+          "median_accepted_draft_tps": 83.25,
+          "median_accepted_draft_share": 0.6426
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4134,
+            "ttft_s": 2.3312,
+            "tps": 1773.3,
+            "followup_s": [
+              0.0449,
+              0.0623,
+              0.0461
+            ],
+            "followup_median_s": 0.0461,
+            "followup_suffix_tps": 433.6
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.4656)"
+      ],
+      "invalid": [],
+      "flag_count": 1,
+      "timing_qualification": "Original native timings retained; execution-quality/repetition warnings mean these are not evidence of general inference gains or no regression."
+    },
+    "A2": {
+      "arm": "reference",
+      "source": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+      "actual_rc": 0,
+      "decoding": "Default precise MTP depth4/KFlash",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "results": {
+        "decode": {
+          "median_tps": 126.94,
+          "runs_tps": [
+            120.64,
+            126.94,
+            134.54
+          ],
+          "median_accepted_draft_tps": 81.07,
+          "median_accepted_draft_share": 0.6387
+        },
+        "decode_greedy": {
+          "median_tps": 134.46,
+          "runs_tps": [
+            134.46,
+            136.36,
+            125.3
+          ],
+          "median_accepted_draft_tps": 89.82,
+          "median_accepted_draft_share": 0.6621
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4132,
+            "ttft_s": 2.3376,
+            "tps": 1767.6,
+            "followup_s": [
+              0.0418,
+              0.0513,
+              0.0639
+            ],
+            "followup_median_s": 0.0513,
+            "followup_suffix_tps": 526.6
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [
+        "decode_greedy: repetition loop (distinct-4-gram 0.4736)",
+        "decode_greedy: repetition loop (distinct-4-gram 0.4842)",
+        "decode: Execution-quality warning; affected timing is not performance qualification.",
+        "decode_greedy: Execution-quality warning; affected timing is not performance qualification."
+      ],
+      "invalid": [],
+      "flag_count": 4,
+      "timing_qualification": "Original native timings retained; execution-quality/repetition warnings mean these are not evidence of general inference gains or no regression."
+    },
+    "B2": {
+      "arm": "candidate",
+      "source": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+      "actual_rc": 0,
+      "decoding": "Default precise MTP depth4/KFlash",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "results": {
+        "decode": {
+          "median_tps": 119.1,
+          "runs_tps": [
+            119.1,
+            120.04,
+            112.76
+          ],
+          "median_accepted_draft_tps": 73.74,
+          "median_accepted_draft_share": 0.6191
+        },
+        "decode_greedy": {
+          "median_tps": 130.96,
+          "runs_tps": [
+            130.96,
+            135.6,
+            122.26
+          ],
+          "median_accepted_draft_tps": 85.18,
+          "median_accepted_draft_share": 0.6504
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4131,
+            "ttft_s": 2.3158,
+            "tps": 1783.8,
+            "followup_s": [
+              0.0474,
+              0.0518,
+              0.0419
+            ],
+            "followup_median_s": 0.0474,
+            "followup_suffix_tps": 477.7
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags": [
+        "decode_greedy: repetition loop (distinct-4-gram 0.4512)"
+      ],
+      "invalid": [],
+      "flag_count": 1,
+      "timing_qualification": "Original native timings retained; execution-quality/repetition warnings mean these are not evidence of general inference gains or no regression."
+    }
+  }
+}

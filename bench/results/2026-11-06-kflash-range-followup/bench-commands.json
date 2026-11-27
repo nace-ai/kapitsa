@@ -1,0 +1,66 @@
+[
+  {
+    "label": "bench-01-base",
+    "tag": "base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-research/build/kapitsa",
+      "bench",
+      "--model",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "--quick",
+      "--json",
+      "--out",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/bench-01-base.json"
+    ],
+    "exit": 0,
+    "actual_version": "kapitsa 0.2.31 (d65a0afa)"
+  },
+  {
+    "label": "bench-02-range",
+    "tag": "range",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-range-neon/build/kapitsa",
+      "bench",
+      "--model",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "--quick",
+      "--json",
+      "--out",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/bench-02-range.json"
+    ],
+    "exit": 0,
+    "actual_version": "kapitsa 0.2.31 (279ce236)"
+  },
+  {
+    "label": "bench-03-base",
+    "tag": "base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-research/build/kapitsa",
+      "bench",
+      "--model",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "--quick",
+      "--json",
+      "--out",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/bench-03-base.json"
+    ],
+    "exit": 0,
+    "actual_version": "kapitsa 0.2.31 (d65a0afa)"
+  },
+  {
+    "label": "bench-04-range",
+    "tag": "range",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-range-neon/build/kapitsa",
+      "bench",
+      "--model",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "--quick",
+      "--json",
+      "--out",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/bench-04-range.json"
+    ],
+    "exit": 0,
+    "actual_version": "kapitsa 0.2.31 (279ce236)"
+  }
+]

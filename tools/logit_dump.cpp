@@ -3,7 +3,12 @@
 //
 //   logit_dump <model_dir> <out_dir> [--paths step,verify,batch] [--from DIR] [--corpus FILE] [--windows N]
 //              [--rows W] [--chunk C] [--batch N] [--batch-rows R] [--loops N] [--loop-kv last-loop|per-loop]
-//              [--verify-rows N]
+//              [--verify-rows N] [--list-paths]
+//
+// --list-paths prints the paths this model has, comma-separated, and exits: step,verify,batch; step,verify for Flint
+// and Qwen3.8-Flash-Next's layout (under any model_type src/model/qwen4_config.cpp maps to it); step for Dory, and
+// step,verify with --loop-kv per-loop. It reads config.json alone (no GPU, no lock, no out_dir made):
+// tools/logit_floor.py takes its paths from it, so a model under a new name gets its layout's.
 //
 // A window is a cold request: its first L0 tokens are prefilled as the engine prefills a prompt (chunks of C rows,
 // default the engine's 2048, with the Neural Engine split wherever the model runs it), then W rows are fed
@@ -11,7 +16,7 @@
 // whole vocabulary are written. The paths (each from the same prefilled state: a checkpoint restored per path):
 //   step    plain decoding, one row per pass (what --spec 0 runs)
 //   verify  the single-stream verify of 8 rows. Qwen: KFlash's tree verify (the default) as DFlash2's cycle encodes it,
-//           the tree a chain of 8 live rows, the experts' row-independent numerics (NI_DFLASH_EXACT_MOE), the K/V
+//           the tree a chain of 8 live rows, the experts' row-independent numerics (NI_KFLASH_EXACT_MOE), the K/V
 //           compaction and the next cycle's fold of the accepted path; NI_KFLASH=0 the chain verify instead (DFlash2
 //           without trees). --verify-rows 16 or 32: the tree a chain of that many live rows, a wide tree verify (the
 //           27B's 16-row block: GPU-driven row tiles, attn8t_partial_tree_g6 on the M5); --rows a multiple of it, since
@@ -43,6 +48,7 @@
 #include "metal/gpu.h"
 #include "model/dory.h"
 #include "model/flint.h"
+#include "model/inkling2.h"
 #include "model/kflash_budget.h"
 #include "model/nemotron_h.h"
 #include "model/qwen35.h"
@@ -198,13 +204,14 @@ int main(int argc, char** argv) {
   if (argc < 3) {
     fprintf(stderr, "usage: logit_dump <model_dir> <out_dir> [--paths step,verify,batch] [--from DIR] [--corpus FILE] "
                     "[--windows N] [--rows W] [--chunk C] [--batch N] [--batch-rows R] [--loops N] [--spec N] "
-                    "[--loop-kv last-loop|per-loop] [--verify-rows N]\n");
+                    "[--loop-kv last-loop|per-loop] [--verify-rows N] [--list-paths]\n");
     return 1;
   }
   const std::string dir = argv[1], out = argv[2];
   std::string from, corpus = "bench/corpus.txt", paths_arg = "step,verify,batch", loop_kv;
   int n_windows = 8, rows = 24, chunk = 2048, members = 4, member_rows = 0, loops = 0, spec = -1;
   int tree_rows = kVerifyRows;  // --verify-rows: a Qwen KFlash tree's live rows (8, or a wide verify's 16 or 32)
+  bool list_paths = false;
   for (int i = 3; i < argc; ++i) {
     const std::string a = argv[i];
     auto next = [&]() -> std::string {
@@ -223,7 +230,19 @@ int main(int argc, char** argv) {
     else if (a == "--spec") spec = std::stoi(next());
     else if (a == "--loop-kv") loop_kv = next();
     else if (a == "--verify-rows") tree_rows = std::stoi(next());
+    else if (a == "--list-paths") list_paths = true;
     else fatal("unknown argument %s", a.c_str());
+  }
+  if (list_paths) {  // the classes below, in the order they are tried, from config.json alone
+    if (!std::filesystem::exists(dir + "/config.json")) fatal("%s: no config.json", dir.c_str());
+    LoopKv kv = LoopKv::last_loop;
+    if (!loop_kv.empty() && !parse_loop_kv(loop_kv, &kv)) fatal("--loop-kv: last-loop or per-loop");
+    const char* has = Qwen4Exp::is_model(dir) || Flint::is_model(dir) ? "step,verify"
+                      : Inkling2::is_model(dir)                       ? "step"
+                      : Dory::is_model(dir) ? (kv == LoopKv::per_loop ? "step,verify" : "step")
+                                            : "step,verify,batch";
+    printf("%s\n", has);
+    return 0;
   }
   const std::vector<std::string> paths = split(paths_arg, ',');
   for (const auto& p : paths)
@@ -270,6 +289,7 @@ int main(int argc, char** argv) {
   Qwen4Exp* fn = nullptr;  // Qwen3.8-Flash-Next (a Qwen35 too: q is set)
   NemotronH* nh = nullptr;
   Dory* dory = nullptr;
+  Inkling2* ink2 = nullptr;
   Flint* fl = nullptr;
   if (Qwen4Exp::is_model(dir)) {
     // the default memory budget, not the engine's (which sets its slots' state and KV apart): a Q2_0 pack's expert
@@ -289,6 +309,10 @@ int main(int argc, char** argv) {
     auto m = std::make_unique<Dory>(dir, chunk, loops, kv);
     dory = m.get();
     model = std::move(m);
+  } else if (Inkling2::is_model(dir)) {
+    auto m = std::make_unique<Inkling2>(dir, chunk);
+    ink2 = m.get();
+    model = std::move(m);
   } else if (NemotronH::is_model(dir)) {
     auto m = std::make_unique<NemotronH>(dir, chunk);
     nh = m.get();
@@ -301,20 +325,20 @@ int main(int argc, char** argv) {
   Model& m = *model;
   const int V = m.vocab();
   auto logits = [&]() -> const float* {
-    return q ? q->logits() : nh ? nh->logits() : fl ? fl->logits() : dory->logits();
+    return q ? q->logits() : nh ? nh->logits() : fl ? fl->logits() : ink2 ? ink2->logits() : dory->logits();
   };
   auto begin_pass = [&] { return m.grouped_passes() ? g.begin_grouped() : g.begin(); };
   const SamplingParams sp;  // greedy: no pass samples a token the next row reads
 
-  // KFlash, as DFlash2 decides it (NI_KFLASH, NI_DFLASH_TREE; the verify must have a tree path), and the experts'
-  // row-independent numerics its tree verifies run with (NI_DFLASH_EXACT_MOE)
+  // KFlash, as DFlash2 decides it (NI_KFLASH, NI_KFLASH_TREE; the verify must have a tree path), and the experts'
+  // row-independent numerics its tree verifies run with (NI_KFLASH_EXACT_MOE)
   bool tree = false, moe_exact = true;
   if (q) {
     const char* kf = getenv("NI_KFLASH");
-    const char* dt = getenv("NI_DFLASH_TREE");
+    const char* dt = kenv("TREE");
     tree = dt && *dt ? atoi(dt) != 0 : !(kf && *kf) || atoi(kf) != 0;
     tree = tree && q->block_drafter_ok() && q->verify_tree_ok();
-    if (const char* v = getenv("NI_DFLASH_EXACT_MOE")) moe_exact = atoi(v) != 0;
+    if (const char* v = kenv("EXACT_MOE")) moe_exact = atoi(v) != 0;
   }
   if (tree_rows > kVerifyRows) {  // a wide tree verify: the verify buffers and every sequence's tape that wide
     if (!q || fn || !tree || !q->verify_wide_ok())
@@ -327,8 +351,11 @@ int main(int argc, char** argv) {
     if (p == "batch" && dory) fatal("Dory decodes one request at a time: no batch path");
     if (p == "batch" && fl) fatal("Flint decodes one request at a time: no batch path");
     if (p == "batch" && fn) fatal("Qwen3.8-Flash-Next decodes one request at a time: no batch path");
+    if (p == "batch" && ink2) fatal("Inkling2 decodes one request at a time: no batch path");
     if (p == "verify" && dory && dory->kv_mode() != LoopKv::per_loop)
       fatal("Dory verifies drafts only with per-loop KV (--loop-kv per-loop); with last-loop KV it decodes step by step");
+    if (p == "verify" && ink2)
+      fatal("Inkling2 verifies no drafts in this build; --paths step only");
   }
   // rows a window feeds on a path: its scored rows, up to whole passes
   // Flint: NI_FLINT_VERIFY_ROWS=R (2-8) verifies R rows a pass instead of 8 (which kernels a pass takes is
@@ -561,7 +588,8 @@ int main(int argc, char** argv) {
   using bench::ojson;
   ojson env = ojson::object();
   for (char** e = environ; *e; ++e)
-    if (!strncmp(*e, "NI_", 3) && strncmp(*e, "NI_LOCK_HELD=", 13) && strncmp(*e, "NI_LOG=", 7)) {
+    if ((!strncmp(*e, "NI_", 3) || !strncmp(*e, "KAPITSA_PROFILE=", 16)) &&
+        strncmp(*e, "NI_LOCK_HELD=", 13) && strncmp(*e, "NI_LOG=", 7)) {
       const std::string kv = *e;
       env[kv.substr(0, kv.find('='))] = kv.substr(kv.find('=') + 1);
     }
@@ -583,6 +611,8 @@ int main(int argc, char** argv) {
                            : "8 rows";
     if (o.name == "verify" && q && tree && q->config().moe) meta["moe_exact"] = moe_exact;
     if (o.name == "batch") meta["batch"] = {{"members", members}, {"rows", member_rows}};
+    const Profile selected = ink2 ? ink2->effective_profile() : profile();
+    meta["profile"] = selected == Profile::kFast ? "fast" : "precise";
     meta["prefill_chunk"] = m.prefill_chunk();
     meta["ane"] = {{"chunks", ane.chunks}, {"evals", ane.evals}, {"reruns", ane.reruns}};
     if (dory) meta["dory"] = {{"loops", dory->default_loops()}, {"kv", loop_kv_name(dory->kv_mode())}};
@@ -595,6 +625,7 @@ int main(int argc, char** argv) {
     meta["macos"] = mac.macos;
     meta["date"] = now_iso();
     meta["env"] = env;
+    meta["disk_format"] = m.disk_format();
     std::ofstream(o.dir + "/meta.json") << meta.dump(2) << "\n";
     printf("%-6s %ld rows: next-token NLL %.4f, top-1 = next token %.4f -> %s\n", o.name.c_str(), o.done,
            o.done ? o.nll / double(o.done) : 0.0, o.done ? double(o.hits) / double(o.done) : 0.0, o.dir.c_str());

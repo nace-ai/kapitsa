@@ -1,0 +1,6 @@
+{
+  "full_suite": "One failure retained: APFS clone space reporting",
+  "targeted_reproduction": "Both assertions passed on first fresh targeted run",
+  "source_identity": "hub/fetch.cpp, server/main.cpp and test_server.py identical to upstream base",
+  "decision": "Continue independent GPU evidence; do not claim all CPU checks passed"
+}

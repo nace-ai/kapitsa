@@ -1,0 +1,21 @@
+Redacted derived transcript: paths and private machine details omitted; numerical report below is unchanged. Source identities are recorded in M5-MODEL-VALIDATION.json.
+
+prefill: 8 records (mxfp4-9b)
+  reference: 0.2.33 (888a5679), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.33 (9ade91e2), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+batch: 192 records (mxfp4-9b)
+  reference: 0.2.33 (888a5679), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.33 (9ade91e2), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+  PASS (flags)
+step: 192 records (mxfp4-9b)
+  reference: 0.2.33 (888a5679), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.33 (9ade91e2), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+  PASS (flags)
+verify: 192 records (mxfp4-9b)
+  reference: 0.2.33 (888a5679), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.33 (9ade91e2), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+  PASS (flags)

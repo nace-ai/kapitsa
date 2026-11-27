@@ -1,0 +1,12 @@
+quiet, load and AC: 5 rounds of 10
+  run2 round 0: old 107.3 tok/s 21.528 ms, new 108.3 tok/s 21.362 ms, foreign GPU mean 0.13% / 0.0%
+  run2 round 1: old 108.1 tok/s 21.393 ms, new 109.3 tok/s 21.164 ms, foreign GPU mean 0.0% / 0.13%
+  run2 round 2: old 108.3 tok/s 21.353 ms, new 109.1 tok/s 21.191 ms, foreign GPU mean 0.0% / 0.0%
+  run3 round 4: old 108.2 tok/s 21.369 ms, new 109.4 tok/s 21.142 ms, foreign GPU mean 0.05% / 0.0%
+  run3 round 5: old 108.2 tok/s 21.373 ms, new 109.5 tok/s 21.109 ms, foreign GPU mean 0.0% / 0.07%
+  median tok_s: old 108.200, new 109.300 (+1.02%)
+  median gpu_ms_cycle: old 21.373, new 21.164 (-0.98%)
+also 0.0% foreign GPU: 1 rounds of 10
+  run2 round 2: old 108.3 tok/s 21.353 ms, new 109.1 tok/s 21.191 ms, foreign GPU mean 0.0% / 0.0%
+  median tok_s: old 108.300, new 109.100 (+0.74%)
+  median gpu_ms_cycle: old 21.353, new 21.191 (-0.76%)

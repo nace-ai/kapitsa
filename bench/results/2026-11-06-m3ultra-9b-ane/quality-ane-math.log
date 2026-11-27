@@ -1,0 +1,12 @@
+[kapitsa] read 5.04 GB of weights in 767 ms (6.6 GB/s)
+[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 13 ms
+[kapitsa] prewarmed 93 prefill pipelines in 19 ms
+[kapitsa] loaded /Users/bytedance/kapitsa-qmm9b-models-20261105/hub/models/qwen3.5-9b-4bit: 32 layers, dense, 5.0 GB mapped in 865 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: 4096-hidden FFN on the Neural Engine (2048-channel input segments; W8A8 changes prefill numerics; NI_ANE=0 disables)
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 16/24 units (8192 channels; GPU 4096) from the NI_ANE_UNITS, chunks >= 512 rows; row scales 2 ms, program cached 1 ms + load 276 ms (13 functions, MIL 106 KB); 272.4 MB Metal; ready in 0.3 s
+[kapitsa] NI_ANE: startup check 2.00% of the ANE's part from the GPU alone (2 functions, 295 ms)
+{"seq": "@bench/quality/ids_qwen35/math.txt", "positions": 1023, "kl_mean": 0.100894, "kl_median": 0.0121287, "kl_p95": 0.278149, "kl_p99": 1.68491, "kl_max": 8.99967, "kl_topk_mean": 0.100894, "top1_agree": 0.91984, "ppl": 3.10860, "ppl_ref": 3.00402, "exact": false}
+{"seq": "total", "positions": 1023, "kl_mean": 0.100894, "kl_median": 0.0121287, "kl_p95": 0.278149, "kl_p99": 1.68491, "kl_max": 8.99967, "kl_topk_mean": 0.100894, "top1_agree": 0.91984, "ppl": 3.10860, "ppl_ref": 3.00402, "exact": false}

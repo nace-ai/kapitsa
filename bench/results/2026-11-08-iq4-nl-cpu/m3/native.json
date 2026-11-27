@@ -1,0 +1,584 @@
+{
+  "configuration": {
+    "chip": "Apple M3 Ultra",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)",
+    "gpu_cores": 60,
+    "macos": "26.4.1",
+    "memory_capacity_gib": 96
+  },
+  "identities": {
+    "candidate": {
+      "actual_target_flag_checks": {
+        "kapitsa": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "logit_dump": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "naceinfer": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "ni_run": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        }
+      },
+      "binaries_sha256": {
+        "kapitsa": "c8e2ec53db372a42b324146ef4d5610c8bacb3258600b63e4eae264fa6353a5b",
+        "libnaceinfer.a": "ae5caff18c89062c7fc49caa79fc15c809d69a5e3b696f368759c74a84aa9f74",
+        "logit_dump": "ae62631bd12486eff599c9253c406f25b1f8d036988f17925476293c2e9c028f",
+        "ni_run": "6b642bc0f894111a82d1e226ab3471acf019cb0b1990e2efe91a3b4f233e4e2a"
+      },
+      "production_source": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+      "source_inventory_sha256": "78e539b5136bc3fd1d5b84be040f0068c18128728c4a6b2051a3da502d8431ad",
+      "source_sha256_by_path": {
+        "CMakeLists.txt": "cb13b0114fe217f9ca17049af75e400b3113c53563b1ce31050dba3d8e45ad5a",
+        "src/bench/bench.h": "dd385ffed63f7a484da25b3ad8a1a03b6865733547cacc2286becf780b7e1fa9",
+        "src/bench/protocol.cpp": "5df1e8795e4b8c501da2304adcef425cbe617fab3f7c5ceb3b0eb4202792a274",
+        "src/bench/system.mm": "148db0401fd8050cac9409b5eeb07d69ab1452ee1999eaf0cb86a155aa7e4602",
+        "src/gguf/gguf.h": "8ebf4e52ee69b8cafc19f57a62ff4b89bd1435194f421cf3424a1fa2e506660e",
+        "src/gguf/import.cpp": "6ec9edd8dbc1444537a4ad14df62bba015ca715725c43737847240e73ac69c62",
+        "src/gguf/quant.cpp": "bc56773f295da3541b603b01ae9407a07371276e19095740969087327003b3a8",
+        "tools/iq_layout_test.cpp": "d85855b019eae100b267d90ea2207147279e2652b0e405d4984028d0e30c8f07",
+        "tools/logit_compare.py": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+        "tools/logit_dump.cpp": "6225e655e828b426ebab4959bf5e6857bbff537c1b0d733385351afa5530e0c4"
+      }
+    },
+    "reference": {
+      "actual_target_flag_checks": {
+        "kapitsa": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "logit_dump": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "naceinfer": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "ni_run": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        }
+      },
+      "binaries_sha256": {
+        "kapitsa": "994f06499086cca1de127d51b30dd5bb1d868ec1e0366536ed5d277245206065",
+        "libnaceinfer.a": "269f02149f2d819cc5ea148c369ac358993eeffba8387a3ae216d3494f1fe682",
+        "logit_dump": "5cb6981970527df44942d267ce1fb9c9de0d0194fb443e2e5a54ff5d94e7a191",
+        "ni_run": "e25b7d62d10f28918dbdb2f01933daee9e97e8fa5b4e93315af127829fccd862"
+      },
+      "production_source": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f",
+      "source_inventory_sha256": "e9ab6bb48b58ea72f11ecc9dd05cb7a51c5a689c5df761b7e8ea543d2b94d246",
+      "source_sha256_by_path": {
+        "CMakeLists.txt": "cb13b0114fe217f9ca17049af75e400b3113c53563b1ce31050dba3d8e45ad5a",
+        "src/bench/bench.h": "dd385ffed63f7a484da25b3ad8a1a03b6865733547cacc2286becf780b7e1fa9",
+        "src/bench/protocol.cpp": "5df1e8795e4b8c501da2304adcef425cbe617fab3f7c5ceb3b0eb4202792a274",
+        "src/bench/system.mm": "148db0401fd8050cac9409b5eeb07d69ab1452ee1999eaf0cb86a155aa7e4602",
+        "src/gguf/gguf.h": "8ebf4e52ee69b8cafc19f57a62ff4b89bd1435194f421cf3424a1fa2e506660e",
+        "src/gguf/import.cpp": "6ec9edd8dbc1444537a4ad14df62bba015ca715725c43737847240e73ac69c62",
+        "src/gguf/quant.cpp": "d33b66d3f1a4ef2089abbb3f03cb46fbab195afb95a8b73f1eb0e1f98a1e5035",
+        "tools/iq_layout_test.cpp": "ae40b21bd510e8437619485dbac0066cadd90503134cd901aca77dffdb0d5bf7",
+        "tools/logit_compare.py": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+        "tools/logit_dump.cpp": "6225e655e828b426ebab4959bf5e6857bbff537c1b0d733385351afa5530e0c4"
+      }
+    }
+  },
+  "leg_order": [
+    "A1",
+    "B1",
+    "A2",
+    "B2"
+  ],
+  "legs": [
+    {
+      "arm": "reference",
+      "flags": [
+        "decode_greedy: repetition loop (distinct-4-gram 0.4256)"
+      ],
+      "invalid": [],
+      "label": "A1",
+      "output_gate_has_flags": true,
+      "per_run_execution": [
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.6,
+          "tps_printed": 237.68
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.6,
+          "tps_printed": 235.46
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.6,
+          "tps_printed": 256.82
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.0,
+          "tps_printed": 237.35
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.0,
+          "tps_printed": 268.9
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.0,
+          "tps_printed": 237.87
+        }
+      ],
+      "phase": {
+        "execution_finished_utc": "2026-11-08T12:09:52.743094+00:00",
+        "execution_started_utc": "2026-11-08T12:09:01.080730+00:00",
+        "rc": 0,
+        "status": "COMPLETED"
+      },
+      "production_source": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_runs": 3,
+        "decode_tokens": 512,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "raw_flag_count": 1,
+      "raw_invalid_count": 0,
+      "results": {
+        "decode": {
+          "median_accepted_draft_share": 0.6309,
+          "median_accepted_draft_tps": 149.94,
+          "median_tps": 237.68,
+          "runs_tps": [
+            237.68,
+            235.46,
+            256.82
+          ]
+        },
+        "decode_greedy": {
+          "median_accepted_draft_share": 0.627,
+          "median_accepted_draft_tps": 149.14,
+          "median_tps": 237.87,
+          "runs_tps": [
+            237.35,
+            268.9,
+            237.87
+          ]
+        },
+        "prefill": [
+          {
+            "followup_median_s": 0.0362,
+            "followup_s": [
+              0.033,
+              0.0464,
+              0.0362
+            ],
+            "followup_suffix_tps": 581.7,
+            "prompt_tokens": 4134,
+            "size": 4000,
+            "tps": 1976.0,
+            "ttft_s": 2.0921
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "runtime_model": {
+        "decoding": "MTP",
+        "decoding_detail": "MTP speculative decoding depth 4, KFlash (MTP)",
+        "drafter_kind": "MTP",
+        "precision": "5-bit (mixed)"
+      },
+      "version": {
+        "commit": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f",
+        "version": "0.2.31"
+      }
+    },
+    {
+      "arm": "candidate",
+      "flags": [
+        "decode_greedy: repetition loop (distinct-4-gram 0.4694)"
+      ],
+      "invalid": [],
+      "label": "B1",
+      "output_gate_has_flags": true,
+      "per_run_execution": [
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.6,
+          "tps_printed": 233.38
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.6,
+          "tps_printed": 232.68
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.6,
+          "tps_printed": 279.2
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.0,
+          "tps_printed": 235.76
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.0,
+          "tps_printed": 258.99
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.0,
+          "tps_printed": 243.94
+        }
+      ],
+      "phase": {
+        "execution_finished_utc": "2026-11-08T12:10:42.543966+00:00",
+        "execution_started_utc": "2026-11-08T12:09:52.762797+00:00",
+        "rc": 0,
+        "status": "COMPLETED"
+      },
+      "production_source": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_runs": 3,
+        "decode_tokens": 512,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "raw_flag_count": 1,
+      "raw_invalid_count": 0,
+      "results": {
+        "decode": {
+          "median_accepted_draft_share": 0.627,
+          "median_accepted_draft_tps": 145.88,
+          "median_tps": 233.38,
+          "runs_tps": [
+            233.38,
+            232.68,
+            279.2
+          ]
+        },
+        "decode_greedy": {
+          "median_accepted_draft_share": 0.6367,
+          "median_accepted_draft_tps": 155.32,
+          "median_tps": 243.94,
+          "runs_tps": [
+            235.76,
+            258.99,
+            243.94
+          ]
+        },
+        "prefill": [
+          {
+            "followup_median_s": 0.0414,
+            "followup_s": [
+              0.0344,
+              0.0441,
+              0.0414
+            ],
+            "followup_suffix_tps": 612.2,
+            "prompt_tokens": 4134,
+            "size": 4000,
+            "tps": 1972.6,
+            "ttft_s": 2.0957
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "runtime_model": {
+        "decoding": "MTP",
+        "decoding_detail": "MTP speculative decoding depth 4, KFlash (MTP)",
+        "drafter_kind": "MTP",
+        "precision": "5-bit (mixed)"
+      },
+      "version": {
+        "commit": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+        "version": "0.2.31"
+      }
+    },
+    {
+      "arm": "reference",
+      "flags": [],
+      "invalid": [],
+      "label": "A2",
+      "output_gate_has_flags": false,
+      "per_run_execution": [
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.6,
+          "tps_printed": 269.75
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.6,
+          "tps_printed": 235.85
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.6,
+          "tps_printed": 258.84
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.0,
+          "tps_printed": 247.76
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.0,
+          "tps_printed": 237.65
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.0,
+          "tps_printed": 261.51
+        }
+      ],
+      "phase": {
+        "execution_finished_utc": "2026-11-08T12:11:31.933794+00:00",
+        "execution_started_utc": "2026-11-08T12:10:42.565052+00:00",
+        "rc": 0,
+        "status": "COMPLETED"
+      },
+      "production_source": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_runs": 3,
+        "decode_tokens": 512,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "raw_flag_count": 0,
+      "raw_invalid_count": 0,
+      "results": {
+        "decode": {
+          "median_accepted_draft_share": 0.6543,
+          "median_accepted_draft_tps": 169.36,
+          "median_tps": 258.84,
+          "runs_tps": [
+            269.75,
+            235.85,
+            258.84
+          ]
+        },
+        "decode_greedy": {
+          "median_accepted_draft_share": 0.6465,
+          "median_accepted_draft_tps": 160.17,
+          "median_tps": 247.76,
+          "runs_tps": [
+            247.76,
+            237.65,
+            261.51
+          ]
+        },
+        "prefill": [
+          {
+            "followup_median_s": 0.0399,
+            "followup_s": [
+              0.0344,
+              0.0468,
+              0.0399
+            ],
+            "followup_suffix_tps": 577.3,
+            "prompt_tokens": 4133,
+            "size": 4000,
+            "tps": 1976.1,
+            "ttft_s": 2.0915
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "runtime_model": {
+        "decoding": "MTP",
+        "decoding_detail": "MTP speculative decoding depth 4, KFlash (MTP)",
+        "drafter_kind": "MTP",
+        "precision": "5-bit (mixed)"
+      },
+      "version": {
+        "commit": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f",
+        "version": "0.2.31"
+      }
+    },
+    {
+      "arm": "candidate",
+      "flags": [
+        "decode_greedy: repetition loop (distinct-4-gram 0.4736)"
+      ],
+      "invalid": [],
+      "label": "B2",
+      "output_gate_has_flags": true,
+      "per_run_execution": [
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.6,
+          "tps_printed": 227.58
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.6,
+          "tps_printed": 251.63
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.6,
+          "tps_printed": 243.74
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.0,
+          "tps_printed": 244.27
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.0,
+          "tps_printed": 238.72
+        },
+        {
+          "completion_tokens": 512,
+          "finish_reason": "length",
+          "temperature": 0.0,
+          "tps_printed": 263.91
+        }
+      ],
+      "phase": {
+        "execution_finished_utc": "2026-11-08T12:12:21.458069+00:00",
+        "execution_started_utc": "2026-11-08T12:11:31.955999+00:00",
+        "rc": 0,
+        "status": "COMPLETED"
+      },
+      "production_source": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_runs": 3,
+        "decode_tokens": 512,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "raw_flag_count": 1,
+      "raw_invalid_count": 0,
+      "results": {
+        "decode": {
+          "median_accepted_draft_share": 0.6328,
+          "median_accepted_draft_tps": 154.24,
+          "median_tps": 243.74,
+          "runs_tps": [
+            227.58,
+            251.63,
+            243.74
+          ]
+        },
+        "decode_greedy": {
+          "median_accepted_draft_share": 0.6348,
+          "median_accepted_draft_tps": 155.06,
+          "median_tps": 244.27,
+          "runs_tps": [
+            244.27,
+            238.72,
+            263.91
+          ]
+        },
+        "prefill": [
+          {
+            "followup_median_s": 0.0395,
+            "followup_s": [
+              0.033,
+              0.0492,
+              0.0395
+            ],
+            "followup_suffix_tps": 548.4,
+            "prompt_tokens": 4133,
+            "size": 4000,
+            "tps": 1973.2,
+            "ttft_s": 2.0945
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "runtime_model": {
+        "decoding": "MTP",
+        "decoding_detail": "MTP speculative decoding depth 4, KFlash (MTP)",
+        "drafter_kind": "MTP",
+        "precision": "5-bit (mixed)"
+      },
+      "version": {
+        "commit": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+        "version": "0.2.31"
+      }
+    }
+  ],
+  "model": {
+    "expected_vocab": 248320,
+    "filename": "Qwen_Qwen3.5-4B-IQ4_NL.gguf",
+    "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "source_bytes": 2775541728,
+    "source_sha256": "f007c3dbf67df668354d37ae13d87fd5789059704977959187e8342aec03b66f"
+  },
+  "production_source": {
+    "candidate": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+    "reference": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f"
+  },
+  "record_kind": "Explicitly sanitized derived evidence; not raw execution logs",
+  "scope": "Native random requests have no matched-input/full-content gate here. Preserve every rc, run and flag. Component CPU speed is not inference speed; no automatic Ready inference. Private condition details are omitted without clearing failed gates.",
+  "setup": "M3"
+}

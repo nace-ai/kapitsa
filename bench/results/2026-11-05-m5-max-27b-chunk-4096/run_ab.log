@@ -1,0 +1,30 @@
+4k round 1 old 'AC Power' reps 3095.65 3091.18  4 split chunks
+4k round 1 new 'AC Power' reps 2953.05 2995.83  2 split chunks
+4k round 2 new 'AC Power' reps 2955.57 2970.18  2 split chunks
+4k round 2 old 'AC Power' reps 3080.57 3082.37  4 split chunks
+4k round 3 old 'AC Power' reps 3084.12 3083.18  4 split chunks
+4k round 3 new 'AC Power' reps 2954.17 2989.83  2 split chunks
+4k round 4 new 'AC Power' reps 2954.79 2962.02  2 split chunks
+4k round 4 old 'AC Power' reps 3081.16 3087.19  4 split chunks
+8k round 1 old 'AC Power' reps 6195.59 6655.88  8 split chunks
+8k round 1 new 'AC Power' reps 5923.05 6656.68  4 split chunks
+8k round 2 new 'AC Power' reps 5923.37 6628.19  4 split chunks
+8k round 2 old 'AC Power' reps 6212.51 6621.97  8 split chunks
+== output check qwen3.8-27b-4bit-mtp
+compare exit 0
+prefill: 8 records (qwen3.8-27b-4bit-mtp)
+  bitwise identical rows 7 of 8; max |logit diff| 0.1884
+  KL mean 5.632e-07 median 0.000e+00 p99 4.190e-06 max 4.506e-06; top-2 margin change up to 0.002943
+batch: 192 records (qwen3.8-27b-4bit-mtp)
+  bitwise identical rows 168 of 192; max |logit diff| 0.3631
+  KL mean 3.105e-05 median 0.000e+00 p99 4.465e-05 max 5.821e-03; top-2 margin change up to 0.2162
+  PASS (kapitsa-wr/tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json)
+step: 192 records (qwen3.8-27b-4bit-mtp)
+  bitwise identical rows 168 of 192; max |logit diff| 0.3651
+  KL mean 3.098e-05 median 0.000e+00 p99 4.319e-05 max 5.820e-03; top-2 margin change up to 0.2162
+  PASS (kapitsa-wr/tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json)
+verify: 192 records (qwen3.8-27b-4bit-mtp)
+  bitwise identical rows 168 of 192; max |logit diff| 0.3628
+  KL mean 3.041e-05 median 0.000e+00 p99 2.169e-05 max 5.742e-03; top-2 margin change up to 0.2146
+  PASS (kapitsa-wr/tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json)
+done

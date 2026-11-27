@@ -1,0 +1,35 @@
+PASS pin: upstream Splash
+PASS pin: full commit hash
+PASS pin: release_binary_sha256
+PASS pin: release_metallib_sha256
+PASS pin: release_host_step_metallib_sha256
+PASS pin: kflash_binary_sha256
+PASS patches: present
+PASS patches: numbered 0001.. in order
+PASS 0001-runtime-kernels.patch: license header
+PASS 0001-runtime-kernels.patch: changes files
+PASS 0001-runtime-kernels.patch: runtime/metal/MetalBackend.mm marked modified
+PASS 0002-h1-gate-replay.patch: license header
+PASS 0002-h1-gate-replay.patch: changes files
+PASS 0002-h1-gate-replay.patch: runtime/metal/CommandGraph.hpp marked modified
+PASS 0002-h1-gate-replay.patch: runtime/metal/MetalBackend.hpp marked modified
+PASS 0002-h1-gate-replay.patch: runtime/metal/MetalBackend.mm marked modified
+PASS 0002-h1-gate-replay.patch: runtime/model/ExpertStore.cpp marked modified
+PASS 0002-h1-gate-replay.patch: runtime/model/Runtime.cpp marked modified
+PASS gen: internals pragma first
+PASS gen: 8 staging pointers coherent
+PASS gen: stops before gguf_repack
+PASS gen: H1 kernels appended
+PASS gen: refuses 7 pointers
+PASS gen: refuses no gguf_repack
+PASS out: mine becomes an empty build dir
+PASS out: empty becomes an empty build dir
+PASS out: new becomes an empty build dir
+PASS out: refuses a directory that is not a build
+PASS out: refuses a file
+PASS out: the refused directory's files survive
+PASS install: another Splash release is left alone, not built
+PASS install: says why KFlash was not built
+PASS install: the pinned release builds KFlash, its files untouched
+PASS apply: every patch applies to the pinned Splash
+all passed

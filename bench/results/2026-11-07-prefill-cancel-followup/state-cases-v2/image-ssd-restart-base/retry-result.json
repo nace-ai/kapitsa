@@ -1,0 +1,77 @@
+{
+  "name": "retry",
+  "progress": [
+    {
+      "total": 15289,
+      "cache": 0,
+      "processed": 0,
+      "time_ms": 0
+    },
+    {
+      "total": 15289,
+      "cache": 0,
+      "processed": 1912,
+      "time_ms": 831
+    },
+    {
+      "total": 15289,
+      "cache": 0,
+      "processed": 3823,
+      "time_ms": 1731
+    },
+    {
+      "total": 15289,
+      "cache": 0,
+      "processed": 5734,
+      "time_ms": 2631
+    },
+    {
+      "total": 15289,
+      "cache": 0,
+      "processed": 7645,
+      "time_ms": 3532
+    },
+    {
+      "total": 15289,
+      "cache": 0,
+      "processed": 9556,
+      "time_ms": 4489
+    },
+    {
+      "total": 15289,
+      "cache": 0,
+      "processed": 11467,
+      "time_ms": 5510
+    },
+    {
+      "total": 15289,
+      "cache": 0,
+      "processed": 13378,
+      "time_ms": 6530
+    },
+    {
+      "total": 15289,
+      "cache": 0,
+      "processed": 15289,
+      "time_ms": 7579
+    }
+  ],
+  "text": "The `XcodecSemanticEncoderBlock` class defines a module that applies a series of residual units followed by a convolutional layer to transform the input feature map with",
+  "reasoning": "",
+  "cancelled": false,
+  "usage": {
+    "prompt_tokens": 15289,
+    "completion_tokens": 32,
+    "total_tokens": 15321,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "kapitsa": {
+      "kflash": {
+        "source": "DFlash2",
+        "cycles": 11
+      }
+    }
+  },
+  "finish_reason": "length"
+}

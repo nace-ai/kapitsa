@@ -1,0 +1,30 @@
+{
+  "format": "Privacy-filtered derived summaries, not raw execution logs.",
+  "source_reference": "66a5f3bc473df9af8b72ded9090c3a8acc16a43e",
+  "source_candidate": "90e10efce8462ede4c756ca77ccdb1510f4e9faf",
+  "configure_build_version_rc": 0,
+  "vk_CPU": {
+    "entries": 22,
+    "rc": 0
+  },
+  "supplemental_native": {
+    "passed": 18,
+    "failed": 1,
+    "failure": "load_error_test: unchanged raw-U8 page-cache threshold assertion; this fixture does not call pack_codes."
+  },
+  "six_supplemental_scripts_rc": 0,
+  "prek_rc": 0,
+  "diff_check_rc": 0,
+  "cleanup_rc": 0,
+  "load_error_control": {
+    "source": "66a5f3bc473df9af8b72ded9090c3a8acc16a43e",
+    "build_rc": 0,
+    "reference_execution_count": 1,
+    "reference_binary_sha256": "8cc10dc42bb81bf195e5eea8a27255740a2d48a9203e83c46583308ffaec3bf5",
+    "candidate_binary_sha256": "8a56caf86e8e7c4c05f757f10d5c0c4e1327aa4086b96e45313c4b65f1cd7bbe",
+    "same_executable": false,
+    "reference_rc": 1,
+    "reference_log_sha256": "fe6355097eb33fde5161f97575d100d78a107b350a6abf84df862c5a2f97b6e2"
+  },
+  "baseline_failure": "A genuinely separate source build and one reference execution also failed the same unchanged raw-U8 page-cache assertion. Binary hashes differ. This is not an all-pass or same-executable control claim."
+}

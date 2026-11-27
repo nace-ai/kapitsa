@@ -1,0 +1,116 @@
+{
+  "record_kind": "Privacy-filtered derived complete-file audit",
+  "configuration": {
+    "chip": "Apple M4 Pro",
+    "gpu_cores": 20,
+    "memory_gb": 48,
+    "macos": "15.7.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)"
+  },
+  "rows_each": 584,
+  "finite_float32_each": 76546048,
+  "literal_complete_bytes_equal": true,
+  "recorded_inputs_equal": true,
+  "paths": {
+    "prefill": {
+      "all_finite": true,
+      "literal_complete_bytes_equal": true,
+      "input_bytes_equal": true,
+      "arms": [
+        {
+          "arm": "reference",
+          "rows": 8,
+          "elements": 1048576,
+          "finite_elements": 1048576,
+          "logits_sha256": "d0471d165500e0680b79874c5ff600183adca3b3c7f0c8d6b017b9e300cab659",
+          "sequences_sha256": "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+          "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d"
+        },
+        {
+          "arm": "candidate",
+          "rows": 8,
+          "elements": 1048576,
+          "finite_elements": 1048576,
+          "logits_sha256": "d0471d165500e0680b79874c5ff600183adca3b3c7f0c8d6b017b9e300cab659",
+          "sequences_sha256": "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+          "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d"
+        }
+      ]
+    },
+    "step": {
+      "all_finite": true,
+      "literal_complete_bytes_equal": true,
+      "input_bytes_equal": true,
+      "arms": [
+        {
+          "arm": "reference",
+          "rows": 192,
+          "elements": 25165824,
+          "finite_elements": 25165824,
+          "logits_sha256": "6e0017eab8bc3de5346e4cef83f49754485cc19779975b493a58d0b9c745459a",
+          "sequences_sha256": "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc"
+        },
+        {
+          "arm": "candidate",
+          "rows": 192,
+          "elements": 25165824,
+          "finite_elements": 25165824,
+          "logits_sha256": "6e0017eab8bc3de5346e4cef83f49754485cc19779975b493a58d0b9c745459a",
+          "sequences_sha256": "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc"
+        }
+      ]
+    },
+    "verify": {
+      "all_finite": true,
+      "literal_complete_bytes_equal": true,
+      "input_bytes_equal": true,
+      "arms": [
+        {
+          "arm": "reference",
+          "rows": 192,
+          "elements": 25165824,
+          "finite_elements": 25165824,
+          "logits_sha256": "7e735a7fec3b23dfe70eb6da672c4d19c6473128c9a497f8a49965a6d4cad958",
+          "sequences_sha256": "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc"
+        },
+        {
+          "arm": "candidate",
+          "rows": 192,
+          "elements": 25165824,
+          "finite_elements": 25165824,
+          "logits_sha256": "7e735a7fec3b23dfe70eb6da672c4d19c6473128c9a497f8a49965a6d4cad958",
+          "sequences_sha256": "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc"
+        }
+      ]
+    },
+    "batch": {
+      "all_finite": true,
+      "literal_complete_bytes_equal": true,
+      "input_bytes_equal": true,
+      "arms": [
+        {
+          "arm": "reference",
+          "rows": 192,
+          "elements": 25165824,
+          "finite_elements": 25165824,
+          "logits_sha256": "7e735a7fec3b23dfe70eb6da672c4d19c6473128c9a497f8a49965a6d4cad958",
+          "sequences_sha256": "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc"
+        },
+        {
+          "arm": "candidate",
+          "rows": 192,
+          "elements": 25165824,
+          "finite_elements": 25165824,
+          "logits_sha256": "7e735a7fec3b23dfe70eb6da672c4d19c6473128c9a497f8a49965a6d4cad958",
+          "sequences_sha256": "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc"
+        }
+      ]
+    }
+  }
+}

@@ -84,6 +84,24 @@ struct Case {
 
 void schema_cases(std::vector<std::pair<std::string, std::shared_ptr<const Grammar>>>* grammars,
                   std::vector<std::pair<std::string, std::string>>* instances) {
+  // A compact schema can describe exponentially many paths to the same value.
+  // Repeated $refs must stay one alternative at each level before matching starts.
+  for (int levels : {0, 4, 12}) {
+    ojson schema{{"$ref", "#/$defs/a0"}, {"$defs", ojson::object()}};
+    for (int level = 0; level < levels; ++level) {
+      ojson alts = ojson::array();
+      for (int branch = 0; branch < 4; ++branch)
+        alts.push_back({{"$ref", "#/$defs/a" + std::to_string(level + 1)}});
+      schema["$defs"]["a" + std::to_string(level)] = {{"anyOf", alts}};
+    }
+    schema["$defs"]["a" + std::to_string(levels)] =
+        {{"anyOf", ojson::array({{{"const", "yes"}}, {{"const", "no"}}})}};
+    GrammarMatcher m(json_grammar(schema), nullptr);
+    check(feed_text(m, "\"yes\"") == Fed::kAccepted, "shared alternatives accept yes " + std::to_string(levels));
+    check(feed_text(m, "\"no\"") == Fed::kAccepted, "shared alternatives accept no " + std::to_string(levels));
+    check(feed_text(m, "\"maybe\"") == Fed::kRejected, "shared alternatives reject others " + std::to_string(levels));
+    check(feed_text(m, "\"y") == Fed::kOpen, "shared alternatives leave a valid prefix " + std::to_string(levels));
+  }
   const std::vector<Case> cases = {
       {"object, required, closed",
        R"({"type":"object","properties":{"name":{"type":"string"},"age":{"type":"integer"}},"required":["name","age"],
@@ -584,6 +602,56 @@ int main(int argc, char** argv) {
   schema_cases(&grammars, &instances);
   refused();
   tool_cases(&grammars, &instances);
+  {
+    // Duplicate-byte token IDs in a vocabulary: fill_mask must unmask every duplicate ID that advance() accepts,
+    // both in walk_thread (e.g. an enum / key) and in apply_bulk (free-text JSON string content and string exits).
+    char tmp[] = "/tmp/kapitsa-gram-dup-XXXXXX";
+    if (mkdtemp(tmp)) {
+      const std::string path = std::string(tmp) + "/tokenizer.json";
+      {
+        std::ofstream f(path);
+        f << R"({
+          "model": {
+            "type": "BPE",
+            "vocab": {
+              "\"": 0, "{": 1, "}": 2, ":": 3,
+              "?": 4, "\u20ac": 5,
+              "?\"": 6, "\u20ac\"": 7
+            },
+            "merges": []
+          },
+          "added_tokens": [
+            { "id": 8, "content": "<|im_end|>", "special": true }
+          ]
+        })";
+      }
+      Tokenizer dtok;
+      dtok.load(path);
+      unlink(path.c_str());
+      rmdir(tmp);
+      auto dtt = std::make_shared<TokenTable>(dtok, dtok.vocab_size(), std::vector<int>{8}, -1, -1);
+      auto check_all_match = [&](const GrammarMatcher& gm, const GrammarState& st, const char* label) {
+        std::vector<uint32_t> mask(size_t(dtt->words()), 0);
+        gm.fill_mask(st, mask.data());
+        bool ok = true;
+        for (int id = 0; id < dtok.vocab_size(); ++id) {
+          GrammarState copy = st;
+          const bool adv = gm.advance(copy, id);
+          const bool mbit = bit(mask, id);
+          if (adv != mbit) ok = false;
+        }
+        check(ok, label);
+      };
+      GrammarMatcher gm_str(json_grammar(J(R"({"type":"string","minLength":1,"maxLength":2})"), true), dtt);
+      GrammarState st_str = gm_str.start();
+      gm_str.advance(st_str, 0);  // opening '"' -> apply_bulk (stay and exit tokens)
+      check_all_match(gm_str, st_str, "duplicate-byte tokens: fill_mask matches advance() inside a JSON string (apply_bulk)");
+      GrammarMatcher gm_enum(json_grammar(J(R"({"enum":["?"]})"), true), dtt);
+      GrammarState st_enum = gm_enum.start();
+      gm_enum.advance(st_enum, 0);  // opening '"' -> walk_thread on literal '?'
+      check_all_match(gm_enum, st_enum, "duplicate-byte tokens: fill_mask matches advance() on a literal walk (walk_thread)");
+    }
+  }
   if (!model.empty()) mask_tests(model, quick, grammars, instances);
   else printf("(no tokenizer: the mask checks are skipped; pass a model folder)\n");
   printf("%d passed, %d failed\n", passes, fails);

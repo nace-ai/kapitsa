@@ -1,0 +1,9 @@
+step: 192 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (9cca6b0d), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.31 (9cca6b0d), prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"fast"}
+  bitwise identical rows 0 of 192; max |logit diff| 2.196
+  top-1 agreement 0.9948 (1 flip)
+  KL mean 2.579e-04 median 1.548e-05 p99 4.082e-03 max 5.957e-03; top-2 margin change up to 0.4375
+  next-token NLL change -8.253e-04 nats per record (candidate minus reference)
+    flip at sequence 0 prefix 3210: top-1 4211 -> 51319, reference margin 0.04509
+  PASS (flags)

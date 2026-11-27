@@ -1,0 +1,17 @@
+[ 83%] Built target naceinfer
+[ 83%] Building CXX object CMakeFiles/kapitsa.dir/src/server/main.cpp.o
+[ 86%] Building CXX object CMakeFiles/kapitsa.dir/src/server/native_execution.cpp.o
+[ 86%] Building CXX object CMakeFiles/kapitsa.dir/src/server/http_stream.cpp.o
+[ 86%] Building CXX object CMakeFiles/kapitsa.dir/src/server/launch.cpp.o
+[ 86%] Building CXX object CMakeFiles/kapitsa.dir/src/server/beam.cpp.o
+[ 86%] Building CXX object CMakeFiles/kapitsa.dir/src/server/ui.cpp.o
+[ 86%] Building CXX object CMakeFiles/kapitsa.dir/src/server/bench_cmd.cpp.o
+[ 90%] Building CXX object CMakeFiles/kapitsa.dir/src/server/picker.cpp.o
+[ 93%] Building CXX object CMakeFiles/kapitsa.dir/src/server/stage_cmd.cpp.o
+[ 93%] Building CXX object CMakeFiles/kapitsa.dir/src/server/route.cpp.o
+[ 96%] Building CXX object CMakeFiles/kapitsa.dir/generated/chat_page.cpp.o
+[ 96%] Building CXX object CMakeFiles/kapitsa.dir/src/server/update_cmd.cpp.o
+[ 96%] Building CXX object CMakeFiles/kapitsa.dir/src/server/cluster_cmd.cpp.o
+[ 96%] Building CXX object CMakeFiles/kapitsa.dir/src/server/pair.cpp.o
+[ 96%] Linking CXX executable kapitsa
+[100%] Built target kapitsa

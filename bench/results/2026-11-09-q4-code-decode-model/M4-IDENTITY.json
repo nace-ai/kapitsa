@@ -1,0 +1,336 @@
+{
+  "export": "Explicitly redacted derived evidence; not an original execution log. Private originals retained. Numeric results and source/binary identities unchanged.",
+  "environment": {
+    "chip": "M4 Pro",
+    "GPU_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "source_commits": {
+    "reference": "87c105238186beadb375805e47a89791a499319a",
+    "candidate": "5bcbe7e2069f55485473ba45755ab4c65a3c44c5"
+  },
+  "model": {
+    "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "filename": "Qwen_Qwen3.5-4B-Q4_0.gguf",
+    "source_bytes": 2776033248,
+    "source_sha256": "3e977de32dfb9377ff827f210091cce5d3c05c7b0f0b9b0c8005df7c0677a49b"
+  },
+  "sources": {
+    "reference": {
+      "commit": "87c105238186beadb375805e47a89791a499319a",
+      "bundle_sha256": "07c3eb9d19fb274f69e81784a03acdb0fdd73f9cdf3922b7ced3ff3240029905",
+      "source_sha256_by_path": {
+        "CMakeLists.txt": "03c1a4e63b1af4d1a77ab59891a87085cb9ff27de034bbe87826b57f7e42ed40",
+        "src/gguf/gguf.cpp": "c634b436b7b2d7aa10f42e1c7f455b4366b233c80f133210da43c20998557be7",
+        "src/gguf/import.cpp": "0ea72ec5ec03e0956dad5dc9f9c184a0b0bf46fc3dceca4d1328e1c00b925322",
+        "src/gguf/quant.cpp": "fcad7ef4387d68d333b60179ae429e3a2343fe4c56098c0a29f791271decd6f9",
+        "tools/logit_compare.py": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+        "tools/logit_dump.cpp": "6225e655e828b426ebab4959bf5e6857bbff537c1b0d733385351afa5530e0c4"
+      },
+      "source_inventory_sha256": "1918d9c55056259da9d2a9386b4709a044cf710d1e9ae8f5b628639104a9f3d5"
+    },
+    "candidate": {
+      "commit": "5bcbe7e2069f55485473ba45755ab4c65a3c44c5",
+      "bundle_sha256": "48683f7f172af5885c9a13de1b72bcd9447d62f40d78d2e5ca212ccec5402963",
+      "source_sha256_by_path": {
+        "CMakeLists.txt": "03c1a4e63b1af4d1a77ab59891a87085cb9ff27de034bbe87826b57f7e42ed40",
+        "src/gguf/gguf.cpp": "c634b436b7b2d7aa10f42e1c7f455b4366b233c80f133210da43c20998557be7",
+        "src/gguf/import.cpp": "0ea72ec5ec03e0956dad5dc9f9c184a0b0bf46fc3dceca4d1328e1c00b925322",
+        "src/gguf/quant.cpp": "af1f8764882734825250d16cfed412aa325cd12535de6345fd64b045b32da9e6",
+        "tools/logit_compare.py": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+        "tools/logit_dump.cpp": "6225e655e828b426ebab4959bf5e6857bbff537c1b0d733385351afa5530e0c4"
+      },
+      "source_inventory_sha256": "e7598a1ec47c3956ab6cd722db84e707b1a0baaef14517373b48e73d9bbf2642"
+    }
+  },
+  "builds": {
+    "reference": {
+      "binaries_sha256": {
+        "kapitsa": "274718ffc84992beae61eb614cd18ab70001935177ce2f698c4d9ad3bc0de3a4",
+        "logit_dump": "6775c85c42e045f9e13c2c1b4fcc8a76e1367dbb8937e0bb07cb0bd71dadecec",
+        "ni_run": "b2292b1fb8c87f43d1531965f0c4f0413df850b9b6c3aa2526bb4c4fbfb5b898",
+        "libnaceinfer.a": "1b11397cad680f976655725a15bd4bf734184cdcf1678b397e5244a5830a126a"
+      },
+      "compile_flags": {
+        "kapitsa": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "naceinfer": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "logit_dump": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "ni_run": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        }
+      }
+    },
+    "candidate": {
+      "binaries_sha256": {
+        "kapitsa": "fce519399c01e031c008b753835eac6d5f25a606d688321631c05211639b59e4",
+        "logit_dump": "571c9c0198af0ede61b786195457a919e90470707c0c77b226703625722a9394",
+        "ni_run": "dcc1c3504e9e54c80e69f79798df79bfce0ecea294140bc7d636f688175c0a76",
+        "libnaceinfer.a": "54313276be5a55a29967143959bbe19f9f267037991428185f53f1b94b46c27b"
+      },
+      "compile_flags": {
+        "kapitsa": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "naceinfer": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "logit_dump": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "ni_run": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        }
+      }
+    }
+  },
+  "fixed_driver": {
+    "source_sha256": "6b022a4791ac656f74ca84dc7b2090e7bfd34e5ad0e7a1c6bc1197e8adcd8310",
+    "binary_sha256": "929ec2b223cd1f9456e4030c1cb56eb43f4553e95adf65dea47452a94ed588f1",
+    "reference_library_sha256": "1b11397cad680f976655725a15bd4bf734184cdcf1678b397e5244a5830a126a"
+  },
+  "execution_steps": [
+    {
+      "label": "compiler_version",
+      "started_at": "2026-11-09T02:33:39.470322+00:00",
+      "finished_at": "2026-11-09T02:33:39.649306+00:00",
+      "rc": 0
+    },
+    {
+      "label": "cmake_version",
+      "started_at": "2026-11-09T02:33:39.651120+00:00",
+      "finished_at": "2026-11-09T02:33:39.664543+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_configure",
+      "started_at": "2026-11-09T02:34:02.915170+00:00",
+      "finished_at": "2026-11-09T02:34:05.126727+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_build",
+      "started_at": "2026-11-09T02:34:05.127708+00:00",
+      "finished_at": "2026-11-09T02:35:52.485231+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_version",
+      "started_at": "2026-11-09T02:35:52.486502+00:00",
+      "finished_at": "2026-11-09T02:35:52.940405+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_configure",
+      "started_at": "2026-11-09T02:35:58.437857+00:00",
+      "finished_at": "2026-11-09T02:36:00.242395+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_build",
+      "started_at": "2026-11-09T02:36:00.243362+00:00",
+      "finished_at": "2026-11-09T02:37:45.707936+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_version",
+      "started_at": "2026-11-09T02:37:45.709834+00:00",
+      "finished_at": "2026-11-09T02:37:46.322106+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_import_plan",
+      "started_at": "2026-11-09T02:37:59.398685+00:00",
+      "finished_at": "2026-11-09T02:37:59.586190+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_import_persistent_recovery",
+      "started_at": "2026-11-09T02:37:59.589425+00:00",
+      "finished_at": "2026-11-09T02:38:13.012484+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_import_plan",
+      "started_at": "2026-11-09T02:38:13.016594+00:00",
+      "finished_at": "2026-11-09T02:38:13.263664+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_import",
+      "started_at": "2026-11-09T02:38:13.266971+00:00",
+      "finished_at": "2026-11-09T02:38:17.553309+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_output",
+      "started_at": "2026-11-09T02:38:22.006431+00:00",
+      "finished_at": "2026-11-09T02:39:02.659033+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_output",
+      "started_at": "2026-11-09T02:39:02.663490+00:00",
+      "finished_at": "2026-11-09T02:39:16.846291+00:00",
+      "rc": 0
+    },
+    {
+      "label": "report_only",
+      "started_at": "2026-11-09T02:39:24.961904+00:00",
+      "finished_at": "2026-11-09T02:40:05.173608+00:00",
+      "rc": 0
+    },
+    {
+      "label": "strict_zero",
+      "started_at": "2026-11-09T02:40:05.177279+00:00",
+      "finished_at": "2026-11-09T02:40:44.340687+00:00",
+      "rc": 0
+    },
+    {
+      "label": "native_A1",
+      "started_at": "2026-11-09T02:40:44.345129+00:00",
+      "finished_at": "2026-11-09T02:41:45.178433+00:00",
+      "rc": 0
+    },
+    {
+      "label": "native_B1",
+      "started_at": "2026-11-09T02:41:45.182811+00:00",
+      "finished_at": "2026-11-09T02:42:44.297253+00:00",
+      "rc": 0
+    },
+    {
+      "label": "native_A2",
+      "started_at": "2026-11-09T02:42:44.305856+00:00",
+      "finished_at": "2026-11-09T02:44:25.746012+00:00",
+      "rc": 0
+    },
+    {
+      "label": "native_B2",
+      "started_at": "2026-11-09T02:44:25.750304+00:00",
+      "finished_at": "2026-11-09T02:45:39.455627+00:00",
+      "rc": 0
+    },
+    {
+      "label": "fixed_driver_compile",
+      "started_at": "2026-11-09T02:45:39.497604+00:00",
+      "finished_at": "2026-11-09T02:45:41.901703+00:00",
+      "rc": 0
+    },
+    {
+      "label": "fixed_A1",
+      "started_at": "2026-11-09T02:45:44.032415+00:00",
+      "finished_at": "2026-11-09T02:46:39.094231+00:00",
+      "rc": 0
+    },
+    {
+      "label": "fixed_B1",
+      "started_at": "2026-11-09T02:46:41.205101+00:00",
+      "finished_at": "2026-11-09T02:47:35.608597+00:00",
+      "rc": 0
+    },
+    {
+      "label": "fixed_A2",
+      "started_at": "2026-11-09T02:47:37.665856+00:00",
+      "finished_at": "2026-11-09T02:48:31.954187+00:00",
+      "rc": 0
+    },
+    {
+      "label": "fixed_B2",
+      "started_at": "2026-11-09T02:48:34.026073+00:00",
+      "finished_at": "2026-11-09T02:49:28.394584+00:00",
+      "rc": 0
+    },
+    {
+      "label": "http_reference",
+      "started_at": "2026-11-09T02:49:30.483065+00:00",
+      "finished_at": "2026-11-09T02:50:38.236027+00:00",
+      "rc": 0
+    },
+    {
+      "label": "http_candidate",
+      "started_at": "2026-11-09T02:50:40.336342+00:00",
+      "finished_at": "2026-11-09T02:51:48.298527+00:00",
+      "rc": 0
+    }
+  ],
+  "server_attempts": [
+    {
+      "arm": "reference",
+      "label": "fixed_A1",
+      "started_at": "2026-11-09T02:45:41.958283+00:00",
+      "ready": true,
+      "action_completed": true,
+      "stop_rc": -15,
+      "stopped_at": "2026-11-09T02:46:39.178800+00:00"
+    },
+    {
+      "arm": "candidate",
+      "label": "fixed_B1",
+      "started_at": "2026-11-09T02:46:39.182964+00:00",
+      "ready": true,
+      "action_completed": true,
+      "stop_rc": -15,
+      "stopped_at": "2026-11-09T02:47:35.647985+00:00"
+    },
+    {
+      "arm": "reference",
+      "label": "fixed_A2",
+      "started_at": "2026-11-09T02:47:35.650940+00:00",
+      "ready": true,
+      "action_completed": true,
+      "stop_rc": -15,
+      "stopped_at": "2026-11-09T02:48:31.998155+00:00"
+    },
+    {
+      "arm": "candidate",
+      "label": "fixed_B2",
+      "started_at": "2026-11-09T02:48:32.003679+00:00",
+      "ready": true,
+      "action_completed": true,
+      "stop_rc": -15,
+      "stopped_at": "2026-11-09T02:49:28.440185+00:00"
+    },
+    {
+      "arm": "reference",
+      "label": "http_reference",
+      "started_at": "2026-11-09T02:49:28.457379+00:00",
+      "ready": true,
+      "action_completed": true,
+      "stop_rc": -15,
+      "stopped_at": "2026-11-09T02:50:38.309179+00:00"
+    },
+    {
+      "arm": "candidate",
+      "label": "http_candidate",
+      "started_at": "2026-11-09T02:50:38.314621+00:00",
+      "ready": true,
+      "action_completed": true,
+      "stop_rc": -15,
+      "stopped_at": "2026-11-09T02:51:48.340167+00:00"
+    }
+  ]
+}

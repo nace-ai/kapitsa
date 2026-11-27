@@ -1,0 +1,243 @@
+{
+  "source": "5bcbe7e2069f55485473ba45755ab4c65a3c44c5",
+  "M4_CPU_recovery_and_supplemental": [
+    {
+      "label": "test_update",
+      "rc": 0,
+      "log_sha256": "9b9a86898e3c5bfe94f5ebd3cd647ce95e337fe658c78b7d84c553ede45e9088"
+    },
+    {
+      "label": "test_community",
+      "rc": 0,
+      "log_sha256": "f547496119c8eb033b2504d0ae7275a65463a4f8698979d3c4120005b8c0aeaa"
+    },
+    {
+      "label": "test_reasoning",
+      "rc": 0,
+      "log_sha256": "5337c77599baeb36271ee20a439bb0d96551d6444080701d8bb08ecb820f8f83"
+    },
+    {
+      "label": "test_pr_size",
+      "rc": 0,
+      "log_sha256": "4e7e9424dda1049899d94ffe56c0aee3f868aa651744de83992a5e942b5a1aff"
+    },
+    {
+      "label": "test_logit_compare",
+      "rc": 0,
+      "log_sha256": "7f990afdae8cc77060908ad6407381bfdf5823ce2fc3e102f7b2b9eeac11c4be"
+    },
+    {
+      "label": "test_sampled_tokens_harness",
+      "rc": 0,
+      "log_sha256": "feed0b5e010772e16f1b27425a316033ab868d3d5345a8fce2c7d8439bea541a"
+    },
+    {
+      "label": "test_structured",
+      "rc": 0,
+      "log_sha256": "68aec5689ef89ca3df491c64ccefb923648b3d68048292f379a3d395c82b9b71"
+    },
+    {
+      "label": "supp-execution_session_test",
+      "rc": 0,
+      "log_sha256": "86266c33c5218a1cacb9f5f927d4c8c603c11e5542685f449bf792484279daee"
+    },
+    {
+      "label": "supp-http_stream_test",
+      "rc": 0,
+      "log_sha256": "a88fe805fb01ece1cd8c9fdbe6ea2f520f94f3f136ebc9f3185b100ef182fc83"
+    },
+    {
+      "label": "supp-grammar_test",
+      "rc": 0,
+      "log_sha256": "e3b19f4d02e2b5ecacbc8bf60eaa42e5f51fd3d64eb45bf22d96fd151a5317e6"
+    },
+    {
+      "label": "supp-structured_check",
+      "rc": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "supp-drafter_attach_test",
+      "rc": 0,
+      "log_sha256": "dcdc8d9113bc2b03604b7e987a36f762018cf80b583ec8099614aac50185196a"
+    },
+    {
+      "label": "supp-exl3_test",
+      "rc": 0,
+      "log_sha256": "8401dcf05b63aaca6738e5d8749611a64877db65f7f7388cce880eb4732b4a29"
+    },
+    {
+      "label": "supp-device_profile_test",
+      "rc": 0,
+      "log_sha256": "2650b0ba4978026e3bdff341ab811fdcb413c33d3180e2709b468c6805e462dd"
+    },
+    {
+      "label": "supp-qwen4_config_test",
+      "rc": 0,
+      "log_sha256": "0ce0916c13d746720e554f8a581c903f8a9206e6e8b5c1abbf5ddfdd86f1959b"
+    },
+    {
+      "label": "supp-json_file_test",
+      "rc": 0,
+      "log_sha256": "49564f2a5948ff1e337d633705400dccd959296f2b25be76058599c6d584a120"
+    },
+    {
+      "label": "supp-affine_pack_test",
+      "rc": 0,
+      "log_sha256": "c3cdf19ecd57a29c901c97762e249e1575194554e928d96f6d476e5dcfc32884"
+    },
+    {
+      "label": "supp-systemone_test",
+      "rc": 0,
+      "log_sha256": "8f9b93c44c38a7e5fdbb032f38ba3712d5ed6233999b1edfd1881ea664774129"
+    },
+    {
+      "label": "supp-systemone_codes_probe_test",
+      "rc": 0,
+      "log_sha256": "32d68b2954bbd8968a32c7f4b9191664fe14c93fbd0620fd4330de2111d09ab0"
+    },
+    {
+      "label": "supp-splash_protocol_test",
+      "rc": 0,
+      "log_sha256": "3fa40c24c85a09c241a97cfbf56c57c7edb8cc89f9ef3f854bdbdb3430a11c3e"
+    },
+    {
+      "label": "supp-splash_runtime_test",
+      "rc": 0,
+      "log_sha256": "503279ce79d937e6a3da83a253509e8127331238c1b26764e317944dcacae642"
+    },
+    {
+      "label": "supp-splash_discover_test",
+      "rc": 0,
+      "log_sha256": "b4726c938fb73d394066a91e46e1c80a16900803de428f0bcf971b25edd306f8"
+    },
+    {
+      "label": "supp-splash_plan_test",
+      "rc": 0,
+      "log_sha256": "1d878bf581c25ae57bba793a32ebc1e89233d5b148bca4f510494310d837c4e6"
+    },
+    {
+      "label": "test_profile_gates",
+      "rc": 0,
+      "log_sha256": "9fb6034d779ecca08bc6902b14abd0e5aeaccc73dddac1e36363819a40bc79ad"
+    },
+    {
+      "label": "test_comment_gates",
+      "rc": 0,
+      "log_sha256": "1d57bc3fd634152d2901ce98fc55fa5205e360f1ef6dbe0088b0c51b69075d42"
+    },
+    {
+      "label": "test_drex_max",
+      "rc": 0,
+      "log_sha256": "3ad54c0919693524fd90fb2ca35020fb8c2ed5dc10c86eab631fcc831a658113"
+    },
+    {
+      "label": "test_logit_dump",
+      "rc": 0,
+      "log_sha256": "fec86b7e63e69c80c04811fe5bd5f7c0a5be2d11327905f2465b1dec7c523645"
+    },
+    {
+      "label": "test_systemone_codes_harness",
+      "rc": 0,
+      "log_sha256": "4e70362759f64997e27aef34d83428f6d3a54839fa308384312da38a5e4a0aa0"
+    },
+    {
+      "label": "prek",
+      "rc": 0,
+      "log_sha256": "9a2ba97865628f9f9ff946ac2be11d54b2357f187116aa3d9abc1e4480a405f5"
+    },
+    {
+      "label": "diff-check",
+      "rc": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "required-checks",
+      "rc": 0,
+      "log_sha256": "1c965cabb4e230d0e7dd3db19f1dfb58911d2822055197ca95debe70a54cc5b8"
+    },
+    {
+      "label": "cleanup",
+      "rc": 0,
+      "log_sha256": "bca369ef758342354c30b98acc6eec90b7bee56e1f731368c0e610b8b0b423e2"
+    }
+  ],
+  "M4_initial_build": [
+    {
+      "label": "dependency-preflight",
+      "rc": 0,
+      "log_sha256": "ed01b1557bd7a1e70f90d8838f38ae0bb6b8367122b3dca7e5935bafa440a45a"
+    },
+    {
+      "label": "configure",
+      "rc": 0,
+      "log_sha256": "eb0998f53530b7cc6955336ff6925f9f47a4d94aa8fccd4df75268bf7972ddbb"
+    },
+    {
+      "label": "build",
+      "rc": 0,
+      "log_sha256": "7ff8ad2e80fce52bb28424a7a05ce55138c334f8b241241b32963003d4e868e4"
+    },
+    {
+      "label": "version",
+      "rc": 0,
+      "log_sha256": "87754e13140699220c6071d2c6f80b7b03cfa65f6329b5c7ff1c81e9586797ad"
+    }
+  ],
+  "sanitizer_and_mutants": [
+    {
+      "label": "sanitizer-build",
+      "rc": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "sanitizer-run",
+      "rc": 0,
+      "log_sha256": "ea7a3647ed8dbf2fbbf5e3377d040cc747e765506d2f5c40df46c0941df78ec7"
+    },
+    {
+      "label": "mutant-mask-build",
+      "rc": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "mutant-mask-run",
+      "rc": 1,
+      "log_sha256": "49d40b6fa0952195fec035b24741c7a2ec02897a485bda0f01b241132595fc24"
+    },
+    {
+      "label": "mutant-shift-build",
+      "rc": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "mutant-shift-run",
+      "rc": 1,
+      "log_sha256": "49d40b6fa0952195fec035b24741c7a2ec02897a485bda0f01b241132595fc24"
+    },
+    {
+      "label": "mutant-alias-build",
+      "rc": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "mutant-alias-run",
+      "rc": 1,
+      "log_sha256": "c3a1be13be4a9cb672f01e9c5eb3ca016f4c97cf3189bbd0725fd246db2bae87"
+    }
+  ],
+  "not_verified": [
+    "non-arm64 execution",
+    "Q4_1 full-model import/output/performance",
+    "whole import or inference speedup",
+    "full-model validation at this CPU evidence checkpoint"
+  ],
+  "initial_CPU_suite": {
+    "passed": 15,
+    "failed_test_update_fixture_extraction": 1,
+    "not_executed_after_log_redirection_failed": 6,
+    "recovery": "The seven remaining checks completed under a new task temporary directory; the 15 earlier passes were not repeated. Original failures are retained privately."
+  },
+  "mutation_interpretation": "Mask, shift and removed-overlap-guard variants deliberately return1 and are rejected by the oracle; they are not candidate failures.",
+  "cases": "254194 Q4_0/Q4_1 cases: all half encodings, each byte value/lane, alignments, overlap with codes/scales/offsets, tails, rounding modes and protected pages."
+}

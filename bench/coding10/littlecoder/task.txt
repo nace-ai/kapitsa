@@ -1,0 +1,10 @@
+Implement the function `{entry_point}`.
+
+Stub file to implement:
+  - solution.py
+
+{problem statement / docstring}
+
+Write your solution to solution.py, then test it with run_python.
+When you believe the code is correct, stop calling tools and reply with the complete final solution in one
+```python block.

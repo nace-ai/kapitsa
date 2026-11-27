@@ -2,7 +2,8 @@
 // template's <tool_call><function=...><parameter=...> XML, turned into OpenAI-style deltas; with CallFormat::Glm, calls
 // in GLM-4.5's <tool_call>NAME<arg_key>...</arg_key><arg_value>...</arg_value></tool_call> (Flint's) instead. With
 // TextTags, tags that are no tokens of the vocabulary (Nemotron Nano 9B v2's <think> and <TOOLCALL>[...] JSON calls)
-// are matched in the decoded text.
+// are matched in the decoded text. A Qwen call whose <tool_call> the model left out (the 24 GB Macs' 35B:16gb) is
+// returned as a call when it is the whole reply (see Lead).
 #pragma once
 #include "engine/chat.h"
 #include "engine/tool_args.h"
@@ -25,8 +26,11 @@ inline std::string random_id(const char* prefix) {
 
 // The markup of a call between its <tool_call> and </tool_call>
 enum class CallFormat {
-  QwenXml,  // <function=NAME>\n<parameter=KEY>\nVALUE\n</parameter>\n</function> (Qwen3.5+'s templates)
-  Glm,      // NAME<arg_key>KEY</arg_key><arg_value>VALUE</arg_value>... (GLM-4.5's and 4.7's, Flint's)
+  QwenXml,   // <function=NAME>\n<parameter=KEY>\nVALUE\n</parameter>\n</function> (Qwen3.5+'s templates)
+  Glm,       // NAME<arg_key>KEY</arg_key><arg_value>VALUE</arg_value>... (GLM-4.5's and 4.7's, Flint's)
+  Hy4,       // Glm's markup with Hy4-flash's ":opensource" tags (<arg_key:opensource>...), every call of the turn inside
+             // <tool_calls:opensource>...</tool_calls:opensource>, whose two tokens the parser drops
+  Inkling2,  // <|message_model|>[name]<|content_thinking|>/<|content_text|>/<|content_invoke_tool_json|>...<|end_message|>
 };
 
 class OutputParser {
@@ -48,7 +52,23 @@ class OutputParser {
       : dec_(t), hdec_(t), tt_(text_tags), think_open_(think_open), think_close_(think_close), tc_open_(tc_open),
         tc_close_(tc_close), in_think_(start_in_think), parse_tools_(parse_tools),
         think_tools_(think_tools && parse_tools && !text_tags.any()), think_ws_(think_ws), fmt_(call_format),
-        tools_(tools) {}
+        tools_(tools) {
+    if (fmt_ == CallFormat::Inkling2) {
+      ink2_model_ = t.find("<|message_model|>");
+      ink2_text_ = t.find("<|content_text|>");
+      ink2_tool_text_ = t.find("<|content_invoke_tool_text|>");
+      ink2_tool_err_ = t.find("<|content_tool_error|>");
+      return;
+    }
+    // only Qwen's markup in tokens: a call there starts with <function=, which no other turn starts with
+    if (parse_tools_ && fmt_ == CallFormat::QwenXml && !tt_.any() && tools_.is_array() && !tools_.empty())
+      lead_ = Lead::kArmed;
+    if (fmt_ == CallFormat::Hy4) {
+      sfx_ = ":opensource";
+      wrap_open_ = t.find("<tool_calls:opensource>");
+      wrap_close_ = t.find("</tool_calls:opensource>");
+    }
+  }
 
   // Returns the delta produced by this token.
   ChatDelta push(int id) {
@@ -74,15 +94,40 @@ class OutputParser {
         replay(d);
       }
     }
+    if (lead_ == Lead::kHolding || lead_ == Lead::kClosed) {  // the reply is a call without its opener, or text
+      const std::string tail = dec_.flush();
+      const bool closed = lead_ == Lead::kClosed;
+      lead_ = Lead::kOff;
+      if (closed && ended && trim_ws(tail).empty()) {
+        d.tool_calls.push_back(std::move(lead_call_));
+        lead_buf_.clear();
+      } else {
+        emit(d, std::move(lead_buf_) + (closed ? "</tool_call>" + lead_ws_ : "") + tail);
+        lead_buf_.clear();
+        lead_ws_.clear();
+      }
+    }
     std::string s = dec_.flush();
     if (tt_.any()) {  // the text held as a possible tag's start is text after all
       text_push(d, s);
       s = pend_;
       pend_.clear();
     }
+    if (fmt_ == CallFormat::Inkling2) {
+      if (in_tool_) {
+        d.content += tool_buf_ + s;
+        in_tool_ = false;
+      } else if (!ink2_hdr_) {
+        (in_think_ ? d.reasoning : d.content) += s;
+      }
+      ink2_hdr_ = false;
+      ink2_hdr_buf_.clear();
+      held_.clear();
+      return d;
+    }
     if (in_tool_) {
       // unterminated tool call: surface as text
-      emit(d, (tt_.tc_open.empty() ? std::string("<tool_call>") : tt_.tc_open) + tool_buf_ + s);
+      emit(d, (tt_.tc_open.empty() ? "<tool_call" + sfx_ + ">" : tt_.tc_open) + tool_buf_ + s);
       in_tool_ = false;
     } else {
       emit(d, s);
@@ -96,6 +141,11 @@ class OutputParser {
 
  private:
   void push_plain(ChatDelta& d, int id) {
+    if (fmt_ == CallFormat::Inkling2) {
+      push_ink2(d, id);
+      return;
+    }
+    if ((lead_ == Lead::kHolding || lead_ == Lead::kClosed) && lead_token(d, id)) return;
     if (id == think_open_) {
       flush_text(d);
       in_think_ = true;
@@ -109,7 +159,14 @@ class OutputParser {
       skip_leading_ws_ = true;
       return;
     }
+    if (parse_tools_ && !in_think_ && !in_tool_ && (id == wrap_open_ || id == wrap_close_)) {  // Hy4's list of calls
+      flush_text(d);
+      held_.clear();
+      if (id == wrap_close_) skip_leading_ws_ = true;
+      return;
+    }
     if (parse_tools_ && id == tc_open_ && !in_think_) {
+      lead_ = Lead::kOff;  // the model writes its openers
       flush_text(d);
       held_.clear();
       in_tool_ = true;
@@ -121,7 +178,7 @@ class OutputParser {
       in_tool_ = false;
       ToolCall tc;
       if (parse_tool(tool_buf_, tc)) d.tool_calls.push_back(tc);
-      else emit(d, "<tool_call>" + tool_buf_ + "</tool_call>");
+      else emit(d, "<tool_call" + sfx_ + ">" + tool_buf_ + "</tool_call" + sfx_ + ">");
       skip_leading_ws_ = true;
       return;
     }
@@ -134,7 +191,82 @@ class OutputParser {
       tool_buf_ += s;
       return;
     }
+    if (lead_ == Lead::kArmed && !in_think_ && lead_text(d, s)) return;
     emit(d, s);
+  }
+
+  // A call whose <tool_call> the model never wrote (Qwen3.6-35B-A3B's UD-IQ2_XXS build, the 24 GB Macs' 35b:16gb,
+  // writes <function=NAME>...</function></tool_call> five replies in five, #1277). The reply is that call when, after
+  // whitespace, its first text is "<function=", the text up to </tool_call> is one call (its only </function> is the
+  // last text) that parses, NAME is a tool of the request, and nothing but whitespace follows until the end of the
+  // turn. The text is held from its first "<function=" until that is decided (the reply as text once it is not), so
+  // such a reply streams at its end.
+  // kArmed: nothing but whitespace was content so far, outside the reasoning and any call; kHolding: the held text
+  // began a call; kClosed: </tool_call> ended a valid call, which finish() returns if the turn ends there;
+  // kOff: decided (a reply is one or the other), or no call to look for.
+  enum class Lead { kOff, kArmed, kHolding, kClosed };
+
+  static bool lead_viable(const std::string& t) {
+    static const std::string open = "<function=";
+    return t.size() >= open.size() ? t.compare(0, open.size(), open) == 0 : open.compare(0, t.size(), t) == 0;
+  }
+
+  // The first content text s while armed; true when it was taken (held, or given out as text)
+  bool lead_text(ChatDelta& d, const std::string& s) {
+    const size_t k = s.find_first_not_of(" \n\r\t");
+    if (k == std::string::npos) return false;  // whitespace goes on as it does
+    emit(d, s.substr(0, k));
+    lead_buf_ = s.substr(k);
+    if (lead_viable(lead_buf_)) lead_ = Lead::kHolding;
+    else give_up(d, false);
+    return true;
+  }
+
+  // A token while the call is held or closed; true when it was taken (a token that ends the hold is replayed by the
+  // caller as it is)
+  bool lead_token(ChatDelta& d, int id) {
+    if (id == tc_close_ && lead_ == Lead::kHolding) {
+      lead_buf_ += dec_.flush();
+      const std::string body = trim_ws(lead_buf_), end = "</function>";
+      ToolCall tc;
+      // one call: the first </function> is the last text (two calls under one </tool_call> would parse as one)
+      if (body.size() >= end.size() && body.find(end) == body.size() - end.size() && parse_tool(body, tc) &&
+          has_tool(tc.name)) {
+        lead_call_ = std::move(tc);
+        lead_ = Lead::kClosed;
+      } else {
+        give_up(d, true);
+      }
+      return true;
+    }
+    if (id == think_open_ || id == think_close_ || id == tc_open_ || id == tc_close_) {
+      lead_buf_ += dec_.flush();
+      give_up(d, lead_ == Lead::kClosed);
+      return false;
+    }
+    const std::string s = dec_.push(id);
+    if (lead_ == Lead::kClosed) {
+      if (trim_ws(s).empty()) {  // whitespace after the call ends the turn as well
+        lead_ws_ += s;
+        return true;
+      }
+      give_up(d, true);
+      emit(d, s);
+      return true;
+    }
+    lead_buf_ += s;
+    if (!lead_viable(lead_buf_)) give_up(d, false);
+    return true;
+  }
+
+  // The held text (with the </tool_call> that closed it) is the reply's text after all
+  void give_up(ChatDelta& d, bool closed) {
+    lead_ = Lead::kOff;
+    std::string t;
+    t.swap(lead_buf_);
+    if (closed) t += "</tool_call>" + lead_ws_;
+    lead_ws_.clear();
+    emit(d, t);
   }
 
   // TextTags: the decoded text s after the text held so far, split at the tags the parser's state looks for (the think
@@ -208,6 +340,7 @@ class OutputParser {
       if (!c.is_object() || !c.contains("name") || !c["name"].is_string()) return false;
       ToolCall tc;
       tc.name = c["name"].get<std::string>();
+      if (trim_ws(tc.name).empty()) return false;
       const ojson a = c.contains("arguments") ? c["arguments"] : ojson::object();
       if (a.is_string()) {
         const ojson pa = ojson::parse(a.get<std::string>(), nullptr, false);
@@ -351,7 +484,7 @@ class OutputParser {
 
   // The body of a call (between its tags), in the parser's call format
   bool parse_tool(const std::string& body, ToolCall& tc) const {
-    return fmt_ == CallFormat::Glm ? parse_glm(body, tc) : parse_qwen(body, tc);
+    return fmt_ == CallFormat::QwenXml ? parse_qwen(body, tc) : parse_glm(body, tc);
   }
 
   bool parse_qwen(const std::string& body, ToolCall& tc) const {
@@ -360,6 +493,7 @@ class OutputParser {
     size_t fe = body.find('>', f);
     if (fe == std::string::npos) return false;
     tc.name = body.substr(f + 10, fe - f - 10);
+    if (trim_ws(tc.name).empty()) return false;
     ojson args = ojson::object();
     std::vector<std::pair<std::string, std::string>> raw;  // the text of each value that is not a string
     size_t p = fe + 1;
@@ -385,10 +519,13 @@ class OutputParser {
 
   // GLM-4.5's call (Flint's template renders it): NAME<arg_key>KEY</arg_key><arg_value>VALUE</arg_value>..., a value
   // the text of a string or the JSON of anything else; no arguments, NAME alone. Whitespace may surround the name and a
-  // key and separate the elements; a value is everything up to the first </arg_value>. Anything else (no name, a name
-  // with whitespace or a tag in it, a tag in a key, text between the elements, a tag left open) is no call.
+  // key and separate the elements; a value is everything up to the first </arg_value>. Repeated key openers are
+  // collapsed; a key with no value before the next key or the end is dropped. Other malformed markup (no name, a name
+  // with whitespace or a tag in it, a tag in a key, text between the elements, a tag left open) is no call. Hy4's tags
+  // carry sfx_.
   bool parse_glm(const std::string& body, ToolCall& tc) const {
-    static const std::string ko = "<arg_key>", kc = "</arg_key>", vo = "<arg_value>", vc = "</arg_value>";
+    const std::string ko = "<arg_key" + sfx_ + ">", kc = "</arg_key" + sfx_ + ">", vo = "<arg_value" + sfx_ + ">",
+                      vc = "</arg_value" + sfx_ + ">";
     static const char* ws = " \n\r\t";
     constexpr size_t npos = std::string::npos;
     size_t p = body.find(ko);
@@ -396,12 +533,18 @@ class OutputParser {
     if (name.empty() || name.find_first_of(" \n\r\t<") != npos) return false;
     ojson args = ojson::object();
     while (p != npos) {  // at an <arg_key>
-      const size_t ke = body.find(kc, p + ko.size());
+      size_t ks = p + ko.size();
+      while (body.compare(ks, ko.size(), ko) == 0) ks += ko.size();
+      const size_t ke = body.find(kc, ks);
       if (ke == npos) return false;
-      const std::string key = trim_ws(body.substr(p + ko.size(), ke - p - ko.size()));
+      const std::string key = trim_ws(body.substr(ks, ke - ks));
       if (key.empty() || key.find(ko) != npos || key.find(vo) != npos || key.find(vc) != npos) return false;
       size_t vs = body.find_first_not_of(ws, ke + kc.size());
-      if (vs == npos || body.compare(vs, vo.size(), vo) != 0) return false;
+      if (vs == npos || body.compare(vs, ko.size(), ko) == 0) {
+        p = vs;
+        continue;
+      }
+      if (body.compare(vs, vo.size(), vo) != 0) return false;
       vs += vo.size();
       const size_t ve = body.find(vc, vs);
       if (ve == npos) return false;
@@ -415,17 +558,119 @@ class OutputParser {
     return true;
   }
 
+  void push_ink2(ChatDelta& d, int id) {
+    if (id == ink2_model_) {
+      const std::string tail = dec_.flush();
+      if (in_tool_) tool_buf_ += tail;
+      else if (!ink2_hdr_) (in_think_ ? d.reasoning : d.content) += tail;
+      in_think_ = false;
+      in_tool_ = false;
+      ink2_hdr_ = true;
+      ink2_hdr_buf_.clear();
+      return;
+    }
+    if (id == think_open_) {
+      const std::string tail = dec_.flush();
+      if (!ink2_hdr_) (in_think_ ? d.reasoning : d.content) += tail;
+      ink2_hdr_ = false;
+      ink2_hdr_buf_.clear();
+      in_think_ = true;
+      in_tool_ = false;
+      return;
+    }
+    if (id == ink2_text_ || id == ink2_tool_text_ || id == ink2_tool_err_) {
+      const std::string tail = dec_.flush();
+      if (!ink2_hdr_) (in_think_ ? d.reasoning : d.content) += tail;
+      ink2_hdr_ = false;
+      ink2_hdr_buf_.clear();
+      in_think_ = false;
+      in_tool_ = false;
+      return;
+    }
+    if (id == tc_open_) {
+      const std::string tail = dec_.flush();
+      if (!ink2_hdr_) (in_think_ ? d.reasoning : d.content) += tail;
+      ink2_hdr_ = false;
+      in_think_ = false;
+      if (parse_tools_) {
+        in_tool_ = true;
+        tool_buf_.clear();
+      } else {
+        ink2_hdr_buf_.clear();
+        in_tool_ = false;
+      }
+      return;
+    }
+    if (id == tc_close_) {
+      const std::string tail = dec_.flush();
+      if (in_tool_) {
+        tool_buf_ += tail;
+        in_tool_ = false;
+        ToolCall tc;
+        if (parse_ink2(tool_buf_, tc)) d.tool_calls.push_back(std::move(tc));
+        else d.content += tool_buf_;
+        tool_buf_.clear();
+        ink2_hdr_buf_.clear();
+      } else if (ink2_hdr_) {
+        ink2_hdr_ = false;
+        ink2_hdr_buf_.clear();
+      } else {
+        (in_think_ ? d.reasoning : d.content) += tail;
+        in_think_ = false;
+      }
+      return;
+    }
+    const std::string s = dec_.push(id);
+    if (in_tool_) tool_buf_ += s;
+    else if (ink2_hdr_) ink2_hdr_buf_ += s;
+    else (in_think_ ? d.reasoning : d.content) += s;
+  }
+
+  bool parse_ink2(const std::string& body, ToolCall& tc) const {
+    const ojson j = ojson::parse(trim_ws(body), nullptr, false);
+    if (!j.is_object()) return false;
+    std::string name;
+    if (j.contains("name") && j["name"].is_string()) name = j["name"].get<std::string>();
+    else name = trim_ws(ink2_hdr_buf_);
+    if (trim_ws(name).empty()) return false;
+    ojson args = ojson::object();
+    const char* key = j.contains("args") ? "args" : (j.contains("arguments") ? "arguments" : nullptr);
+    if (key) {
+      if (j[key].is_object()) args = j[key];
+      else if (j[key].is_null()) args = ojson::object();
+      else if (j[key].is_string()) {
+        const ojson parsed = ojson::parse(j[key].get<std::string>(), nullptr, false);
+        if (!parsed.is_object()) return false;
+        args = parsed;
+      } else {
+        return false;
+      }
+    }
+    tc.name = std::move(name);
+    tc.arguments = args.dump();
+    tc.id = random_id("call_");
+    return true;
+  }
+
   StreamDecoder dec_;
   StreamDecoder hdec_;  // text of held tokens (think_tools)
   TextTags tt_;
   std::string pend_;    // TextTags: decoded text that may begin a tag
   int think_open_, think_close_, tc_open_, tc_close_;
+  int ink2_model_ = -1, ink2_text_ = -1, ink2_tool_text_ = -1, ink2_tool_err_ = -1;
+  bool ink2_hdr_ = false;
+  std::string ink2_hdr_buf_;
   bool in_think_;
   bool parse_tools_, think_tools_, think_ws_;
   CallFormat fmt_;
+  std::string sfx_;                       // Hy4: its tags' ":opensource"
+  int wrap_open_ = -1, wrap_close_ = -1;  // Hy4: <tool_calls:opensource>, </tool_calls:opensource>
   const ojson& tools_;
   bool in_tool_ = false, skip_leading_ws_ = false;
   std::string tool_buf_, held_;
+  Lead lead_ = Lead::kOff;
+  std::string lead_buf_, lead_ws_;  // the held text; the whitespace after a closed call
+  ToolCall lead_call_;
   // think_tools hold: token ids, complete call bodies, the body being read, </think> seen after them
   bool holding_ = false, in_body_ = false, closed_ = false;
   std::vector<int> hold_ids_;

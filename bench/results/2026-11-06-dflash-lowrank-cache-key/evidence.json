@@ -1,0 +1,1166 @@
+{
+  "kind": "dflash-lowrank-cache-key-validation",
+  "reference": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+  "candidate": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+  "machine": {
+    "identifier": "Mac15,14",
+    "name": "Mac Studio (2025)",
+    "year": 2025,
+    "chip": "Apple M3 Ultra",
+    "cpu_cores": 28,
+    "gpu_cores": 60,
+    "memory_gb": 96,
+    "macos": "26.4.1",
+    "macos_build": "25E253"
+  },
+  "model": "Qwen3.5 4B 4-bit, DFlash v1",
+  "drafter_sha256": "1eb221d36abb13a5f1b972f8d031a9723fad8cbb7d275abe548b60e77577eb42",
+  "logit_report": {
+    "paths": {
+      "prefill": {
+        "records": 8,
+        "bitwise": 8,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": "../lowrank/tools/logit_floors/qwen3.5-4b-4bit.json"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (39f20c8)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 8,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T18:57:25Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (15e494d)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 8,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-night-20261106/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T18:57:35Z",
+          "env": {}
+        }
+      },
+      "batch": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "../lowrank/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (39f20c8)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "batch",
+          "batch": {
+            "members": 4,
+            "rows": 2
+          },
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T18:57:25Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (15e494d)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "batch",
+          "batch": {
+            "members": 4,
+            "rows": 2
+          },
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-night-20261106/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T18:57:35Z",
+          "env": {}
+        }
+      },
+      "step": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "../lowrank/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (39f20c8)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T18:57:25Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (15e494d)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-night-20261106/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T18:57:35Z",
+          "env": {}
+        }
+      },
+      "verify": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "../lowrank/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (39f20c8)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "verify",
+          "verify": "KFlash tree (a chain of 8 live rows)",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T18:57:25Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (15e494d)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "verify",
+          "verify": "KFlash tree (a chain of 8 live rows)",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-night-20261106/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-05T18:57:35Z",
+          "env": {}
+        }
+      }
+    }
+  },
+  "steps": [
+    {
+      "label": "logits-reference",
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "overnight logits-reference",
+        "--",
+        "/Users/bytedance/kapitsa-night-20261106/reference/build/logit_dump",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/logits-reference"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-night-20261106/reference",
+      "env": {
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-night-20261106/evidence/homes/logits-reference"
+      },
+      "start": 1793905031.4600608,
+      "binary_sha256": "6b7a84260a1d24631edeffd11164d0e65b846ab90d494958e7088fbaeb090fb1",
+      "source_heads": {
+        "reference": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+        "interleave": "e554264e5934c22a4fb271aec7babdd86e1c4785",
+        "lowrank": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+        "planner": "30320cab4ff81159d0b71c31b1c1fe60ed36f7d8"
+      },
+      "exit_code": 0,
+      "end": 1793905045.477786
+    },
+    {
+      "label": "logits-lowrank",
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "overnight logits-lowrank",
+        "--",
+        "/Users/bytedance/kapitsa-night-20261106/lowrank/build/logit_dump",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/logits-lowrank",
+        "--from",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/logits-reference"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-night-20261106/reference",
+      "env": {
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-night-20261106/evidence/homes/logits-lowrank"
+      },
+      "start": 1793905045.483488,
+      "binary_sha256": "fda44de3b9377b3c1688eb99d26f8dca7cc125a2076569b67b3e1976cefaf007",
+      "source_heads": {
+        "reference": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+        "interleave": "e554264e5934c22a4fb271aec7babdd86e1c4785",
+        "lowrank": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+        "planner": "30320cab4ff81159d0b71c31b1c1fe60ed36f7d8"
+      },
+      "exit_code": 0,
+      "end": 1793905055.865846
+    },
+    {
+      "label": "compare-lowrank",
+      "command": [
+        "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python3",
+        "/Users/bytedance/kapitsa-night-20261106/lowrank/tools/logit_compare.py",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/logits-reference",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/logits-lowrank",
+        "--json",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/compare-lowrank.json"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-night-20261106/reference",
+      "env": {
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-night-20261106/evidence/homes/compare-lowrank"
+      },
+      "start": 1793905055.8676858,
+      "binary_sha256": "36984af9f922aec72ba5b03e811ee92512268785007192e20f826cbd07cf8d04",
+      "source_heads": {
+        "reference": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+        "interleave": "e554264e5934c22a4fb271aec7babdd86e1c4785",
+        "lowrank": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+        "planner": "30320cab4ff81159d0b71c31b1c1fe60ed36f7d8"
+      },
+      "exit_code": 0,
+      "end": 1793905058.145188
+    },
+    {
+      "label": "draft-ref",
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "overnight draft-ref",
+        "--",
+        "/Users/bytedance/kapitsa-night-20261106/reference/build/qmm_draft_check",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft.ids",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft-ref"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-night-20261106/reference",
+      "env": {
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-night-20261106/evidence/ref-cache",
+        "NI_DFLASH_LOWRANK": "768"
+      },
+      "start": 1793905070.2220118,
+      "binary_sha256": "cd7005309dc5c57907888dc9a92e2bf30d70ace476c05ce1615f92071d59f0bb",
+      "source_heads": {
+        "reference": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+        "interleave": "e554264e5934c22a4fb271aec7babdd86e1c4785",
+        "lowrank": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+        "planner": "30320cab4ff81159d0b71c31b1c1fe60ed36f7d8"
+      },
+      "exit_code": 0,
+      "end": 1793905074.722843
+    },
+    {
+      "label": "draft-new-cold",
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "overnight draft-new-cold",
+        "--",
+        "/Users/bytedance/kapitsa-night-20261106/lowrank/build/qmm_draft_check",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft.ids",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft-new-cold",
+        "--from",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft-ref"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-night-20261106/reference",
+      "env": {
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-night-20261106/evidence/new-cache",
+        "NI_DFLASH_LOWRANK": "768"
+      },
+      "start": 1793905074.7241988,
+      "binary_sha256": "1c81eeeefaacb0095fa0dd11219ecb9b8bd3acbb562374fb7cae86b462fbcb31",
+      "source_heads": {
+        "reference": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+        "interleave": "e554264e5934c22a4fb271aec7babdd86e1c4785",
+        "lowrank": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+        "planner": "30320cab4ff81159d0b71c31b1c1fe60ed36f7d8"
+      },
+      "exit_code": 0,
+      "end": 1793905079.199417
+    },
+    {
+      "label": "draft-new-warm",
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "overnight draft-new-warm",
+        "--",
+        "/Users/bytedance/kapitsa-night-20261106/lowrank/build/qmm_draft_check",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft.ids",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft-new-warm",
+        "--from",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft-new-cold"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-night-20261106/reference",
+      "env": {
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-night-20261106/evidence/new-cache",
+        "NI_DFLASH_LOWRANK": "768"
+      },
+      "start": 1793905079.2010062,
+      "binary_sha256": "1c81eeeefaacb0095fa0dd11219ecb9b8bd3acbb562374fb7cae86b462fbcb31",
+      "source_heads": {
+        "reference": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+        "interleave": "e554264e5934c22a4fb271aec7babdd86e1c4785",
+        "lowrank": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+        "planner": "30320cab4ff81159d0b71c31b1c1fe60ed36f7d8"
+      },
+      "exit_code": 0,
+      "end": 1793905081.180746
+    }
+  ],
+  "draft_logs": {
+    "draft-new-warm": "[kapitsa] read 2.37 GB of weights in 363 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 16 ms (15.3 GB/s)\n[kapitsa] MTP head loaded in 220 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 12 ms\n[kapitsa] prewarmed 93 prefill pipelines in 18 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 639 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 194 ms (6.5 GB/s)\n[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] DFlash2: low-rank shortlist head r=768 (factors cached in 57 ms, rows 191 ms)\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +0.79 GB), loaded in 550 ms\nAKO_CHECK={\"passed\":true,\"cases\":270,\"bytes\":35198376,\"mismatches\":0}\n",
+    "draft-ref": "[kapitsa] read 2.37 GB of weights in 364 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 17 ms (14.5 GB/s)\n[kapitsa] MTP head loaded in 221 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 13 ms\n[kapitsa] prewarmed 93 prefill pipelines in 19 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 649 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 195 ms (6.5 GB/s)\n[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] DFlash2: low-rank shortlist head r=768 (factors computed in 2044 ms, rows 180 ms)\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +1.05 GB), loaded in 2529 ms\nSaved 270 files / 35198376 bytes to /Users/bytedance/kapitsa-night-20261106/evidence/draft-ref\n",
+    "draft-new-cold": "[kapitsa] read 2.37 GB of weights in 364 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 14 ms (17.1 GB/s)\n[kapitsa] MTP head loaded in 221 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 13 ms\n[kapitsa] prewarmed 93 prefill pipelines in 19 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 646 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 194 ms (6.6 GB/s)\n[kapitsa] DFlash2: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] DFlash2: low-rank shortlist head r=768 (factors computed in 2067 ms, rows 178 ms)\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +1.05 GB), loaded in 2548 ms\nAKO_CHECK={\"passed\":true,\"cases\":270,\"bytes\":35198376,\"mismatches\":0}\n"
+  },
+  "http_original": [
+    {
+      "variant": "reference",
+      "head": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/reference/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "57017",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "32768",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "NI_DFLASH_LOWRANK": "768",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-night-20261106/evidence/http-home-reference"
+      },
+      "exit_code": 1,
+      "passes": 47,
+      "failures": [
+        "FAIL in flight together: a 2K-token request sent during a long reply finishes first  side done 2.4 s, long reply done 0.9 s (693 tokens), side usage {'prompt_tokens': 2976, 'completion_tokens': 4, 'total_tokens': 2980, 'prompt_tokens_details': {'cached_tokens': 0}, 'kapitsa': {'prefill_ms': 1357.0, 'kflash': {'source': 'DFlash2', 'cycles': 2}}}",
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0008208751678466797, {'id': 'chatcmpl-1793905173560', 'object': 'chat.completion.chunk', 'created': 1793905173, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.141967058181763], first token at 17.227742910385132"
+      ]
+    },
+    {
+      "variant": "lowrank",
+      "head": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/lowrank/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "57962",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "32768",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "NI_DFLASH_LOWRANK": "768",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-night-20261106/evidence/http-home-lowrank"
+      },
+      "exit_code": 1,
+      "passes": 47,
+      "failures": [
+        "FAIL in flight together: a 2K-token request sent during a long reply finishes first  side done 2.4 s, long reply done 0.9 s (693 tokens), side usage {'prompt_tokens': 2976, 'completion_tokens': 4, 'total_tokens': 2980, 'prompt_tokens_details': {'cached_tokens': 0}, 'kapitsa': {'prefill_ms': 1358.3, 'kflash': {'source': 'DFlash2', 'cycles': 2}}}",
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0008680820465087891, {'id': 'chatcmpl-179390525336123', 'object': 'chat.completion.chunk', 'created': 1793905253, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.14182186126709], first token at 17.262694120407104"
+      ]
+    }
+  ],
+  "http_longer_max_tokens": [
+    {
+      "variant": "reference",
+      "head": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/reference/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "61215",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "131072",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "NI_DFLASH_LOWRANK": "768",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-night-20261106/evidence/http-long-home-reference"
+      },
+      "exit_code": 1,
+      "passes": 47,
+      "failures": [
+        "FAIL in flight together: a 2K-token request sent during a long reply finishes first  side done 2.4 s, long reply done 0.9 s (693 tokens), side usage {'prompt_tokens': 2976, 'completion_tokens': 4, 'total_tokens': 2980, 'prompt_tokens_details': {'cached_tokens': 0}, 'kapitsa': {'prefill_ms': 1352.3, 'kflash': {'source': 'DFlash2', 'cycles': 2}}}",
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0006639957427978516, {'id': 'chatcmpl-179390572936775', 'object': 'chat.completion.chunk', 'created': 1793905729, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.132376194000244], first token at 16.925545930862427"
+      ]
+    },
+    {
+      "variant": "lowrank",
+      "head": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/lowrank/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "61433",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "131072",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "NI_DFLASH_LOWRANK": "768",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-night-20261106/evidence/http-long-home-lowrank"
+      },
+      "exit_code": 1,
+      "passes": 47,
+      "failures": [
+        "FAIL in flight together: a 2K-token request sent during a long reply finishes first  side done 2.4 s, long reply done 0.9 s (693 tokens), side usage {'prompt_tokens': 2976, 'completion_tokens': 4, 'total_tokens': 2980, 'prompt_tokens_details': {'cached_tokens': 0}, 'kapitsa': {'prefill_ms': 1360.1, 'kflash': {'source': 'DFlash2', 'cycles': 2}}}",
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0008871555328369141, {'id': 'chatcmpl-179390580762767', 'object': 'chat.completion.chunk', 'created': 1793905807, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.14150619506836], first token at 17.196990966796875"
+      ]
+    }
+  ],
+  "default_bench": [
+    {
+      "label": "01-reference",
+      "result": {
+        "schema": 1,
+        "kind": "kapitsa-bench",
+        "mode": "quick",
+        "time_utc": "2026-11-05T19:03:13Z",
+        "kapitsa": {
+          "version": "0.2.30",
+          "commit": "39f20c8"
+        },
+        "mac": {
+          "identifier": "Mac15,14",
+          "name": "Mac Studio (2025)",
+          "year": 2025,
+          "chip": "Apple M3 Ultra",
+          "cpu_cores": 28,
+          "gpu_cores": 60,
+          "memory_gb": 96,
+          "macos": "26.4.1",
+          "macos_build": "25E253"
+        },
+        "model": {
+          "name": "qwen3.5-4b-4bit",
+          "title": "qwen3.5-4b-4bit",
+          "variant": null,
+          "precision": "4-bit",
+          "catalog": false,
+          "revision": null,
+          "decoding": "KFlash",
+          "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+          "drafter": "dflash2",
+          "drafter_kind": "DFlash",
+          "drafter_source": "dflash2",
+          "drafter_reason": "found in the model's folder"
+        },
+        "protocol": {
+          "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+          "decode_tokens": 512,
+          "decode_runs": 3,
+          "greedy_runs": 3,
+          "sizes": [
+            4000
+          ],
+          "temperature": 0.6
+        },
+        "results": {
+          "decode": {
+            "median_tps": 329.8,
+            "runs_tps": [
+              329.7,
+              334.8,
+              329.8
+            ],
+            "median_accepted_draft_tps": 231.89,
+            "median_accepted_draft_share": 0.6992
+          },
+          "decode_greedy": {
+            "median_tps": 354.01,
+            "runs_tps": [
+              339.57,
+              354.01,
+              363.46
+            ],
+            "median_accepted_draft_tps": 251.68,
+            "median_accepted_draft_share": 0.7109
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4132,
+              "ttft_s": 1.9337,
+              "tps": 2136.9,
+              "followup_s": [
+                0.0322,
+                0.0344,
+                0.0298
+              ],
+              "followup_median_s": 0.0322,
+              "followup_suffix_tps": 683.6
+            }
+          ],
+          "tool_calls": "pass",
+          "peak_memory_gb": 4.55
+        },
+        "conditions": {
+          "power_source": "ac",
+          "power_mode": "automatic",
+          "low_power_mode": false,
+          "thermal_state": "nominal",
+          "swapouts": 0,
+          "gpu_quiet_wait_s": 18.1,
+          "gpu_other_mean_pct": 0.0,
+          "gpu_other_max_pct": 0.0,
+          "gpu_ambient_mean_pct": 0.0,
+          "gpu_users": [],
+          "contention": []
+        },
+        "flags": [],
+        "invalid": []
+      }
+    },
+    {
+      "label": "02-lowrank",
+      "result": {
+        "schema": 1,
+        "kind": "kapitsa-bench",
+        "mode": "quick",
+        "time_utc": "2026-11-05T19:03:53Z",
+        "kapitsa": {
+          "version": "0.2.30",
+          "commit": "15e494d"
+        },
+        "mac": {
+          "identifier": "Mac15,14",
+          "name": "Mac Studio (2025)",
+          "year": 2025,
+          "chip": "Apple M3 Ultra",
+          "cpu_cores": 28,
+          "gpu_cores": 60,
+          "memory_gb": 96,
+          "macos": "26.4.1",
+          "macos_build": "25E253"
+        },
+        "model": {
+          "name": "qwen3.5-4b-4bit",
+          "title": "qwen3.5-4b-4bit",
+          "variant": null,
+          "precision": "4-bit",
+          "catalog": false,
+          "revision": null,
+          "decoding": "KFlash",
+          "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+          "drafter": "dflash2",
+          "drafter_kind": "DFlash",
+          "drafter_source": "dflash2",
+          "drafter_reason": "found in the model's folder"
+        },
+        "protocol": {
+          "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+          "decode_tokens": 512,
+          "decode_runs": 3,
+          "greedy_runs": 3,
+          "sizes": [
+            4000
+          ],
+          "temperature": 0.6
+        },
+        "results": {
+          "decode": {
+            "median_tps": 352.96,
+            "runs_tps": [
+              380.11,
+              325.79,
+              352.96
+            ],
+            "median_accepted_draft_tps": 249.56,
+            "median_accepted_draft_share": 0.707
+          },
+          "decode_greedy": {
+            "median_tps": 378.14,
+            "runs_tps": [
+              381.96,
+              367.19,
+              378.14
+            ],
+            "median_accepted_draft_tps": 272.53,
+            "median_accepted_draft_share": 0.7207
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4133,
+              "ttft_s": 1.933,
+              "tps": 2138.1,
+              "followup_s": [
+                0.0333,
+                0.0375,
+                0.0312
+              ],
+              "followup_median_s": 0.0333,
+              "followup_suffix_tps": 659.9
+            }
+          ],
+          "tool_calls": "pass",
+          "peak_memory_gb": 4.55
+        },
+        "conditions": {
+          "power_source": "ac",
+          "power_mode": "automatic",
+          "low_power_mode": false,
+          "thermal_state": "nominal",
+          "swapouts": 0,
+          "gpu_quiet_wait_s": 18.1,
+          "gpu_other_mean_pct": 0.0,
+          "gpu_other_max_pct": 0.0,
+          "gpu_ambient_mean_pct": 0.0,
+          "gpu_users": [],
+          "contention": []
+        },
+        "flags": [],
+        "invalid": []
+      }
+    },
+    {
+      "label": "05-reference",
+      "result": {
+        "schema": 1,
+        "kind": "kapitsa-bench",
+        "mode": "quick",
+        "time_utc": "2026-11-05T19:05:49Z",
+        "kapitsa": {
+          "version": "0.2.30",
+          "commit": "39f20c8"
+        },
+        "mac": {
+          "identifier": "Mac15,14",
+          "name": "Mac Studio (2025)",
+          "year": 2025,
+          "chip": "Apple M3 Ultra",
+          "cpu_cores": 28,
+          "gpu_cores": 60,
+          "memory_gb": 96,
+          "macos": "26.4.1",
+          "macos_build": "25E253"
+        },
+        "model": {
+          "name": "qwen3.5-4b-4bit",
+          "title": "qwen3.5-4b-4bit",
+          "variant": null,
+          "precision": "4-bit",
+          "catalog": false,
+          "revision": null,
+          "decoding": "KFlash",
+          "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+          "drafter": "dflash2",
+          "drafter_kind": "DFlash",
+          "drafter_source": "dflash2",
+          "drafter_reason": "found in the model's folder"
+        },
+        "protocol": {
+          "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+          "decode_tokens": 512,
+          "decode_runs": 3,
+          "greedy_runs": 3,
+          "sizes": [
+            4000
+          ],
+          "temperature": 0.6
+        },
+        "results": {
+          "decode": {
+            "median_tps": 343.82,
+            "runs_tps": [
+              343.82,
+              377.69,
+              337.41
+            ],
+            "median_accepted_draft_tps": 238.39,
+            "median_accepted_draft_share": 0.6934
+          },
+          "decode_greedy": {
+            "median_tps": 368.84,
+            "runs_tps": [
+              368.84,
+              351.81,
+              376.56
+            ],
+            "median_accepted_draft_tps": 265.11,
+            "median_accepted_draft_share": 0.7188
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4131,
+              "ttft_s": 1.9345,
+              "tps": 2135.5,
+              "followup_s": [
+                0.0352,
+                0.0307,
+                0.0425
+              ],
+              "followup_median_s": 0.0352,
+              "followup_suffix_tps": 625.9
+            }
+          ],
+          "tool_calls": "pass",
+          "peak_memory_gb": 4.55
+        },
+        "conditions": {
+          "power_source": "ac",
+          "power_mode": "automatic",
+          "low_power_mode": false,
+          "thermal_state": "nominal",
+          "swapouts": 0,
+          "gpu_quiet_wait_s": 18.1,
+          "gpu_other_mean_pct": 0.0,
+          "gpu_other_max_pct": 0.0,
+          "gpu_ambient_mean_pct": 0.0,
+          "gpu_users": [],
+          "contention": []
+        },
+        "flags": [],
+        "invalid": []
+      }
+    },
+    {
+      "label": "06-lowrank",
+      "result": {
+        "schema": 1,
+        "kind": "kapitsa-bench",
+        "mode": "quick",
+        "time_utc": "2026-11-05T19:06:28Z",
+        "kapitsa": {
+          "version": "0.2.30",
+          "commit": "15e494d"
+        },
+        "mac": {
+          "identifier": "Mac15,14",
+          "name": "Mac Studio (2025)",
+          "year": 2025,
+          "chip": "Apple M3 Ultra",
+          "cpu_cores": 28,
+          "gpu_cores": 60,
+          "memory_gb": 96,
+          "macos": "26.4.1",
+          "macos_build": "25E253"
+        },
+        "model": {
+          "name": "qwen3.5-4b-4bit",
+          "title": "qwen3.5-4b-4bit",
+          "variant": null,
+          "precision": "4-bit",
+          "catalog": false,
+          "revision": null,
+          "decoding": "KFlash",
+          "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+          "drafter": "dflash2",
+          "drafter_kind": "DFlash",
+          "drafter_source": "dflash2",
+          "drafter_reason": "found in the model's folder"
+        },
+        "protocol": {
+          "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+          "decode_tokens": 512,
+          "decode_runs": 3,
+          "greedy_runs": 3,
+          "sizes": [
+            4000
+          ],
+          "temperature": 0.6
+        },
+        "results": {
+          "decode": {
+            "median_tps": 358.46,
+            "runs_tps": [
+              379.6,
+              349.33,
+              358.46
+            ],
+            "median_accepted_draft_tps": 252.04,
+            "median_accepted_draft_share": 0.7031
+          },
+          "decode_greedy": {
+            "median_tps": 362.2,
+            "runs_tps": [
+              338.9,
+              375.14,
+              362.2
+            ],
+            "median_accepted_draft_tps": 259.62,
+            "median_accepted_draft_share": 0.7168
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4133,
+              "ttft_s": 1.9348,
+              "tps": 2136.1,
+              "followup_s": [
+                0.0317,
+                0.0339,
+                0.0299
+              ],
+              "followup_median_s": 0.0317,
+              "followup_suffix_tps": 693.0
+            }
+          ],
+          "tool_calls": "pass",
+          "peak_memory_gb": 4.55
+        },
+        "conditions": {
+          "power_source": "ac",
+          "power_mode": "automatic",
+          "low_power_mode": false,
+          "thermal_state": "nominal",
+          "swapouts": 0,
+          "gpu_quiet_wait_s": 18.2,
+          "gpu_other_mean_pct": 0.51,
+          "gpu_other_max_pct": 3.54,
+          "gpu_ambient_mean_pct": 0.0,
+          "gpu_users": [
+            "loginwindow"
+          ],
+          "contention": []
+        },
+        "flags": [],
+        "invalid": []
+      }
+    }
+  ],
+  "rank768_generation": [
+    {
+      "label": "rank-smoke-01-reference",
+      "variant": "reference",
+      "tokens": 1024,
+      "eos_count": 0,
+      "tokens_before_first_eos": 1024,
+      "text_nonempty": true,
+      "ids_match_reference": true,
+      "ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+      "source_head": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/reference/build/ni_run",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "@/Users/bytedance/kapitsa-night-20261106/evidence/rank-smoke.ids",
+        "1024",
+        "0",
+        "--dflash",
+        "auto"
+      ],
+      "draft_load": [
+        "[kapitsa] DFlash2: low-rank shortlist head r=768 (factors computed in 2004 ms, rows 194 ms)",
+        "[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +1.05 GB), loaded in 2417 ms"
+      ],
+      "timing": [
+        "prompt 31 tok in 46 ms (666.8 tok/s); dflash decode (verify 7 of 7, greedy): 1023 tok in 1267 ms (807.7 tok/s), 129 cycles, 7.930 tok/cycle, 9.80 ms GPU/cycle, 9.82 ms wall/cycle (mode 3), hist 0 0 0 0 0 2 0 127; 7.00 proposals verified per cycle; acceptance by position 1.00 1.00 1.00 1.00 1.00 0.98 1.00"
+      ]
+    },
+    {
+      "label": "rank-smoke-02-lowrank",
+      "variant": "lowrank",
+      "tokens": 1024,
+      "eos_count": 0,
+      "tokens_before_first_eos": 1024,
+      "text_nonempty": true,
+      "ids_match_reference": true,
+      "ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+      "source_head": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/lowrank/build/ni_run",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "@/Users/bytedance/kapitsa-night-20261106/evidence/rank-smoke.ids",
+        "1024",
+        "0",
+        "--dflash",
+        "auto"
+      ],
+      "draft_load": [
+        "[kapitsa] DFlash2: low-rank shortlist head r=768 (factors computed in 2043 ms, rows 181 ms)",
+        "[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +1.05 GB), loaded in 2443 ms"
+      ],
+      "timing": [
+        "prompt 31 tok in 48 ms (650.6 tok/s); dflash decode (verify 7 of 7, greedy): 1023 tok in 1269 ms (806.4 tok/s), 129 cycles, 7.930 tok/cycle, 9.81 ms GPU/cycle, 9.83 ms wall/cycle (mode 3), hist 0 0 0 0 0 2 0 127; 7.00 proposals verified per cycle; acceptance by position 1.00 1.00 1.00 1.00 1.00 0.98 1.00"
+      ]
+    },
+    {
+      "label": "rank-smoke-05-reference",
+      "variant": "reference",
+      "tokens": 1024,
+      "eos_count": 0,
+      "tokens_before_first_eos": 1024,
+      "text_nonempty": true,
+      "ids_match_reference": true,
+      "ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+      "source_head": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/reference/build/ni_run",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "@/Users/bytedance/kapitsa-night-20261106/evidence/rank-smoke.ids",
+        "1024",
+        "0",
+        "--dflash",
+        "auto"
+      ],
+      "draft_load": [
+        "[kapitsa] DFlash2: low-rank shortlist head r=768 (factors cached in 19 ms, rows 180 ms)",
+        "[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +0.79 GB), loaded in 416 ms"
+      ],
+      "timing": [
+        "prompt 31 tok in 48 ms (640.1 tok/s); dflash decode (verify 7 of 7, greedy): 1023 tok in 1258 ms (813.2 tok/s), 129 cycles, 7.930 tok/cycle, 9.73 ms GPU/cycle, 9.75 ms wall/cycle (mode 3), hist 0 0 0 0 0 2 0 127; 7.00 proposals verified per cycle; acceptance by position 1.00 1.00 1.00 1.00 1.00 0.98 1.00"
+      ]
+    },
+    {
+      "label": "rank-smoke-06-lowrank",
+      "variant": "lowrank",
+      "tokens": 1024,
+      "eos_count": 0,
+      "tokens_before_first_eos": 1024,
+      "text_nonempty": true,
+      "ids_match_reference": true,
+      "ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+      "source_head": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+      "command": [
+        "/Users/bytedance/kapitsa-night-20261106/lowrank/build/ni_run",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "@/Users/bytedance/kapitsa-night-20261106/evidence/rank-smoke.ids",
+        "1024",
+        "0",
+        "--dflash",
+        "auto"
+      ],
+      "draft_load": [
+        "[kapitsa] DFlash2: low-rank shortlist head r=768 (factors cached in 56 ms, rows 167 ms)",
+        "[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +0.79 GB), loaded in 438 ms"
+      ],
+      "timing": [
+        "prompt 31 tok in 48 ms (639.8 tok/s); dflash decode (verify 7 of 7, greedy): 1023 tok in 1259 ms (812.3 tok/s), 129 cycles, 7.930 tok/cycle, 9.74 ms GPU/cycle, 9.76 ms wall/cycle (mode 3), hist 0 0 0 0 0 2 0 127; 7.00 proposals verified per cycle; acceptance by position 1.00 1.00 1.00 1.00 1.00 0.98 1.00"
+      ]
+    }
+  ],
+  "cpu_checks": {
+    "cpu": "PASS api_test\nPASS prefix_cache_test\nPASS fn_store_test\nPASS fn_dflash_test\nPASS tokenizer_test\nPASS iq_layout_test\nPASS remote_test\nPASS cluster_test\nPASS split_place_test\nPASS ws_upgrade_test\nPASS test_server_cli\nPASS test_sidecar\nPASS test_bench\nPASS test_update\nPASS test_community\nPASS test_reasoning\nPASS test_pr_size\nPASS test_logit_compare\nPASS test_sampled_tokens_harness\nPASS test_structured_cli\n0 failed\nbuilt: execution_session_test http_stream_test exl3_test qwen4_config_test json_file_test affine_pack_test systemone systemone_test systemone_codes_probe_test systemone_codes_driver splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test (log: /Users/bytedance/kapitsa-night-20261106/evidence/vk/lowrank-983375/15e494d1/build.log)\n........read model.safetensors (5 tensors)\n.GGUF v3: 3 tensors, 0 metadata KVs\narch: None name: None\n.read model.safetensors (3 tensors)\nread model.safetensors (3 tensors)\nread model.safetensors (3 tensors)\n.read model.safetensors (1 tensors)\nread model.safetensors (2 tensors)\nread model.safetensors (2 tensors)\nread model.safetensors (2 tensors)\nGGUF v3: 1 tensors, 0 metadata KVs\narch: None name: None\nGGUF v3: 2 tensors, 0 metadata KVs\narch: None name: None\nGGUF v3: 2 tensors, 0 metadata KVs\narch: None name: None\n...GGUF v3: 1 tensors, 0 metadata KVs\narch: None name: None\nGGUF v3: 1 tensors, 0 metadata KVs\narch: None name: None\n.\n----------------------------------------------------------------------\nRan 15 tests in 0.947s\n\nOK\nPASS nested path: stops at the corpus\nPASS nested path: dumps/x/ref made with its parents\nPASS existing path: kept, stops at the corpus\nPASS path under a file: cannot make, before the corpus\nPASS --verify-rows 12: refused before the directory\nall passed\n  ok    Flash-Next's multipliers from its seed\n  ok    Flash-Next's 16 head sizes: the primes from 20,000,000\n  ok    the heads' rows end to end\n  ok    320,001,536 rows in 128 shards of 2,500,012, rows of 160 values\n  ok    Flash-Next's ids as before\n  ok    Flash-Next's ids as ngram.cpp's\n  ok    5-grams of 3 heads: 12 heads of 40 values\n  ok    odd multipliers below 2^63 / vocab\n  ok    rows padded to 64, in 4 shards\n  ok    5-grams of 3 heads as ngram.cpp's\n  ok    Flash-Next's table: layer 1, its spec\n  ok    table_specs: 128 shards of 4-bit group-32 rows of 160 in layer 1\n  ok    a shard of another width is refused\n  ok    a missing shard is refused\n  ok    a shard past split_ngram_parts is refused\n  ok    the table in layer 5 (one-indexed) is read from layer 4's names, not layer 1's\n  ok    two n-gram layers are refused\n  ok    a hidden size the heads do not divide is refused\nPASS (0 failed)\nPASS pin: upstream Splash\nPASS pin: full commit hash\nPASS pin: release_binary_sha256\nPASS pin: release_metallib_sha256\nPASS pin: release_host_step_metallib_sha256\nPASS pin: kflash_binary_sha256\nPASS patches: present\nPASS patches: numbered 0001.. in order\nPASS 0001-runtime-kernels.patch: license header\nPASS 0001-runtime-kernels.patch: changes files\nPASS 0001-runtime-kernels.patch: runtime/metal/MetalBackend.mm marked modified\nPASS 0002-h1-gate-replay.patch: license header\nPASS 0002-h1-gate-replay.patch: changes files\nPASS 0002-h1-gate-replay.patch: runtime/metal/CommandGraph.hpp marked modified\nPASS 0002-h1-gate-replay.patch: runtime/metal/MetalBackend.hpp marked modified\nPASS 0002-h1-gate-replay.patch: runtime/metal/MetalBackend.mm marked modified\nPASS 0002-h1-gate-replay.patch: runtime/model/ExpertStore.cpp marked modified\nPASS 0002-h1-gate-replay.patch: runtime/model/Runtime.cpp marked modified\nPASS gen: internals pragma first\nPASS gen: 8 staging pointers coherent\nPASS gen: stops before gguf_repack\nPASS gen: H1 kernels appended\nPASS gen: refuses 7 pointers\nPASS gen: refuses no gguf_repack\nPASS out: mine becomes an empty build dir\nPASS out: empty becomes an empty build dir\nPASS out: new becomes an empty build dir\nPASS out: refuses a directory that is not a build\nPASS out: refuses a file\nPASS out: the refused directory's files survive\nPASS install: another Splash release is left alone, not built\nPASS install: says why KFlash was not built\nPASS install: the pinned release builds KFlash, its files untouched\nPASS apply: every patch applies to the pinned Splash\nall passed\n",
+    "prek": "check for merge conflicts................................................Passed\ncheck yaml...............................................................Passed\ncheck for added large files..............................................Passed\ncheck for case conflicts.................................................Passed\ntrim trailing whitespace.................................................Passed\nruff check...............................................................Passed\nshell scripts parse (bash -n)............................................Passed\n",
+    "unit": "dflash_lowrank_cache_test: ALL PASSED\n"
+  }
+}

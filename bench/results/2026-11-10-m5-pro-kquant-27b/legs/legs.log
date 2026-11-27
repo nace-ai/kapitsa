@@ -1,0 +1,17 @@
+18:11:43 bin=/opt/homebrew/bin/kapitsa sha=5e9ac395181b commit=e728524 model=/Users/alisheramantay/.cache/kapitsa/models/qwen3.8-27b-4bit order=[B A B A B A] macos=26.5.2
+18:11:45 LOCKPROOF lockf(30603) holder-in-my-ancestry=30603 (me=59083)
+18:13:03 1-B rc=0 load 2.64->2.42 ok prefill4k_ms=5605 power=ac powermode=2 serve_rss_end=16.6G serve_peak=16.55G kflash_lines=44 drafter_lines=28
+18:13:04 LOCKPROOF lockf(30603) holder-in-my-ancestry=30603 (me=59083)
+18:14:22 2-A rc=0 load 2.42->2.47 ok prefill4k_ms=5551 power=ac powermode=2 serve_rss_end=16.6G serve_peak=16.55G kflash_lines=44 drafter_lines=28
+18:14:23 LOCKPROOF lockf(30603) holder-in-my-ancestry=30603 (me=59083)
+18:15:41 3-B rc=0 load 2.51->2.46 ok prefill4k_ms=5580 power=ac powermode=2 serve_rss_end=16.5G serve_peak=16.55G kflash_lines=44 drafter_lines=28
+18:15:42 LOCKPROOF lockf(30603) holder-in-my-ancestry=30603 (me=59083)
+18:16:59 4-A rc=0 load 2.46->3.35 ok prefill4k_ms=5612 power=ac powermode=2 serve_rss_end=16.6G serve_peak=16.55G kflash_lines=44 drafter_lines=28
+18:17:01 LOCKPROOF lockf(30603) holder-in-my-ancestry=30603 (me=59083)
+18:18:27 5-B rc=0 load 3.35->4.27 void-foreign(36151:Application:51%) prefill4k_ms=5857 power=ac powermode=2 serve_rss_end=16.6G serve_peak=16.55G kflash_lines=44 drafter_lines=28
+18:18:28 waiting for load 4.41
+18:18:43 waiting for load 4.01
+18:18:58 waiting for load 4.03
+18:19:14 LOCKPROOF lockf(30603) holder-in-my-ancestry=30603 (me=59083)
+18:20:28 6-A rc=0 load 3.67->4.18 ok prefill4k_ms=6106 power=ac powermode=2 serve_rss_end=16.5G serve_peak=16.55G kflash_lines=44 drafter_lines=28
+18:20:28 LEGSDONE

@@ -1,0 +1,14 @@
+{
+  "required_rows": 16,
+  "missing_rows": 0,
+  "all_row_bytes_rechecked": true,
+  "ordered_row_digest": "62ddb874003768a4d1fb3a0686ba40b4a950fda22cbdc7a97eb547f18f6711b8",
+  "label": "seed-input-250",
+  "new_rows": 8,
+  "downloaded_bytes": 800,
+  "table_logical_bytes": 32000153976,
+  "table_allocated_bytes": 11488759808,
+  "full_table_downloaded": false,
+  "revision": "f37e7ba46f0f2993b6ca373221530c579f258712",
+  "response_ranges_verified": true
+}

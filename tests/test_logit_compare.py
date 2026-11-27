@@ -6,7 +6,8 @@ numpy giving the same numbers. CPU only, stdlib only (numpy too when it is insta
 
 usage: test_logit_compare.py
 """
-import array, json, math, os, random, subprocess, sys, tempfile
+import array, json, math, os, random, shutil, subprocess, sys, tempfile
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOOLS = os.path.join(HERE, "..", "tools")
@@ -60,6 +61,10 @@ def fsrc(kl):
 FAKE_DUMP = r'''#!/usr/bin/env python3
 import array, json, os, random, sys
 a = sys.argv[1:]
+if "--list-paths" in a:  # as logit_dump decides it from config.json (here: Flint has no batch path)
+    print("step,verify" if json.load(open(os.path.join(a[0], "config.json")))["model_type"] == "flint"
+          else "step,verify,batch")
+    sys.exit(0)
 out, paths = a[1], a[a.index("--paths") + 1].split(",")
 rows = int(a[a.index("--rows") + 1]) if "--rows" in a else 24
 env = {k: os.environ.get(k, "") for k in ("NI_QMT", "NI_MATH_SAFE")}
@@ -79,6 +84,8 @@ for p in ["prefill"] + paths:
             if name:
                 q = random.Random(f"{name} {w} {k}")
                 row = [x + amp * q.gauss(0, 1) for x in row]
+        if os.environ.get("FAKE_NONFINITE") and p == "verify" and (w, k) == (0, 4):
+            row[0] = float("nan")
         data += row
     with open(os.path.join(d, "sequences.txt"), "w") as f:
         f.write("".join(" ".join(map(str, s)) + "\n" for s in seqs))
@@ -87,7 +94,7 @@ for p in ["prefill"] + paths:
     with open(os.path.join(d, "logits.f32"), "wb") as f:
         f.write(array.array("f", data).tobytes())
     with open(os.path.join(d, "meta.json"), "w") as f:
-        json.dump({"model": "fm", "path": p, "build": "test", "mac": "Apple M5 Pro", "macos": "26", "date": "now",
+        json.dump({"model": a[0].rstrip("/").rsplit("/", 1)[-1], "model_dir": a[0], "path": p, "build": "test", "mac": "Apple M5 Pro", "macos": "26", "date": "now",
                    "records": len(recs), "source": "fake", "env": {k: v for k, v in env.items() if v},
                    "ane": {"evals": 0}, "verify": "chain"}, f)
 '''
@@ -121,8 +128,33 @@ t2 = max((i for i in range(V) if i != t1), key=ref[NEAR].__getitem__)
 ref[NEAR][t2] = f32(ref[NEAR][t1] - 0.002)
 
 with tempfile.TemporaryDirectory() as tmp:
+    # Two observations at the same prefix still carry two independently scored rows.
+    sequences = [[1, 2], [1, 3], [2, 1]]
+    records = [(0, 1), (1, 1), (2, 1)]
+    same, flipped = [0., 1., 2., 3.], [3., 2., 1., 0.]
+    repeated = write_dump(os.path.join(tmp, "repeated"), sequences, records, [same] * 3)
+    changed = write_dump(os.path.join(tmp, "changed"), sequences,
+                         [records[2], records[0], records[1]], [same, flipped, same])
+    rc, out = run(repeated, changed, "--min-top1", "1")
+    check(rc == 1 and "1 flip" in out, "a changed duplicate prefix row reaches the gate", out)
+    short = write_dump(os.path.join(tmp, "short"), sequences, records[1:], [same] * 2)
+    rc, out = run(repeated, short, "--min-top1", "1")
+    check(rc == 2, "a missing occurrence of a prefix cannot be scored twice", out)
     meta = {"model": "test-model-without-floor", "build": "test", "path": "verify"}
     R = write_dump(os.path.join(tmp, "ref"), seqs, recs, ref, meta)
+
+    # A constant offset on just one row leaves its softmax unchanged.
+    a = write_dump(os.path.join(tmp, "offset"), [[0, 0]], [(0, 1)], [[2**60, 2**60]])
+    b = write_dump(os.path.join(tmp, "small"), [[0, 0]], [(0, 1)], [[0., 4.]])
+    metrics = lc.compare(lc.Dump(a), lc.Dump(b))
+    expected_nll = math.log1p(math.exp(4)) - math.log(2)
+    check(abs(metrics["kl_mean"] - (expected_nll - 2)) < 1e-12
+          and abs(metrics["nll_change_mean"] - expected_nll) < 1e-12
+          and metrics["max_abs_diff"] == 2**60,
+          "large row offset preserves KL, NLL and raw logit distance", metrics)
+    rc, out = run(a, b, "--max-mean-kl", "1", "--max-nll-change", "1")
+    check(rc == 1 and "FAIL: mean KL" in out and "FAIL: mean NLL change" in out,
+          "both bounds reject the offset row", out)
 
     # ---- identical ----
     rc, out = run(R, write_dump(os.path.join(tmp, "same"), seqs, recs, ref, meta))
@@ -423,6 +455,96 @@ with tempfile.TemporaryDirectory() as tmp:
                            capture_output=True, text=True)
         with open(out) as f:
             check(p.returncode == 0 and json.load(f)["reorder_gate"] == rg, "--rescore derives the reorder gate again")
+    with open(out, "rb") as f:
+        saved_floor = f.read()
+    p = subprocess.run([sys.executable, os.path.join(TOOLS, "logit_floor.py"), mdir, "--bin", fake,
+                        "--work", os.path.join(tmp, "bad-work"), "--out", out, "--rows", "6"],
+                       capture_output=True, text=True, env={**os.environ, "FAKE_NONFINITE": "1"})
+    with open(out, "rb") as f:
+        check(p.returncode != 0 and "non-finite" in p.stderr and "sequence 0 prefix 4" in p.stderr
+              and f.read() == saved_floor, "non-finite logits cannot replace a measured floor", p.stderr)
+    # A shared --work can hold a complete run of a different model, or just one stale path.
+    cache = Path(tmp) / "reuse-work"
+    other = Path(tmp) / "other-model"
+    other.mkdir()
+    shutil.copyfile(os.path.join(mdir, "config.json"), other / "config.json")
+
+    def run_floor(model_dir, work, *flags, cwd=None):
+        return subprocess.run([sys.executable, os.path.join(TOOLS, "logit_floor.py"), model_dir, "--bin", fake,
+                               "--rows", "3", "--out", out, "--work", work, *flags], capture_output=True, text=True, cwd=cwd)
+
+    seed = run_floor(mdir, cache, "--keep")
+    check(seed.returncode == 0, "create a reusable floor fixture", seed.stderr)
+    saved = Path(out).read_bytes()
+    for case, requested in [("other-model", other), ("mixed", mdir), ("missing-model", mdir)]:
+        work = Path(tmp) / ("reuse-" + case)
+        shutil.copytree(cache, work)
+        if case != "other-model":
+            metadata = work / "chunk" / "verify" / "meta.json"
+            info = json.loads(metadata.read_bytes())
+            if case == "mixed":
+                info["model"] = other.name
+            else:
+                del info["model"]
+            metadata.write_text(json.dumps(info))
+        def contents():
+            return {p.relative_to(work): p.read_bytes() for p in work.rglob("*") if p.is_file()}
+        before = contents()
+        result = run_floor(requested, work, "--reuse")
+        check(result.returncode != 0 and "--reuse" in result.stderr and "model" in result.stderr
+              and Path(out).read_bytes() == saved and contents() == before,
+              f"--reuse refuses {case} and preserves the prior floor and dumps", result.stderr)
+
+    # Keep a named alias. A parent after a symlink must follow the filesystem, as when opening the model.
+    inner = Path(mdir) / "inner"
+    inner.mkdir()
+    alias = Path(tmp) / "alias"
+    alias.symlink_to(mdir, target_is_directory=True)
+    nested_link = Path(tmp) / "nested-link"
+    nested_link.symlink_to(inner, target_is_directory=True)
+    for arg, expected in [(".", "fm"), (str(alias) + "/.", "alias"), (str(nested_link) + "/..", "fm")]:
+        work = Path(tmp) / "path-work"
+        result = run_floor(arg, work, "--keep", cwd=mdir)
+        meta = work / "a" / "verify" / "meta.json"
+        check(result.returncode == 0 and meta.exists() and json.loads(meta.read_bytes())["model"] == expected
+              and json.loads(Path(out).read_bytes())["model"] == expected,
+              f"floor and producer use {expected} for {os.path.basename(arg)}", result.stderr)
+        if meta.exists():
+            shutil.rmtree(work)
+
+    saved = Path(out).read_bytes()
+    result = run_floor(mdir + "/absent/..", Path(tmp) / "absent-work", "--keep")
+    check(result.returncode != 0 and Path(out).read_bytes() == saved,
+          "an absent component before .. still fails the model lookup", result.stderr)
+
+    result = run_floor(mdir + "/absent/..", Path(tmp) / "absent-work", "--rescore")
+    check(result.returncode == 0 and json.loads(Path(out).read_bytes())["model"] == json.loads(saved)["model"],
+          "--rescore with an explicit floor needs no model directory", result.stderr)
+
+    # Some older dumps recorded "." as the model. Only a named directory in their own metadata identifies it.
+    legacy = Path(tmp) / "legacy"
+    shutil.copytree(cache, legacy)
+    for meta in legacy.rglob("meta.json"):
+        info = json.loads(meta.read_bytes())
+        info.update(model=".", model_dir=".")
+        meta.write_text(json.dumps(info))
+    prior = Path(out).read_bytes()
+    result = run_floor(".", legacy, "--reuse", "--keep", cwd=other)
+    check(result.returncode != 0 and "--reuse" in result.stderr and Path(out).read_bytes() == prior,
+          "--reuse refuses a bare dot from another working directory", result.stderr)
+    for meta in legacy.rglob("meta.json"):
+        info = json.loads(meta.read_bytes())
+        info["model_dir"] = "fm/."
+        meta.write_text(json.dumps(info))
+    result = run_floor(mdir, legacy, "--reuse")
+    check(result.returncode == 0 and "$ " not in result.stdout and not legacy.exists(),
+          "--reuse accepts a legacy name/. label from its recorded directory", result.stderr)
+
+    result = run_floor(mdir + "/", cache, "--reuse")
+    check(result.returncode == 0 and json.loads(Path(out).read_bytes())["measured"]["reused"]["dumps"] == 8
+          and "$ " not in result.stdout and not cache.exists(),
+          "--reuse accepts the same recorded model and cleans up after success", result.stderr)
+
     lc_saved, lf_mac = lc.FLOORS, lf.this_mac
     try:  # --rescore without --out: this Mac's file
         lc.FLOORS = os.path.join(tmp, "floors2")

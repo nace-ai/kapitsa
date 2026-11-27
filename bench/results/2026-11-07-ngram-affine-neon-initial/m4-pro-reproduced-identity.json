@@ -1,0 +1,23 @@
+{
+  "original": {
+    "commit": "01b4c6d69fbe69e862c00358f88c94a363129592",
+    "source_sha256": "17f6a47b0b0d53f96d90c06722792ed91ca2ebe0324d4452ea121c056071fdf5",
+    "body_sha256": "0c372b1045348ae6c07392f28a7aafbe23bacae0ca0f1bb73e9157a19d9374d6"
+  },
+  "vector": {
+    "commit": "8c0a7ec3bf72623f6c7f92524ef229f3643a9e67",
+    "source_sha256": "f6012c692374a9c80d398845445e63d38db74776c8d84ba4fc273f43487b9c18",
+    "body_sha256": "e74f76a0e515d8971ce3f6e92264fe3543e60c081ca476875a01e6368b2e2439"
+  },
+  "compile_command": [
+    "clang++",
+    "-O3",
+    "-std=c++20",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/replenish-1632/public-helper-run/original.cpp",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/replenish-1632/public-helper-run/vector.cpp",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/ngram-affine-neon/bench/results/2026-11-07-ngram-affine-neon-initial/screen.cpp",
+    "-o",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/replenish-1632/public-helper-run/screen"
+  ],
+  "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)\nTarget: arm64-apple-darwin24.6.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n"
+}

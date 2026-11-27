@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/.venv/bin/python",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/candidate-current-pr775/tools/logit_compare.py",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-m3-current/logits-precise",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-m3-current/logits-fast",
+    "--min-top1",
+    "1",
+    "--max-mean-kl",
+    "0",
+    "--json",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-m3-current-competitors/zero-drift.json"
+  ],
+  "returncode": 1
+}

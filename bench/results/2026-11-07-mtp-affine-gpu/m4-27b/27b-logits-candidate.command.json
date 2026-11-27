@@ -1,0 +1,20 @@
+{
+  "label": "27b-logits-candidate",
+  "argv": [
+    "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/build/logit_dump",
+    "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-logits-candidate",
+    "--corpus",
+    "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/bench/corpus.txt",
+    "--from",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-logits-base"
+  ],
+  "cwd": "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool",
+  "started_at": "2026-11-07T05:51:51.208315+00:00",
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-logits-candidate"
+  }
+}

@@ -1,0 +1,17 @@
+step: 192 records (qwen3.6-35b-a3b-4bit)
+  reference: 0.2.30 (4d9a9ec8), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.30 (4d9a9ec8), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_QMT_I8":"1"}
+  bitwise identical rows 0 of 192; max |logit diff| 9.776
+  top-1 agreement 0.9740 (5 flips, 0 of them near-ties (reference margin under 0))
+  KL mean 4.028e-03 median 1.369e-04 p99 6.040e-02 max 1.799e-01; top-2 margin change up to 3.03
+  next-token NLL change -4.774e-05 nats per record (candidate minus reference)
+    flip at sequence 0 prefix 3211: top-1 42598 -> 6633, reference margin 0.312
+    flip at sequence 0 prefix 3209: top-1 10434 -> 8102, reference margin 0.1229
+    flip at sequence 0 prefix 3201: top-1 5254 -> 6469, reference margin 0.09323
+    flip at sequence 3 prefix 2058: top-1 653 -> 687, reference margin 0.04872
+    flip at sequence 1 prefix 2822: top-1 471 -> 220, reference margin 0.004829
+  FAIL: top-1 agreement 0.9740 < 0.9896
+  FAIL: mean KL 4.028e-03 > 3.370e-04
+  FAIL: p99 KL 6.040e-02 > 1.030e-02
+  FAIL: 5 flips at a reference margin of 0 or more (allowed 0)
+  FAIL (tools/logit_floors/qwen3.6-35b-a3b-4bit.m5.json)

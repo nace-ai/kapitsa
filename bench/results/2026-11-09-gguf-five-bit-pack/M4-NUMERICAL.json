@@ -1,0 +1,126 @@
+{
+  "format": "Privacy-filtered derived summaries, not raw execution logs.",
+  "source_reference": "66a5f3bc473df9af8b72ded9090c3a8acc16a43e",
+  "source_candidate": "90e10efce8462ede4c756ca77ccdb1510f4e9faf",
+  "rows_each_arm": 584,
+  "vocab": 248320,
+  "float32_each_arm": 145018880,
+  "paths": {
+    "prefill": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 8,
+          "float32_elements": 1986560,
+          "finite_float32_elements": 1986560,
+          "logits_sha256": "de5685a7a70c78ee12934df8f09a227b2e037527c220d2a5aa17bdc6ba077c67",
+          "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (66a5f3bc473df9af8b72ded9090c3a8acc16a43e)",
+          "verify_method": null
+        },
+        {
+          "records": 8,
+          "float32_elements": 1986560,
+          "finite_float32_elements": 1986560,
+          "logits_sha256": "de5685a7a70c78ee12934df8f09a227b2e037527c220d2a5aa17bdc6ba077c67",
+          "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (90e10efce8462ede4c756ca77ccdb1510f4e9faf)",
+          "verify_method": null
+        }
+      ]
+    },
+    "step": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "713e82a635f021d969c9df009b854bd472dd23850b946c16e4ef954a7ecaaa84",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (66a5f3bc473df9af8b72ded9090c3a8acc16a43e)",
+          "verify_method": null
+        },
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "713e82a635f021d969c9df009b854bd472dd23850b946c16e4ef954a7ecaaa84",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (90e10efce8462ede4c756ca77ccdb1510f4e9faf)",
+          "verify_method": null
+        }
+      ]
+    },
+    "verify": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "0085136eb1a450055190d8408b13e9f5d29505fa32a3eef03e431f9b272a4852",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (66a5f3bc473df9af8b72ded9090c3a8acc16a43e)",
+          "verify_method": "KFlash tree (a chain of 8 live rows)"
+        },
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "0085136eb1a450055190d8408b13e9f5d29505fa32a3eef03e431f9b272a4852",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (90e10efce8462ede4c756ca77ccdb1510f4e9faf)",
+          "verify_method": "KFlash tree (a chain of 8 live rows)"
+        }
+      ]
+    },
+    "batch": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "f17e3c8dfcae9fce5f8dcced589a8811b79593acee4ce32777efc2f2f29930c3",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (66a5f3bc473df9af8b72ded9090c3a8acc16a43e)",
+          "verify_method": null
+        },
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "f17e3c8dfcae9fce5f8dcced589a8811b79593acee4ce32777efc2f2f29930c3",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "build": "0.2.31 (90e10efce8462ede4c756ca77ccdb1510f4e9faf)",
+          "verify_method": null
+        }
+      ]
+    }
+  },
+  "command_rc": {
+    "reference_output": 0,
+    "candidate_output": 0,
+    "report_only": 0,
+    "strict_zero": 0
+  },
+  "threshold_scope": "Explicit strict-zero thresholds apply to step/verify/batch. Prefill independently passes finite and complete literal byte/input comparison. No floor changed.",
+  "method": "Teacher-forced trunk, including KFlash tree chain-of-eight verify. Not a free-generating MTP numerical qualification."
+}

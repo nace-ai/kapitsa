@@ -1,0 +1,32 @@
+{
+  "output": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu",
+  "trees": {
+    "base": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference",
+    "candidate": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate"
+  },
+  "builds": {
+    "base": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build",
+    "candidate": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/build"
+  },
+  "heads": {
+    "base": "2c41b56cc6c5f0895d4359d5ff33d1459b22bc39",
+    "candidate": "3ce432031569e364af6731ffb59aec1bc67355ef"
+  },
+  "ready_files": [
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/build-ready"
+  ],
+  "tokenizer_source": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/tokenizer.cpp",
+  "min_free_bytes": 2147483648,
+  "models": [
+    {
+      "path": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+      "name": "4b",
+      "mtp": true
+    },
+    {
+      "path": "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+      "name": "35b",
+      "mtp": false
+    }
+  ]
+}

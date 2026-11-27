@@ -1,6 +1,7 @@
 #include "api/chat_completions.h"
 
 #include <cmath>
+#include <limits>
 
 namespace ni::api {
 
@@ -9,7 +10,10 @@ ojson chat_usage(const ChatResult& res) {
           {"completion_tokens", res.completion_tokens},
           {"total_tokens", res.prompt_tokens + res.completion_tokens},
           {"prompt_tokens_details", {{"cached_tokens", res.cached_tokens}}}};
-  if (res.loops > 0) u["kapitsa"] = kapitsa_usage(res);  // looped models: the loop count the request ran
+  if (res.reasoning_tokens > 0)
+    u["completion_tokens_details"] = {{"reasoning_tokens", res.reasoning_tokens}};
+  // looped models: the loop count the request ran; a thinking budget: its cap and whether the close was forced
+  if (ojson k = kapitsa_usage(res); !k.is_null()) u["kapitsa"] = k;
   // the time the engine took to read the uncached part of the prompt (a client's prefill tok/s is
   // (prompt_tokens - cached_tokens) / prefill_ms; its own time to first token also holds the network and the queue).
   // Left out when the prompt had images (encoded before the clock starts) or the request gave up its turn to another
@@ -43,16 +47,39 @@ std::pair<int, ojson> chat_failure(const ChatResult& res) {
   if (res.engine_down) return {503, chat_error(res.error, "server_error", "engine_unavailable")};
   if (res.prompt_limit > 0)
     return {400, chat_error("This model's maximum context length is " + std::to_string(res.prompt_limit) +
-                                " tokens. However, your messages resulted in " + std::to_string(res.prompt_tokens) +
+                                (res.memory_limit ? " tokens for this conversation now, as much KV cache as this Mac's "
+                                                    "memory budget holds (the context window itself is larger)"
+                                                  : " tokens") +
+                                ". However, your messages resulted in " + std::to_string(res.prompt_tokens) +
                                 " tokens. Please reduce the length of the messages.",
                             "invalid_request_error", "context_length_exceeded", "messages")};
   return {400, chat_error(res.error.empty() ? "the request failed" : res.error)};
 }
 
 int chat_max_tokens(const ojson& body) {
-  for (const char* k : {"max_completion_tokens", "max_tokens"})
-    if (body.contains(k) && !body[k].is_null()) return body[k].get<int>();
+  for (const char* k : {"max_completion_tokens", "max_tokens"}) {
+    if (!body.contains(k) || body[k].is_null()) continue;
+    const auto& value = body[k];
+    const bool valid = value.is_number_unsigned()
+        ? value.get<uint64_t>() >= 1 && value.get<uint64_t>() <= uint64_t(std::numeric_limits<int>::max())
+        : value.is_number_integer() && value.get<int64_t>() >= 1 &&
+              value.get<int64_t>() <= std::numeric_limits<int>::max();
+    if (!valid)
+      throw ApiError(400, "invalid_request_error",
+                     std::string(k) + " must be an integer between 1 and " + std::to_string(std::numeric_limits<int>::max()),
+                     "", k);
+    return value.get<int>();
+  }
   return 16384;
+}
+
+void chat_tools(const ojson& body, ChatRequest& r) {
+  if (body.contains("tools") && body["tools"].is_array()) {
+    r.tools = r.deferred_tools = ojson::array();
+    for (ojson t : body["tools"]) (take_deferred(t) ? r.deferred_tools : r.tools).push_back(std::move(t));
+  }
+  if (body.contains("tool_choice") && body["tool_choice"].is_string() && body["tool_choice"] == "none")
+    r.tools = r.deferred_tools = ojson::array();
 }
 
 std::shared_ptr<const Grammar> chat_grammar(const ojson& body, const ojson& tools) {
@@ -104,13 +131,15 @@ std::shared_ptr<const Grammar> chat_grammar(const ojson& body, const ojson& tool
   return request_grammar(spec, tools);
 }
 
-std::string ChatCompletionsStream::chunk(const ojson& delta, const ojson& finish, const ojson* usage) const {
+std::string ChatCompletionsStream::chunk(const ojson& delta, const ojson& finish, const ojson* usage,
+                                         const ojson* progress) const {
   ojson c{{"id", id_},
           {"object", "chat.completion.chunk"},
           {"created", created_},
           {"model", model_},
           {"choices", ojson::array({ojson{{"index", 0}, {"delta", delta}, {"finish_reason", finish}}})}};
   if (usage) c["usage"] = *usage;
+  if (progress) c["prompt_progress"] = *progress;
   return "data: " + dump(c) + "\n\n";
 }
 
@@ -138,6 +167,14 @@ std::string ChatCompletionsStream::keepalive() {
   // The delta carries nothing, not even empty content, so no client takes it for the start of text, wherever it lands
   // (a reply also goes quiet mid-reasoning while the parser holds back a tool call, or while it waits for memory).
   return chunk(ojson::object(), nullptr);
+}
+
+std::string ChatCompletionsStream::progress(const PromptProgress& p) {
+  // llama.cpp's prompt_progress object beside the choices, on the keepalive's empty delta. llama.cpp's own chunk repeats
+  // the assistant's role (null content) instead, which OpenAI's Python stream helper concatenates into the message's
+  // role ("assistantassistant..."); an empty delta adds nothing, and the stream's one choice stays at [0].
+  const ojson pp{{"total", p.total}, {"cache", p.cache}, {"processed", p.processed}, {"time_ms", p.time_ms}};
+  return chunk(ojson::object(), nullptr, nullptr, &pp);
 }
 
 std::string ChatCompletionsStream::end(const ChatResult& res) {

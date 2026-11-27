@@ -46,24 +46,51 @@ not ask for abstractions, interfaces or configuration the change does not need.
   Their floor is an older M4 Pro measurement, not a re-measurement of these M5 kernels. These historical results
   do not waive the output check for a new change or authorize another default. Do not report an unchanged default
   as a defect introduced by the PR; flag a new 35B comparison that uses the stale M4 Pro floor without saying so.
+- A default that only switches which published pack a catalog name downloads (the plain 4-bit pack to its Nace Q4 pack)
+  changes which weights a catalog name loads, not the loader or the kernels (a pack whose tensors need a different
+  kernel path, such as 6-bit group-64 dense weights on `NI_QMT6`, goes back to the floor gate). The floors cover code
+  paths on one pack: `tools/logit_compare.py` between two packs can only report "moved". It gates on KL to BF16 for both packs on the same token set (corpus and tool named),
+  a task score and the interleaved A/B, and passes only when the new pack's mean KL is at most the old pack's, its
+  task score is not below the old pack's by more than that score's run-to-run spread, and it is no slower beyond noise
+  (3%). Flag such a PR that lacks any of those numbers, whose two KL figures come from different token sets, or that
+  does not meet that rule. Do not ask it for a `logit_dump` comparison between the two packs.
 - `tools/logit_floors/*.json` change only through `tools/logit_floor.py` (the file records its build, Mac and date), in
   a PR of their own: flag a floor or gate edited by hand, or loosened in the same PR as a change it lets pass.
 - A PR whose title or description says it was not verified on a GPU is fine; flag it only when the diff is a kernel or
   numerics change that is presented as verified without evidence.
 - Whether a PR needed a GPU run, and on which models: `.dsh/skills/verify-kapitsa`'s `vk checks` reads the diff
   against `origin/main` and says so. Flag a GPU-tier PR that claims outputs or speed without the runs it lists.
+- Before binding an architecture-specific measurement or cap run, trace the runner's loader factory to that architecture.
+  On 2026-11-23, the ni_run/Inkling2 near-miss selected load_qwen, which cannot load Inkling2; the engine selects it separately.
 - More than one unrelated change in a PR (speed change plus refactor plus docs rewrite): say it should be split.
 
-## New features: on by default somewhere, or widely established
+## New features: on by default for the whole class, no exceptions
 
 - A PR that adds a feature (a kernel path, a decode, drafting or verify strategy, a cache or memory policy, a new
-  user-facing flag or environment variable) must do at least one of two things. It turns the feature on by default for
-  at least one model on at least one Mac, with the interleaved A/B and the output check above. Or it cites a well-known
-  paper or a major engine (llama.cpp, MLX, vLLM, SGLang, TensorRT-LLM) that has the feature, and says why it fits Kapitsa
-  (Apple silicon, exact outputs, single-stream speed). Flag a feature that ships opt-in only (off by default everywhere)
-  with neither: it should stay an open PR until it wins a default.
-- Once a feature is a default somewhere, other models may reach it opt-in. Do not flag a default scoped to the models
-  the author measured: a later PR widens it.
+  user-facing flag or environment variable) must turn it on by default for the whole class of hardware or model it
+  targets (a matrix-unit optimization for every Mac with matrix units, a MoE path for every MoE model), with the
+  interleaved A/B and the output check above on at least two setups that differ in chip class or model family when two
+  exist for the class, and name the class and the setups. Flag every feature that is off by default on every model and
+  Mac as blocking. A byte-identical flag-off path, a paper or other engine that has it, or "a later PR flips the
+  default" does not make it mergeable. Check the code, not the title: find where the new flag or env variable is read
+  and confirm the class's path enables it without the user setting anything.
+- If the PR's own measurements show the feature faster and the output check passes, but the default stays off, flag it:
+  the default belongs on for the class in this PR.
+- Flag a default narrowed to the setup the author measured (an exact chip name, core count, RAM size or one model) unless
+  the PR cites a win of at least 10% on that target that is slower or broken on the wider class.
+  A per-chip-class default in the device profile table also needs a shown mechanism: a profile or kernel-cost
+  measurement explaining why the change is faster on that class and not others. Measured speed differences alone,
+  including a slower or broken class member, do not justify a chip-class exception. Without that mechanism,
+  require wins on two measured devices and default on for all Macs, or do not merge. These are additional
+  requirements; they do not waive the narrow-gate evidence, setup coverage or output checks.
+- Flag a new inline `apple_family()`, `apple10()`, `m4_base()`, chip-name or core-count check outside
+  `src/engine/device_profile.cpp`. `python3 tests/test_profile_gates.py` fails when that count grows.
+- The fast profile counts (docs/profiles.md): a feature that moves outputs past the floor's gate may be on by default
+  only in the fast profile, for its whole class, as in the rules above. Check that its switch is read through
+  `profile_switch()`, that the class is a row in `src/engine/device_profile.cpp`, and that the PR's output check shows
+  flips and mean KL against the precise path within the bar docs/profiles.md gives for the model and Mac it ran on. Flag a
+  fast-only default whose drift exceeds the bar, or whose output check passes the floor's gate (that belongs in
+  precise).
 - Not features, so do not flag them: a kill switch for an existing default (`NI_X=0`), a debug or profiling switch, a
   measuring tool under `tools/` or `bench/`.
 
@@ -85,7 +112,8 @@ not ask for abstractions, interfaces or configuration the change does not need.
   without naming it in its subject (a re-measured cell, a superseded transcript, an erratum), and flag a transcript
   rewritten under the same label, which is a re-run wearing the old run's name.
 - A pull request that adds a file under `bench/community/results` must carry the regenerated
-  `bench/community/RESULTS.md` (`python3 tools/community_table.py`) in the same pull request. Flag a result without it,
+  `bench/community/RESULTS.md` and `docs/site/leaderboard-data.js` (`python3 tools/community_table.py` writes both, then
+  `git add` the two files) in the same pull request. Flag a result without either,
   and flag a merge of a bench pull request whose branch is behind main until the table is regenerated on the new base:
   the row and its rewrite land together or main's table goes stale.
 
@@ -123,7 +151,7 @@ not ask for abstractions, interfaces or configuration the change does not need.
 
 - A changed default, flag, environment variable, measured number or catalog entry must be updated everywhere it is
   stated (README.md, docs/usage.md, docs/benchmarks.md, docs/architecture.md, tests, `src/hub/catalog.cpp`). Flag a stale
-  copy.
+  copy. A `src/hub/catalog.cpp` change comes with the regenerated `docs/models.md` (`python3 tools/models_table.py`).
 - A test that cannot fail for a user-visible reason (asserts the mock, or nothing) is not coverage; flag it.
 
 ## Size

@@ -1,0 +1,58 @@
+{
+ "labels": {
+  "math500-quick": {
+   "math-gpu": {
+    "problems": 50,
+    "samples": 50,
+    "accuracy": 0.74,
+    "ci95": [
+     0.62,
+     0.86
+    ],
+    "cut_short": 12,
+    "no_answer": 12,
+    "answered_in_thinking": 0,
+    "looping": 32,
+    "completion_tokens_median": 21894,
+    "tok_s_median": 112.7,
+    "by_level": {
+     "5": 0.74
+    }
+   },
+   "math-ane": {
+    "problems": 50,
+    "samples": 50,
+    "accuracy": 0.72,
+    "ci95": [
+     0.6,
+     0.84
+    ],
+    "cut_short": 13,
+    "no_answer": 13,
+    "answered_in_thinking": 0,
+    "looping": 32,
+    "completion_tokens_median": 21894,
+    "tok_s_median": 112.5,
+    "by_level": {
+     "5": 0.72
+    }
+   }
+  }
+ },
+ "paired": {
+  "math500-quick": {
+   "math-ane": {
+    "problems": 50,
+    "difference": -0.02,
+    "ci95": [
+     -0.06,
+     0.0
+    ],
+    "better": 0,
+    "worse": 1,
+    "mcnemar_p": 1.0,
+    "baseline": "math-gpu"
+   }
+  }
+ }
+}

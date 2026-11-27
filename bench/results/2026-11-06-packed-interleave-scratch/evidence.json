@@ -1,0 +1,2019 @@
+{
+  "kind": "packed-interleave-validation",
+  "source_heads": {
+    "reference": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+    "candidate": "e554264e5934c22a4fb271aec7babdd86e1c4785"
+  },
+  "scope": "Host layout permutation only; no kernel/dispatch/numeric changes.",
+  "cpu_cases": 840,
+  "host_microbenchmark": {
+    "machine": "M3 Ultra, 60 GPU cores, 96 GiB; macOS 26.4.1 (25E253)",
+    "repeat_order": "Six alternating AB/BA pairs per shape, fresh process per arm; all full-image SHA256 digests equal. Timed only interleave; maxrss includes fixture, scratch and runtime. CPU tests were running elsewhere; no concurrent compilation in final run.",
+    "runs": [
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 6.695625,
+        "maxrss_bytes": 51986432,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "reference",
+        "repeat": 0
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 4.632833,
+        "maxrss_bytes": 26984448,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "interleave",
+        "repeat": 0
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 2.618583,
+        "maxrss_bytes": 27000832,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "interleave",
+        "repeat": 1
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 3.137459,
+        "maxrss_bytes": 51986432,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "reference",
+        "repeat": 1
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 2.756916,
+        "maxrss_bytes": 51986432,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "reference",
+        "repeat": 2
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 1.647625,
+        "maxrss_bytes": 27000832,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "interleave",
+        "repeat": 2
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 1.27175,
+        "maxrss_bytes": 27000832,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "interleave",
+        "repeat": 3
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 2.265666,
+        "maxrss_bytes": 51970048,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "reference",
+        "repeat": 3
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 2.257917,
+        "maxrss_bytes": 51986432,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "reference",
+        "repeat": 4
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 1.227084,
+        "maxrss_bytes": 27000832,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "interleave",
+        "repeat": 4
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 1.223042,
+        "maxrss_bytes": 27000832,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "interleave",
+        "repeat": 5
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 1.982667,
+        "maxrss_bytes": 51986432,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "reference",
+        "repeat": 5
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.964292,
+        "maxrss_bytes": 26820608,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "reference",
+        "repeat": 0
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.509208,
+        "maxrss_bytes": 14876672,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "interleave",
+        "repeat": 0
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.489083,
+        "maxrss_bytes": 14876672,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "interleave",
+        "repeat": 1
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.960791,
+        "maxrss_bytes": 26820608,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "reference",
+        "repeat": 1
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.957959,
+        "maxrss_bytes": 26820608,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "reference",
+        "repeat": 2
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.4875,
+        "maxrss_bytes": 14876672,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "interleave",
+        "repeat": 2
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.486708,
+        "maxrss_bytes": 14876672,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "interleave",
+        "repeat": 3
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.945625,
+        "maxrss_bytes": 26820608,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "reference",
+        "repeat": 3
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.944083,
+        "maxrss_bytes": 26820608,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "reference",
+        "repeat": 4
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.484041,
+        "maxrss_bytes": 14876672,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "interleave",
+        "repeat": 4
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.489166,
+        "maxrss_bytes": 14876672,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "interleave",
+        "repeat": 5
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.961459,
+        "maxrss_bytes": 26820608,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "reference",
+        "repeat": 5
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 29.502417,
+        "maxrss_bytes": 679591936,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "reference",
+        "repeat": 0
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 17.494375,
+        "maxrss_bytes": 340787200,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "interleave",
+        "repeat": 0
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 17.524208,
+        "maxrss_bytes": 340787200,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "interleave",
+        "repeat": 1
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 29.378125,
+        "maxrss_bytes": 679591936,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "reference",
+        "repeat": 1
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 29.164333,
+        "maxrss_bytes": 679591936,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "reference",
+        "repeat": 2
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 17.570833,
+        "maxrss_bytes": 340803584,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "interleave",
+        "repeat": 2
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 17.488667,
+        "maxrss_bytes": 340803584,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "interleave",
+        "repeat": 3
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 29.074708,
+        "maxrss_bytes": 679591936,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "reference",
+        "repeat": 3
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 29.2395,
+        "maxrss_bytes": 679591936,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "reference",
+        "repeat": 4
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 17.696167,
+        "maxrss_bytes": 340803584,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "interleave",
+        "repeat": 4
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 17.717625,
+        "maxrss_bytes": 340803584,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "interleave",
+        "repeat": 5
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 29.19175,
+        "maxrss_bytes": 679591936,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "reference",
+        "repeat": 5
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 2.021084,
+        "maxrss_bytes": 55328768,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "reference",
+        "repeat": 0
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 1.110125,
+        "maxrss_bytes": 29327360,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "interleave",
+        "repeat": 0
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 1.1125,
+        "maxrss_bytes": 29327360,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "interleave",
+        "repeat": 1
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 2.005417,
+        "maxrss_bytes": 55328768,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "reference",
+        "repeat": 1
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 2.007792,
+        "maxrss_bytes": 55328768,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "reference",
+        "repeat": 2
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 1.118208,
+        "maxrss_bytes": 29327360,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "interleave",
+        "repeat": 2
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 1.087417,
+        "maxrss_bytes": 29327360,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "interleave",
+        "repeat": 3
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 2.028208,
+        "maxrss_bytes": 55328768,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "reference",
+        "repeat": 3
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 2.028209,
+        "maxrss_bytes": 55328768,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "reference",
+        "repeat": 4
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 1.084916,
+        "maxrss_bytes": 29327360,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "interleave",
+        "repeat": 4
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 1.086292,
+        "maxrss_bytes": 29327360,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "interleave",
+        "repeat": 5
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 2.053375,
+        "maxrss_bytes": 55328768,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "reference",
+        "repeat": 5
+      }
+    ],
+    "preliminary_during_build_runs": [
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 2.091542,
+        "maxrss_bytes": 51986432,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "reference",
+        "repeat": 0
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 1.251333,
+        "maxrss_bytes": 26984448,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "interleave",
+        "repeat": 0
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 1.35375,
+        "maxrss_bytes": 27000832,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "interleave",
+        "repeat": 1
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 2.053458,
+        "maxrss_bytes": 51986432,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "reference",
+        "repeat": 1
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 2.093084,
+        "maxrss_bytes": 51986432,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "reference",
+        "repeat": 2
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 1.320667,
+        "maxrss_bytes": 26984448,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "interleave",
+        "repeat": 2
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 1.258291,
+        "maxrss_bytes": 27000832,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "interleave",
+        "repeat": 3
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 2.116042,
+        "maxrss_bytes": 51986432,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "reference",
+        "repeat": 3
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 2.048916,
+        "maxrss_bytes": 51986432,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "reference",
+        "repeat": 4
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 1.278084,
+        "maxrss_bytes": 27000832,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "interleave",
+        "repeat": 4
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 1.287125,
+        "maxrss_bytes": 27000832,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "interleave",
+        "repeat": 5
+      },
+      {
+        "N": 18432,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 2.124333,
+        "maxrss_bytes": 51986432,
+        "sha256": "41e126039c606eea26065957bce0fead1a026579fa78e2d5e91487dec8768499",
+        "arm": "reference",
+        "repeat": 5
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.954625,
+        "maxrss_bytes": 26820608,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "reference",
+        "repeat": 0
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.498916,
+        "maxrss_bytes": 14876672,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "interleave",
+        "repeat": 0
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.496583,
+        "maxrss_bytes": 14876672,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "interleave",
+        "repeat": 1
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 1.01325,
+        "maxrss_bytes": 26820608,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "reference",
+        "repeat": 1
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 1.074042,
+        "maxrss_bytes": 26820608,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "reference",
+        "repeat": 2
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.494834,
+        "maxrss_bytes": 14876672,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "interleave",
+        "repeat": 2
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.496125,
+        "maxrss_bytes": 14876672,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "interleave",
+        "repeat": 3
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.990167,
+        "maxrss_bytes": 26820608,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "reference",
+        "repeat": 3
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.956084,
+        "maxrss_bytes": 26820608,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "reference",
+        "repeat": 4
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.496,
+        "maxrss_bytes": 14876672,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "interleave",
+        "repeat": 4
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.537625,
+        "maxrss_bytes": 14876672,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "interleave",
+        "repeat": 5
+      },
+      {
+        "N": 2560,
+        "groups": 144,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 0.991416,
+        "maxrss_bytes": 26820608,
+        "sha256": "b254b714c5a3d58500ed8230ba605fd1e1a6449cd615ce045a85b850c425c258",
+        "arm": "reference",
+        "repeat": 5
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 30.162625,
+        "maxrss_bytes": 679591936,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "reference",
+        "repeat": 0
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 17.677458,
+        "maxrss_bytes": 340803584,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "interleave",
+        "repeat": 0
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 20.087292,
+        "maxrss_bytes": 340803584,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "interleave",
+        "repeat": 1
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 31.539875,
+        "maxrss_bytes": 679591936,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "reference",
+        "repeat": 1
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 30.725542,
+        "maxrss_bytes": 679591936,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "reference",
+        "repeat": 2
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 18.507375,
+        "maxrss_bytes": 340803584,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "interleave",
+        "repeat": 2
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 17.875958,
+        "maxrss_bytes": 340803584,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "interleave",
+        "repeat": 3
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 30.112542,
+        "maxrss_bytes": 679591936,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "reference",
+        "repeat": 3
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 30.447583,
+        "maxrss_bytes": 679591936,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "reference",
+        "repeat": 4
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 17.76575,
+        "maxrss_bytes": 340787200,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "interleave",
+        "repeat": 4
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 19.032,
+        "maxrss_bytes": 340803584,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "interleave",
+        "repeat": 5
+      },
+      {
+        "N": 248320,
+        "groups": 40,
+        "ks": 2,
+        "rg": 8,
+        "elapsed_ms": 31.287083,
+        "maxrss_bytes": 679591936,
+        "sha256": "5e758183c638b6016b92d674bab245f636febf0ad728b7bf81da556dda82e722",
+        "arm": "reference",
+        "repeat": 5
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 2.210125,
+        "maxrss_bytes": 55328768,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "reference",
+        "repeat": 0
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 1.110834,
+        "maxrss_bytes": 29310976,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "interleave",
+        "repeat": 0
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 1.209792,
+        "maxrss_bytes": 29327360,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "interleave",
+        "repeat": 1
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 2.119584,
+        "maxrss_bytes": 55328768,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "reference",
+        "repeat": 1
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 2.276375,
+        "maxrss_bytes": 55328768,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "reference",
+        "repeat": 2
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 1.105666,
+        "maxrss_bytes": 29327360,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "interleave",
+        "repeat": 2
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 1.108291,
+        "maxrss_bytes": 29327360,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "interleave",
+        "repeat": 3
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 2.107833,
+        "maxrss_bytes": 55328768,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "reference",
+        "repeat": 3
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 2.10125,
+        "maxrss_bytes": 55328768,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "reference",
+        "repeat": 4
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 1.11,
+        "maxrss_bytes": 29327360,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "interleave",
+        "repeat": 4
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 1.210625,
+        "maxrss_bytes": 29327360,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "interleave",
+        "repeat": 5
+      },
+      {
+        "N": 4096,
+        "groups": 192,
+        "ks": 8,
+        "rg": 8,
+        "elapsed_ms": 2.141625,
+        "maxrss_bytes": 55328768,
+        "sha256": "28828ccf24375ab5f136b0aea872336a087e79a0802704cd7d74eaf73c768290",
+        "arm": "reference",
+        "repeat": 5
+      }
+    ]
+  },
+  "scratch_lm_head_bytes": {
+    "old": 338956800,
+    "new": 174720
+  },
+  "model_bench": [
+    {
+      "label": "bench-01-reference",
+      "result": {
+        "schema": 1,
+        "kind": "kapitsa-bench",
+        "mode": "quick",
+        "time_utc": "2026-11-05T19:03:19Z",
+        "kapitsa": {
+          "version": "0.2.30",
+          "commit": "39f20c8d"
+        },
+        "mac": {
+          "identifier": "Mac16,7",
+          "name": "MacBook Pro (16-inch, 2024)",
+          "year": 2024,
+          "chip": "Apple M4 Pro",
+          "cpu_cores": 14,
+          "gpu_cores": 20,
+          "memory_gb": 48,
+          "macos": "15.7.1",
+          "macos_build": "24G231"
+        },
+        "model": {
+          "name": "qwen3.5-4b-4bit",
+          "title": "qwen3.5-4b-4bit",
+          "variant": null,
+          "precision": "4-bit",
+          "catalog": false,
+          "revision": null,
+          "decoding": "MTP",
+          "decoding_detail": "MTP speculative decoding depth 4, KFlash (MTP)",
+          "drafter": null,
+          "drafter_kind": "MTP",
+          "drafter_source": null,
+          "drafter_reason": "no matching drafter found, MTP head drafts depth 4"
+        },
+        "protocol": {
+          "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+          "decode_tokens": 512,
+          "decode_runs": 3,
+          "greedy_runs": 3,
+          "sizes": [
+            4000
+          ],
+          "temperature": 0.6
+        },
+        "results": {
+          "decode": {
+            "median_tps": 165.3,
+            "runs_tps": [
+              154.18,
+              165.3,
+              194.72
+            ],
+            "median_accepted_draft_tps": 101.7,
+            "median_accepted_draft_share": 0.6152
+          },
+          "decode_greedy": {
+            "median_tps": 167.01,
+            "runs_tps": [
+              167.19,
+              167.01,
+              164.14
+            ],
+            "median_accepted_draft_tps": 102.1,
+            "median_accepted_draft_share": 0.6113
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4132,
+              "ttft_s": 2.2637,
+              "tps": 1825.3,
+              "followup_s": [
+                0.0529,
+                0.0681,
+                0.0524
+              ],
+              "followup_median_s": 0.0529,
+              "followup_suffix_tps": 396.2
+            }
+          ],
+          "tool_calls": "pass",
+          "peak_memory_gb": 5.74
+        },
+        "conditions": {
+          "power_source": "ac",
+          "power_mode": "automatic",
+          "low_power_mode": false,
+          "thermal_state": "nominal",
+          "swapouts": 0,
+          "gpu_quiet_wait_s": 18.1,
+          "gpu_other_mean_pct": 0.0,
+          "gpu_other_max_pct": 0.0,
+          "gpu_ambient_mean_pct": 0.0,
+          "gpu_users": [],
+          "contention": []
+        },
+        "flags": [],
+        "invalid": []
+      }
+    },
+    {
+      "label": "bench-02-interleave",
+      "result": {
+        "schema": 1,
+        "kind": "kapitsa-bench",
+        "mode": "quick",
+        "time_utc": "2026-11-05T19:04:19Z",
+        "kapitsa": {
+          "version": "0.2.30",
+          "commit": "e554264e"
+        },
+        "mac": {
+          "identifier": "Mac16,7",
+          "name": "MacBook Pro (16-inch, 2024)",
+          "year": 2024,
+          "chip": "Apple M4 Pro",
+          "cpu_cores": 14,
+          "gpu_cores": 20,
+          "memory_gb": 48,
+          "macos": "15.7.1",
+          "macos_build": "24G231"
+        },
+        "model": {
+          "name": "qwen3.5-4b-4bit",
+          "title": "qwen3.5-4b-4bit",
+          "variant": null,
+          "precision": "4-bit",
+          "catalog": false,
+          "revision": null,
+          "decoding": "MTP",
+          "decoding_detail": "MTP speculative decoding depth 4, KFlash (MTP)",
+          "drafter": null,
+          "drafter_kind": "MTP",
+          "drafter_source": null,
+          "drafter_reason": "no matching drafter found, MTP head drafts depth 4"
+        },
+        "protocol": {
+          "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+          "decode_tokens": 512,
+          "decode_runs": 3,
+          "greedy_runs": 3,
+          "sizes": [
+            4000
+          ],
+          "temperature": 0.6
+        },
+        "results": {
+          "decode": {
+            "median_tps": 162.36,
+            "runs_tps": [
+              166.15,
+              162.36,
+              148.73
+            ],
+            "median_accepted_draft_tps": 99.25,
+            "median_accepted_draft_share": 0.6113
+          },
+          "decode_greedy": {
+            "median_tps": 168.4,
+            "runs_tps": [
+              169.85,
+              168.4,
+              166.65
+            ],
+            "median_accepted_draft_tps": 104.26,
+            "median_accepted_draft_share": 0.6191
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4133,
+              "ttft_s": 2.2621,
+              "tps": 1827.0,
+              "followup_s": [
+                0.0724,
+                0.0633,
+                0.0525
+              ],
+              "followup_median_s": 0.0633,
+              "followup_suffix_tps": 380.7
+            }
+          ],
+          "tool_calls": "pass",
+          "peak_memory_gb": 5.81
+        },
+        "conditions": {
+          "power_source": "ac",
+          "power_mode": "automatic",
+          "low_power_mode": false,
+          "thermal_state": "nominal",
+          "swapouts": 0,
+          "gpu_quiet_wait_s": 18.2,
+          "gpu_other_mean_pct": 0.0,
+          "gpu_other_max_pct": 0.0,
+          "gpu_ambient_mean_pct": 0.0,
+          "gpu_users": [],
+          "contention": []
+        },
+        "flags": [],
+        "invalid": []
+      }
+    },
+    {
+      "label": "bench-03-reference",
+      "result": {
+        "schema": 1,
+        "kind": "kapitsa-bench",
+        "mode": "quick",
+        "time_utc": "2026-11-05T19:05:17Z",
+        "kapitsa": {
+          "version": "0.2.30",
+          "commit": "39f20c8d"
+        },
+        "mac": {
+          "identifier": "Mac16,7",
+          "name": "MacBook Pro (16-inch, 2024)",
+          "year": 2024,
+          "chip": "Apple M4 Pro",
+          "cpu_cores": 14,
+          "gpu_cores": 20,
+          "memory_gb": 48,
+          "macos": "15.7.1",
+          "macos_build": "24G231"
+        },
+        "model": {
+          "name": "qwen3.5-4b-4bit",
+          "title": "qwen3.5-4b-4bit",
+          "variant": null,
+          "precision": "4-bit",
+          "catalog": false,
+          "revision": null,
+          "decoding": "MTP",
+          "decoding_detail": "MTP speculative decoding depth 4, KFlash (MTP)",
+          "drafter": null,
+          "drafter_kind": "MTP",
+          "drafter_source": null,
+          "drafter_reason": "no matching drafter found, MTP head drafts depth 4"
+        },
+        "protocol": {
+          "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+          "decode_tokens": 512,
+          "decode_runs": 3,
+          "greedy_runs": 3,
+          "sizes": [
+            4000
+          ],
+          "temperature": 0.6
+        },
+        "results": {
+          "decode": {
+            "median_tps": 157.77,
+            "runs_tps": [
+              150.67,
+              208.39,
+              157.77
+            ],
+            "median_accepted_draft_tps": 94.29,
+            "median_accepted_draft_share": 0.5977
+          },
+          "decode_greedy": {
+            "median_tps": 163.88,
+            "runs_tps": [
+              161.03,
+              165.89,
+              163.88
+            ],
+            "median_accepted_draft_tps": 99.55,
+            "median_accepted_draft_share": 0.6074
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4133,
+              "ttft_s": 2.2588,
+              "tps": 1829.8,
+              "followup_s": [
+                0.0508,
+                0.0678,
+                0.0562
+              ],
+              "followup_median_s": 0.0562,
+              "followup_suffix_tps": 398.3
+            }
+          ],
+          "tool_calls": "pass",
+          "peak_memory_gb": 5.77
+        },
+        "conditions": {
+          "power_source": "ac",
+          "power_mode": "automatic",
+          "low_power_mode": false,
+          "thermal_state": "nominal",
+          "swapouts": 0,
+          "gpu_quiet_wait_s": 18.2,
+          "gpu_other_mean_pct": 0.0,
+          "gpu_other_max_pct": 0.0,
+          "gpu_ambient_mean_pct": 0.0,
+          "gpu_users": [],
+          "contention": []
+        },
+        "flags": [
+          "decode: repetition loop (distinct-4-gram 0.4299)"
+        ],
+        "invalid": []
+      }
+    },
+    {
+      "label": "bench-04-interleave",
+      "result": {
+        "schema": 1,
+        "kind": "kapitsa-bench",
+        "mode": "quick",
+        "time_utc": "2026-11-05T19:06:14Z",
+        "kapitsa": {
+          "version": "0.2.30",
+          "commit": "e554264e"
+        },
+        "mac": {
+          "identifier": "Mac16,7",
+          "name": "MacBook Pro (16-inch, 2024)",
+          "year": 2024,
+          "chip": "Apple M4 Pro",
+          "cpu_cores": 14,
+          "gpu_cores": 20,
+          "memory_gb": 48,
+          "macos": "15.7.1",
+          "macos_build": "24G231"
+        },
+        "model": {
+          "name": "qwen3.5-4b-4bit",
+          "title": "qwen3.5-4b-4bit",
+          "variant": null,
+          "precision": "4-bit",
+          "catalog": false,
+          "revision": null,
+          "decoding": "MTP",
+          "decoding_detail": "MTP speculative decoding depth 4, KFlash (MTP)",
+          "drafter": null,
+          "drafter_kind": "MTP",
+          "drafter_source": null,
+          "drafter_reason": "no matching drafter found, MTP head drafts depth 4"
+        },
+        "protocol": {
+          "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+          "decode_tokens": 512,
+          "decode_runs": 3,
+          "greedy_runs": 3,
+          "sizes": [
+            4000
+          ],
+          "temperature": 0.6
+        },
+        "results": {
+          "decode": {
+            "median_tps": 162.2,
+            "runs_tps": [
+              159.16,
+              165.72,
+              162.2
+            ],
+            "median_accepted_draft_tps": 98.84,
+            "median_accepted_draft_share": 0.6094
+          },
+          "decode_greedy": {
+            "median_tps": 161.48,
+            "runs_tps": [
+              159.04,
+              161.48,
+              164.16
+            ],
+            "median_accepted_draft_tps": 97.45,
+            "median_accepted_draft_share": 0.6035
+          },
+          "prefill": [
+            {
+              "size": 4000,
+              "prompt_tokens": 4131,
+              "ttft_s": 2.2532,
+              "tps": 1833.4,
+              "followup_s": [
+                0.0514,
+                0.0626,
+                0.0535
+              ],
+              "followup_median_s": 0.0535,
+              "followup_suffix_tps": 427.9
+            }
+          ],
+          "tool_calls": "pass",
+          "peak_memory_gb": 5.79
+        },
+        "conditions": {
+          "power_source": "ac",
+          "power_mode": "automatic",
+          "low_power_mode": false,
+          "thermal_state": "nominal",
+          "swapouts": 0,
+          "gpu_quiet_wait_s": 18.1,
+          "gpu_other_mean_pct": 0.0,
+          "gpu_other_max_pct": 0.0,
+          "gpu_ambient_mean_pct": 0.0,
+          "gpu_users": [],
+          "contention": []
+        },
+        "flags": [
+          "decode: repetition loop (distinct-4-gram 0.4731)"
+        ],
+        "invalid": []
+      }
+    }
+  ],
+  "local_gpu_logits": {
+    "paths": {
+      "prefill": {
+        "records": 8,
+        "bitwise": 8,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": "tools/logit_floors/qwen3.5-4b-4bit.json"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (39f20c8d)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 10,
+            "evals": 576,
+            "reruns": 0
+          },
+          "records": 8,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+          "macos": "15.7.1",
+          "date": "2026-11-05T18:55:28Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (e554264e)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 10,
+            "evals": 576,
+            "reruns": 0
+          },
+          "records": 8,
+          "vocab": 248320,
+          "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-interleave/ref",
+          "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+          "macos": "15.7.1",
+          "date": "2026-11-05T18:55:46Z",
+          "env": {}
+        }
+      },
+      "batch": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (39f20c8d)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit",
+          "path": "batch",
+          "batch": {
+            "members": 4,
+            "rows": 2
+          },
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 10,
+            "evals": 576,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+          "macos": "15.7.1",
+          "date": "2026-11-05T18:55:28Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (e554264e)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit",
+          "path": "batch",
+          "batch": {
+            "members": 4,
+            "rows": 2
+          },
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 10,
+            "evals": 576,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-interleave/ref",
+          "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+          "macos": "15.7.1",
+          "date": "2026-11-05T18:55:46Z",
+          "env": {}
+        }
+      },
+      "step": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (39f20c8d)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 10,
+            "evals": 576,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+          "macos": "15.7.1",
+          "date": "2026-11-05T18:55:28Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (e554264e)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 10,
+            "evals": 576,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-interleave/ref",
+          "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+          "macos": "15.7.1",
+          "date": "2026-11-05T18:55:46Z",
+          "env": {}
+        }
+      },
+      "verify": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (39f20c8d)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit",
+          "path": "verify",
+          "verify": "KFlash tree (a chain of 8 live rows)",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 10,
+            "evals": 576,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+          "macos": "15.7.1",
+          "date": "2026-11-05T18:55:28Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.30 (e554264e)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit",
+          "path": "verify",
+          "verify": "KFlash tree (a chain of 8 live rows)",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 10,
+            "evals": 576,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-interleave/ref",
+          "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+          "macos": "15.7.1",
+          "date": "2026-11-05T18:55:46Z",
+          "env": {}
+        }
+      }
+    }
+  },
+  "http": [
+    {
+      "variant": "reference",
+      "head": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+      "command": [
+        "/tmp/verify-kapitsa/ref/39f20c8d/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "62741",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "32768",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-http/http-home-reference"
+      },
+      "exit_code": 0,
+      "passes": 49,
+      "failures": []
+    },
+    {
+      "variant": "interleave",
+      "head": "e554264e5934c22a4fb271aec7babdd86e1c4785",
+      "command": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/packed-interleave-scratch/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.5-4b-4bit",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "62862",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "32768",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-http/http-home-interleave"
+      },
+      "exit_code": 0,
+      "passes": 49,
+      "failures": []
+    }
+  ],
+  "gpu_checks": [
+    {
+      "label": "interleave-check-codec",
+      "step": {
+        "label": "interleave-check-codec",
+        "command": [
+          "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+          "gpu",
+          "run",
+          "--eta",
+          "10",
+          "--label",
+          "overnight interleave-check-codec",
+          "--",
+          "/Users/bytedance/kapitsa-night-20261106/evidence/interleave_gpu_check",
+          "check-codec"
+        ],
+        "cwd": "/Users/bytedance/kapitsa-night-20261106/reference",
+        "env": {
+          "KAPITSA_NO_AUTO_UPDATE": "1",
+          "KAPITSA_NO_PROMPT": "1",
+          "KAPITSA_HOME": "/Users/bytedance/kapitsa-night-20261106/evidence/homes/interleave-check-codec",
+          "MTL_SHADER_VALIDATION": "1",
+          "MTL_DEBUG_LAYER": "1"
+        },
+        "start": 1793905008.0997279,
+        "binary_sha256": "c7db3450e3884dfb20af9b69c86fdfe6618862cebf34d3d1faf07be6647d4aa2",
+        "source_heads": {
+          "reference": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+          "interleave": "e554264e5934c22a4fb271aec7babdd86e1c4785",
+          "lowrank": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+          "planner": "30320cab4ff81159d0b71c31b1c1fe60ed36f7d8"
+        },
+        "exit_code": 0,
+        "end": 1793905009.114845
+      },
+      "log": "2026-11-06 02:56:48.321 interleave_gpu_check[75829:49808190] Metal API Validation Enabled\n2026-11-06 02:56:48.321 interleave_gpu_check[75829:49808190] Metal GPU Validation Enabled\n[kapitsa] compiled kernels in 13 ms\ndevice=Apple M3 Ultra cores=60 kernel=qmm8pc_b4_nf1 thermal=nominal\nAKO_CHECK={\"passed\":true,\"cases\":1152,\"bit_pairs\":186496,\"outputs\":162432,\"compressed_blocks\":3456,\"blocks\":10880}\nQMM_CD_DISPATCH={\"candidate\":336,\"original\":1968}\n"
+    },
+    {
+      "label": "interleave-check-scales",
+      "step": {
+        "label": "interleave-check-scales",
+        "command": [
+          "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+          "gpu",
+          "run",
+          "--eta",
+          "10",
+          "--label",
+          "overnight interleave-check-scales",
+          "--",
+          "/Users/bytedance/kapitsa-night-20261106/evidence/interleave_gpu_check",
+          "check-scales"
+        ],
+        "cwd": "/Users/bytedance/kapitsa-night-20261106/reference",
+        "env": {
+          "KAPITSA_NO_AUTO_UPDATE": "1",
+          "KAPITSA_NO_PROMPT": "1",
+          "KAPITSA_HOME": "/Users/bytedance/kapitsa-night-20261106/evidence/homes/interleave-check-scales",
+          "MTL_SHADER_VALIDATION": "1",
+          "MTL_DEBUG_LAYER": "1"
+        },
+        "start": 1793905009.1164281,
+        "binary_sha256": "c7db3450e3884dfb20af9b69c86fdfe6618862cebf34d3d1faf07be6647d4aa2",
+        "source_heads": {
+          "reference": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+          "interleave": "e554264e5934c22a4fb271aec7babdd86e1c4785",
+          "lowrank": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+          "planner": "30320cab4ff81159d0b71c31b1c1fe60ed36f7d8"
+        },
+        "exit_code": 0,
+        "end": 1793905009.4356558
+      },
+      "log": "2026-11-06 02:56:49.347 interleave_gpu_check[75856:49808313] Metal API Validation Enabled\n2026-11-06 02:56:49.347 interleave_gpu_check[75856:49808313] Metal GPU Validation Enabled\n[kapitsa] compiled kernels in 12 ms\ndevice=Apple M3 Ultra cores=60 kernel=qmm8pc_b4_nf1 thermal=nominal\nAKO_CHECK={\"passed\":true,\"cases\":80,\"values\":14760,\"nan_class\":4744,\"infinity_bitwise\":1592}\nQMM_CD_DISPATCH={\"candidate\":12,\"original\":148}\n"
+    },
+    {
+      "label": "interleave-check-segments",
+      "step": {
+        "label": "interleave-check-segments",
+        "command": [
+          "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+          "gpu",
+          "run",
+          "--eta",
+          "10",
+          "--label",
+          "overnight interleave-check-segments",
+          "--",
+          "/Users/bytedance/kapitsa-night-20261106/evidence/interleave_gpu_check",
+          "check-segments"
+        ],
+        "cwd": "/Users/bytedance/kapitsa-night-20261106/reference",
+        "env": {
+          "KAPITSA_NO_AUTO_UPDATE": "1",
+          "KAPITSA_NO_PROMPT": "1",
+          "KAPITSA_HOME": "/Users/bytedance/kapitsa-night-20261106/evidence/homes/interleave-check-segments",
+          "MTL_SHADER_VALIDATION": "1",
+          "MTL_DEBUG_LAYER": "1"
+        },
+        "start": 1793905009.437349,
+        "binary_sha256": "c7db3450e3884dfb20af9b69c86fdfe6618862cebf34d3d1faf07be6647d4aa2",
+        "source_heads": {
+          "reference": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+          "interleave": "e554264e5934c22a4fb271aec7babdd86e1c4785",
+          "lowrank": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+          "planner": "30320cab4ff81159d0b71c31b1c1fe60ed36f7d8"
+        },
+        "exit_code": 0,
+        "end": 1793905009.9150531
+      },
+      "log": "2026-11-06 02:56:49.626 interleave_gpu_check[75882:49808420] Metal API Validation Enabled\n2026-11-06 02:56:49.626 interleave_gpu_check[75882:49808420] Metal GPU Validation Enabled\n[kapitsa] compiled kernels in 12 ms\ndevice=Apple M3 Ultra cores=60 kernel=qmm8pc_b4_nf1 thermal=nominal\nAKO_CHECK={\"passed\":true,\"cases\":384,\"outputs\":187488,\"bitwise_outputs\":187488,\"max_cpu_error\":7.06105581e-07,\"max_gpu_error\":0}\nQMM_CD_DISPATCH={\"candidate\":160,\"original\":608}\n"
+    },
+    {
+      "label": "interleave-check-shapes",
+      "step": {
+        "label": "interleave-check-shapes",
+        "command": [
+          "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+          "gpu",
+          "run",
+          "--eta",
+          "10",
+          "--label",
+          "overnight interleave-check-shapes",
+          "--",
+          "/Users/bytedance/kapitsa-night-20261106/evidence/interleave_gpu_check",
+          "check-shapes"
+        ],
+        "cwd": "/Users/bytedance/kapitsa-night-20261106/reference",
+        "env": {
+          "KAPITSA_NO_AUTO_UPDATE": "1",
+          "KAPITSA_NO_PROMPT": "1",
+          "KAPITSA_HOME": "/Users/bytedance/kapitsa-night-20261106/evidence/homes/interleave-check-shapes",
+          "MTL_SHADER_VALIDATION": "1",
+          "MTL_DEBUG_LAYER": "1"
+        },
+        "start": 1793905009.916119,
+        "binary_sha256": "c7db3450e3884dfb20af9b69c86fdfe6618862cebf34d3d1faf07be6647d4aa2",
+        "source_heads": {
+          "reference": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+          "interleave": "e554264e5934c22a4fb271aec7babdd86e1c4785",
+          "lowrank": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+          "planner": "30320cab4ff81159d0b71c31b1c1fe60ed36f7d8"
+        },
+        "exit_code": 0,
+        "end": 1793905012.5706089
+      },
+      "log": "2026-11-06 02:56:50.107 interleave_gpu_check[75908:49808517] Metal API Validation Enabled\n2026-11-06 02:56:50.107 interleave_gpu_check[75908:49808517] Metal GPU Validation Enabled\n[kapitsa] compiled kernels in 12 ms\ndevice=Apple M3 Ultra cores=60 kernel=qmm8pc_b4_nf1 thermal=nominal\ncheck_shape N=18432 K=2560 seed=7 passed=1\ncheck_shape N=18432 K=2560 seed=19 passed=1\ncheck_shape N=18432 K=2560 seed=42 passed=1\ncheck_shape N=12352 K=2560 seed=7 passed=1\ncheck_shape N=12352 K=2560 seed=19 passed=1\ncheck_shape N=12352 K=2560 seed=42 passed=1\ncheck_shape N=10240 K=2560 seed=7 passed=1\ncheck_shape N=10240 K=2560 seed=19 passed=1\ncheck_shape N=10240 K=2560 seed=42 passed=1\ncheck_shape N=2560 K=4096 seed=7 passed=1\ncheck_shape N=2560 K=4096 seed=19 passed=1\ncheck_shape N=2560 K=4096 seed=42 passed=1\ncheck_shape N=2560 K=9216 seed=7 passed=1\ncheck_shape N=2560 K=9216 seed=19 passed=1\ncheck_shape N=2560 K=9216 seed=42 passed=1\ncheck_shape N=248320 K=2560 seed=7 passed=1\ncheck_shape N=248320 K=2560 seed=19 passed=1\ncheck_shape N=248320 K=2560 seed=42 passed=1\nAKO_CHECK={\"passed\":true,\"cases\":36,\"outputs\":14134272,\"bitwise_outputs\":14134272,\"max_cpu_error\":4.87891285e-07,\"max_gpu_error\":0}\nQMM_CD_DISPATCH={\"candidate\":24,\"original\":48}\n"
+    },
+    {
+      "label": "interleave-check-small",
+      "step": {
+        "label": "interleave-check-small",
+        "command": [
+          "/Users/bytedance/kapitsa-night-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+          "gpu",
+          "run",
+          "--eta",
+          "10",
+          "--label",
+          "overnight interleave-check-small",
+          "--",
+          "/Users/bytedance/kapitsa-night-20261106/evidence/interleave_gpu_check",
+          "check-small"
+        ],
+        "cwd": "/Users/bytedance/kapitsa-night-20261106/reference",
+        "env": {
+          "KAPITSA_NO_AUTO_UPDATE": "1",
+          "KAPITSA_NO_PROMPT": "1",
+          "KAPITSA_HOME": "/Users/bytedance/kapitsa-night-20261106/evidence/homes/interleave-check-small",
+          "MTL_SHADER_VALIDATION": "1",
+          "MTL_DEBUG_LAYER": "1"
+        },
+        "start": 1793905001.645011,
+        "binary_sha256": "c7db3450e3884dfb20af9b69c86fdfe6618862cebf34d3d1faf07be6647d4aa2",
+        "source_heads": {
+          "reference": "39f20c8d8c658f9b6f03115711aaf7fc4698f82e",
+          "interleave": "e554264e5934c22a4fb271aec7babdd86e1c4785",
+          "lowrank": "15e494d1c6366833ccdfda5664b0bb0523bcc406",
+          "planner": "30320cab4ff81159d0b71c31b1c1fe60ed36f7d8"
+        },
+        "exit_code": 0,
+        "end": 1793905008.098721
+      },
+      "log": "2026-11-06 02:56:42.476 interleave_gpu_check[75801:49807975] Metal API Validation Enabled\n2026-11-06 02:56:42.478 interleave_gpu_check[75801:49807975] Metal GPU Validation Enabled\n[kapitsa] compiled kernels in 3811 ms\ndevice=Apple M3 Ultra cores=60 kernel=qmm8pc_b4_nf1 thermal=nominal\nAKO_CHECK={\"passed\":true,\"cases\":1600,\"outputs\":286554,\"bitwise_outputs\":286554,\"max_cpu_error\":1.02916514e-06,\"max_gpu_error\":0}\nQMM_CD_DISPATCH={\"candidate\":240,\"original\":2960}\n"
+    }
+  ],
+  "binary_sha256": {
+    "reference": "ec58f78e4f1b37af892e6c7afa66e2d64cf7459302e0591f4a5b670736514b90",
+    "candidate": "85d45fa836f39d4dc18fb8c6277ed58020178d7e25ce0af9929a9e1ade84c17c"
+  }
+}

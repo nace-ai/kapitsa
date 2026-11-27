@@ -1,0 +1,22 @@
+<think>
+Here's a thinking process:
+
+1.  **Understand User Request:**
+   - **Topic:** How a compiler transforms a small programming language into machine code
+   - **Required Stages:** Lexical analysis, parsing, type checking, optimization, register allocation, code generation
+   - **Requirements:** Detailed tutorial, include examples, explain each stage in depth, at least 2000 words
+   - **Tone/Style:** Educational, technical but accessible, structured as a tutorial
+
+2.  **Deconstruct the Stages & Plan Structure:**
+   I'll structure the tutorial logically, following the typical compiler pipeline:
+   - Introduction (what a compiler does, overview of the pipeline)
+   - Stage 1: Lexical Analysis (Tokenization)
+   - Stage 2: Parsing (Syntax Analysis & AST Construction)
+   - Stage 3: Semantic Analysis & Type Checking
+   - Stage 4: Intermediate Representation & Optimization
+   - Stage 5: Register Allocation
+   - Stage 6: Code Generation (Machine Code)
+   - Conclusion
+   - Each section will include: explanation, example (using a small custom language), step-by-step breakdown, and technical depth.
+
+   I

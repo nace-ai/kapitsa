@@ -1,0 +1,16 @@
+{
+  "format": "Portable adaptation source manifest",
+  "original_measured_source_sha256": "326eeb19c2454735723fd30437a319181f1ba1febe3f0af28cf21bf247146571",
+  "files": {
+    "run_fixed_seed.py": "6c8030e7b1a08b7fef76b95eae88c2833da130f4dcdd4a39e0b0e6f40b56a3c3",
+    "README.md": "cfe90f2385da50cb0d8febf2cbce67d2e459eac8782c991e7ab1c14c5aef3918",
+    "portable_fixed_seed.cpp": "e6f4b309a4c8b56b0a64baf5072a9ec9d65d5a9e09b6222920c39b57e42257a0"
+  },
+  "verification": {
+    "compile_link_rc": 0,
+    "python_syntax": "PASS",
+    "missing_lock_rejected_before_network": true,
+    "gpu_runs_of_portable_adaptation": 0
+  },
+  "compile_example": "Relative-path Release -O3 reproduction; original measured driver identity retained separately"
+}

@@ -1,0 +1,23 @@
+{
+  "engine": "kapitsa",
+  "build": "0.2.26 (d93297d)",
+  "model": "qwen3.8-flash-next-4bit",
+  "model_dir": "~/models/qwen3.8-flash-next-4bit",
+  "path": "verify",
+  "verify": "MTP cycle's chain of 3 rows",
+  "prefill_chunk": 2048,
+  "ane": {
+    "chunks": 0,
+    "evals": 0,
+    "reruns": 0
+  },
+  "records": 192,
+  "vocab": 248320,
+  "source": "bench/corpus.txt",
+  "mac": "MacBook Pro (16-inch, 2026), M5 Max (40-core GPU), 128 GB",
+  "macos": "26.4",
+  "date": "2026-11-04T03:26:15Z",
+  "env": {
+    "NI_MOE4_DX": "0"
+  }
+}

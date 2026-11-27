@@ -1,0 +1,6 @@
+ok   websocket upgrade on /v1/responses: 426 and a JSON reason, not 404
+ok   a plain GET is not the probe: untouched (404, no GET route exists)
+ok   POST /v1/responses passes through to its handler
+ok   the same probe on another endpoint is untouched
+ok   the Upgrade value is read case-insensitively
+5 passed, 0 failed

@@ -1686,12 +1686,14 @@ template <uint BK> constexpr uint attn11_xs() { return 8 * (BK / 8) * 32; }
 // K rows of one tile into registers: thread = (key tid % BK, BK-dim slice tid / BK), 2*BK bytes.
 // int8 rows: the thread's BK dims start at (tid / BK) * BK; kvq_load8 takes the row start plus the
 // 8-dim group index (it reads the row's scale at + KVQ_HD).
-template <uint BK>
-NI_INLINE void attn11_fetch_k(thread uint4* r, const device half* kb, uint k0, uint kend, uint tid) {
+// RING (Hy4's window caches): key position k sits in row k % ring.
+template <uint BK, bool RING = false>
+NI_INLINE void attn11_fetch_k(thread uint4* r, const device half* kb, uint k0, uint kend, uint tid, uint ring = 0) {
   const uint key = tid % BK;
   const bool ok = k0 + key < kend;
   const uint c8 = (tid / BK) * (BK / 8);
-  NI_UNROLL for (uint u = 0; u < BK / 8; ++u) r[u] = ok ? kvq_load8(kb, (k0 + key) * KVQ_ROW, c8 + u) : uint4(0);
+  const uint row = RING ? (k0 + key) % ring : k0 + key;
+  NI_UNROLL for (uint u = 0; u < BK / 8; ++u) r[u] = ok ? kvq_load8(kb, row * KVQ_ROW, c8 + u) : uint4(0);
 }
 
 // K^T store: for each dim, consecutive lanes write consecutive keys.
@@ -1708,12 +1710,13 @@ NI_INLINE void attn11_store_k(threadgroup half* kt, thread const uint4* r, uint 
 
 // V rows of one tile: thread = (key, BK-dim slice); 256 / BK lanes cover one row. int8: as fetch_k
 // (kvq_load8 takes the row start plus the 8-dim group index).
-template <uint BK>
-NI_INLINE void attn11_fetch_v(thread uint4* r, const device half* vb, uint k0, uint kend, uint tid) {
+template <uint BK, bool RING = false>
+NI_INLINE void attn11_fetch_v(thread uint4* r, const device half* vb, uint k0, uint kend, uint tid, uint ring = 0) {
   const uint key = tid / (kHD / BK);
   const bool ok = k0 + key < kend;
   const uint c8 = (tid % (kHD / BK)) * (BK / 8);
-  NI_UNROLL for (uint u = 0; u < BK / 8; ++u) r[u] = ok ? kvq_load8(vb, (k0 + key) * KVQ_ROW, c8 + u) : uint4(0);
+  const uint row = RING ? (k0 + key) % ring : k0 + key;
+  NI_UNROLL for (uint u = 0; u < BK / 8; ++u) r[u] = ok ? kvq_load8(vb, row * KVQ_ROW, c8 + u) : uint4(0);
 }
 
 template <uint BK>
@@ -1734,15 +1737,26 @@ NI_INLINE void attn11_store_v(threadgroup half* vt, thread const uint4* r, uint 
 // are skipped (tflag: 2 uints of threadgroup memory).
 // BIDI (attn_prefill11gs_bidi, Clover's denoising pass; GQ): every query of the pass attends to every key before
 // pos0 + T, its own block's later rows included (a causal prefix, the block bidirectional).
+// HY (Hy4-flash, hy4/hy4.metal's hy4_attn_prefill*; not GQ/SPLIT/MASK/BIDI; Hq = Hkv): one learned sink logit per head
+// joins the softmax denominator (the running max and sum start from it), on hy->win > 0 query position qp sees keys
+// k > qp - win only (tiles below the block's first window are skipped), on hy->ring > 0 key k sits in cache row
+// k % ring, the gate is qg [T, Hq, D] (no query half) and hy->out_half writes half rows.
+struct AttnHyParams {
+  uint win;       // 0: full causal
+  uint ring;      // 0: linear cache
+  uint sink_t;    // sinks dtype: 0 fp32, 1 bf16, 2 fp16
+  uint out_half;
+};
 template <uint BK, bool XS, bool SPLIT = false, bool GQ = false, bool RSKIP = false, bool MASK = false,
-          bool BIDI = false>
+          bool BIDI = false, bool HY = false>
 NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc, const device half* vc,
                                    const device float* qg, device float* out, constant AttnPrefParams& p,
                                    uint2 tg, uint tid, uint sg, uint lane, threadgroup half* kv,
                                    threadgroup float2* xs, uint split = 0, uint nsplit = 1,
                                    device float* part_o = nullptr, device float2* part_ml = nullptr,
                                    const device uint* mask = nullptr, uint mwords = 0,
-                                   threadgroup uint* tflag = nullptr, uint seg = 0) {
+                                   threadgroup uint* tflag = nullptr, uint seg = 0,
+                                   const device void* sinks = nullptr, constant AttnHyParams* hy = nullptr) {
   constexpr uint NC = BK / 8;                     // key fragments per tile
   constexpr uint KLD = attn11_kld<BK>();
   const uint G = p.Hq / p.Hkv;
@@ -1779,6 +1793,10 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
     it_begin = min(split * per, ntiles);
     it_end = min(it_begin + per, ntiles);
   }
+  if (HY && hy->win) {  // the block's first query sees keys from qpos0 + 1 - win on
+    const uint qpos0 = p.pos0 + tq0;
+    it_begin = (qpos0 + 1 > hy->win ? qpos0 + 1 - hy->win : 0) / BK;
+  }
 
   // Q straight from device into fragments (own 128 dims), scaled by 1/sqrt(D) (a power of two:
   // the half rounding is v10's). Rows past T are zero and never stored.
@@ -1795,6 +1813,12 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
   simdgroup_float8x8 o[kDH / 8];
   NI_UNROLL for (uint j = 0; j < kDH / 8; ++j) o[j] = simdgroup_float8x8(0);
   float m_row = kNeg11, l_row = 0.0f;             // running max (log2 domain) and sum of the lane's row
+  if (HY) {  // the sink: exp2(sink - sink) = 1 in the sum, never in O
+    const float sk = hy->sink_t == 1 ? float(((const device bfloat*)sinks)[h])
+                   : hy->sink_t == 2 ? float(((const device half*)sinks)[h]) : ((const device float*)sinks)[h];
+    m_row = sk * M_LOG2E_F;
+    l_row = 1.0f;
+  }
   const device half* kb = (const device half*)((const device char*)kc + size_t(kvh) * p.max_seq * KVQ_ROW);
   const device half* vb = (const device half*)((const device char*)vc + size_t(kvh) * p.max_seq * KVQ_ROW);
   threadgroup float2* xw = XS ? xs : (threadgroup float2*)kv;
@@ -1815,7 +1839,8 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
       mword = mask[min(t, p.T - 1) * mwords + k0 / 32];
     }
     uint4 r[BK / 8];
-    attn11_fetch_k<BK>(r, kb, k0, kend, tid);
+    if (HY) attn11_fetch_k<BK, true>(r, kb, k0, kend, tid, hy->ring ? hy->ring : 0xffffffffu);
+    else attn11_fetch_k<BK>(r, kb, k0, kend, tid);
     threadgroup_barrier(mem_flags::mem_threadgroup);   // previous P.V is done with the buffer
     attn11_store_k<BK>(kv, r, tid);
     threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -1845,7 +1870,8 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
     }
     if (!XS) threadgroup_barrier(mem_flags::mem_threadgroup);  // exchange reads done: V may overwrite
     // V load issued before the softmax so the two overlap
-    attn11_fetch_v<BK>(r, vb, k0, kend, tid);
+    if (HY) attn11_fetch_v<BK, true>(r, vb, k0, kend, tid, hy->ring ? hy->ring : 0xffffffffu);
+    else attn11_fetch_v<BK>(r, vb, k0, kend, tid);
     attn11_store_v<BK>(kv, r, tid);
 
     // online softmax on this lane's scores (row frow; the row's other lanes are lane^1, lane^8)
@@ -1857,6 +1883,7 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
         float v = s[c].thread_elements()[i] * M_LOG2E_F;
         if (diag && k0 + c * 8 + fcol + i > (BIDI ? kend - 1 : qpos)) v = kNeg11;
         if (MASK && !((mword >> (c * 8 + fcol + i)) & 1u)) v = kNeg11;
+        if (HY && hy->win && k0 + c * 8 + fcol + i + hy->win <= qpos) v = kNeg11;
         s[c].thread_elements()[i] = v;
         mx = max(mx, v);
       }
@@ -1902,6 +1929,18 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
       NI_UNROLL for (uint j = 0; j < kDH / 8; ++j)
         *(device float2*)(dst + j * 8) = float2(o[j].thread_elements()[0], o[j].thread_elements()[1]);
       if (dh == 0 && fcol == 0) part_ml[row] = float2(m_row, l_row);
+    }
+    return;
+  }
+  if (HY && t < p.T) {
+    const float inv = 1.0f / l_row;
+    const uint o0 = (t * p.Hq + h) * kHD + dh * kDH + fcol;
+    NI_UNROLL for (uint j = 0; j < kDH / 8; ++j) {
+      const float2 g = *(const device float2*)(qg + o0 + j * 8);
+      const float2 r = float2(o[j].thread_elements()[0], o[j].thread_elements()[1]) * inv;
+      const float2 y = float2(r.x * sigmoid(g.x), r.y * sigmoid(g.y));
+      if (hy->out_half) *(device half2*)((device half*)out + o0 + j * 8) = half2(y);
+      else *(device float2*)(out + o0 + j * 8) = y;
     }
     return;
   }

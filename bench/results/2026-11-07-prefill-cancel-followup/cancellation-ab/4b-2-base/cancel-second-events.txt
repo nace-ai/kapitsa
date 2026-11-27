@@ -1,0 +1,5 @@
+data: {"id":"chatcmpl-179406054743658","object":"chat.completion.chunk","created":1794060547,"model":"qwen3.5-4b-4bit","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-179406054743658","object":"chat.completion.chunk","created":1794060547,"model":"qwen3.5-4b-4bit","choices":[{"index":0,"delta":{},"finish_reason":null}],"prompt_progress":{"total":15223,"cache":0,"processed":0,"time_ms":0}}
+
+data: {"id":"chatcmpl-179406054743658","object":"chat.completion.chunk","created":1794060547,"model":"qwen3.5-4b-4bit","choices":[{"index":0,"delta":{},"finish_reason":null}],"prompt_progress":{"total":15223,"cache":0,"processed":1903,"time_ms":839}}

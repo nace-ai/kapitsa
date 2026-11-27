@@ -1,0 +1,173 @@
+[
+  {
+    "label": "compile-probe-base",
+    "argv": [
+      "/usr/bin/clang++",
+      "-DKAPITSA_GIT=\"934a6d72\"",
+      "-DKAPITSA_VERSION=\"0.2.31\"",
+      "-I/Users/bytedance/kapitsa-ngram-remote-20261107/base/src",
+      "-I/Users/bytedance/kapitsa-ngram-remote-20261107/base/include",
+      "-I/Users/bytedance/kapitsa-ngram-remote-20261107/base/third_party",
+      "-O3",
+      "-std=gnu++20",
+      "-arch",
+      "arm64",
+      "-mmacosx-version-min=14.0",
+      "-c",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/probe.cpp",
+      "-o",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/probe-base.o"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107/base/build"
+  },
+  {
+    "label": "link-probe-base",
+    "argv": [
+      "/usr/bin/c++",
+      "-O3",
+      "-arch",
+      "arm64",
+      "-mmacosx-version-min=14.0",
+      "-Wl,-search_paths_first",
+      "-Wl,-headerpad_max_install_names",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/probe-base.o",
+      "-o",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/probe-base",
+      "libnaceinfer.a",
+      "-framework",
+      "Metal",
+      "-framework",
+      "Foundation",
+      "-framework",
+      "CoreFoundation",
+      "-framework",
+      "IOSurface",
+      "-framework",
+      "IOKit",
+      "-framework",
+      "ImageIO",
+      "-framework",
+      "CoreGraphics",
+      "-framework",
+      "Security",
+      "-framework",
+      "SystemConfiguration",
+      "-framework",
+      "Accelerate"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107/base/build"
+  },
+  {
+    "label": "corpus-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/probe-base",
+      "corpus",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/base/bench/corpus.txt",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/corpus-base.json"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107"
+  },
+  {
+    "label": "compile-probe-candidate",
+    "argv": [
+      "/usr/bin/clang++",
+      "-DKAPITSA_GIT=\"dd166319\"",
+      "-DKAPITSA_VERSION=\"0.2.31\"",
+      "-I/Users/bytedance/kapitsa-ngram-remote-20261107/candidate/src",
+      "-I/Users/bytedance/kapitsa-ngram-remote-20261107/candidate/include",
+      "-I/Users/bytedance/kapitsa-ngram-remote-20261107/candidate/third_party",
+      "-O3",
+      "-std=gnu++20",
+      "-arch",
+      "arm64",
+      "-mmacosx-version-min=14.0",
+      "-c",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/probe.cpp",
+      "-o",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/probe-candidate.o"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107/candidate/build"
+  },
+  {
+    "label": "link-probe-candidate",
+    "argv": [
+      "/usr/bin/c++",
+      "-O3",
+      "-arch",
+      "arm64",
+      "-mmacosx-version-min=14.0",
+      "-Wl,-search_paths_first",
+      "-Wl,-headerpad_max_install_names",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/probe-candidate.o",
+      "-o",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/probe-candidate",
+      "libnaceinfer.a",
+      "-framework",
+      "Metal",
+      "-framework",
+      "Foundation",
+      "-framework",
+      "CoreFoundation",
+      "-framework",
+      "IOSurface",
+      "-framework",
+      "IOKit",
+      "-framework",
+      "ImageIO",
+      "-framework",
+      "CoreGraphics",
+      "-framework",
+      "Security",
+      "-framework",
+      "SystemConfiguration",
+      "-framework",
+      "Accelerate"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107/candidate/build"
+  },
+  {
+    "label": "corpus-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/probe-candidate",
+      "corpus",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/candidate/bench/corpus.txt",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/corpus-candidate.json"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107"
+  },
+  {
+    "label": "real-row-decode-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/probe-base",
+      "rows",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/corpus-base.json",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/base-real-rows.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107"
+  },
+  {
+    "label": "real-row-decode-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/probe-candidate",
+      "rows",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/corpus-base.json",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/candidate-real-rows.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107"
+  },
+  {
+    "label": "chat-prompt",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/probe-candidate",
+      "text",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/chat-prompt.txt",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/chat-prompt.json"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107"
+  }
+]

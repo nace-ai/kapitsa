@@ -1,0 +1,10 @@
+[kapitsa] tokenizer: 150000 tokens, 149744 merges, 144 added (124 ms)
+[kapitsa] compiled kernels in 2879 ms
+[kapitsa] compiled the Flint kernels in 0 ms
+[kapitsa] compiled the tensor kernels in 2 ms
+[kapitsa] read 22.57 GB of weights in 8002 ms (2.8 GB/s)
+[kapitsa] Flint: 49 layers (14 full attention), 4-bit group 64 (embedding 8-bit group 64, LM head 4-bit group 64, router bf16), loaded in 11.9 s
+[kapitsa] compiled the weight-format kernels in 6635 ms
+rep 0: prefill 1024 tokens 7001.7 ms (146 tok/s, GPU 346.4 ms); decode 128 steps 3879.1 ms = 30.31 ms/step (33.0 tok/s; GPU 30.26 ms/step)
+rep 1: prefill 1024 tokens 341.0 ms (3003 tok/s, GPU 337.7 ms); decode 128 steps 3869.7 ms = 30.23 ms/step (33.1 tok/s; GPU 30.23 ms/step)
+rep 2: prefill 1024 tokens 341.1 ms (3002 tok/s, GPU 338.5 ms); decode 128 steps 3869.2 ms = 30.23 ms/step (33.1 tok/s; GPU 30.22 ms/step)

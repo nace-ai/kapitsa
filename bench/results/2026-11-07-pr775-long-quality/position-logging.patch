@@ -1,0 +1,11 @@
+--- a/tools/ni_eval.cpp
++++ b/tools/ni_eval.cpp
+@@ -336,6 +336,8 @@
+         if (!refpos.empty()) {
+           const RefPos& rp = refpos[q][p];
+           st.kl_top.push_back(std::max(kl_topk(rp, row), 0.0));
++          double mass = 0; for (const auto& kv : rp.top) mass += std::exp(double(kv.second));
++          fprintf(stderr, "POSITION {\"sequence\":%zu,\"position\":%d,\"kl_topk\":%.12g,\"ref_tail_mass\":%.12g,\"ref_top1\":%u,\"top1\":%d}\n", q, p, st.kl_top.back(), std::max(0.0, 1.0-mass), rp.top[0].first, am);
+           st.nll_ref -= rp.lp_next;
+           st.agree += uint32_t(am) == rp.top[0].first;
+         }

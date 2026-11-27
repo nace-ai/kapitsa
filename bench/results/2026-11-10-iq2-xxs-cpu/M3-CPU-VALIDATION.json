@@ -1,0 +1,169 @@
+{
+  "evidence_kind": "Redacted derived record, not a raw log. Original commands, paths and logs retained privately.",
+  "configuration": {
+    "chip": "Apple M3 Ultra",
+    "macos": "26.4.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)"
+  },
+  "source": {
+    "reference_commit": "fd98ce47e96df885371883dbc8510e6e118ca977",
+    "candidate_commit": "87c7e60d9658a03d7e0d4da205d19e9da3534063",
+    "model": {
+      "repo": "Acnoryx/Airy",
+      "revision": "ba4ce94d5e7bcdd4997f4dbf6275848c99c7fbb5",
+      "filename": "Airy-0.8b-IQ1_S.gguf",
+      "repository_file": "gguf/Airy-0.8b-IQ1_S.gguf",
+      "source_sha256": "8065a5ec831f74f8e38e12b219abb61aa564bf677b97c70cd049747bcda90711",
+      "expected_vocab": 248320
+    },
+    "files_sha256": {
+      "src/gguf/quant.h": "8776fd64829f58136db82ce1a5877204410fc008e3f9c5bb0f35cee8cccc21de",
+      "src/gguf/gguf.h": "8ebf4e52ee69b8cafc19f57a62ff4b89bd1435194f421cf3424a1fa2e506660e",
+      "src/gguf/iq_grids.h": "e4c44677def29c2a1e0d596126af812c77c36581335077e5b62e6c9c6bd7d5c6",
+      "tools/gguf_iq2_xxs_test.h": "7414f91f24fbeaeb87d8f80fffa0c91c441e2b6136957422e60457af8d5552de",
+      "candidate-quant.cpp": "02bf989e59819ae2dcf68365195411c4c8d03b371a7315986032bee97adbf0c8",
+      "reference-quant.cpp": "3163f5377fa2242a267300547a41a37cf6b9f7e10192d5c510b75ea390a4a200",
+      "focused.cpp": "15a1e6b07ed61f8d6896d53e6fd5238325b4579defcebffe6a56ccdeed58630c",
+      "benchmark-driver.cpp": "eec313c6b16f88b8319f373545b9dd6897e30232af387724b30e8d3fa790991c",
+      "stubs.cpp": "55f2d1dcbdb8b80cedc393d5321c66500a0fccc4c2c97ac1de6f8e87ccee5287",
+      "trained-rows.bin": "2e9baf32fb432e57b5e36271e4fb36b283803b3e690d1b64f05d223d1cca0e38"
+    },
+    "sample_provenance": "Same locally extracted pinned GGUF row bytes transferred with SHA256 verification; no independent M3 extraction or import."
+  },
+  "binary_sha256": {
+    "check-reference": "83eaf97e64951459879b0e479bd5cbf182af5f8809e1cb773440b57809145cfa",
+    "check-candidate": "4403f45c4ad3d38974dc4abe57baea348a36458533583cbca764f06d6953f2aa",
+    "bench-reference": "885373223e68043cd82213c4ae7e5f8017af77f8131378e3fcda46dc399fec17",
+    "bench-candidate": "321f815ea9bdcc3962bb9acae10946429b6943f2abaa290eec19f37d952d144c"
+  },
+  "method": "Same C++20 -O3 driver/stubs for both arms, replacing quant.cpp; CPU-only A/B/A/B under the exclusive GPU lock; 16 complete decodes per leg after one untimed decode.",
+  "runs": {
+    "A1": {
+      "ns_per_row": [
+        2720.5,
+        2608.642578,
+        2796.792969,
+        2601.074219,
+        2600.667969,
+        4176.879883,
+        2600.260742,
+        2600.178711,
+        2878.947266,
+        2604.329102,
+        2601.928711,
+        2658.447266,
+        2602.416992,
+        2603.271484,
+        3100.138672,
+        2632.283203
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 2606.4858400000003
+    },
+    "B1": {
+      "ns_per_row": [
+        2571.166992,
+        4772.705078,
+        1685.180664,
+        1716.389648,
+        1683.634766,
+        2346.110352,
+        4271.078125,
+        1684.570312,
+        2270.547852,
+        1685.342773,
+        1682.901367,
+        1685.261719,
+        1686.726562,
+        3042.155273,
+        3051.188477,
+        1686.401367
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 1701.558105
+    },
+    "A2": {
+      "ns_per_row": [
+        3926.960938,
+        3497.436523,
+        6329.426758,
+        2613.240234,
+        2607.951172,
+        2622.111328,
+        3195.271484,
+        3433.390625,
+        3254.597656,
+        4582.885742,
+        4983.845703,
+        2962.727539,
+        2612.710938,
+        2627.685547,
+        2611.532227,
+        2900.350586
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 3078.9995115
+    },
+    "B2": {
+      "ns_per_row": [
+        2584.147461,
+        1817.626953,
+        2021.80957,
+        1984.538086,
+        1685.018555,
+        1685.098633,
+        1685.220703,
+        1683.959961,
+        1684.204102,
+        1688.354492,
+        2172.607422,
+        1683.227539,
+        1694.864258,
+        1683.71582,
+        1684.814453,
+        1684.163086
+      ],
+      "passes": 16,
+      "complete_bytes_per_pass": 4194304,
+      "finite": true,
+      "input_unchanged": true,
+      "canary": true,
+      "equal_to_reference": true,
+      "median_ns_per_row": 1685.159668
+    }
+  },
+  "complete_output_bytes_per_pass": 8388608,
+  "reporting_correction": "The frozen original driver reports 4194304 bytes; its memcmp and saved files actually cover 8388608. Original fields and driver are retained unchanged.",
+  "all_four_complete_output_files_literal_equal": true,
+  "tests": {
+    "reference": "IQ2_XXS: 942282 oracle/overlap cases and guarded single/multiple/empty/partial blocks PASS",
+    "candidate": "IQ2_XXS: 942282 oracle/overlap cases and guarded single/multiple/empty/partial blocks PASS"
+  },
+  "preparation_failures": [
+    "The first reference compile could not create its temporary output; no benchmark ran.",
+    "The next reference compile lacked the repository JSON include path; no benchmark ran.",
+    "The completed attempt used a writable compiler temporary directory and the hash-verified existing repository header. Decoder, tests, driver and -O3 flags were unchanged."
+  ],
+  "limitations": [
+    "Substantial timing variation, including slower candidate samples, is retained in all 64 samples.",
+    "The trained sample was transferred from the M5 extraction with SHA256 verification; no independent M3 extraction or model import.",
+    "CPU decoder results do not establish overall inference speed.",
+    "No complete-model runtime validation on M3."
+  ],
+  "original_collection_sha256": "c772b387cec1cc981984ab959a381dc0d4139003e6aadecf8c0bf154b111a73f"
+}

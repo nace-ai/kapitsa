@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nace-ai/kapitsa/blob/main/schema/control/model-switch-request.schema.json",
+  "title": "POST /model request body",
+  "description": "Loads another model in this instance. Every field but run_id is a serve configuration field with step 1's name, type and range; a field left out keeps the instance's current value.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["model"],
+  "properties": {
+    "run_id": {"$ref": "control.schema.json#/$defs/run_id"},
+    "model": {"$ref": "../../docs/serve-config.schema.json#/properties/model", "minLength": 1},
+    "model_id": {"$ref": "../../docs/serve-config.schema.json#/properties/model_id"},
+    "context": {"$ref": "../../docs/serve-config.schema.json#/properties/context"},
+    "slots": {"$ref": "../../docs/serve-config.schema.json#/properties/slots"},
+    "spec": {"$ref": "../../docs/serve-config.schema.json#/properties/spec"},
+    "dflash": {"$ref": "../../docs/serve-config.schema.json#/properties/dflash"},
+    "prefill_chunk": {"$ref": "../../docs/serve-config.schema.json#/properties/prefill_chunk"},
+    "mem_budget": {"$ref": "../../docs/serve-config.schema.json#/properties/mem_budget"},
+    "disk_cache": {"$ref": "../../docs/serve-config.schema.json#/properties/disk_cache"}
+  }
+}

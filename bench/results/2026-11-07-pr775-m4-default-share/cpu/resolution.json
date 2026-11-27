@@ -1,0 +1,7 @@
+{
+  "initial_pass": 19,
+  "initial_fail": 2,
+  "cause": "missing jsonschema in fresh venv",
+  "targeted_rerun_pass": 2,
+  "code_changes": false
+}

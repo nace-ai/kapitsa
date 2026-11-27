@@ -1,0 +1,19 @@
+{
+  "base": {
+    "head": "01b4c6d69fbe69e862c00358f88c94a363129592",
+    "version": "kapitsa 0.2.31 (01b4c6d6)",
+    "library_sha256": "00bc65909437c8c3516c8ac488f2d2038e9c9c771b6e66fb94ec0ff3ed41f9eb",
+    "ni_run_sha256": "cdbfe5c36f6bb5c4e5bf3215b468ddb28d554e0841a98fc272e24e6e368fea6c",
+    "logit_dump_sha256": "b95fcece9c9b1cfc13a72546a451b9f829e0bf6a05214e870baa2b6a105ce284"
+  },
+  "candidate": {
+    "head": "8c0a7ec3bf72623f6c7f92524ef229f3643a9e67",
+    "version": "kapitsa 0.2.31 (8c0a7ec3)",
+    "library_sha256": "f59fb8fa36218c85c2a6722f1da12f55649c906cb1030cc34cd07f7aa0dd3932",
+    "ni_run_sha256": "eac045c1dd81a3a86472eccd968edc3847c2503f9f803b5eb14026fdefdb8ff0",
+    "logit_dump_sha256": "9f21286bf65eeefae5e415aacc3e357f68b1b56f0190b8ca4304a870ce682f49"
+  },
+  "scope": "Own complete baseline and candidate checkouts; random synthetic 6-layer/hidden512/vocab2048 graph. No trained weights, language quality or performance claim.",
+  "generator_sha256": "ab8728a856789e99f684baa6fd19dc66c60fe5baa7abecda04400238784d7f1f",
+  "harness_sha256": "8b453201b3a897ed7f07b88b12d5b3e36f7772d120dc444439e5092d6e3c32d0"
+}

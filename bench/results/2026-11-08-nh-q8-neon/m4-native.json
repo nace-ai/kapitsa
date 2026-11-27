@@ -1,0 +1,190 @@
+{
+  "record_kind": "Privacy-filtered derived kapitsa bench --quick JSON; original numeric results and flags retained",
+  "configuration": {
+    "chip": "Apple M4 Pro",
+    "gpu_cores": 20,
+    "memory_gb": 48,
+    "macos": "15.7.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)"
+  },
+  "runs": [
+    {
+      "label": "A1",
+      "arm": "reference",
+      "rc": 0,
+      "source": "95a0a552fab5c359dd91b716e9936918d436d713",
+      "result_sha256": "f0ac8a3811006d9cc5d59774d72aeaa694e2551d54fcf9b0cc7559d5293a012a",
+      "flags": [],
+      "invalid": [],
+      "time_utc": "2026-11-08T09:11:06Z",
+      "results": {
+        "decode": {
+          "median_tps": 51.88,
+          "runs_tps": [
+            50.47,
+            51.88,
+            55.02
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 54.96,
+          "runs_tps": [
+            54.25,
+            54.96,
+            55.26
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4181,
+            "ttft_s": 4.8587,
+            "tps": 860.5,
+            "followup_s": [
+              0.0683,
+              0.0654,
+              0.0673
+            ],
+            "followup_median_s": 0.0673,
+            "followup_suffix_tps": 322.1
+          }
+        ],
+        "tool_calls": "pass"
+      }
+    },
+    {
+      "label": "B1",
+      "arm": "candidate",
+      "rc": 0,
+      "source": "7ece78ea37e6f68a2d35ff8fa5e20753645b84c7",
+      "result_sha256": "0ad01dabe6b224a3b659abbaaee54d57f9016163b58a39f4331eebc7cff38fd9",
+      "flags": [],
+      "invalid": [],
+      "time_utc": "2026-11-08T09:12:47Z",
+      "results": {
+        "decode": {
+          "median_tps": 64.1,
+          "runs_tps": [
+            64.1,
+            59.93,
+            74.3
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 55.96,
+          "runs_tps": [
+            55.96,
+            56.0,
+            55.96
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4183,
+            "ttft_s": 4.3324,
+            "tps": 965.5,
+            "followup_s": [
+              0.0686,
+              0.0785,
+              0.0588
+            ],
+            "followup_median_s": 0.0686,
+            "followup_suffix_tps": 340.4
+          }
+        ],
+        "tool_calls": "pass"
+      }
+    },
+    {
+      "label": "A2",
+      "arm": "reference",
+      "rc": 0,
+      "source": "95a0a552fab5c359dd91b716e9936918d436d713",
+      "result_sha256": "88738685fc146f6ee056f574ed22cde9cb196a50296eca0a0de230242c6455da",
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.0016)"
+      ],
+      "invalid": [],
+      "time_utc": "2026-11-08T09:14:21Z",
+      "results": {
+        "decode": {
+          "median_tps": 64.32,
+          "runs_tps": [
+            240.42,
+            64.32,
+            56.88
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 55.83,
+          "runs_tps": [
+            56.1,
+            55.5,
+            55.83
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4186,
+            "ttft_s": 4.332,
+            "tps": 966.3,
+            "followup_s": [
+              0.0681,
+              0.0725,
+              0.0589
+            ],
+            "followup_median_s": 0.0681,
+            "followup_suffix_tps": 339.8
+          }
+        ],
+        "tool_calls": "pass"
+      }
+    },
+    {
+      "label": "B2",
+      "arm": "candidate",
+      "rc": 0,
+      "source": "7ece78ea37e6f68a2d35ff8fa5e20753645b84c7",
+      "result_sha256": "a54745a018c9ca09ae6b79b40e694a58591a03f6727ffd317b4188592c2ff784",
+      "flags": [],
+      "invalid": [],
+      "time_utc": "2026-11-08T09:15:49Z",
+      "results": {
+        "decode": {
+          "median_tps": 57.88,
+          "runs_tps": [
+            57.4,
+            57.88,
+            58.86
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 56.07,
+          "runs_tps": [
+            56.09,
+            55.94,
+            56.07
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4184,
+            "ttft_s": 4.3336,
+            "tps": 965.5,
+            "followup_s": [
+              0.0592,
+              0.0805,
+              0.0666
+            ],
+            "followup_median_s": 0.0666,
+            "followup_suffix_tps": 335.3
+          }
+        ],
+        "tool_calls": "pass"
+      }
+    }
+  ]
+}

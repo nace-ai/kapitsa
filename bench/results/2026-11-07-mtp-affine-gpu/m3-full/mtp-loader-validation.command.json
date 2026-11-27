@@ -1,0 +1,17 @@
+{
+  "label": "mtp-loader-validation",
+  "argv": [
+    "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/build/load_error_test",
+    "--mtp-gpu"
+  ],
+  "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate",
+  "started_at": "2026-11-07T05:50:04.963069+00:00",
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-full/home-mtp-loader-validation",
+    "MTL_SHADER_VALIDATION": "1",
+    "MTL_DEBUG_LAYER": "1"
+  }
+}

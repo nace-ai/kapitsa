@@ -1,0 +1,17 @@
+{
+  "base": {
+    "source": "934a6d72f2a393b6987baf0b98ebe5a9e07d69be",
+    "library_sha256": "a89905f22aef643a69a23dcf12a0960d3a298d1d65793a0698f8d7a56d421acc",
+    "probe_sha256": "beddcc2cf654df5896a39c4874e48b8471042af7123b66715554bfdd254f8584"
+  },
+  "candidate": {
+    "source": "dd166319cc746fd439beb77119416e610f9acf63",
+    "library_sha256": "9cef8bbfad7041654b54998343f1d634d791ec3bf7ba50c29ba479ada45bbb6d",
+    "probe_sha256": "fae029ca67f7992e9e56ae9c7c7644de5dc6ebe462137539984bb943b12fa0bf"
+  },
+  "row_hash_crosscheck": {
+    "reference_candidate_python_match": true,
+    "rows": 83302
+  },
+  "probe_source_sha256": "bf5d3bf89a6609b9a200db9d3db1b69ca384b5355ef3de2be3b3bb5142c7f6ec"
+}

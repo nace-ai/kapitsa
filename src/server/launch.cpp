@@ -9,14 +9,17 @@
 #include "server/beam.h"
 #include "server/picker.h"
 #include "server/route.h"
+#include "server/serve_defaults.h"
 #include "server/ui.h"
 #include "util/log.h"
 #include "util/term.h"
 
 #include <httplib/httplib.h>
+#include <CoreFoundation/CoreFoundation.h>
 
 #include <fcntl.h>
 #include <mach-o/dyld.h>
+#include <pwd.h>
 #include <signal.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -38,9 +41,10 @@ using json = nlohmann::ordered_json;
 namespace {
 
 const char* kHelp =
-    "kapitsa claude|codex|opencode|pi [--model M] [--port P] [--context N] [--loops N] [--api-key K] [agent arguments]\n"
-    "                                 [-- agent arguments]\n\n"
-    "Starts Claude Code, Codex, opencode or Pi on Kapitsa. If Kapitsa is already serving on 127.0.0.1:P (default\n"
+    "kapitsa <agent> [--model M] [--port P] [--context N] [--loops N] [--api-key K] [agent arguments]\n"
+    "                [-- agent arguments]\n\n"
+    "Agents: claude, codex, opencode, pi, hermes, aider, goose, copilot\n\n"
+    "Starts a coding agent on Kapitsa. If Kapitsa is already serving on 127.0.0.1:P (default\n"
     "8000), the agent uses that server; otherwise one is started for it (downloading the model the first time) with\n"
     "the model's own context (less where this Mac's memory is tight), and stopped when the agent exits. Its log is in\n"
     "%s/logs/serve-P.log.\n\n"
@@ -113,6 +117,19 @@ int probe(int port, const std::string& key, Running* out, std::string* why) {
   return -1;
 }
 
+CFTypeRef plist_value(CFTypeRef dict, CFStringRef key) {
+  return dict && CFGetTypeID(dict) == CFDictionaryGetTypeID() ? CFDictionaryGetValue(CFDictionaryRef(dict), key) : nullptr;
+}
+
+std::string plist_string(CFTypeRef value) {
+  if (!value || CFGetTypeID(value) != CFStringGetTypeID()) return "";
+  auto s = CFStringRef(value);
+  std::string text(size_t(CFStringGetMaximumSizeForEncoding(CFStringGetLength(s), kCFStringEncodingUTF8)) + 1, '\0');
+  if (!CFStringGetCString(s, text.data(), text.size(), kCFStringEncodingUTF8)) return "";
+  text.resize(strlen(text.c_str()));
+  return text;
+}
+
 // The Homebrew service (`brew services start kapitsa`: a launchd job running `kapitsa serve` without --model at each
 // login and again whenever it ends on an error or a signal) when it serves on `port`: the command that stops it, else
 // "". A server found on the port is then most likely that one, which the agent's exit leaves running and Activity
@@ -132,10 +149,46 @@ std::string brew_service_stop(int port) {
     char buf[4096];
     for (size_t n; (n = fread(buf, 1, sizeof buf, f)) > 0;) s.append(buf, n);
     fclose(f);
-    // its port: a --port among its arguments (<string>--port</string> <string>P</string>), else serve's 8000
+    // Read the plist as a plist: Homebrew can write binary ones, and a custom home can contain XML escapes.
+    CFDataRef data = CFDataCreate(nullptr, reinterpret_cast<const UInt8*>(s.data()), s.size());
+    CFPropertyListRef job = CFPropertyListCreateWithData(nullptr, data, kCFPropertyListImmutable, nullptr, nullptr);
+    CFRelease(data);
+    if (!job) continue;
+    CFTypeRef av = plist_value(job, CFSTR("ProgramArguments"));
+    std::vector<std::string> args;
+    if (av && CFGetTypeID(av) == CFArrayGetTypeID())
+      for (CFIndex i = 0; i < CFArrayGetCount(CFArrayRef(av)); ++i)
+        args.push_back(plist_string(CFArrayGetValueAtIndex(CFArrayRef(av), i)));
+    CFTypeRef env = plist_value(job, CFSTR("EnvironmentVariables"));
+    std::string service_home = plist_string(plist_value(env, CFSTR("KAPITSA_HOME")));
+    std::string user_home = plist_string(plist_value(env, CFSTR("HOME")));
+    if (user_home.empty()) {
+      const std::string user = plist_string(plist_value(job, CFSTR("UserName")));
+      if (!user.empty()) {
+        if (const auto* pw = getpwnam(user.c_str())) user_home = pw->pw_dir;
+      }
+    }
+    if (user_home.empty()) user_home = stop.starts_with("sudo ") ? "/var/root" : home ? home : "";
+    if (service_home.empty()) service_home = user_home + "/.cache/kapitsa";
+    else if (service_home == "~" || service_home.starts_with("~/")) service_home = user_home + service_home.substr(1);
+    if (!service_home.starts_with("/")) {
+      const std::string dir = plist_string(plist_value(job, CFSTR("WorkingDirectory")));
+      service_home = (dir.empty() ? "/" : dir + "/") + service_home;
+    }
+    CFRelease(job);
+    if (args.size() < 2 || args[1] != "serve") continue;
+    if (args.size() == 2) {
+      try { args = serve_defaults(service_home); }
+      catch (const std::exception&) { continue; }  // a broken file must not prevent attaching to a running server
+    } else args.erase(args.begin(), args.begin() + 2);
+    // An explicit command line bypasses the file, just as serve does. The last --port wins.
     int p = 8000;
-    if (size_t a = s.find("<string>--port</string>"); a != std::string::npos)
-      if ((a = s.find("<string>", a + 23)) != std::string::npos) p = atoi(s.c_str() + a + 8);
+    for (size_t i = 0; i + 1 < args.size(); ++i) {
+      if (args[i] != "--port") continue;
+      char* end = nullptr;
+      const long value = strtol(args[i + 1].c_str(), &end, 10);
+      if (end != args[i + 1].c_str() && !*end && value > 0 && value <= 65535) p = int(value);
+    }
     if (p == port) return stop;
   }
   return "";
@@ -456,8 +509,9 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     } else if (ctx == kContextMax) {
       ctx = model_context_limit(ref.dir);
       if (ctx <= 0)
-        return fail(serve_model + " does not state the context it was trained for (max_position_embeddings in its "
-                    "config.json), so --context max has no size here: give it in tokens (--context 128k).", 2);
+        return fail(serve_model + " does not state the context it was trained for (max_position_embeddings or "
+                    "model_max_length in its config.json), so --context max has no size here: give it in tokens "
+                    "(--context 128k).", 2);
     } else if (ctx == 0) {
       ctx = default_context(ref.dir, opt, budget);
     } else if (const int limit = model_context_limit(ref.dir); limit > 0 && ctx > limit) {

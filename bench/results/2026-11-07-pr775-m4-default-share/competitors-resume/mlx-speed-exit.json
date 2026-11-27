@@ -1,0 +1,13 @@
+{
+  "command": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/mlx_probe.py",
+    "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+    "speed",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/speed-ids.txt",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/competitors-resume/mlx-speed.jsonl"
+  ],
+  "returncode": 0,
+  "start": 1793992287.452737,
+  "end": 1793992311.605498
+}

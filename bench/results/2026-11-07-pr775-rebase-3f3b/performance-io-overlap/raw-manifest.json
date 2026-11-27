@@ -1,0 +1,143 @@
+{
+  "source": "work/pr775/m4-local/performance-rebase-3f3b-versioned",
+  "files": [
+    {
+      "path": "evidence-io-overlap.json",
+      "bytes": 268,
+      "sha256": "226d247ed877b0980da7f5f332f9bbcbdba1a08732eb724d81f2dfd5a10480f3",
+      "included": true
+    },
+    {
+      "path": "perf-A1-requests.json",
+      "bytes": 32701,
+      "sha256": "a819db78681011ef1b97a34ef04c3df6109bf8317f604b727d0e51348103f643",
+      "included": true
+    },
+    {
+      "path": "perf-A1-server.log",
+      "bytes": 2357,
+      "sha256": "7bbc7e788be7b8b4fa03c49cedd8dc086ea99c26f337dbf939e6a8c580dd5998",
+      "included": true
+    },
+    {
+      "path": "perf-A1-telemetry.json",
+      "bytes": 1075,
+      "sha256": "95b26d367cf585e244e78f89b2a4063d50cf83dc7328d2bc86f4962059db0af1",
+      "included": true
+    },
+    {
+      "path": "perf-A1.json",
+      "bytes": 4115,
+      "sha256": "01843e1121523350469b61732d21fc33ddff46c410582e4657bce06b06f48ad1",
+      "included": true
+    },
+    {
+      "path": "perf-A1.log",
+      "bytes": 410,
+      "sha256": "e7cfbc28924dd3a8d37f7fb9e60115c2d89289524b8b81b6d0230c2d7208252f",
+      "included": true
+    },
+    {
+      "path": "perf-A2-requests.json",
+      "bytes": 32701,
+      "sha256": "a819db78681011ef1b97a34ef04c3df6109bf8317f604b727d0e51348103f643",
+      "included": true
+    },
+    {
+      "path": "perf-A2-server.log",
+      "bytes": 2359,
+      "sha256": "d1893028e17d3dc93cb27815dd9f90182f24ea926ab4a3d6aa1a8a0f1604567d",
+      "included": true
+    },
+    {
+      "path": "perf-A2-telemetry.json",
+      "bytes": 1069,
+      "sha256": "199fc8c8303389238b306425d2fb78f1b60b9595569c4f924e4da5d76aa3f248",
+      "included": true
+    },
+    {
+      "path": "perf-A2.json",
+      "bytes": 4130,
+      "sha256": "186789d273ffc52bc16aaa6435ee58fdd681684bf246dae0f57f63c658808e88",
+      "included": true
+    },
+    {
+      "path": "perf-A2.log",
+      "bytes": 410,
+      "sha256": "7bd37bc2d320092f882f14c6448bb8c92aeda3733dea3e709540e3b92ac35052",
+      "included": true
+    },
+    {
+      "path": "perf-B1-requests.json",
+      "bytes": 32701,
+      "sha256": "a819db78681011ef1b97a34ef04c3df6109bf8317f604b727d0e51348103f643",
+      "included": true
+    },
+    {
+      "path": "perf-B1-server.log",
+      "bytes": 3140,
+      "sha256": "36dba775e2e051e2e714ab4cfc243a128d3d00d0f700fd47ecce890a285263a3",
+      "included": true
+    },
+    {
+      "path": "perf-B1-telemetry.json",
+      "bytes": 883,
+      "sha256": "17771bfea224b53726199f19a894a7b04d22123480b40a05348770c83cc91425",
+      "included": true
+    },
+    {
+      "path": "perf-B1.json",
+      "bytes": 4164,
+      "sha256": "052af17e60c2e3ec6073798195f72eb495a796ba4682d145fda25c4c63cad463",
+      "included": true
+    },
+    {
+      "path": "perf-B1.log",
+      "bytes": 410,
+      "sha256": "28cf3ba401ca209765b35aa03d2069792a343321eccf931d3f0b746adcc48c1f",
+      "included": true
+    },
+    {
+      "path": "perf-B2-requests.json",
+      "bytes": 32701,
+      "sha256": "a819db78681011ef1b97a34ef04c3df6109bf8317f604b727d0e51348103f643",
+      "included": true
+    },
+    {
+      "path": "perf-B2-server.log",
+      "bytes": 3142,
+      "sha256": "0ad854fc599423d33a0efe95f693c3536de172ac11006ec8a966d0f1967f3a9b",
+      "included": true
+    },
+    {
+      "path": "perf-B2-telemetry.json",
+      "bytes": 883,
+      "sha256": "4c7ad98f5008ebc845bb5371f6e23ea5f40130c80f25769ea91583b37924c1a3",
+      "included": true
+    },
+    {
+      "path": "perf-B2.json",
+      "bytes": 4149,
+      "sha256": "900fb2a7137c346a8005cbc0a9be3b653e2b37223ef417f091a4b8b8a67bfd84",
+      "included": true
+    },
+    {
+      "path": "perf-B2.log",
+      "bytes": 410,
+      "sha256": "d11c72038e24db34c3283225776af12c2f775ee6ea1f317dee52e899c7476883",
+      "included": true
+    },
+    {
+      "path": "performance-legs.json",
+      "bytes": 28812,
+      "sha256": "69c8e5572060c56737f44099f14a870cd7d28d43e6679fef2c667d029b43b581",
+      "included": true
+    },
+    {
+      "path": "performance-status.json",
+      "bytes": 47,
+      "sha256": "8a8833cebba5b2da059aba0d93eacbb00411258952638797f66da56b9bc14e23",
+      "included": true
+    }
+  ]
+}

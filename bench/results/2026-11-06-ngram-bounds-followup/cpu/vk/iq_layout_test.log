@@ -1,0 +1,7 @@
+IQ blocks in wfmt_iq.metal's layout against gguf::dequantize:
+  IQ1_S     50-byte blocks: 7680 values, |A| <=  135, every operand exact
+  IQ2_XXS   66-byte blocks: 7680 values, |A| <= 1333, every operand exact
+  IQ2_S     82-byte blocks: 7680 values, |A| <= 1333, every operand exact
+  IQ3_XXS   98-byte blocks: 7680 values, |A| <= 1922, every operand exact
+  IQ3_S    110-byte blocks: 7680 values, |A| <=  465, every operand exact
+all passed

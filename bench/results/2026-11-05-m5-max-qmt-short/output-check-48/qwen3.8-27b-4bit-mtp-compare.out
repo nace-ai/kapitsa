@@ -1,0 +1,31 @@
+prefill: 8 records (qwen3.8-27b-4bit-mtp)
+  reference: 0.2.29 (d9d479dd), prefill_chunk 48, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.29 (d9d479dd), prefill_chunk 48, ane {"chunks":0,"evals":0,"reruns":0}
+  bitwise identical rows 0 of 8; max |logit diff| 0.01892
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 1.483e-07 median 7.662e-08 p99 6.276e-07 max 6.593e-07; top-2 margin change up to 0.006561
+  next-token NLL change -3.393e-06 nats per record (candidate minus reference)
+batch: 192 records (qwen3.8-27b-4bit-mtp)
+  reference: 0.2.29 (d9d479dd), batch {"members":4,"rows":2}, prefill_chunk 48, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.29 (d9d479dd), batch {"members":4,"rows":2}, prefill_chunk 48, ane {"chunks":0,"evals":0,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 0.1046
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.0726))
+  KL mean 5.882e-07 median 9.737e-09 p99 6.657e-06 max 4.263e-05; top-2 margin change up to 0.01849
+  next-token NLL change -7.135e-05 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json)
+step: 192 records (qwen3.8-27b-4bit-mtp)
+  reference: 0.2.29 (d9d479dd), prefill_chunk 48, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.29 (d9d479dd), prefill_chunk 48, ane {"chunks":0,"evals":0,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 0.08825
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.0726))
+  KL mean 2.950e-07 median 4.263e-09 p99 1.316e-06 max 3.622e-05; top-2 margin change up to 0.02001
+  next-token NLL change +2.057e-05 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json)
+verify: 192 records (qwen3.8-27b-4bit-mtp)
+  reference: 0.2.29 (d9d479dd), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 48, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.29 (d9d479dd), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 48, ane {"chunks":0,"evals":0,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 0.08474
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.0726))
+  KL mean 4.367e-07 median 1.069e-08 p99 4.910e-06 max 2.001e-05; top-2 margin change up to 0.02037
+  next-token NLL change -1.584e-05 nats per record (candidate minus reference)
+  PASS (tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json)

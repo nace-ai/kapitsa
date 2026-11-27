@@ -1,0 +1,16 @@
+{
+  "id": "7f3a9c2e5b1d4e60.912",
+  "type": "request_progress",
+  "data": {
+    "request_id": "req-41",
+    "api": "openai",
+    "client": "Kapitan/0.9",
+    "phase": "writing",
+    "prompt_tokens": 2310,
+    "cached_tokens": 2048,
+    "prefilled_tokens": 262,
+    "completion_tokens": 118,
+    "elapsed_ms": 4210,
+    "tokens_per_second": 41.5
+  }
+}

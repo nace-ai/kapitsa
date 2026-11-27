@@ -1,0 +1,5 @@
+2026-11-06 23:34:18.554 ane_segment_check[95970:51502878] Metal API Validation Enabled
+2026-11-06 23:34:18.556 ane_segment_check[95970:51502878] Metal GPU Validation Enabled
+[kapitsa] compiled kernels in 4455 ms
+CPU input selection: 50 checks, 0 failures
+GPU input segments: 2098 comparisons, 34105984 data/guard bytes checked, 0 failures

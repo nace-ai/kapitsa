@@ -88,6 +88,39 @@ int main() {
     const Install head = detect(h);
     check(head.kind == Kind::kHomebrew && head.head && brew_command(head) == "brew upgrade --fetch-HEAD nace-ai/tap/kapitsa",
           "a --HEAD install fetches HEAD", brew_command(head));
+    // homebrew-core install: INSTALL_RECEIPT.json with "homebrew/core" tap
+    const std::string core_p = T + "/hbcore/Cellar/kapitsa/0.2.31/bin/kapitsa";
+    touch(core_p);
+    touch(T + "/hbcore/Cellar/kapitsa/0.2.31/INSTALL_RECEIPT.json",
+          R"({"source":{"tap":"homebrew/core"}})");
+    const Install core = detect(core_p);
+    check(core.kind == Kind::kHomebrew && core.core && !core.head, "homebrew-core install detected",
+          std::string(kind_name(core.kind)) + (core.core ? " core" : " tap"));
+    check(brew_command(core) == "brew upgrade kapitsa", "homebrew-core: brew upgrade kapitsa", brew_command(core));
+    // homebrew-core --HEAD install
+    const std::string core_h = T + "/hbcore/Cellar/kapitsa/HEAD-def5678/bin/kapitsa";
+    touch(core_h);
+    touch(T + "/hbcore/Cellar/kapitsa/HEAD-def5678/INSTALL_RECEIPT.json",
+          R"({"source":{"tap":"homebrew/core"}})");
+    const Install core_head = detect(core_h);
+    check(core_head.core && core_head.head && brew_command(core_head) == "brew upgrade --fetch-HEAD kapitsa",
+          "homebrew-core --HEAD: brew upgrade --fetch-HEAD kapitsa", brew_command(core_head));
+    // tap install with receipt: stays nace-ai/tap
+    const std::string tap_p = T + "/hbtap/Cellar/kapitsa/0.2.31/bin/kapitsa";
+    touch(tap_p);
+    touch(T + "/hbtap/Cellar/kapitsa/0.2.31/INSTALL_RECEIPT.json",
+          R"({"source":{"tap":"nace-ai/tap"}})");
+    const Install tap = detect(tap_p);
+    check(tap.kind == Kind::kHomebrew && !tap.core, "tap install with receipt stays tap",
+          std::string(kind_name(tap.kind)) + (tap.core ? " core" : " tap"));
+    check(brew_command(tap) == "brew upgrade nace-ai/tap/kapitsa", "tap: brew upgrade nace-ai/tap/kapitsa", brew_command(tap));
+    // no receipt: falls back to tap
+    const std::string norec = T + "/hbnorec/Cellar/kapitsa/0.2.31/bin/kapitsa";
+    touch(norec);
+    const Install norec_in = detect(norec);
+    check(norec_in.kind == Kind::kHomebrew && !norec_in.core, "no receipt falls back to tap",
+          std::string(kind_name(norec_in.kind)) + (norec_in.core ? " core" : " tap"));
+    check(brew_command(norec_in) == "brew upgrade nace-ai/tap/kapitsa", "no receipt: tap command", brew_command(norec_in));
   }
   {
     const std::string src = T + "/my src";

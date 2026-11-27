@@ -1,0 +1,45 @@
+qwen3.6-35b-a3b-4bit round 1 old 'AC Power' units  reps 1542.69 625.19 627.80 
+qwen3.6-35b-a3b-4bit round 1 new 'AC Power' units  reps 1660.39 614.85 616.59 
+qwen3.6-35b-a3b-4bit round 2 new 'AC Power' units  reps 642.50 615.67 620.21 
+qwen3.6-35b-a3b-4bit round 2 old 'AC Power' units  reps 1534.57 627.77 627.75 
+qwen3.6-35b-a3b-4bit round 3 old 'AC Power' units  reps 652.73 628.71 629.26 
+qwen3.6-35b-a3b-4bit round 3 new 'AC Power' units  reps 1549.01 617.01 614.33 
+qwen3.6-35b-a3b-4bit round 4 new 'AC Power' units  reps 644.41 616.13 616.78 
+qwen3.6-35b-a3b-4bit round 4 old 'AC Power' units  reps 1541.10 627.77 628.00 
+qwen3.8-27b-4bit-mtp round 1 old 'AC Power' units 14/34 units reps 3090.81 3081.74 3279.84 
+qwen3.8-27b-4bit-mtp round 1 new 'AC Power' units 14/34 units reps 3089.40 3099.90 3291.04 
+qwen3.8-27b-4bit-mtp round 2 new 'AC Power' units 14/34 units reps 3095.62 3106.73 3302.04 
+qwen3.8-27b-4bit-mtp round 2 old 'AC Power' units 14/34 units reps 3096.49 3118.16 3364.63 
+qwen3.8-27b-4bit-mtp round 3 old 'AC Power' units 14/34 units reps 3092.66 3135.72 3384.05 
+qwen3.8-27b-4bit-mtp round 3 new 'AC Power' units 14/34 units reps 3088.33 3127.36 3421.83 
+qwen3.8-27b-4bit-mtp round 4 new 'AC Power' units 14/34 units reps 3088.92 3138.14 3336.25 
+qwen3.8-27b-4bit-mtp round 4 old 'AC Power' units 14/34 units reps 3092.27 3153.30 3504.83 
+== output check qwen3.6-35b-a3b-4bit
+compare exit 0
+  every row bitwise identical
+  PASS (kapitsa-st/tools/logit_floors/qwen3.6-35b-a3b-4bit.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+step: 192 records (qwen3.6-35b-a3b-4bit)
+  reference: 0.2.28 (446165e5), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.28 (90575b66), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+  PASS (kapitsa-st/tools/logit_floors/qwen3.6-35b-a3b-4bit.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+verify: 192 records (qwen3.6-35b-a3b-4bit)
+  reference: 0.2.28 (446165e5), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 0.2.28 (90575b66), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  every row bitwise identical
+  PASS (kapitsa-st/tools/logit_floors/qwen3.6-35b-a3b-4bit.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+== output check qwen3.8-27b-4bit-mtp
+compare exit 0
+  every row bitwise identical
+  PASS (kapitsa-st/tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+step: 192 records (qwen3.8-27b-4bit-mtp)
+  reference: 0.2.28 (446165e5), prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  candidate: 0.2.28 (90575b66), prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  every row bitwise identical
+  PASS (kapitsa-st/tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+verify: 192 records (qwen3.8-27b-4bit-mtp)
+  reference: 0.2.28 (446165e5), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  candidate: 0.2.28 (90575b66), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  every row bitwise identical
+  PASS (kapitsa-st/tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json: the decode passes' gate (the prefill rows are bitwise the same))
+done

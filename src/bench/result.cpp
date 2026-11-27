@@ -270,6 +270,8 @@ ojson make_result(const RunInputs& in) {
     }
 
   if (in.external_server) invalid.push_back("server: a server kapitsa bench did not start (KAPITSA_BENCH_SERVER), so its settings are unknown");
+  if (in.external_server && in.external_server_pid <= 0)
+    flags.push_back("server: no process found listening on the server's port, so its own GPU load may count as foreign");
   // conditions per timed phase: other apps on the GPU (compare_engines.py's contention summary), swap, thermal state
   std::vector<std::string> busy, hot;
   double t_first = INFINITY, t_last = -INFINITY;
@@ -403,6 +405,7 @@ ojson make_result(const RunInputs& in) {
     for (const auto& x : raw["context"]["flags"]) flags.push_back("context: " + x.get<std::string>());
   }
   if (in.prefill_chunk) protocol["prefill_chunk"] = in.prefill_chunk;
+  if (!in.dflash.empty()) protocol["dflash"] = in.dflash;
   ojson users = ojson::array();
   for (const auto& u : overall.value("gpu_users", ojson::array())) users.push_back(u["name"]);
   ojson conditions = {{"power_source", in.power_start.source.empty() ? ojson(nullptr) : ojson(in.power_start.source)},
@@ -614,6 +617,8 @@ std::string submit_problem(const ojson& r) {
   if (r.contains("protocol") && r["protocol"].contains("context_window")) return "Custom-context runs cannot be submitted as standard community benchmarks.";
   if (r.contains("protocol") && r["protocol"].contains("prefill_chunk"))
     return "Custom prefill chunks cannot be submitted as standard community benchmarks.";
+  if (r.contains("protocol") && r["protocol"].contains("dflash"))
+    return "Runs with --dflash cannot be submitted as standard community benchmarks.";
   const ojson& m = r["model"];
   if (!m.value("catalog", false) || !m["variant"].is_string())
     return "Only results of the catalog's models can be submitted (their weights are pinned, so results compare): "

@@ -1,0 +1,2 @@
+[kapitsa] compiled kernels in 16 ms
+moe4_down R=3 median 100.60 us/call (min 100.33 max 101.02; reps 100.62 100.65 100.33 101.02 100.55 100.60 100.56)

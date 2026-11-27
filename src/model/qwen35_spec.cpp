@@ -1,6 +1,8 @@
 // Speculative decoding for Qwen3.5/3.6/3.8: the model's own MTP head drafts tokens, the trunk
 // verifies the pending token plus drafts in one small-batch forward, and Gated DeltaNet layers roll
 // back through a tape (rows are only folded into the recurrent state once accepted).
+#include "engine/device_profile.h"
+#include "model/sampler.h"
 #include "loader/safetensors.h"
 #include "model/affine_pack.h"
 #include "model/dflash2.h"
@@ -18,11 +20,6 @@
 #include <nlohmann/json.hpp>
 
 namespace ni {
-
-static int env_int(const char* n, int def) {
-  const char* v = getenv(n);
-  return v && *v ? atoi(v) : def;
-}
 
 static Pipeline pipe2(const std::string& n) {
   static std::unordered_map<std::string, Pipeline> cache;
@@ -153,6 +150,12 @@ QLinear Qwen35::quantize_rows4(const QLinear& src, uint32_t r0, uint32_t n) {
 // An already-quantized linear from the MTP file (copied into engine-owned buffers). Group 64; the width comes from the
 // shapes and may be any the kernels read (format_supported: 3, 4, 5, 6, 8), scales and biases in f16 / f32 become bf16.
 QLinear Qwen35::own_qlin(const WeightStore& w, const std::string& name) {
+  const Tensor &weight = w.get(name + ".weight"), &scales = w.get(name + ".scales"), &biases = w.get(name + ".biases");
+  const auto floats = [](DType d) { return d == DType::BF16 || d == DType::F16 || d == DType::F32; };
+  if (weight.dtype != DType::U32 || !floats(scales.dtype) || !floats(biases.dtype) ||
+      !affine_matrix_shape(weight.shape, scales.shape, biases.shape, 64))
+    fatal("%s: invalid affine tensor shapes or dtypes (expected uint32 matrix or stacked experts, "
+          "matching float scales and biases, and positive 32-bit dimensions)", name.c_str());
   QLinear L;
   int lossy = 0;
   bool cast = false;
@@ -633,7 +636,7 @@ void Qwen35::enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffe
   // fp32 version is ALU-bound at 1.5x a single row; this one measured 1.17-1.32x). Apple10 GPUs (M5) take the
   // shifted-nibble build: their fast-math compiler turns qmvht_t3_r4 into half sums that overflow (NaN rows).
   static const bool half3_off = env_on("NI_NO_QMVH");
-  static const char* half3 = Gpu::get().apple10() ? "qmvhts_t3_r4" : "qmvht_t3_r4";
+  static const char* half3 = matrix_units() ? "qmvhts_t3_r4" : "qmvht_t3_r4";
   if (R == 3 && !half3_off && !no_qmvh_ && L.bits == 4) {
     e.use(pipe2(half3));
     kp::Qmvr p{L.N, L.K, uint32_t(R), x_ld ? x_ld : L.K, y_ld ? y_ld : L.N, add ? 1u : 0u};
@@ -749,12 +752,66 @@ void Qwen35::enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, 
   static const bool off = env_on("NI_NO_QMVR_MULTI");
   if (off || !special || (R != 2 && R != 3) || K > 2048 || segs.size() > 4) {
     const Buffer* xin = &x;
-    if (norm) {
+    size_t begin = 0;
+    bool x8_ready = false;
+    static const bool simd = simd_gpu();
+    const bool moe35 = cfg_.moe && cfg_.hidden == 2048 && cfg_.layers == 40 && cfg_.experts == 256 &&
+                       cfg_.top_k == 8 && cfg_.moe_I == 512 && cfg_.shared_I == 512;
+    // The 35B oQ4e path: fold rows_norm_f32 into the first projection's X8 preparation.
+    // Keep its 256-thread scalar reduction and retain xrn_ for the remaining projections.
+    static const bool norm_x8 = env_int("NI_NORM_X8", 1) != 0 && simd;
+    const QLinear& first = *segs[0].L;
+    if (norm_x8 && !off && norm && R >= 1 && R <= 2 && K == 2048 && moe35 &&
+        !(first.q4() || first.q8()) && env_int("NI_V8_PREP", 2) != 1) {
+      if (xn_out && xn_out != &xrn_) fatal("enc_qmvr_multi: xn_out fallback needs xn_out == xrn_");
+      v8_alloc();
+      kp::X8Prep p{K, uint32_t(R), K, 1, 1, cfg_.eps, K, 0, 0, 0};
+      e.use(pipe2("x8_prep2_rows_norm"));
+      e.buf(0, x); e.buf(1, norm->buf); e.buf(2, v8t_); e.buf(3, v8s_);
+      e.buf(4, xrn_); e.val(5, p); e.buf(6, v8tl_); e.buf(7, v8sl_); e.buf(8, v8tl_);
+      e.dispatch(K / 256, 1, 1, 256);
+      enc_qmm8(e, {{&first, segs[0].y, first.N, !add.empty() && add[0]}}, R, v8t_, v8s_);
+      xin = &xrn_;
+      begin = 1;
+      x8_ready = true;
+    } else if (norm) {
       enc_rows_norm(e, x, norm, xrn_, R, int(K));
       xin = &xrn_;
     }
     if (xn_out && xin != xn_out) fatal("enc_qmvr_multi: xn_out fallback needs xn_out == xrn_");
-    for (size_t i = 0; i < segs.size(); ++i) enc_qmvr(e, *segs[i].L, *xin, segs[i].y, R, i < add.size() && add[i]);
+    // Reuse the first projection's table (including NI_NORM_X8's) without changing any GEMM's K reduction.
+    // On by default today only for the 35B shape / 5-6-bit affine projections on the 20-core M4 Pro.
+    static const int share_x8 = env_int("NI_QMVR_SHARE_X8", -1);
+    if (share_x8 != 0 && !off && !special && R >= 1 && R < v8_rows_min(true) && segs.size() <= 4 && K % 64 == 0) {
+      size_t generic = 0;
+      bool same_k = true, measured_formats = !cfg_.iq;
+      for (const Seg& sg : segs) {
+        if (!(sg.L->q4() || sg.L->q8())) {
+          ++generic;
+          measured_formats = measured_formats && !sg.L->iq && !sg.L->q20 && !sg.L->exl3 &&
+                             (sg.L->bits == 5 || sg.L->bits == 6) && sg.L->gs == 64;
+        }
+        same_k = same_k && sg.L->K == K;
+      }
+      if (same_k && generic > 1 && (share_x8 > 0 || (simd && moe35 && measured_formats))) {
+        if (!x8_ready) {
+          v8_alloc();
+          enc_x8(e, *xin, R, int(K), nullptr);
+        }
+        for (size_t i = begin; i < segs.size(); ++i) {
+          const Seg& sg = segs[i];
+          const bool accum = i < add.size() && add[i];
+          if (sg.L->q4() || sg.L->q8()) {
+            // Below the MMA threshold these encoders leave the shared X8 table intact.
+            enc_qmvr(e, *sg.L, *xin, sg.y, R, accum);
+          } else {
+            enc_qmm8(e, {{sg.L, sg.y, sg.L->N, accum}}, R, v8t_, v8s_);
+          }
+        }
+        return;
+      }
+    }
+    for (size_t i = begin; i < segs.size(); ++i) enc_qmvr(e, *segs[i].L, *xin, segs[i].y, R, i < add.size() && add[i]);
     return;
   }
   e.use(pipe2(R == 2 ? "qmvr_multi_t2" : "qmvr_multi_t3"));
@@ -974,7 +1031,7 @@ void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Bu
   if (draft_out < 0) return;
   // greedy draft over the reduced vocabulary from the last row
   const Buffer last = mtp_post_.view(size_t(R - 1) * D * 4, size_t(D) * 4);
-  const bool full_vocab = full_draft_;
+  const bool full_vocab = full_draft_ || bool(s.suppression);
   uint32_t n0 = draft_head_[0].N, n1 = draft_head_[1].N, n2 = 0;
   DraftVocab* dv = nullptr;
   if (full_vocab) {
@@ -992,6 +1049,7 @@ void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Bu
       for (const Seg& sg : segs) enc_qmv(e, *sg.L, last, sg.y, nullptr, nullptr);
   }
   const uint32_t V = n0 + n1 + n2, chunk = 2048, ntg = (V + chunk - 1) / chunk;
+  enc_token_suppression(e, s, dlog_, 1, int(V), int(V));
   kp::TopkStage ts{V, 1, chunk};
   e.use(pipe2("topk_stage1_rows"));
   e.buf(0, dlog_); e.buf(1, cand_v_); e.buf(2, cand_i_);
@@ -1053,9 +1111,8 @@ void Qwen35::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0)
 // ---- trunk verify ----
 
 uint32_t Qwen35::verify_candidates(const SamplingParams& sp) const {
-  const uint32_t V = uint32_t(cfg_.vocab), ntg = (V + 2047) / 2048;
-  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
-  return ntg * K;
+  const uint32_t K = topk_k(sp);
+  return topk_lists(uint32_t(cfg_.vocab), K) * K;
 }
 
 void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step, bool v8) {
@@ -1076,6 +1133,7 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
   const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
   const int VD = cfg_.lin_hv * cfg_.lin_dv;
   enc_embed(e, s.tok, pos, R, x_);
+  flush_backlog(e, s);
   kp::GdnVerify gv{uint32_t(R), uint32_t(s.n_pend), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C, cfg_.eps};
   for (int i = 0; i < cfg_.layers; ++i) {
     const Layer& L = layers_[i];
@@ -1107,14 +1165,13 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
     enc_rows_norm(e, x_, final_norm_, xrn_, R, D);
     enc_qmvr(e, lm_head_, xrn_, logits_, R, false);
   }
-  const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
-  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
+  const uint32_t V = uint32_t(cfg_.vocab), K = topk_k(sp), chunk = topk_chunk(K), ntg = topk_lists(V, K);
   enc_logit_mask(e, s, logits_, R, int(V), int(V));  // structured output (nothing without masks)
   kp::TopkStage ts{V, K, chunk};
   e.use(pipe2("topk_stage1_rows"));
   e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, R, 1, 256);
+  e.dispatch(ntg, R, 1, topk_threads(K));
   kp::SampleRows sr{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, 0, 0, 0};
   e.use(pipe2("sample_stage2_rows"));
   e.buf(0, cand_v_); e.buf(1, cand_i_); e.buf(2, samp_);
@@ -1124,6 +1181,7 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
 }
 
 void Qwen35::encode_flush(Encoder& e, Seq& s) {
+  flush_backlog(e, s);  // (its rows precede the pending ones)
   if (s.n_pend == 0) {
     s.pend_tree = false;
     return;

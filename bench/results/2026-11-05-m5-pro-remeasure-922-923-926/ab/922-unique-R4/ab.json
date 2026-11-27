@@ -1,0 +1,138 @@
+[
+ {
+  "round": 0,
+  "arm": "old",
+  "quiet": true,
+  "quiet_wait_s": 82.8,
+  "load_wait_s": 0.0,
+  "load1_before": 1.41,
+  "load1_after": 1.41,
+  "ac_before": true,
+  "ac_after": true,
+  "gpu_load": {
+   "samples": 0,
+   "flagged": false
+  },
+  "us_call": 19.99,
+  "clean": false
+ },
+ {
+  "round": 0,
+  "arm": "new",
+  "quiet": true,
+  "quiet_wait_s": 18.6,
+  "load_wait_s": 0.0,
+  "load1_before": 1.3,
+  "load1_after": 1.3,
+  "ac_before": true,
+  "ac_after": true,
+  "gpu_load": {
+   "samples": 0,
+   "flagged": false
+  },
+  "us_call": 10.81,
+  "clean": false
+ },
+ {
+  "round": 1,
+  "arm": "new",
+  "quiet": true,
+  "quiet_wait_s": 18.6,
+  "load_wait_s": 0.0,
+  "load1_before": 1.61,
+  "load1_after": 1.61,
+  "ac_before": true,
+  "ac_after": true,
+  "gpu_load": {
+   "samples": 0,
+   "flagged": false
+  },
+  "us_call": 10.8,
+  "clean": false
+ },
+ {
+  "round": 1,
+  "arm": "old",
+  "quiet": true,
+  "quiet_wait_s": 33.1,
+  "load_wait_s": 0.0,
+  "load1_before": 2.42,
+  "load1_after": 2.54,
+  "ac_before": true,
+  "ac_after": true,
+  "gpu_load": {
+   "samples": 0,
+   "flagged": false
+  },
+  "us_call": 20.65,
+  "clean": false
+ },
+ {
+  "round": 2,
+  "arm": "old",
+  "quiet": true,
+  "quiet_wait_s": 18.6,
+  "load_wait_s": 0.0,
+  "load1_before": 2.29,
+  "load1_after": 2.18,
+  "ac_before": true,
+  "ac_after": true,
+  "gpu_load": {
+   "samples": 0,
+   "flagged": false
+  },
+  "us_call": 19.17,
+  "clean": false
+ },
+ {
+  "round": 2,
+  "arm": "new",
+  "quiet": true,
+  "quiet_wait_s": 20.7,
+  "load_wait_s": 0.0,
+  "load1_before": 2.37,
+  "load1_after": 2.37,
+  "ac_before": true,
+  "ac_after": true,
+  "gpu_load": {
+   "samples": 0,
+   "flagged": false
+  },
+  "us_call": 10.84,
+  "clean": false
+ },
+ {
+  "round": 3,
+  "arm": "new",
+  "quiet": true,
+  "quiet_wait_s": 39.3,
+  "load_wait_s": 0.0,
+  "load1_before": 1.64,
+  "load1_after": 1.64,
+  "ac_before": true,
+  "ac_after": true,
+  "gpu_load": {
+   "samples": 0,
+   "flagged": false
+  },
+  "us_call": 10.82,
+  "clean": false
+ },
+ {
+  "round": 3,
+  "arm": "old",
+  "quiet": true,
+  "quiet_wait_s": 66.2,
+  "load_wait_s": 0.0,
+  "load1_before": 1.58,
+  "load1_after": 1.58,
+  "ac_before": true,
+  "ac_after": true,
+  "gpu_load": {
+   "samples": 0,
+   "flagged": false
+  },
+  "us_call": 19.16,
+  "clean": false
+ }
+]

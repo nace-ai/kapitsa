@@ -69,6 +69,12 @@ struct Sample {
   uint32_t seed, step, out_index;
 };
 
+struct SampleFull {  // sample_full (sample.metal): K 0 = no truncation; dstep 1: step + dstep[out_index]
+  uint32_t V, K;
+  float temp, top_p;
+  uint32_t seed, step, out_index, dstep;
+};
+
 struct Qmm {
   uint32_t M, N, K, x_ld, y_ld, add, gs, w_expert_stride, s_expert_stride;
 };
@@ -133,6 +139,8 @@ struct GdnVerify {
   float eps;
   uint32_t tree = 0, pidx = 0;  // the *_tree kernels: rows form a tree / pending rows are a tree cycle's path
   uint32_t pin = 0;             // gdn_step_verify8s_tree: the recurrence's update in one explicit form (gdn_update)
+  uint32_t nback = 0;           // gdn_step_verify8s_tree: backlog rows to fold before the pending ones (lazy fold)
+  uint32_t lazy = 0;            // 1: append the pending rows to the backlog instead of storing the folded state
 };
 
 struct SampleRows {
@@ -271,6 +279,12 @@ struct KfBuild {
   uint32_t K, P, root, pad;
 };
 
+struct DflHist {
+  uint32_t P, nmin, nmax, cap, window;
+  float hlq;
+  uint32_t pad0, pad1;
+};
+
 struct KfAccept {
   uint32_t P, R, gst, pad;
 };
@@ -358,6 +372,86 @@ struct Moe8Iq {
 struct QrmIq {
   uint32_t N, K, x_ld, y_ld;
   IqSec sec;
+};
+
+// Hy4-flash (src/kernels/hy4/hy4.metal, src/model/hy4_ops.cpp)
+struct Hy4Hc {
+  uint32_t D, nout, has_y, u_half, has_post, fn_t, base_t, scale_t;
+  float rms_eps, hc_eps, mag;
+};
+struct Hy4Norm {
+  uint32_t D, w_t, y_half;
+  float eps;
+};
+struct Hy4Swiglu {
+  uint32_t n, h_half;
+  float limit;
+};
+struct Hy4Router {
+  uint32_t R, E, k, bias_t;
+  float scale;
+};
+struct Hy4Engram {
+  uint32_t D, R, t_vb, t_kb, t_nk, t_nq, t_pg, t_hs, masked;
+  float eps, inv_sqrt_d;
+};
+struct Hy4AttnPrep {
+  uint32_t T, H, pos0, cap, ring, kr_ld, kr_off, rope_bf16;
+  float theta;
+};
+struct Hy4AttnDec {
+  uint32_t H, L, lo, chunk, nchunks, cap, ring, sink_t, out_half;
+  float scale;
+};
+struct Hy4AttnHy {  // attn.metal's AttnHyParams
+  uint32_t win, ring, sink_t, out_half;
+};
+struct Hy4MlaWrite {
+  uint32_t pos0, cap, ring, lat_ld, kr_ld, kr_off, rope_bf16;
+  float theta;
+};
+struct Hy4MlaQ {
+  uint32_t T, H, pos0, q_ld, mode, rope_bf16;
+  float theta, qscale;
+};
+struct Hy4MlaGemm {
+  uint32_t M, N, K, H, a_ld, a_hs, mode, out_half, gate_ld, out_ld;
+  float qscale;
+};
+struct Hy4MlaKr {
+  uint32_t M, cap, ring, kbase;
+};
+struct Hy4MlaSmall {
+  uint32_t T, H, q_ld, out_half, gate_ld, out_ld;
+  float qscale;
+};
+struct Hy4MlaExp {
+  uint32_t M, cap, ring, kbase;
+};
+struct Hy4IxTok {
+  uint32_t pos0, tk_ld, tk_off, w_t;
+  float eps;
+};
+struct Hy4IxPool {
+  uint32_t g0, kn_t;
+  float eps, theta;
+  uint32_t rope_bf16;
+};
+struct Hy4IxQ {
+  uint32_t pos0, qi_ld, qi_off, hw_ld, hw_off, rope_bf16;
+  float theta;
+};
+struct Hy4IxScore {
+  uint32_t T, pos0, gld;
+};
+struct Hy4IxSel {
+  uint32_t pos0, gld;
+};
+struct Hy4IxPick {
+  uint32_t T, row, has_idx;
+};
+struct Hy4MlaAttn {
+  uint32_t T, H, pos0, cap, ring, win, nsplit, per, sink_t, sel_one;
 };
 
 } // namespace ni::kp

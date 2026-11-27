@@ -157,7 +157,11 @@ void on_service_queue(const char* what, double limit_s, const std::function<void
   dispatch_async(q, ^{
     @autoreleasepool {
       @try {
-        (*f)();
+        try {
+          (*f)();
+        } catch (const std::exception& e) {  // keep the message (the @catch (...) below would drop it)
+          box->error = e.what();
+        }
       } @catch (NSException* ex) {
         box->error = std::string(what) + " raised " + (ex.reason ? ex.reason.UTF8String : "?");
       } @catch (...) {

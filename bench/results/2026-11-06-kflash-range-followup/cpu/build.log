@@ -1,0 +1,1 @@
+built: kapitsa api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test remote_test cluster_test split_place_test gemm_slices_test ws_upgrade_test (log: /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/replenish-1222/local-vk/kflash-range-neon-f42bb1/279ce236/build.log)

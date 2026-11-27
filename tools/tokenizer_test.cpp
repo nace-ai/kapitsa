@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -146,6 +147,238 @@ std::string ids_str(const std::vector<int>& ids) {
   return s;
 }
 
+// Independent array-based reference: choose a pair, then replace all its
+// nonoverlapping occurrences before consulting the ranks again.
+std::vector<int> reference_bpe(std::string_view text, const json& vocab, const json& merges) {
+  std::unordered_map<uint64_t, std::pair<int, int>> ranks;
+  for (int rank = 0; rank < int(merges.size()); ++rank) {
+    const std::string a = merges[rank][0], b = merges[rank][1];
+    const int ai = vocab[a], bi = vocab[b], id = vocab[a + b];
+    ranks[(uint64_t(uint32_t(ai)) << 32) | uint32_t(bi)] = {rank, id};
+  }
+  std::vector<int> ids;
+  for (char c : text) ids.push_back(vocab[std::string(1, c)]);
+  for (;;) {
+    int best = INT32_MAX, left = -1, right = -1, merged = -1;
+    for (size_t i = 1; i < ids.size(); ++i) {
+      auto it = ranks.find((uint64_t(uint32_t(ids[i - 1])) << 32) | uint32_t(ids[i]));
+      if (it != ranks.end() && it->second.first < best) {
+        best = it->second.first;
+        left = ids[i - 1]; right = ids[i]; merged = it->second.second;
+      }
+    }
+    if (left < 0) return ids;
+    std::vector<int> next;
+    for (size_t i = 0; i < ids.size(); ++i) {
+      if (i + 1 < ids.size() && ids[i] == left && ids[i + 1] == right) {
+        next.push_back(merged);
+        ++i;
+      } else next.push_back(ids[i]);
+    }
+    ids.swap(next);
+  }
+}
+
+void check_bpe_merges() {
+  std::mt19937 rng(72519);
+  json vocab = json::object(), merges = json::array();
+  for (int b = 0; b < 256; ++b) vocab[byte_level(std::string(1, char(b)))] = b;
+  std::vector<std::string> parts = {"a", "b", "c", "d"};
+  for (int tries = 0; merges.size() < 240 && tries < 100000; ++tries) {
+    std::string a = parts[rng() % parts.size()], b = parts[rng() % parts.size()];
+    if (a.size() + b.size() > 12 || vocab.contains(a + b)) continue;
+    vocab[a + b] = int(vocab.size());
+    merges.push_back(json::array({a, b}));
+    parts.push_back(a + b);
+  }
+  // Forward and reversed dependency ranks exercise newly created lower-ranked
+  // edges, stale edges, overlapping pairs, and several equal-ranked occurrences.
+  for (int order = 0; order < 3; ++order) {
+    if (order == 1) std::reverse(merges.begin(), merges.end());
+    if (order == 2)
+      for (size_t i = merges.size(); i > 1; --i) std::swap(merges[i - 1], merges[rng() % i]);
+    json j = {{"added_tokens", json::array()}, {"normalizer", nullptr}, {"pre_tokenizer", nullptr},
+              {"model", {{"type", "BPE"}, {"vocab", vocab}, {"merges", merges}}}};
+    ni::Tokenizer tok;
+    load(tok, j);
+    for (int n : {0, 1, 63, 64, 65, 127, 128, 256, 1024, 8192}) {
+      for (int pattern = 0; pattern < 4; ++pattern) {
+        std::string text;
+        for (int i = 0; i < n; ++i)
+          text += pattern == 0 ? 'a' : pattern == 1 ? "aab"[i % 3] : "abcd"[rng() % 4];
+        auto want = reference_bpe(text, vocab, merges);
+        const auto name = "BPE order " + std::to_string(order) + " size " + std::to_string(n) +
+                          " pattern " + std::to_string(pattern);
+        check(tok.encode(text) == want && tok.encode(text) == want, name);
+      }
+    }
+  }
+}
+
+// The pre-tokenizer of lmstudio-community's and mlx-community's Qwen3.8-27B packs lost \p{M} from both letter classes
+// (their tokenizer.json: `[^\r\n\p{L}\p{N}]?\p{L}+`, ` ?[^\s\p{L}\p{N}]+[\r\n]*`). Hugging Face tokenizers split Thai and
+// Devanagari at every combining mark with it, and the original Qwen3.8-27B file does not (#443). Kapitsa gives a
+// Sequence it does not know Qwen's own split, marks included, so loading the lmstudio file must give the original's ids.
+// A vocabulary of the 256 bytes plus, for each piece Qwen's split makes, a chain of merges to the whole piece: one cut
+// in the wrong place leaves two tokens.
+void check_lmstudio_pretokenizer() {
+  struct Text {
+    const char* what;
+    const char* text;
+    std::vector<std::string> pieces;  // as Qwen/Qwen3.8-27B's tokenizer.json splits it
+  };
+  const Text texts[] = {
+      {"Thai: vowel and tone marks stay in the word", "\u0E2A\u0E27\u0E31\u0E2A\u0E14\u0E35\u0E04\u0E23\u0E31\u0E1A \u0E20\u0E32\u0E29\u0E32\u0E44\u0E17\u0E22",
+       {"\u0E2A\u0E27\u0E31\u0E2A\u0E14\u0E35\u0E04\u0E23\u0E31\u0E1A", " \u0E20\u0E32\u0E29\u0E32\u0E44\u0E17\u0E22"}},
+      {"Devanagari: virama and vowel signs stay in the word", "\u0928\u092E\u0938\u094D\u0924\u0947 \u0926\u0941\u0928\u093F\u092F\u093E",
+       {"\u0928\u092E\u0938\u094D\u0924\u0947", " \u0926\u0941\u0928\u093F\u092F\u093E"}},
+      {"Latin: unchanged", "Hello world, it's 2026.", {"Hello", " world", ",", " it", "'s", " ", "2", "0", "2", "6", "."}},
+  };
+  const json lmstudio_pre = {
+      {"type", "Sequence"},
+      {"pretokenizers",
+       json::array({{{"type", "Split"},
+                     {"pattern", {{"Regex", R"((?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+)"}}},
+                     {"behavior", "Isolated"},
+                     {"invert", false}},
+                    {{"type", "ByteLevel"}, {"add_prefix_space", false}, {"trim_offsets", true}, {"use_regex", false}}})}};
+  json vocab = json::object(), merges = json::array();
+  for (int b = 0; b < 256; ++b) vocab[byte_level(std::string(1, char(b)))] = b;
+  // merge `parts` (strings of raw bytes) one after the other, from the left: (p0 p1), (p0p1 p2), ...
+  auto chain = [&](const std::vector<std::string>& parts) {
+    std::string head = parts[0];
+    for (size_t i = 1; i < parts.size(); ++i) {
+      const std::string left = byte_level(head), right = byte_level(parts[i]);
+      head += parts[i];
+      if (vocab.contains(byte_level(head))) continue;
+      vocab[byte_level(head)] = int(vocab.size());
+      merges.push_back(json::array({left, right}));
+    }
+  };
+  auto characters = [](const std::string& s) {  // UTF-8 characters
+    std::vector<std::string> out;
+    for (size_t i = 0; i < s.size();) {
+      const unsigned char c = s[i];
+      const size_t n = c < 0x80 ? 1 : c < 0xE0 ? 2 : c < 0xF0 ? 3 : 4;
+      out.push_back(s.substr(i, n));
+      i += n;
+    }
+    return out;
+  };
+  for (const Text& t : texts)  // every character first (lower ranks), then each piece from its characters
+    for (const std::string& piece : t.pieces)
+      for (const std::string& ch : characters(piece)) {
+        std::vector<std::string> bytes;
+        for (char c : ch) bytes.push_back(std::string(1, c));
+        chain(bytes);
+      }
+  for (const Text& t : texts)
+    for (const std::string& piece : t.pieces) chain(characters(piece));
+  json j = {{"added_tokens", json::array()}, {"normalizer", {{"type", "NFC"}}}, {"pre_tokenizer", lmstudio_pre},
+            {"model", {{"type", "BPE"}, {"vocab", vocab}, {"merges", merges}}}};
+  ni::Tokenizer tok;
+  load(tok, j);
+  for (const Text& t : texts) {
+    std::vector<int> want;
+    for (const std::string& piece : t.pieces) want.push_back(tok.find(byte_level(piece)));
+    const std::vector<int> got = tok.encode(t.text);
+    check(got == want, std::string("lmstudio's Qwen3.8-27B pre-tokenizer gives the original's ids: ") + t.what,
+          "ids " + ids_str(got) + ", want " + ids_str(want));
+  }
+}
+
+void check_o200k_pretokenizer() {
+  const std::vector<Case> cases = {
+      {"contractions mixed case and U+017F fold",
+       "it's IT'S It'S they'RE we've YOU'LL I'm she'd don't x'\u017F it'\u017F",
+       {"it's", " IT'S", " It'S", " they'RE", " we've", " YOU'LL", " I'm", " she'd", " don't", " x'\u017F",
+        " it'\u017F"}},
+      {"digits in threes and Unicode digits",
+       "1 12 123 1234 1234567 a\u0661\u0662\u0663\u0664",
+       {"1", " ", "12", " ", "123", " ", "123", "4", " ", "123", "456", "7", " a", "\u0661\u0662\u0663", "\u0664"}},
+      {"non-contractions and punctuation slashes",
+       "IT\u2019S 123's 'tis a/b foo///\n",
+       {"IT", "\u2019S", " ", "123", "'s", " '", "tis", " a", "/b", " foo", "///\n"}},
+  };
+  json vocab = json::object();
+  auto add = [&](const std::string& s) {
+    const std::string t = byte_level(s);
+    if (!vocab.contains(t)) vocab[t] = int(vocab.size());
+  };
+  for (int b = 0; b < 256; ++b) add(std::string(1, char(b)));
+  add("it");
+  for (const Case& c : cases)
+    for (size_t i = 0; i < c.pieces.size(); ++i) {
+      std::string run;
+      for (size_t k = i; k < c.pieces.size(); ++k) add(run += c.pieces[k]);
+    }
+  auto make_pt = [](const std::string& re) {
+    return json{
+        {"type", "Sequence"},
+        {"pretokenizers",
+         json::array({{{"type", "Split"}, {"pattern", {{"Regex", re}}}, {"behavior", "Isolated"}, {"invert", false}},
+                      {{"type", "ByteLevel"},
+                       {"add_prefix_space", false},
+                       {"trim_offsets", true},
+                       {"use_regex", false}}})}};
+  };
+  const std::string kO200kExact =
+      "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+"
+      "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+      "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*"
+      "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+      "\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+  const std::string kTekkenExact =
+      "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+|"
+      "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*|"
+      "\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+
+  {
+    json j = {{"added_tokens", json::array()},
+              {"normalizer", nullptr},
+              {"pre_tokenizer", make_pt(kO200kExact)},
+              {"model", {{"type", "BPE"}, {"vocab", vocab}, {"merges", json::array()}, {"ignore_merges", true}}}};
+    ni::Tokenizer tok;
+    load(tok, j);
+    for (const Case& c : cases) {
+      std::vector<int> want;
+      for (const std::string& p : c.pieces) want.push_back(tok.find(byte_level(p)));
+      const std::vector<int> got = tok.encode(c.text);
+      check(got == want, std::string("exact O200k split: ") + c.what, "ids " + ids_str(got) + ", want " + ids_str(want));
+    }
+  }
+
+  // Regexes carrying the distinguishing substrings without matching kO200k exactly must keep default split (single digits).
+  for (const auto& [label, bad_re] : std::vector<std::pair<std::string, std::string>>{
+           {"truncated O200k missing tail alternatives",
+            "[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}][\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}](?i:'s|'t|'re|'ve|'m|'ll|'d)|\\p{N}{1,3}"},
+           {"O200k with extra alternative", kO200kExact + "|extra"}}) {
+    json bj = {{"added_tokens", json::array()},
+               {"normalizer", nullptr},
+               {"pre_tokenizer", make_pt(bad_re)},
+               {"model", {{"type", "BPE"}, {"vocab", vocab}, {"merges", json::array()}, {"ignore_merges", true}}}};
+    ni::Tokenizer btok;
+    load(btok, bj);
+    const std::vector<int> bgot = btok.encode("1234");
+    const std::vector<int> bwant = {btok.find(byte_level("1")), btok.find(byte_level("2")),
+                                    btok.find(byte_level("3")), btok.find(byte_level("4"))};
+    check(bgot == bwant, label + " does not select O200k", "ids " + ids_str(bgot));
+  }
+
+  // Tekken split remains distinct (no contractions, digits 1-by-1)
+  json tj = {{"added_tokens", json::array()},
+             {"normalizer", nullptr},
+             {"pre_tokenizer", make_pt(kTekkenExact)},
+             {"model", {{"type", "BPE"}, {"vocab", vocab}, {"merges", json::array()}, {"ignore_merges", true}}}};
+  ni::Tokenizer ttok;
+  load(ttok, tj);
+  const std::vector<int> tgot = ttok.encode("it's 1234");
+  const std::vector<int> twant = {ttok.find(byte_level("it")), ttok.find(byte_level("'s")), ttok.find(byte_level(" ")),
+                                  ttok.find(byte_level("1")),  ttok.find(byte_level("2")),  ttok.find(byte_level("3")),
+                                  ttok.find(byte_level("4"))};
+  check(tgot == twant, "Tekken split keeps single digits and separates contractions", "ids " + ids_str(tgot));
+}
+
 }  // namespace
 
 int main() {
@@ -184,6 +417,59 @@ int main() {
   load(other, j);
   const Case& digits = kCases[3];  // digits in threes
   check(other.encode(digits.text) != want(digits), "a Sequence other than Flint's keeps the default split");
+
+  check_bpe_merges();
+  check_lmstudio_pretokenizer();
+  check_o200k_pretokenizer();
+
+  // Duplicate merge line (later rank wins, matching HF tokenizers), string-form merges ("a b"),
+  // and non-byte codepoints in vocab (mapped to '?' in id_to_bytes_).
+  {
+    json dv = json::object();
+    dv["a"] = 0;
+    dv["b"] = 1;
+    dv["c"] = 2;
+    dv["ab"] = 3;
+    dv["bc"] = 4;
+    dv["a\xe2\x98\x83z"] = 5;  // U+2603 SNOWMAN is outside the 256 GPT-2 byte-unicode codepoints [0, 323]
+    // "a b" appears at rank 0 and again at rank 2 (after ["b", "c"] at rank 1): last wins -> "bc" (4) merges before "ab"
+    json dj = {{"added_tokens", json::array()},
+               {"normalizer", nullptr},
+               {"pre_tokenizer", nullptr},
+               {"model",
+                {{"type", "BPE"},
+                 {"vocab", dv},
+                 {"merges", json::array({"a b", json::array({"b", "c"}), "a b"})}}}};
+    ni::Tokenizer dtok;
+    load(dtok, dj);
+    const std::vector<int> got = dtok.encode("abc");
+    const std::vector<int> want_ids = {0, 4};  // "a" (0) + "bc" (4), not "ab" (3) + "c" (2)
+    check(got == want_ids, "duplicate merge line keeps the later rank (HF order) and string-form merges parse",
+          "ids " + ids_str(got));
+    check(dtok.token_bytes(5) == "a?z", "non-byte codepoint in vocab maps to '?' in token_bytes", dtok.token_bytes(5));
+  }
+
+  // added_tokens whose content does not start with '<' or '[' (e.g. "@@TOOL@@") are matched whole and set split_index,
+  // and an empty content entry in added_tokens is skipped without looping forever.
+  {
+    json av = json::object();
+    av["a"] = 0;
+    av["b"] = 1;
+    json aj = {{"added_tokens", json::array({{{"id", 2}, {"content", "@@TOOL@@"}, {"special", true}},
+                                             {{"id", 3}, {"content", "<|im_end|>"}, {"special", true}},
+                                             {{"id", 4}, {"content", ""}, {"special", true}}})},
+               {"normalizer", nullptr},
+               {"pre_tokenizer", nullptr},
+               {"model", {{"type", "BPE"}, {"vocab", av}, {"merges", json::array()}}}};
+    ni::Tokenizer atok;
+    load(atok, aj);
+    int split_idx = -1;
+    const std::vector<int> got = atok.encode("ab@@TOOL@@a<|im_end|>", 2, &split_idx);
+    const std::vector<int> want_ids = {0, 1, 2, 0, 3};
+    check(got == want_ids && split_idx == 2,
+          "added_tokens not starting with '<' or '[' are recognized whole, set split_index, and skip empty content",
+          "ids " + ids_str(got) + ", split_index " + std::to_string(split_idx));
+  }
 
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;

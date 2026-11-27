@@ -1,0 +1,22 @@
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] compiled the tensor kernels in 2 ms
+qmtg_m64_n64               M=   17 N=17408 K= 5120     514.3 us  med 11.78  best 11.79 TFLOP/s  err=3.8e-04
+qmtg_m128_n64              M=   17 N=17408 K= 5120     557.1 us  med 10.88  best 10.88 TFLOP/s  err=3.8e-04
+qmr_gu_k64_w14_m16_n64     M=   17 N=17408 K= 5120     830.3 us  med  7.30  best  7.30 TFLOP/s  err=3.8e-04
+qmr_gu_k64_w14_m24_n64     M=   17 N=17408 K= 5120     638.3 us  med  9.49  best  9.50 TFLOP/s  err=3.8e-04
+qmr_gu_k64_w14_m32_n64     M=   17 N=17408 K= 5120     828.5 us  med  7.32  best  7.32 TFLOP/s  err=3.8e-04
+qmtg_m64_n64               M=   33 N=17408 K= 5120     526.7 us  med 22.34  best 22.38 TFLOP/s  err=3.6e-04
+qmtg_m128_n64              M=   33 N=17408 K= 5120     576.6 us  med 20.40  best 20.42 TFLOP/s  err=3.6e-04
+qmr_gu_k64_w14_m16_n64     M=   33 N=17408 K= 5120    1217.1 us  med  9.67  best  9.67 TFLOP/s  err=3.6e-04
+qmr_gu_k64_w14_m24_n64     M=   33 N=17408 K= 5120    1214.5 us  med  9.69  best  9.69 TFLOP/s  err=3.6e-04
+qmr_gu_k64_w14_m32_n64     M=   33 N=17408 K= 5120    1588.2 us  med  7.41  best  7.41 TFLOP/s  err=3.6e-04
+qmtg_m64_n64               M=   48 N=17408 K= 5120     535.0 us  med 31.98  best 31.99 TFLOP/s  err=4.0e-04
+qmtg_m128_n64              M=   48 N=17408 K= 5120     595.1 us  med 28.76  best 28.80 TFLOP/s  err=4.0e-04
+qmr_gu_k64_w14_m16_n64     M=   48 N=17408 K= 5120    1222.2 us  med 14.00  best 14.01 TFLOP/s  err=4.0e-04
+qmr_gu_k64_w14_m24_n64     M=   48 N=17408 K= 5120    1217.8 us  med 14.05  best 14.06 TFLOP/s  err=4.0e-04
+qmr_gu_k64_w14_m32_n64     M=   48 N=17408 K= 5120    1591.3 us  med 10.75  best 10.76 TFLOP/s  err=4.0e-04
+qmtg_m64_n64               M=   63 N=17408 K= 5120     552.4 us  med 40.66  best 40.82 TFLOP/s  err=3.7e-04
+qmtg_m128_n64              M=   63 N=17408 K= 5120     600.0 us  med 37.44  best 37.52 TFLOP/s  err=3.7e-04
+qmr_gu_k64_w14_m16_n64     M=   63 N=17408 K= 5120    1617.8 us  med 13.88  best 13.89 TFLOP/s  err=3.7e-04
+qmr_gu_k64_w14_m24_n64     M=   63 N=17408 K= 5120    1796.6 us  med 12.50  best 12.50 TFLOP/s  err=3.7e-04
+qmr_gu_k64_w14_m32_n64     M=   63 N=17408 K= 5120    1595.7 us  med 14.08  best 14.08 TFLOP/s  err=3.7e-04

@@ -1,0 +1,415 @@
+{
+  "record_kind": "Actual unchanged timing rows; one call flattens K*1024 elements",
+  "configuration": {
+    "chip": "Apple M4 Pro",
+    "gpu_cores": 20,
+    "memory_gb": 48,
+    "macos": "15.7.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)"
+  },
+  "records": [
+    {
+      "mode": "warm_cpu_quantizer",
+      "rows": 1024,
+      "K": 1536,
+      "input_sha256": "23bfc8bc1be5fd3335c7b4b5ad1e2e96468eb33738f33c2c4b8813b1a7fa0d60",
+      "code_sha256": "3a6805cf23f20d0d8524090c411ccac75e51e7d13bfc8be72b4970d5639c1cfd",
+      "scale_sha256": "2d214a18fcb0e09c8a3fe3ed08c0bc1768cb4049d2c9d5f8c60cbb58dfbc3eb5"
+    },
+    {
+      "K": 1536,
+      "rows": 1024,
+      "leg": 1,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 2.321664063,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 1536,
+      "rows": 1024,
+      "leg": 2,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.342690125,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 1536,
+      "rows": 1024,
+      "leg": 3,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 1.699552063,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 1536,
+      "rows": 1024,
+      "leg": 4,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.292151,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 1536,
+      "rows": 1024,
+      "leg": 5,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 1.490791688,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 1536,
+      "rows": 1024,
+      "leg": 6,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.2815755,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 1536,
+      "rows": 1024,
+      "leg": 7,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 1.437112,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 1536,
+      "rows": 1024,
+      "leg": 8,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.28323175,
+      "complete_byte_gate": true
+    },
+    {
+      "mode": "warm_cpu_quantizer",
+      "rows": 1024,
+      "K": 2048,
+      "input_sha256": "9429d03102bfa5442a9c342c5fac51387eb973d9c66d2a9e9768e052341868ca",
+      "code_sha256": "550bfdbe3d32f643128680a84d9d265c9a639b7fef715ac620e032f7814d4c20",
+      "scale_sha256": "c7117404eeab56de73f815a9c45ab9bd4cb09ab1256b9f6c5d4994cdd54aca23"
+    },
+    {
+      "K": 2048,
+      "rows": 1024,
+      "leg": 1,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 1.91365625,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 2048,
+      "rows": 1024,
+      "leg": 2,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.382984375,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 2048,
+      "rows": 1024,
+      "leg": 3,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 1.914492188,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 2048,
+      "rows": 1024,
+      "leg": 4,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.383395812,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 2048,
+      "rows": 1024,
+      "leg": 5,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 1.958705687,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 2048,
+      "rows": 1024,
+      "leg": 6,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.377283812,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 2048,
+      "rows": 1024,
+      "leg": 7,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 1.9758385,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 2048,
+      "rows": 1024,
+      "leg": 8,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.380724,
+      "complete_byte_gate": true
+    },
+    {
+      "mode": "warm_cpu_quantizer",
+      "rows": 1024,
+      "K": 3072,
+      "input_sha256": "5a8781dd07de2d560df1873a8fcd4d6b0fe1a17bccd5c4a4e4991efd1b700d0f",
+      "code_sha256": "f19bfc6d4d4944a8657053ccdd3f92359cf509994e328e9dcaf59b7c7d4782c0",
+      "scale_sha256": "49f3ddd2e30ff988fad9b9b8a39a472fafa5cf2c86d35db7c21bcdc1cc83dc92"
+    },
+    {
+      "K": 3072,
+      "rows": 1024,
+      "leg": 1,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 2.937401,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 3072,
+      "rows": 1024,
+      "leg": 2,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.5676615,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 3072,
+      "rows": 1024,
+      "leg": 3,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 2.941976562,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 3072,
+      "rows": 1024,
+      "leg": 4,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.57566925,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 3072,
+      "rows": 1024,
+      "leg": 5,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 2.913609375,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 3072,
+      "rows": 1024,
+      "leg": 6,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.571276062,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 3072,
+      "rows": 1024,
+      "leg": 7,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 2.900122375,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 3072,
+      "rows": 1024,
+      "leg": 8,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.577690125,
+      "complete_byte_gate": true
+    },
+    {
+      "mode": "warm_cpu_quantizer",
+      "rows": 1024,
+      "K": 3136,
+      "input_sha256": "646c3edecc1b14011ef6130680c16ff61123ea121f7ebfcb51c88224220b70fa",
+      "code_sha256": "f4a530fb964ef0ff73bdb7acae39406184156fecc72d3f02f602448982d69f3d",
+      "scale_sha256": "e43369f5df61e765bd9db75ce8c39b7c2b761a1bbeaffb94e8ce3831c588191f"
+    },
+    {
+      "K": 3136,
+      "rows": 1024,
+      "leg": 1,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 2.999085937,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 3136,
+      "rows": 1024,
+      "leg": 2,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.586320313,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 3136,
+      "rows": 1024,
+      "leg": 3,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 3.04793225,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 3136,
+      "rows": 1024,
+      "leg": 4,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.592895875,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 3136,
+      "rows": 1024,
+      "leg": 5,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 2.934296875,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 3136,
+      "rows": 1024,
+      "leg": 6,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.591888,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 3136,
+      "rows": 1024,
+      "leg": 7,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 2.938010438,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 3136,
+      "rows": 1024,
+      "leg": 8,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.574695313,
+      "complete_byte_gate": true
+    },
+    {
+      "mode": "warm_cpu_quantizer",
+      "rows": 1024,
+      "K": 4096,
+      "input_sha256": "5e438f0c0ea1712ccc1976260cefcbbf7a451d4693222725013f9a2a83608898",
+      "code_sha256": "e0f0a68d8734ccb47bc1926b5478d492511879970ad7e3dc2dc080d56d7582fb",
+      "scale_sha256": "8df239ed55ce2a75c6133750ef87aaca031f43b577e14e91233ee6e693aa2373"
+    },
+    {
+      "K": 4096,
+      "rows": 1024,
+      "leg": 1,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 3.881515625,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 4096,
+      "rows": 1024,
+      "leg": 2,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.768716125,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 4096,
+      "rows": 1024,
+      "leg": 3,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 3.823010437,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 4096,
+      "rows": 1024,
+      "leg": 4,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.77153125,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 4096,
+      "rows": 1024,
+      "leg": 5,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 3.95348175,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 4096,
+      "rows": 1024,
+      "leg": 6,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.760489562,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 4096,
+      "rows": 1024,
+      "leg": 7,
+      "arm": "A",
+      "repetitions": 16,
+      "ms_per_call": 3.823596312,
+      "complete_byte_gate": true
+    },
+    {
+      "K": 4096,
+      "rows": 1024,
+      "leg": 8,
+      "arm": "B",
+      "repetitions": 16,
+      "ms_per_call": 0.7728255,
+      "complete_byte_gate": true
+    },
+    {
+      "consume": 5144
+    }
+  ]
+}

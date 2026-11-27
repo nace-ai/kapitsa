@@ -1,0 +1,15 @@
+{
+  "recorded_at": 1794009173.639631,
+  "initial_cpu_pass": 16,
+  "initial_cpu_failed_or_not_started": [
+    "test_update",
+    "test_pr_size",
+    "test_logit_compare",
+    "test_sampled_tokens_harness",
+    "test_structured_cli"
+  ],
+  "cause": "ENOSPC in test_update installer and subsequent log/fixture creation; controller could not write terminal status either",
+  "repair": "SHA256-verified hardlinks preserve all matrix bytes and paths; removed only this failed test run abandoned temp install tree after confirming no process used it",
+  "removed_generated_fixture": "/private/var/folders/bv/2dmpdk3552gd42p15z1sw9xm0000gn/T/kapitsa-update-test-mim67r90",
+  "raw_failure_logs_retained": true
+}

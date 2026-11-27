@@ -1,0 +1,177 @@
+{
+  "format": "Derived privacy-filtered HTTP failure summary; not raw execution logs",
+  "hardware_configuration": {
+    "chip": "Apple M3 Ultra",
+    "memory_capacity_gib": 96,
+    "macos": "26.4.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)",
+    "gpu_cores": 60
+  },
+  "model": {
+    "repository": "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8",
+    "revision": "3fe6dab75665a93884214ad4b1b95cf02717d081",
+    "file_identities": {
+      "LICENSE": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "chat_template.jinja": {
+        "bytes": 10504,
+        "sha256": "ab7813c3abdd9cb655905a410728b26c7884eca45ddfab8d9f931553485a7862"
+      },
+      "config.json": {
+        "bytes": 1459,
+        "sha256": "1a0a0703a73600ff4b1042dde35cb2137c7e4d76dadc5a88f6f436f2323aa3e9"
+      },
+      "generation_config.json": {
+        "bytes": 173,
+        "sha256": "fd316076134cbadac02f083463c579b2a3c4a587f51b0855f02202adf2f8a7ce"
+      },
+      "hf_quant_config.json": {
+        "bytes": 2387,
+        "sha256": "2f56ab5f569276bfdb794e057443a83891c2b7c511ddf09d79ddf2446a5959d5"
+      },
+      "model-00001-of-00002.safetensors": {
+        "bytes": 3982036144,
+        "sha256": "a1f56594260896ffcf1c0d0c89da33ebff16dfa978b669fecfd073295ae789f3"
+      },
+      "model-00002-of-00002.safetensors": {
+        "bytes": 1285019664,
+        "sha256": "43dc7b2b59a04140e761020bce62c7307527a22fd5e1d55c44fd3b5f8f98a054"
+      },
+      "model.safetensors.index.json": {
+        "bytes": 34393,
+        "sha256": "6d151c2a33634d62897bce3507ade32155d15680fdfc0326cef43e8f5a4e8026"
+      },
+      "special_tokens_map.json": {
+        "bytes": 420,
+        "sha256": "e3a4f63da745f02317a45e00e6476c17fc66ac41faf14bb1b0be1f3211b0ca53"
+      },
+      "tokenizer.json": {
+        "bytes": 17077484,
+        "sha256": "623c34567aebb18582765289fbe23d901c62704d6518d71866e0e58db892b5b7"
+      },
+      "tokenizer_config.json": {
+        "bytes": 188035,
+        "sha256": "b5b5f4cf5b098cd174b1307c5133d662e7d78cf665d4e184ee0e1c7e15f75e01"
+      }
+    },
+    "actual_loader_coverage": "42 layers: 21 Mamba-2, 4 attention, 17 MLP; loader reports 17 FP8 and 4 BF16 Mamba layers, FP8 MLP, BF16 attention and embeddings, Q8_0 output head"
+  },
+  "source_and_binaries": {
+    "reference": {
+      "commit": "052104f8f9c99edde129415a7384a1a58dc24ae6",
+      "nemotron_h_source_sha256": "5f14e86f96c6fd1431fa2184d113d22b2466c6693b798d7413db53fb31c0b4df",
+      "kapitsa_sha256": "1cbf7d4eeab30d5b4009ad1332ef7bc7e4dd5a2c99731e4a809a560d2fa75f23",
+      "logit_dump_sha256": "2f51d84c41d609c048daa01872ae18b30ccc72d8fc302fbcb494ea39a75136a2",
+      "cmake_cache_sha256": "93bf519cb6cb08b6a5174232f7a6b7f41e89325d961f1e13cd8db4a9dcf03349",
+      "build_type": "Release",
+      "original_source_archive_sha256": "0301c9b9f7866bee577cbc957747b3273e4023f9a35897f146eaa6caf4e5bcc5",
+      "original_archive_regular_files_verified": 540,
+      "full_source_file_manifest_sha256": "23f58b75fd4afe2299598206ba3be0eec8d7ac9ffa02707af414f65858499f4e",
+      "supplemental_samecommit_assets": [
+        {
+          "path": "bench/harness/corpus/bench_corpus.txt",
+          "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+          "git_blob": "b47e7d2149932f3ea4bb13647640517f764259eb"
+        },
+        {
+          "path": "bench/community/mac-models.json",
+          "sha256": "f7f5696f02c30128e4216936a5aa482bc7385f64bc022f66f373e63c8da16250",
+          "git_blob": "f793adeb9019b975c308b9fd80ffad0dcc8e8057"
+        }
+      ],
+      "cached_cmake_release_flags": "-O3 -DNDEBUG",
+      "actual_target_flags": {
+        "cli_and_library_entries": [
+          "CXX_DEFINES = -DKAPITSA_GIT=\\\"052104f8f9c99edde129415a7384a1a58dc24ae6\\\" -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "CXX_FLAGS = -O3 -std=gnu++20 -arch arm64 -isysroot $SDK -mmacosx-version-min=14.0",
+          "CXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "OBJCXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "OBJCXX_FLAGS =  -fobjc-arc -O3 -std=gnu++2a -arch arm64 -isysroot $SDK -mmacosx-version-min=14.0"
+        ],
+        "source": "Generated flags.make for the binaries whose digests are recorded; SDK path replaced by placeholder"
+      }
+    },
+    "candidate": {
+      "commit": "8f3996fea6f1f44537bee4e789b98cd6a531f347",
+      "nemotron_h_source_sha256": "94e9cf4632e4d63783e9701494a325d6176f321a95fa9b25266b2f571dcd5b40",
+      "kapitsa_sha256": "0728e0b9488cd779bb9ff137d5bce5b2c19ed6fbefed92dd4d9168f5bc2592c9",
+      "logit_dump_sha256": "5b9011733c325cc393160cbf009b6d1438e843acdc888c75d268ea81eb5ceb59",
+      "cmake_cache_sha256": "7d0a7ef92b7e7b45402cec9a5b27ef5eeacc97f1ccb55f6ec88b2de545601a5a",
+      "build_type": "Release",
+      "original_source_archive_sha256": "cd96f3407c3dee14f04381410b586c71a6cc9a4ba330023ee1312a589a0a7bf9",
+      "original_archive_regular_files_verified": 540,
+      "full_source_file_manifest_sha256": "9a08b283d1348ce904fb5761bb5bf9df35faba66168930975f579f35f985bcbd",
+      "supplemental_samecommit_assets": [
+        {
+          "path": "bench/harness/corpus/bench_corpus.txt",
+          "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+          "git_blob": "b47e7d2149932f3ea4bb13647640517f764259eb"
+        },
+        {
+          "path": "bench/community/mac-models.json",
+          "sha256": "f7f5696f02c30128e4216936a5aa482bc7385f64bc022f66f373e63c8da16250",
+          "git_blob": "f793adeb9019b975c308b9fd80ffad0dcc8e8057"
+        }
+      ],
+      "cached_cmake_release_flags": "-O3 -DNDEBUG",
+      "actual_target_flags": {
+        "cli_and_library_entries": [
+          "CXX_DEFINES = -DKAPITSA_GIT=\\\"8f3996fea6f1f44537bee4e789b98cd6a531f347\\\" -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "CXX_FLAGS = -O3 -std=gnu++20 -arch arm64 -isysroot $SDK -mmacosx-version-min=14.0",
+          "CXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "OBJCXX_DEFINES = -DKAPITSA_VERSION=\\\"0.2.31\\\"",
+          "OBJCXX_FLAGS =  -fobjc-arc -O3 -std=gnu++2a -arch arm64 -isysroot $SDK -mmacosx-version-min=14.0"
+        ],
+        "source": "Generated flags.make for the binaries whose digests are recorded; SDK path replaced by placeholder"
+      }
+    }
+  },
+  "method": "Unmodified default tests/test_server.py URL mode against each source own precise server; no fixed seed assumed. Original failure logs remain privately verifiable.",
+  "arms": {
+    "reference": {
+      "rc": 1,
+      "pass_count": 40,
+      "failure_count": 8,
+      "failed_assertion_labels": [
+        "FAIL thinking: correct answer",
+        "FAIL tool call: read_file or run_shell on the fixture path",
+        "FAIL non-stream tool call + int arg",
+        "FAIL thinking + tools: a call on the fixture path returned as a tool call",
+        "FAIL anthropic: non-streamed tool call (stop_reason tool_use, tool_use on the fixture path, usage)",
+        "FAIL anthropic stream: final answer mentions 3",
+        "FAIL responses stream: a function_call on the fixture path",
+        "FAIL in flight together: a 2K-token request sent during a long reply finishes first"
+      ],
+      "original_log_sha256": "ffd65638254ccb7c64e87c917876bf3d67e463d8b9f09aca476e411ab24007a4"
+    },
+    "candidate": {
+      "rc": 1,
+      "pass_count": 37,
+      "failure_count": 11,
+      "failed_assertion_labels": [
+        "FAIL thinking: correct answer",
+        "FAIL tool call: finish=tool_calls",
+        "FAIL tool call: read_file or run_shell on the fixture path",
+        "FAIL non-stream tool call + int arg",
+        "FAIL thinking + tools: a call on the fixture path returned as a tool call",
+        "FAIL anthropic: non-streamed tool call (stop_reason tool_use, tool_use on the fixture path, usage)",
+        "FAIL anthropic stream: final answer mentions 3",
+        "FAIL responses stream: a function_call on the fixture path",
+        "FAIL responses: the tool loop's next request is answered (mentions 3)",
+        "FAIL in flight together: a 2K-token request sent during a long reply finishes first",
+        "FAIL a client gone mid-stream: the request beside it is answered, the next one starts at once"
+      ],
+      "original_log_sha256": "cb8543a1ae33162cab8afe2598ff68333815a362331383b339a7303d5aa0f3a8"
+    }
+  },
+  "failure_sets_equal": false,
+  "raw_logs_byte_identical": false,
+  "interpretation": "Both suites failed; counts and failure sets differ. Candidate additionally has tool-finish, response-loop and disconnected-client failures, and a 13-token early response invalidates the long-reply concurrency fixture. Cause remains unresolved. Numerical byte equality alone does not qualify these API outcomes.",
+  "next_checks": [
+    "Source-derived failed fixtures with declared Chat seed1 where supported; synthetic histories and new-prefix controls are explicit adaptations.",
+    "Fresh-server first-thinking request, default GET sequence, then repeated/shared-prefix controls.",
+    "Existing shared-system-prefix switch is a diagnostic; cache-off success will not qualify the default."
+  ]
+}

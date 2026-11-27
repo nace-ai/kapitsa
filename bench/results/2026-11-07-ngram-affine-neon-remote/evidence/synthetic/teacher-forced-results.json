@@ -1,0 +1,92 @@
+[
+  {
+    "model": "sharded",
+    "path": "prefill",
+    "rows": 3,
+    "byte_equal": true,
+    "bytes": 24576,
+    "sha256": "980b9cb13f74d8459d0593934fcb9ddc6d858592f8962b666e667cb32164364c",
+    "finite": true,
+    "nonzero": true
+  },
+  {
+    "model": "sharded",
+    "path": "step",
+    "rows": 72,
+    "byte_equal": true,
+    "bytes": 589824,
+    "sha256": "1d41ed9bc0bf37c13d4de48cea0aaa99472e0d4f5491c714d61d52b6c371c337",
+    "finite": true,
+    "nonzero": true
+  },
+  {
+    "model": "sharded",
+    "path": "verify",
+    "rows": 72,
+    "byte_equal": true,
+    "bytes": 589824,
+    "sha256": "1d41ed9bc0bf37c13d4de48cea0aaa99472e0d4f5491c714d61d52b6c371c337",
+    "finite": true,
+    "nonzero": true
+  },
+  {
+    "model": "bin-affine",
+    "path": "prefill",
+    "rows": 3,
+    "byte_equal": true,
+    "bytes": 24576,
+    "sha256": "980b9cb13f74d8459d0593934fcb9ddc6d858592f8962b666e667cb32164364c",
+    "finite": true,
+    "nonzero": true
+  },
+  {
+    "model": "bin-affine",
+    "path": "step",
+    "rows": 72,
+    "byte_equal": true,
+    "bytes": 589824,
+    "sha256": "1d41ed9bc0bf37c13d4de48cea0aaa99472e0d4f5491c714d61d52b6c371c337",
+    "finite": true,
+    "nonzero": true
+  },
+  {
+    "model": "bin-affine",
+    "path": "verify",
+    "rows": 72,
+    "byte_equal": true,
+    "bytes": 589824,
+    "sha256": "1d41ed9bc0bf37c13d4de48cea0aaa99472e0d4f5491c714d61d52b6c371c337",
+    "finite": true,
+    "nonzero": true
+  },
+  {
+    "model": "bin-bf16",
+    "path": "prefill",
+    "rows": 3,
+    "byte_equal": true,
+    "bytes": 24576,
+    "sha256": "6c5e6b2fdb89270f761660a7f93badcd7c0421a39769e7d807eb91a5b1d26c93",
+    "finite": true,
+    "nonzero": true
+  },
+  {
+    "model": "bin-bf16",
+    "path": "step",
+    "rows": 72,
+    "byte_equal": true,
+    "bytes": 589824,
+    "sha256": "c3ca8ce2f4ff502686fc273eddbd3470ce1644e3c0b9b290385e5412c4e0a6f8",
+    "finite": true,
+    "nonzero": true
+  },
+  {
+    "model": "bin-bf16",
+    "path": "verify",
+    "rows": 72,
+    "byte_equal": true,
+    "bytes": 589824,
+    "sha256": "c3ca8ce2f4ff502686fc273eddbd3470ce1644e3c0b9b290385e5412c4e0a6f8",
+    "finite": true,
+    "nonzero": true
+  }
+]

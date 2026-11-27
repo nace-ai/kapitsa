@@ -1,0 +1,2453 @@
+{
+  "pid": 73047,
+  "started_at": "2026-11-07T05:50:04.069129+00:00",
+  "status": "complete; inspect HTTP failures and all benchmark flags before Ready",
+  "config": {
+    "output": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b",
+    "trees": {
+      "base": "/tmp/verify-kapitsa/ref/b171f983/src",
+      "candidate": "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool"
+    },
+    "builds": {
+      "base": "/tmp/verify-kapitsa/ref/b171f983/build",
+      "candidate": "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/build"
+    },
+    "heads": {
+      "base": "b171f98363abd5dfd8ae5d24f786ca77b3801a4a",
+      "candidate": "02e53017f19aaac71d4f64795ec55d0fb4c12d0e"
+    },
+    "ready_files": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/local-ready"
+    ],
+    "models": [
+      {
+        "name": "27b",
+        "path": "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "mtp": true
+      }
+    ],
+    "tokenizer_source": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/tokenizer.cpp",
+    "min_free_bytes": 6442450944
+  },
+  "commands": [
+    {
+      "label": "tokenizer-build",
+      "argv": [
+        "/usr/bin/c++",
+        "-std=c++20",
+        "-O3",
+        "-arch",
+        "arm64",
+        "-mmacosx-version-min=14.0",
+        "-I/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/src",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/tokenizer.cpp",
+        "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/build/libnaceinfer.a",
+        "-framework",
+        "Foundation",
+        "-framework",
+        "CoreFoundation",
+        "-o",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/tokenizer"
+      ],
+      "cwd": "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool",
+      "started_at": "2026-11-07T05:50:04.751708+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-tokenizer-build"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T05:50:05.269810+00:00"
+    },
+    {
+      "label": "27b-logits-base",
+      "argv": [
+        "/tmp/verify-kapitsa/ref/b171f983/build/logit_dump",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-logits-base",
+        "--corpus",
+        "/tmp/verify-kapitsa/ref/b171f983/src/bench/corpus.txt"
+      ],
+      "cwd": "/tmp/verify-kapitsa/ref/b171f983/src",
+      "started_at": "2026-11-07T05:50:05.401023+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-logits-base"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T05:51:51.205090+00:00"
+    },
+    {
+      "label": "27b-logits-candidate",
+      "argv": [
+        "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/build/logit_dump",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-logits-candidate",
+        "--corpus",
+        "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/bench/corpus.txt",
+        "--from",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-logits-base"
+      ],
+      "cwd": "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool",
+      "started_at": "2026-11-07T05:51:51.208315+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-logits-candidate"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T05:53:00.217400+00:00"
+    },
+    {
+      "label": "27b-compare",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+        "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/tools/logit_compare.py",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-logits-base",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-logits-candidate",
+        "--json",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-compare.json"
+      ],
+      "cwd": "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool",
+      "started_at": "2026-11-07T05:53:00.220481+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-compare"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T05:53:04.364201+00:00"
+    },
+    {
+      "label": "27b-continuation-0-base",
+      "argv": [
+        "/tmp/verify-kapitsa/ref/b171f983/build/ni_run",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "@/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--spec",
+        "2"
+      ],
+      "cwd": "/tmp/verify-kapitsa/ref/b171f983/src",
+      "started_at": "2026-11-07T05:53:13.356832+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-continuation-0-base"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T05:54:07.134086+00:00"
+    },
+    {
+      "label": "27b-continuation-1-candidate",
+      "argv": [
+        "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/build/ni_run",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "@/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--spec",
+        "2"
+      ],
+      "cwd": "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool",
+      "started_at": "2026-11-07T05:54:15.855915+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-continuation-1-candidate"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T05:54:33.430139+00:00"
+    },
+    {
+      "label": "27b-continuation-2-base",
+      "argv": [
+        "/tmp/verify-kapitsa/ref/b171f983/build/ni_run",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "@/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--spec",
+        "2"
+      ],
+      "cwd": "/tmp/verify-kapitsa/ref/b171f983/src",
+      "started_at": "2026-11-07T05:54:42.150426+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-continuation-2-base"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T05:54:59.451986+00:00"
+    },
+    {
+      "label": "27b-continuation-3-candidate",
+      "argv": [
+        "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/build/ni_run",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "@/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--spec",
+        "2"
+      ],
+      "cwd": "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool",
+      "started_at": "2026-11-07T05:55:08.163865+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-continuation-3-candidate"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T05:55:25.250586+00:00"
+    },
+    {
+      "label": "27b-http-base",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+        "/tmp/verify-kapitsa/ref/b171f983/src/tests/test_server.py",
+        "http://127.0.0.1:50203"
+      ],
+      "cwd": "/tmp/verify-kapitsa/ref/b171f983/src",
+      "started_at": "2026-11-07T05:55:35.736235+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-http-base"
+      },
+      "exit": 1,
+      "completed_at": "2026-11-07T05:58:10.674147+00:00"
+    },
+    {
+      "label": "27b-http-candidate",
+      "argv": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+        "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/tests/test_server.py",
+        "http://127.0.0.1:50596"
+      ],
+      "cwd": "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool",
+      "started_at": "2026-11-07T05:58:20.898279+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-http-candidate"
+      },
+      "exit": 1,
+      "completed_at": "2026-11-07T06:00:57.995887+00:00"
+    },
+    {
+      "label": "27b-bench-0-base",
+      "argv": [
+        "/tmp/verify-kapitsa/ref/b171f983/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-bench-0-base.json"
+      ],
+      "cwd": "/tmp/verify-kapitsa/ref/b171f983/src",
+      "started_at": "2026-11-07T06:01:10.776815+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-bench-0-base"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T06:03:52.618848+00:00"
+    },
+    {
+      "label": "27b-bench-1-candidate",
+      "argv": [
+        "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-bench-1-candidate.json"
+      ],
+      "cwd": "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool",
+      "started_at": "2026-11-07T06:04:05.089085+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-bench-1-candidate"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T06:06:14.669102+00:00"
+    },
+    {
+      "label": "27b-bench-2-base",
+      "argv": [
+        "/tmp/verify-kapitsa/ref/b171f983/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-bench-2-base.json"
+      ],
+      "cwd": "/tmp/verify-kapitsa/ref/b171f983/src",
+      "started_at": "2026-11-07T06:06:27.142915+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-bench-2-base"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T06:08:34.639323+00:00"
+    },
+    {
+      "label": "27b-bench-3-candidate",
+      "argv": [
+        "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-bench-3-candidate.json"
+      ],
+      "cwd": "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool",
+      "started_at": "2026-11-07T06:08:47.144767+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-bench-3-candidate"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T06:11:07.645951+00:00"
+    }
+  ],
+  "models": [
+    {
+      "name": "27b",
+      "path": "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+      "metadata": {
+        "config.json": "14b65a0ee06517060a6bbd979bb1a8ff54e7b304b1a1f01d54344b88b8285e85",
+        "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+      },
+      "mtp_requested": true,
+      "mtp_sha256": "c58feddc584f37971c72af1f0da95e0099478487009936b3c26ddd88844fab10",
+      "logits": {
+        "paths": {
+          "prefill": {
+            "records": 8,
+            "bitwise": 8,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "failures": [],
+            "gate": {
+              "source": "tools/logit_floors/qwen3.8-27b-4bit.json"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (b171f983)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+              "path": "prefill",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1152,
+                "reruns": 0
+              },
+              "records": 8,
+              "vocab": 248320,
+              "source": "/tmp/verify-kapitsa/ref/b171f983/src/bench/corpus.txt",
+              "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+              "macos": "15.7.1",
+              "date": "2026-11-07T05:51:50Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (02e53017)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+              "path": "prefill",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1152,
+                "reruns": 0
+              },
+              "records": 8,
+              "vocab": 248320,
+              "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-logits-base",
+              "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+              "macos": "15.7.1",
+              "date": "2026-11-07T05:52:59Z",
+              "env": {}
+            }
+          },
+          "batch": {
+            "records": 192,
+            "bitwise": 192,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "near_tie": 0.0,
+            "near_tie_flips": 0,
+            "failures": [],
+            "gate": {
+              "min_top1": 0.989583,
+              "max_mean_kl": 4.08e-07,
+              "max_p99_kl": 6.63e-06,
+              "near_tie": 0.0,
+              "max_far_flips": 0,
+              "source": "tools/logit_floors/qwen3.8-27b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (b171f983)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+              "path": "batch",
+              "batch": {
+                "members": 4,
+                "rows": 2
+              },
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1152,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "source": "/tmp/verify-kapitsa/ref/b171f983/src/bench/corpus.txt",
+              "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+              "macos": "15.7.1",
+              "date": "2026-11-07T05:51:50Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (02e53017)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+              "path": "batch",
+              "batch": {
+                "members": 4,
+                "rows": 2
+              },
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1152,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-logits-base",
+              "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+              "macos": "15.7.1",
+              "date": "2026-11-07T05:52:59Z",
+              "env": {}
+            }
+          },
+          "step": {
+            "records": 192,
+            "bitwise": 192,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "near_tie": 0.0,
+            "near_tie_flips": 0,
+            "failures": [],
+            "gate": {
+              "min_top1": 0.989583,
+              "max_mean_kl": 4.08e-07,
+              "max_p99_kl": 6.63e-06,
+              "near_tie": 0.0,
+              "max_far_flips": 0,
+              "source": "tools/logit_floors/qwen3.8-27b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (b171f983)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+              "path": "step",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1152,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "source": "/tmp/verify-kapitsa/ref/b171f983/src/bench/corpus.txt",
+              "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+              "macos": "15.7.1",
+              "date": "2026-11-07T05:51:50Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (02e53017)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+              "path": "step",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1152,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-logits-base",
+              "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+              "macos": "15.7.1",
+              "date": "2026-11-07T05:52:59Z",
+              "env": {}
+            }
+          },
+          "verify": {
+            "records": 192,
+            "bitwise": 192,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "near_tie": 0.0,
+            "near_tie_flips": 0,
+            "failures": [],
+            "gate": {
+              "min_top1": 0.989583,
+              "max_mean_kl": 4.08e-07,
+              "max_p99_kl": 6.63e-06,
+              "near_tie": 0.0,
+              "max_far_flips": 0,
+              "source": "tools/logit_floors/qwen3.8-27b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (b171f983)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+              "path": "verify",
+              "verify": "KFlash tree (a chain of 8 live rows)",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1152,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "source": "/tmp/verify-kapitsa/ref/b171f983/src/bench/corpus.txt",
+              "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+              "macos": "15.7.1",
+              "date": "2026-11-07T05:51:50Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (02e53017)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+              "path": "verify",
+              "verify": "KFlash tree (a chain of 8 live rows)",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1152,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/27b-logits-base",
+              "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+              "macos": "15.7.1",
+              "date": "2026-11-07T05:52:59Z",
+              "env": {}
+            }
+          }
+        }
+      },
+      "continuations": [
+        {
+          "label": "27b-continuation-0-base",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "bf9bd80862daa6d72d4dd83f0341dc9f7f0b60de161ee9f28397a35bf0f84b6b",
+          "load_lines": [
+            "[kapitsa] MTP head loaded in 31 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)"
+          ],
+          "decode_lines": [
+            "prompt 63 tok in 592 ms (106.5 tok/s); spec decode D=2: 255 tok in 7853 ms (32.5 tok/s), 96 cycles, 2.66 tok/cycle, accepted/drafted 0.83, 81.104 ms GPU/cycle, 81.802 ms wall/cycle, hist 7 19 70"
+          ],
+          "contention": {
+            "samples": 98,
+            "mean_foreign_gpu_pct": 3.94,
+            "max_foreign_gpu_pct": 20.97,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 5,
+            "longest_busy_run": 2,
+            "top": [
+              "NeraJelly Helper",
+              "Codex (Aperitif)"
+            ],
+            "flagged": false
+          },
+          "samples": [
+            [
+              1794030793.892,
+              2.57,
+              "NeraJelly Helper",
+              2.57,
+              0.0
+            ],
+            [
+              1794030794.434,
+              3.06,
+              "NeraJelly Helper",
+              3.06,
+              0.0
+            ],
+            [
+              1794030794.98,
+              1.82,
+              "NeraJelly Helper",
+              1.82,
+              0.0
+            ],
+            [
+              1794030795.523,
+              4.16,
+              "NeraJelly Helper",
+              4.16,
+              0.0
+            ],
+            [
+              1794030796.076,
+              4.04,
+              "NeraJelly Helper",
+              4.04,
+              0.0
+            ],
+            [
+              1794030796.622,
+              3.88,
+              "Codex (Aperitif)",
+              2.31,
+              0.0
+            ],
+            [
+              1794030797.168,
+              4.52,
+              "NeraJelly Helper",
+              3.06,
+              0.0
+            ],
+            [
+              1794030797.714,
+              4.07,
+              "NeraJelly Helper",
+              4.07,
+              0.0
+            ],
+            [
+              1794030798.254,
+              4.24,
+              "NeraJelly Helper",
+              4.24,
+              0.0
+            ],
+            [
+              1794030798.811,
+              2.71,
+              "NeraJelly Helper",
+              2.71,
+              0.0
+            ],
+            [
+              1794030799.353,
+              4.01,
+              "NeraJelly Helper",
+              4.01,
+              0.0
+            ],
+            [
+              1794030799.893,
+              4.31,
+              "NeraJelly Helper",
+              4.31,
+              0.0
+            ],
+            [
+              1794030800.432,
+              5.21,
+              "NeraJelly Helper",
+              3.91,
+              0.0
+            ],
+            [
+              1794030800.974,
+              3.62,
+              "NeraJelly Helper",
+              1.85,
+              0.0
+            ],
+            [
+              1794030801.517,
+              3.22,
+              "NeraJelly Helper",
+              3.22,
+              0.0
+            ],
+            [
+              1794030802.061,
+              2.76,
+              "NeraJelly Helper",
+              2.76,
+              0.0
+            ],
+            [
+              1794030802.605,
+              3.08,
+              "NeraJelly Helper",
+              3.08,
+              0.0
+            ],
+            [
+              1794030803.158,
+              2.07,
+              "NeraJelly Helper",
+              2.07,
+              0.0
+            ],
+            [
+              1794030803.701,
+              2.67,
+              "NeraJelly Helper",
+              2.67,
+              0.0
+            ],
+            [
+              1794030804.243,
+              3.6,
+              "NeraJelly Helper",
+              2.89,
+              0.0
+            ],
+            [
+              1794030804.788,
+              4.04,
+              "Codex (Aperitif)",
+              2.17,
+              0.0
+            ],
+            [
+              1794030805.329,
+              3.05,
+              "NeraJelly Helper",
+              2.17,
+              0.0
+            ],
+            [
+              1794030805.871,
+              2.46,
+              "NeraJelly Helper",
+              2.46,
+              0.0
+            ],
+            [
+              1794030806.415,
+              3.09,
+              "NeraJelly Helper",
+              3.09,
+              0.0
+            ],
+            [
+              1794030806.967,
+              3.15,
+              "NeraJelly Helper",
+              3.15,
+              0.0
+            ],
+            [
+              1794030807.509,
+              2.02,
+              "NeraJelly Helper",
+              2.02,
+              0.0
+            ],
+            [
+              1794030808.062,
+              2.81,
+              "NeraJelly Helper",
+              2.81,
+              0.0
+            ],
+            [
+              1794030808.615,
+              4.59,
+              "NeraJelly Helper",
+              2.62,
+              0.0
+            ],
+            [
+              1794030809.165,
+              4.17,
+              "NeraJelly Helper",
+              2.72,
+              0.0
+            ],
+            [
+              1794030809.704,
+              2.48,
+              "NeraJelly Helper",
+              2.48,
+              0.0
+            ],
+            [
+              1794030810.246,
+              2.32,
+              "NeraJelly Helper",
+              2.32,
+              0.0
+            ],
+            [
+              1794030810.786,
+              3.52,
+              "NeraJelly Helper",
+              3.52,
+              0.0
+            ],
+            [
+              1794030811.331,
+              3.2,
+              "NeraJelly Helper",
+              3.2,
+              0.0
+            ],
+            [
+              1794030811.878,
+              3.15,
+              "NeraJelly Helper",
+              3.15,
+              0.0
+            ],
+            [
+              1794030812.422,
+              3.55,
+              "NeraJelly Helper",
+              2.32,
+              0.0
+            ],
+            [
+              1794030812.966,
+              4.66,
+              "NeraJelly Helper",
+              2.7,
+              0.0
+            ],
+            [
+              1794030813.51,
+              3.46,
+              "NeraJelly Helper",
+              3.46,
+              0.0
+            ],
+            [
+              1794030814.055,
+              3.66,
+              "NeraJelly Helper",
+              3.66,
+              0.0
+            ],
+            [
+              1794030814.596,
+              2.34,
+              "NeraJelly Helper",
+              2.34,
+              0.0
+            ],
+            [
+              1794030815.14,
+              4.25,
+              "NeraJelly Helper",
+              4.25,
+              0.0
+            ],
+            [
+              1794030815.683,
+              4.47,
+              "NeraJelly Helper",
+              4.47,
+              0.0
+            ],
+            [
+              1794030816.231,
+              4.47,
+              "NeraJelly Helper",
+              4.47,
+              0.0
+            ],
+            [
+              1794030816.775,
+              4.09,
+              "Codex (Aperitif)",
+              2.07,
+              0.0
+            ],
+            [
+              1794030817.326,
+              4.81,
+              "NeraJelly Helper",
+              3.88,
+              0.0
+            ],
+            [
+              1794030817.865,
+              4.12,
+              "NeraJelly Helper",
+              4.12,
+              0.0
+            ],
+            [
+              1794030818.406,
+              4.49,
+              "NeraJelly Helper",
+              4.49,
+              0.0
+            ],
+            [
+              1794030818.95,
+              2.9,
+              "NeraJelly Helper",
+              2.9,
+              0.0
+            ],
+            [
+              1794030819.496,
+              3.36,
+              "NeraJelly Helper",
+              3.36,
+              0.0
+            ],
+            [
+              1794030820.045,
+              3.67,
+              "NeraJelly Helper",
+              3.67,
+              0.0
+            ],
+            [
+              1794030820.586,
+              4.68,
+              "NeraJelly Helper",
+              2.84,
+              0.0
+            ],
+            [
+              1794030821.136,
+              3.93,
+              "NeraJelly Helper",
+              2.4,
+              0.0
+            ],
+            [
+              1794030821.679,
+              3.25,
+              "NeraJelly Helper",
+              3.25,
+              0.0
+            ],
+            [
+              1794030822.22,
+              4.02,
+              "NeraJelly Helper",
+              4.02,
+              0.0
+            ],
+            [
+              1794030822.763,
+              4.03,
+              "NeraJelly Helper",
+              4.03,
+              0.0
+            ],
+            [
+              1794030823.305,
+              3.46,
+              "NeraJelly Helper",
+              3.46,
+              0.0
+            ],
+            [
+              1794030823.843,
+              3.14,
+              "NeraJelly Helper",
+              3.14,
+              0.0
+            ],
+            [
+              1794030824.399,
+              4.91,
+              "NeraJelly Helper",
+              3.79,
+              0.0
+            ],
+            [
+              1794030824.942,
+              5.13,
+              "NeraJelly Helper",
+              3.26,
+              0.0
+            ],
+            [
+              1794030825.484,
+              3.5,
+              "NeraJelly Helper",
+              3.5,
+              0.0
+            ],
+            [
+              1794030826.026,
+              2.46,
+              "NeraJelly Helper",
+              2.46,
+              0.0
+            ],
+            [
+              1794030826.567,
+              3.86,
+              "NeraJelly Helper",
+              3.86,
+              0.0
+            ],
+            [
+              1794030827.11,
+              4.24,
+              "NeraJelly Helper",
+              4.24,
+              0.0
+            ],
+            [
+              1794030827.663,
+              4.11,
+              "NeraJelly Helper",
+              4.11,
+              0.0
+            ],
+            [
+              1794030828.205,
+              3.1,
+              "NeraJelly Helper",
+              2.52,
+              0.0
+            ],
+            [
+              1794030828.746,
+              4.9,
+              "NeraJelly Helper",
+              3.11,
+              0.0
+            ],
+            [
+              1794030829.287,
+              4.43,
+              "NeraJelly Helper",
+              3.34,
+              0.0
+            ],
+            [
+              1794030829.829,
+              4.34,
+              "NeraJelly Helper",
+              4.34,
+              0.0
+            ],
+            [
+              1794030830.378,
+              2.5,
+              "NeraJelly Helper",
+              2.5,
+              0.0
+            ],
+            [
+              1794030830.916,
+              4.1,
+              "NeraJelly Helper",
+              4.1,
+              0.0
+            ],
+            [
+              1794030831.455,
+              4.27,
+              "NeraJelly Helper",
+              4.27,
+              0.0
+            ],
+            [
+              1794030831.996,
+              4.42,
+              "NeraJelly Helper",
+              4.42,
+              0.0
+            ],
+            [
+              1794030832.54,
+              4.58,
+              "NeraJelly Helper",
+              2.96,
+              0.0
+            ],
+            [
+              1794030833.084,
+              4.14,
+              "NeraJelly Helper",
+              3.0,
+              0.0
+            ],
+            [
+              1794030833.628,
+              4.74,
+              "NeraJelly Helper",
+              3.79,
+              0.0
+            ],
+            [
+              1794030834.172,
+              4.51,
+              "NeraJelly Helper",
+              3.47,
+              0.0
+            ],
+            [
+              1794030834.713,
+              3.32,
+              "NeraJelly Helper",
+              3.32,
+              0.0
+            ],
+            [
+              1794030835.253,
+              3.1,
+              "NeraJelly Helper",
+              3.1,
+              0.0
+            ],
+            [
+              1794030835.796,
+              4.54,
+              "NeraJelly Helper",
+              4.54,
+              0.0
+            ],
+            [
+              1794030836.339,
+              4.78,
+              "NeraJelly Helper",
+              4.78,
+              0.0
+            ],
+            [
+              1794030836.881,
+              4.46,
+              "NeraJelly Helper",
+              4.46,
+              0.0
+            ],
+            [
+              1794030837.426,
+              3.4,
+              "NeraJelly Helper",
+              3.4,
+              0.0
+            ],
+            [
+              1794030837.972,
+              20.97,
+              "Codex (Aperitif)",
+              11.21,
+              0.0
+            ],
+            [
+              1794030838.522,
+              6.34,
+              "NeraJelly Helper",
+              6.34,
+              0.0
+            ],
+            [
+              1794030839.065,
+              4.4,
+              "NeraJelly Helper",
+              4.4,
+              0.0
+            ],
+            [
+              1794030839.613,
+              2.07,
+              "NeraJelly Helper",
+              2.07,
+              0.0
+            ],
+            [
+              1794030840.156,
+              3.43,
+              "NeraJelly Helper",
+              3.43,
+              0.0
+            ],
+            [
+              1794030840.702,
+              4.72,
+              "NeraJelly Helper",
+              4.72,
+              0.0
+            ],
+            [
+              1794030841.245,
+              4.11,
+              "NeraJelly Helper",
+              4.11,
+              0.0
+            ],
+            [
+              1794030841.788,
+              4.27,
+              "NeraJelly Helper",
+              2.72,
+              0.0
+            ],
+            [
+              1794030842.335,
+              4.12,
+              "NeraJelly Helper",
+              3.52,
+              0.0
+            ],
+            [
+              1794030842.888,
+              4.09,
+              "NeraJelly Helper",
+              4.09,
+              0.0
+            ],
+            [
+              1794030843.43,
+              3.8,
+              "NeraJelly Helper",
+              3.8,
+              0.0
+            ],
+            [
+              1794030843.986,
+              2.61,
+              "NeraJelly Helper",
+              2.61,
+              0.0
+            ],
+            [
+              1794030844.531,
+              4.18,
+              "NeraJelly Helper",
+              4.18,
+              0.0
+            ],
+            [
+              1794030845.084,
+              4.38,
+              "NeraJelly Helper",
+              4.38,
+              0.0
+            ],
+            [
+              1794030845.631,
+              5.75,
+              "NeraJelly Helper",
+              4.51,
+              0.0
+            ],
+            [
+              1794030846.176,
+              3.92,
+              "NeraJelly Helper",
+              2.71,
+              0.0
+            ],
+            [
+              1794030846.739,
+              3.11,
+              "NeraJelly Helper",
+              3.11,
+              0.0
+            ]
+          ]
+        },
+        {
+          "label": "27b-continuation-1-candidate",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "bf9bd80862daa6d72d4dd83f0341dc9f7f0b60de161ee9f28397a35bf0f84b6b",
+          "load_lines": [
+            "[kapitsa] MTP head loaded in 22 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)"
+          ],
+          "decode_lines": [
+            "prompt 63 tok in 574 ms (109.7 tok/s); spec decode D=2: 255 tok in 7847 ms (32.5 tok/s), 96 cycles, 2.66 tok/cycle, accepted/drafted 0.83, 81.071 ms GPU/cycle, 81.741 ms wall/cycle, hist 7 19 70"
+          ],
+          "contention": {
+            "samples": 32,
+            "mean_foreign_gpu_pct": 4.14,
+            "max_foreign_gpu_pct": 6.9,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 6,
+            "longest_busy_run": 5,
+            "top": [
+              "NeraJelly Helper"
+            ],
+            "flagged": true
+          },
+          "samples": [
+            [
+              1794030856.387,
+              4.2,
+              "NeraJelly Helper",
+              4.2,
+              0.0
+            ],
+            [
+              1794030856.934,
+              3.93,
+              "NeraJelly Helper",
+              3.93,
+              0.0
+            ],
+            [
+              1794030857.48,
+              1.78,
+              "NeraJelly Helper",
+              1.78,
+              0.0
+            ],
+            [
+              1794030858.021,
+              3.74,
+              "NeraJelly Helper",
+              3.2,
+              0.0
+            ],
+            [
+              1794030858.561,
+              4.46,
+              "NeraJelly Helper",
+              2.7,
+              0.0
+            ],
+            [
+              1794030859.11,
+              4.32,
+              "NeraJelly Helper",
+              3.13,
+              0.0
+            ],
+            [
+              1794030859.656,
+              2.7,
+              "NeraJelly Helper",
+              2.7,
+              0.0
+            ],
+            [
+              1794030860.222,
+              3.41,
+              "NeraJelly Helper",
+              3.41,
+              0.0
+            ],
+            [
+              1794030860.766,
+              4.02,
+              "NeraJelly Helper",
+              4.02,
+              0.0
+            ],
+            [
+              1794030861.309,
+              4.09,
+              "NeraJelly Helper",
+              4.09,
+              0.0
+            ],
+            [
+              1794030861.849,
+              3.5,
+              "NeraJelly Helper",
+              3.5,
+              0.0
+            ],
+            [
+              1794030862.387,
+              4.02,
+              "NeraJelly Helper",
+              2.31,
+              0.0
+            ],
+            [
+              1794030862.926,
+              4.42,
+              "NeraJelly Helper",
+              2.81,
+              0.0
+            ],
+            [
+              1794030863.471,
+              3.77,
+              "NeraJelly Helper",
+              3.77,
+              0.0
+            ],
+            [
+              1794030864.014,
+              6.9,
+              "NeraJelly Helper",
+              6.9,
+              0.0
+            ],
+            [
+              1794030864.56,
+              6.59,
+              "NeraJelly Helper",
+              6.07,
+              0.0
+            ],
+            [
+              1794030865.105,
+              6.33,
+              "NeraJelly Helper",
+              6.33,
+              0.0
+            ],
+            [
+              1794030865.652,
+              5.04,
+              "NeraJelly Helper",
+              5.04,
+              0.0
+            ],
+            [
+              1794030866.199,
+              5.16,
+              "NeraJelly Helper",
+              3.87,
+              0.0
+            ],
+            [
+              1794030866.751,
+              4.15,
+              "NeraJelly Helper",
+              2.37,
+              0.0
+            ],
+            [
+              1794030867.298,
+              4.35,
+              "NeraJelly Helper",
+              3.75,
+              0.0
+            ],
+            [
+              1794030867.85,
+              4.26,
+              "NeraJelly Helper",
+              4.26,
+              0.0
+            ],
+            [
+              1794030868.399,
+              5.78,
+              "NeraJelly Helper",
+              4.59,
+              0.0
+            ],
+            [
+              1794030868.946,
+              3.13,
+              "NeraJelly Helper",
+              2.61,
+              0.0
+            ],
+            [
+              1794030869.499,
+              3.4,
+              "NeraJelly Helper",
+              3.4,
+              0.0
+            ],
+            [
+              1794030870.057,
+              3.34,
+              "NeraJelly Helper",
+              3.34,
+              0.0
+            ],
+            [
+              1794030870.606,
+              2.91,
+              "NeraJelly Helper",
+              2.91,
+              0.0
+            ],
+            [
+              1794030871.151,
+              2.34,
+              "NeraJelly Helper",
+              2.34,
+              0.0
+            ],
+            [
+              1794030871.701,
+              4.04,
+              "NeraJelly Helper",
+              4.04,
+              0.0
+            ],
+            [
+              1794030872.249,
+              4.4,
+              "NeraJelly Helper",
+              3.61,
+              0.0
+            ],
+            [
+              1794030872.797,
+              3.98,
+              "NeraJelly Helper",
+              3.34,
+              0.0
+            ],
+            [
+              1794030873.347,
+              3.94,
+              "NeraJelly Helper",
+              3.94,
+              0.0
+            ]
+          ]
+        },
+        {
+          "label": "27b-continuation-2-base",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "bf9bd80862daa6d72d4dd83f0341dc9f7f0b60de161ee9f28397a35bf0f84b6b",
+          "load_lines": [
+            "[kapitsa] MTP head loaded in 19 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)"
+          ],
+          "decode_lines": [
+            "prompt 63 tok in 634 ms (99.4 tok/s); spec decode D=2: 255 tok in 7801 ms (32.7 tok/s), 96 cycles, 2.66 tok/cycle, accepted/drafted 0.83, 80.678 ms GPU/cycle, 81.265 ms wall/cycle, hist 7 19 70"
+          ],
+          "contention": {
+            "samples": 31,
+            "mean_foreign_gpu_pct": 1.5,
+            "max_foreign_gpu_pct": 4.49,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 0,
+            "longest_busy_run": 0,
+            "top": [],
+            "flagged": false
+          },
+          "samples": [
+            [
+              1794030882.684,
+              2.36,
+              "NeraJelly Helper",
+              2.36,
+              0.0
+            ],
+            [
+              1794030883.228,
+              2.41,
+              "NeraJelly Helper",
+              2.41,
+              0.0
+            ],
+            [
+              1794030883.797,
+              3.05,
+              "NeraJelly Helper",
+              3.05,
+              0.0
+            ],
+            [
+              1794030884.347,
+              4.49,
+              "NeraJelly Helper",
+              3.62,
+              0.0
+            ],
+            [
+              1794030884.89,
+              2.86,
+              "NeraJelly Helper",
+              2.06,
+              0.0
+            ],
+            [
+              1794030885.448,
+              4.18,
+              "NeraJelly Helper",
+              4.18,
+              0.0
+            ],
+            [
+              1794030885.995,
+              4.06,
+              "NeraJelly Helper",
+              4.06,
+              0.0
+            ],
+            [
+              1794030886.546,
+              4.49,
+              "NeraJelly Helper",
+              4.49,
+              0.0
+            ],
+            [
+              1794030887.086,
+              2.8,
+              "NeraJelly Helper",
+              2.8,
+              0.0
+            ],
+            [
+              1794030887.667,
+              4.09,
+              "NeraJelly Helper",
+              3.44,
+              0.0
+            ],
+            [
+              1794030888.214,
+              4.18,
+              "NeraJelly Helper",
+              3.0,
+              0.0
+            ],
+            [
+              1794030888.764,
+              4.46,
+              "NeraJelly Helper",
+              3.31,
+              0.0
+            ],
+            [
+              1794030889.318,
+              1.38,
+              "NeraJelly Helper",
+              1.38,
+              0.0
+            ],
+            [
+              1794030889.865,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030890.418,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030891.01,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030891.573,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030892.125,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030892.676,
+              0.85,
+              "NeraJelly Helper",
+              0.85,
+              0.0
+            ],
+            [
+              1794030893.224,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030893.778,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030894.325,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030894.875,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030895.431,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030895.988,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030896.546,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030897.096,
+              0.69,
+              "NeraJelly Helper",
+              0.69,
+              0.0
+            ],
+            [
+              1794030897.658,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030898.223,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030898.771,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030899.348,
+              0,
+              "-",
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "label": "27b-continuation-3-candidate",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "bf9bd80862daa6d72d4dd83f0341dc9f7f0b60de161ee9f28397a35bf0f84b6b",
+          "load_lines": [
+            "[kapitsa] MTP head loaded in 20 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)"
+          ],
+          "decode_lines": [
+            "prompt 63 tok in 524 ms (120.3 tok/s); spec decode D=2: 255 tok in 7765 ms (32.8 tok/s), 96 cycles, 2.66 tok/cycle, accepted/drafted 0.83, 80.354 ms GPU/cycle, 80.889 ms wall/cycle, hist 7 19 70"
+          ],
+          "contention": {
+            "samples": 31,
+            "mean_foreign_gpu_pct": 0.11,
+            "max_foreign_gpu_pct": 1.51,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 0,
+            "longest_busy_run": 0,
+            "top": [],
+            "flagged": false
+          },
+          "samples": [
+            [
+              1794030908.713,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030909.257,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030909.807,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030910.354,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030910.907,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030911.448,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030911.997,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030912.54,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030913.087,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030913.641,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030914.186,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030914.735,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030915.28,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030915.82,
+              1.2,
+              "iTerm2",
+              1.2,
+              0.0
+            ],
+            [
+              1794030916.369,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030916.917,
+              0.69,
+              "NeraJelly Helper",
+              0.69,
+              0.0
+            ],
+            [
+              1794030917.47,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030918.019,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030918.563,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030919.131,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030919.679,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030920.218,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030920.772,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030921.332,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030921.876,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030922.43,
+              1.51,
+              "Google Chrome He",
+              1.51,
+              0.0
+            ],
+            [
+              1794030922.973,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030923.524,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030924.078,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030924.635,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794030925.2,
+              0,
+              "-",
+              0.0,
+              0.0
+            ]
+          ]
+        }
+      ],
+      "http": [
+        {
+          "label": "27b-http-base",
+          "exit": 1,
+          "passes": 48,
+          "failures": [
+            "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0011000633239746094, {'id': 'chatcmpl-179403104591745', 'object': 'chat.completion.chunk', 'created': 1794031045, 'model': 'qwen3.8-27b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [], first token at 0.5844271183013916"
+          ]
+        },
+        {
+          "label": "27b-http-candidate",
+          "exit": 1,
+          "passes": 48,
+          "failures": [
+            "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0010149478912353516, {'id': 'chatcmpl-179403121225228', 'object': 'chat.completion.chunk', 'created': 1794031212, 'model': 'qwen3.8-27b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [], first token at 0.5750219821929932"
+          ]
+        }
+      ],
+      "http_same_outcomes": true,
+      "benchmarks": [
+        {
+          "label": "27b-bench-0-base",
+          "exit": 0,
+          "kapitsa": {
+            "version": "0.2.31",
+            "commit": "b171f983"
+          },
+          "model": {
+            "name": "qwen3.8-27b-4bit",
+            "title": "qwen3.8-27b-4bit",
+            "variant": null,
+            "precision": "4-bit",
+            "catalog": false,
+            "revision": null,
+            "decoding": "KFlash",
+            "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+            "drafter": "dflash2",
+            "drafter_kind": "DFlash2",
+            "drafter_source": "dflash2",
+            "drafter_reason": "found in the model's folder"
+          },
+          "results": {
+            "decode": {
+              "median_tps": 64.62,
+              "runs_tps": [
+                60.4,
+                64.92,
+                64.62
+              ],
+              "median_accepted_draft_tps": 52.0,
+              "median_accepted_draft_share": 0.8047
+            },
+            "decode_greedy": {
+              "median_tps": 66.58,
+              "runs_tps": [
+                66.1,
+                66.58,
+                67.4
+              ],
+              "median_accepted_draft_tps": 53.97,
+              "median_accepted_draft_share": 0.8105
+            },
+            "prefill": [
+              {
+                "size": 4000,
+                "prompt_tokens": 4135,
+                "ttft_s": 10.5246,
+                "tps": 392.9,
+                "followup_s": [
+                  0.2433,
+                  0.3005,
+                  0.2487
+                ],
+                "followup_median_s": 0.2487,
+                "followup_suffix_tps": 93.2
+              }
+            ],
+            "tool_calls": "pass",
+            "peak_memory_gb": 19.18
+          },
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "fair",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.1,
+            "gpu_other_mean_pct": 1.81,
+            "gpu_other_max_pct": 20.5,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [
+              "Google Chrome"
+            ],
+            "contention": []
+          },
+          "flags": [],
+          "invalid": []
+        },
+        {
+          "label": "27b-bench-1-candidate",
+          "exit": 0,
+          "kapitsa": {
+            "version": "0.2.31",
+            "commit": "02e53017"
+          },
+          "model": {
+            "name": "qwen3.8-27b-4bit",
+            "title": "qwen3.8-27b-4bit",
+            "variant": null,
+            "precision": "4-bit",
+            "catalog": false,
+            "revision": null,
+            "decoding": "KFlash",
+            "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+            "drafter": "dflash2",
+            "drafter_kind": "DFlash2",
+            "drafter_source": "dflash2",
+            "drafter_reason": "found in the model's folder"
+          },
+          "results": {
+            "decode": {
+              "median_tps": 58.08,
+              "runs_tps": [
+                55.38,
+                58.08,
+                64.27
+              ],
+              "median_accepted_draft_tps": 45.71,
+              "median_accepted_draft_share": 0.7871
+            },
+            "decode_greedy": {
+              "median_tps": 65.99,
+              "runs_tps": [
+                65.99,
+                65.15,
+                66.69
+              ],
+              "median_accepted_draft_tps": 53.36,
+              "median_accepted_draft_share": 0.8086
+            },
+            "prefill": [
+              {
+                "size": 4000,
+                "prompt_tokens": 4132,
+                "ttft_s": 10.5301,
+                "tps": 392.4,
+                "followup_s": [
+                  0.2524,
+                  0.2911,
+                  0.2448
+                ],
+                "followup_median_s": 0.2524,
+                "followup_suffix_tps": 91.1
+              }
+            ],
+            "tool_calls": "pass",
+            "peak_memory_gb": 19.18
+          },
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "fair",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.1,
+            "gpu_other_mean_pct": 0.35,
+            "gpu_other_max_pct": 3.75,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [],
+            "contention": []
+          },
+          "flags": [],
+          "invalid": []
+        },
+        {
+          "label": "27b-bench-2-base",
+          "exit": 0,
+          "kapitsa": {
+            "version": "0.2.31",
+            "commit": "b171f983"
+          },
+          "model": {
+            "name": "qwen3.8-27b-4bit",
+            "title": "qwen3.8-27b-4bit",
+            "variant": null,
+            "precision": "4-bit",
+            "catalog": false,
+            "revision": null,
+            "decoding": "KFlash",
+            "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+            "drafter": "dflash2",
+            "drafter_kind": "DFlash2",
+            "drafter_source": "dflash2",
+            "drafter_reason": "found in the model's folder"
+          },
+          "results": {
+            "decode": {
+              "median_tps": 59.52,
+              "runs_tps": [
+                59.52,
+                64.16,
+                55.26
+              ],
+              "median_accepted_draft_tps": 46.85,
+              "median_accepted_draft_share": 0.7871
+            },
+            "decode_greedy": {
+              "median_tps": 66.15,
+              "runs_tps": [
+                65.91,
+                66.48,
+                66.15
+              ],
+              "median_accepted_draft_tps": 53.62,
+              "median_accepted_draft_share": 0.8105
+            },
+            "prefill": [
+              {
+                "size": 4000,
+                "prompt_tokens": 4133,
+                "ttft_s": 10.6841,
+                "tps": 386.8,
+                "followup_s": [
+                  0.2514,
+                  0.3166,
+                  0.2418
+                ],
+                "followup_median_s": 0.2514,
+                "followup_suffix_tps": 88.4
+              }
+            ],
+            "tool_calls": "pass",
+            "peak_memory_gb": 19.18
+          },
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "fair",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.1,
+            "gpu_other_mean_pct": 0.85,
+            "gpu_other_max_pct": 7.81,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [],
+            "contention": [
+              "prefill_4000"
+            ]
+          },
+          "flags": [
+            "CONTENTION: sustained foreign GPU load > 5% in ['prefill_4000'] (mean 0.85%, top ['Lark'])"
+          ],
+          "invalid": []
+        },
+        {
+          "label": "27b-bench-3-candidate",
+          "exit": 0,
+          "kapitsa": {
+            "version": "0.2.31",
+            "commit": "02e53017"
+          },
+          "model": {
+            "name": "qwen3.8-27b-4bit",
+            "title": "qwen3.8-27b-4bit",
+            "variant": null,
+            "precision": "4-bit",
+            "catalog": false,
+            "revision": null,
+            "decoding": "KFlash",
+            "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+            "drafter": "dflash2",
+            "drafter_kind": "DFlash2",
+            "drafter_source": "dflash2",
+            "drafter_reason": "found in the model's folder"
+          },
+          "results": {
+            "decode": {
+              "median_tps": 51.17,
+              "runs_tps": [
+                51.17,
+                50.14,
+                52.4
+              ],
+              "median_accepted_draft_tps": 40.58,
+              "median_accepted_draft_share": 0.7812
+            },
+            "decode_greedy": {
+              "median_tps": 66.21,
+              "runs_tps": [
+                62.96,
+                66.21,
+                66.68
+              ],
+              "median_accepted_draft_tps": 53.66,
+              "median_accepted_draft_share": 0.8105
+            },
+            "prefill": [
+              {
+                "size": 4000,
+                "prompt_tokens": 4133,
+                "ttft_s": 10.7854,
+                "tps": 383.2,
+                "followup_s": [
+                  0.2764,
+                  0.2984,
+                  0.2498
+                ],
+                "followup_median_s": 0.2764,
+                "followup_suffix_tps": 84.1
+              }
+            ],
+            "tool_calls": "pass",
+            "peak_memory_gb": 19.18
+          },
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "fair",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.1,
+            "gpu_other_mean_pct": 0.34,
+            "gpu_other_max_pct": 2.58,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [],
+            "contention": []
+          },
+          "flags": [],
+          "invalid": []
+        }
+      ]
+    }
+  ],
+  "identities": {
+    "base": {
+      "head": "b171f98363abd5dfd8ae5d24f786ca77b3801a4a",
+      "version": "kapitsa 0.2.31 (b171f983)",
+      "binaries": {
+        "kapitsa": "3f1f56dea2c64deff131f80a79d0eb4456d192500b8d31af791f476502af6b8c",
+        "ni_run": "25e08a5c2946d3b8c6e3ff14cb323f2d92e49705551d074b27a1403d16ca0c60",
+        "logit_dump": "4acec4e43c9d136e1fdb48776fda1cda64d17c6588ac24b8e6aad6d0a029110f"
+      },
+      "sources": {
+        "src/model/affine_pack.h": "bde8632354ce54e1ee40ebb30f2df2da1abe5569928991ffe84129de065d85dd",
+        "src/model/qwen35_spec.cpp": "5ca89d5a1823d2bf31d9656ff949f6758a0c9aead368455b2a58cf59d46009e2"
+      }
+    },
+    "candidate": {
+      "head": "02e53017f19aaac71d4f64795ec55d0fb4c12d0e",
+      "version": "kapitsa 0.2.31 (02e53017)",
+      "binaries": {
+        "kapitsa": "e295493fd8767de21f1099feebdf7b5062d966428f793f5958571fecd25120a1",
+        "ni_run": "7ee96f6a1efb132e6ec7dec6eef8b13ac2e6beefa6c18b78ce489c21fa9939d3",
+        "logit_dump": "98e962e01fd68977fb133d49e7ed646c3a398680de32a8f384789b2215c5d29b"
+      },
+      "sources": {
+        "src/model/affine_pack.h": "c008bcbacf24ab0c137312027960101386e5a60e8285ae0a19ed7608966f20c6",
+        "src/model/qwen35_spec.cpp": "b1b7df3ebc16e3b25ead07429303706505aef36d707d235cab8d9fc644258331"
+      }
+    }
+  },
+  "gpu_lock_acquired_at": "2026-11-07T05:50:05.271341+00:00"
+}

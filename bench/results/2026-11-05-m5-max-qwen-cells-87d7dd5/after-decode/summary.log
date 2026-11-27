@@ -1,0 +1,7 @@
+round 1 dec: prompt 4133 (cached 0) in 3645 ms Neural Engine busy 92% of 3645 ms keep_ms=0
+round 1 keep: prompt 4131 (cached 0) in 3882 ms Neural Engine busy 103% of 3882 ms keep_ms=0
+round 1 alone: prompt 4134 (cached 0) in 3131 ms Neural Engine busy 91% of 3131 ms keep_ms=0
+round 2 alone: prompt 4133 (cached 0) in 3137 ms Neural Engine busy 91% of 3137 ms keep_ms=0
+round 2 keep: prompt 4135 (cached 0) in 3761 ms Neural Engine busy 95% of 3761 ms keep_ms=0
+round 2 dec: prompt 4132 (cached 0) in 3674 ms Neural Engine busy 96% of 3674 ms keep_ms=0
+done

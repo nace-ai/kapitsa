@@ -1,0 +1,8 @@
+prefill: 8 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (9cca6b0d), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.31 (9cca6b0d), prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","KAPITSA_PROFILE":"fast"}
+  bitwise identical rows 0 of 8; max |logit diff| 0.8047
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 4.785e-04 median 8.722e-05 p99 1.989e-03 max 2.064e-03; top-2 margin change up to 0.3214
+  next-token NLL change +7.510e-05 nats per record (candidate minus reference)
+  PASS (flags)

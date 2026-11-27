@@ -1,0 +1,696 @@
+{
+  "evidence_kind": "redacted derived evidence, not an original execution log",
+  "source_records": [
+    {
+      "record": "full-output-audit.private.json",
+      "sha256": "fa290985811bc5edfdd4087ea0d1c4f94233b703c51ad52d9f189b97a7988f71"
+    },
+    {
+      "record": "qwen-logit-report.json",
+      "sha256": "d2e351afe3ae5755f645f2655c4831e0cc714a91ebb0d95bb71f541b68918d77"
+    },
+    {
+      "record": "bolt-logit-report.json",
+      "sha256": "642cb95aa348511fdbe42ec2368ad96579ec7e6d94b42aab249c14e793aecfce"
+    }
+  ],
+  "data": {
+    "protocol": "Full literal byte comparison of logits, records and sequences plus independent finite check of every reference float32; candidate full bytes equal reference",
+    "models": {
+      "qwen": {
+        "total_rows_each": 584,
+        "paths": {
+          "prefill": {
+            "records": 8,
+            "vocab": 248320,
+            "files": {
+              "logits.f32": {
+                "bytes": 7946240,
+                "sha256_both": "2bbe5d44954dd2f5d2d161454ec88a5f55f7d4fb7092f2d8006eb678d42af046",
+                "literal_equal": true
+              },
+              "records.txt": {
+                "bytes": 54,
+                "sha256_both": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+                "literal_equal": true
+              },
+              "sequences.txt": {
+                "bytes": 68379,
+                "sha256_both": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+                "literal_equal": true
+              }
+            },
+            "all_finite_both_arms": true
+          },
+          "step": {
+            "records": 192,
+            "vocab": 248320,
+            "files": {
+              "logits.f32": {
+                "bytes": 190709760,
+                "sha256_both": "5cad0d03a2e0aa73514418530f213e4f822c764f6c51f4107d09230ebe84d531",
+                "literal_equal": true
+              },
+              "records.txt": {
+                "bytes": 1296,
+                "sha256_both": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+                "literal_equal": true
+              },
+              "sequences.txt": {
+                "bytes": 68379,
+                "sha256_both": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+                "literal_equal": true
+              }
+            },
+            "all_finite_both_arms": true
+          },
+          "verify": {
+            "records": 192,
+            "vocab": 248320,
+            "files": {
+              "logits.f32": {
+                "bytes": 190709760,
+                "sha256_both": "9a7117e97e938da56117ec74fdda4fd56d2d358b0513efb1d7c8f0ce1e208666",
+                "literal_equal": true
+              },
+              "records.txt": {
+                "bytes": 1296,
+                "sha256_both": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+                "literal_equal": true
+              },
+              "sequences.txt": {
+                "bytes": 68379,
+                "sha256_both": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+                "literal_equal": true
+              }
+            },
+            "all_finite_both_arms": true
+          },
+          "batch": {
+            "records": 192,
+            "vocab": 248320,
+            "files": {
+              "logits.f32": {
+                "bytes": 190709760,
+                "sha256_both": "8e238e970d607cc58c709988d348c623891867aaad7b5c40338d247cd357db4d",
+                "literal_equal": true
+              },
+              "records.txt": {
+                "bytes": 1296,
+                "sha256_both": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+                "literal_equal": true
+              },
+              "sequences.txt": {
+                "bytes": 68379,
+                "sha256_both": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+                "literal_equal": true
+              }
+            },
+            "all_finite_both_arms": true
+          }
+        }
+      },
+      "bolt": {
+        "total_rows_each": 584,
+        "paths": {
+          "prefill": {
+            "records": 8,
+            "vocab": 131072,
+            "files": {
+              "logits.f32": {
+                "bytes": 4194304,
+                "sha256_both": "0694c7c3af41ed1fd6c8d83fdf8503c6111177928e8f45b98b15cbf0ba621c53",
+                "literal_equal": true
+              },
+              "records.txt": {
+                "bytes": 54,
+                "sha256_both": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+                "literal_equal": true
+              },
+              "sequences.txt": {
+                "bytes": 80333,
+                "sha256_both": "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+                "literal_equal": true
+              }
+            },
+            "all_finite_both_arms": true
+          },
+          "step": {
+            "records": 192,
+            "vocab": 131072,
+            "files": {
+              "logits.f32": {
+                "bytes": 100663296,
+                "sha256_both": "16019fe454bfaa0b771bb680063822efed8230f36b19a7ba633d2a5ca873d71f",
+                "literal_equal": true
+              },
+              "records.txt": {
+                "bytes": 1296,
+                "sha256_both": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+                "literal_equal": true
+              },
+              "sequences.txt": {
+                "bytes": 80333,
+                "sha256_both": "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+                "literal_equal": true
+              }
+            },
+            "all_finite_both_arms": true
+          },
+          "verify": {
+            "records": 192,
+            "vocab": 131072,
+            "files": {
+              "logits.f32": {
+                "bytes": 100663296,
+                "sha256_both": "53ba321719ee5f4bc8105e062c8f2554ae67f144208151bec11af7eb4e82ea0e",
+                "literal_equal": true
+              },
+              "records.txt": {
+                "bytes": 1296,
+                "sha256_both": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+                "literal_equal": true
+              },
+              "sequences.txt": {
+                "bytes": 80333,
+                "sha256_both": "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+                "literal_equal": true
+              }
+            },
+            "all_finite_both_arms": true
+          },
+          "batch": {
+            "records": 192,
+            "vocab": 131072,
+            "files": {
+              "logits.f32": {
+                "bytes": 100663296,
+                "sha256_both": "4d6abbe7ba5bc0299299b54596bab462d4f47b7ca9de9bff48612aa45a31acb1",
+                "literal_equal": true
+              },
+              "records.txt": {
+                "bytes": 1296,
+                "sha256_both": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+                "literal_equal": true
+              },
+              "sequences.txt": {
+                "bytes": 80333,
+                "sha256_both": "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+                "literal_equal": true
+              }
+            },
+            "all_finite_both_arms": true
+          }
+        }
+      }
+    },
+    "comparator": {
+      "qwen": {
+        "paths": {
+          "prefill": {
+            "records": 8,
+            "bitwise": 8,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "failures": [],
+            "gate": {
+              "source": "tools/logit_floors/qwen3.5-4b-4bit.json"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (0f1db298)",
+              "model": "qwen3.5-4b-4bit",
+              "path": "prefill",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 576,
+                "reruns": 0
+              },
+              "records": 8,
+              "vocab": 248320,
+              "date": "2026-11-10T19:39:46Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (24f9182b)",
+              "model": "qwen3.5-4b-4bit",
+              "path": "prefill",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 576,
+                "reruns": 0
+              },
+              "records": 8,
+              "vocab": 248320,
+              "date": "2026-11-10T19:39:57Z",
+              "env": {}
+            }
+          },
+          "batch": {
+            "records": 192,
+            "bitwise": 192,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "near_tie": 0.0,
+            "near_tie_flips": 0,
+            "failures": [],
+            "gate": {
+              "min_top1": 0.989583,
+              "max_mean_kl": 1.02e-06,
+              "max_p99_kl": 1.06e-05,
+              "near_tie": 0.0,
+              "max_far_flips": 0,
+              "source": "tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (0f1db298)",
+              "model": "qwen3.5-4b-4bit",
+              "path": "batch",
+              "batch": {
+                "members": 4,
+                "rows": 2
+              },
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 576,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "date": "2026-11-10T19:39:46Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (24f9182b)",
+              "model": "qwen3.5-4b-4bit",
+              "path": "batch",
+              "batch": {
+                "members": 4,
+                "rows": 2
+              },
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 576,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "date": "2026-11-10T19:39:57Z",
+              "env": {}
+            }
+          },
+          "step": {
+            "records": 192,
+            "bitwise": 192,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "near_tie": 0.0,
+            "near_tie_flips": 0,
+            "failures": [],
+            "gate": {
+              "min_top1": 0.989583,
+              "max_mean_kl": 1.02e-06,
+              "max_p99_kl": 1.06e-05,
+              "near_tie": 0.0,
+              "max_far_flips": 0,
+              "source": "tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (0f1db298)",
+              "model": "qwen3.5-4b-4bit",
+              "path": "step",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 576,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "date": "2026-11-10T19:39:46Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (24f9182b)",
+              "model": "qwen3.5-4b-4bit",
+              "path": "step",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 576,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "date": "2026-11-10T19:39:57Z",
+              "env": {}
+            }
+          },
+          "verify": {
+            "records": 192,
+            "bitwise": 192,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "near_tie": 0.0,
+            "near_tie_flips": 0,
+            "failures": [],
+            "gate": {
+              "min_top1": 0.989583,
+              "max_mean_kl": 1.02e-06,
+              "max_p99_kl": 1.06e-05,
+              "near_tie": 0.0,
+              "max_far_flips": 0,
+              "source": "tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (0f1db298)",
+              "model": "qwen3.5-4b-4bit",
+              "path": "verify",
+              "verify": "KFlash tree (a chain of 8 live rows)",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 576,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "date": "2026-11-10T19:39:46Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (24f9182b)",
+              "model": "qwen3.5-4b-4bit",
+              "path": "verify",
+              "verify": "KFlash tree (a chain of 8 live rows)",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 576,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "date": "2026-11-10T19:39:57Z",
+              "env": {}
+            }
+          }
+        }
+      },
+      "bolt": {
+        "paths": {
+          "prefill": {
+            "records": 8,
+            "bitwise": 8,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "failures": [],
+            "gate": {
+              "source": "tools/logit_floors/nemotron-3.5-bolt-24gb.m5.json"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (0f1db298)",
+              "model": "nemotron-3.5-bolt-24gb",
+              "path": "prefill",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1200,
+                "reruns": 0
+              },
+              "records": 8,
+              "vocab": 131072,
+              "date": "2026-11-10T19:47:42Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (24f9182b)",
+              "model": "nemotron-3.5-bolt-24gb",
+              "path": "prefill",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1200,
+                "reruns": 0
+              },
+              "records": 8,
+              "vocab": 131072,
+              "date": "2026-11-10T19:48:15Z",
+              "env": {}
+            }
+          },
+          "batch": {
+            "records": 192,
+            "bitwise": 192,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "near_tie": 0.0119,
+            "near_tie_flips": 0,
+            "failures": [],
+            "gate": {
+              "min_top1": 0.989583,
+              "max_mean_kl": 8.03e-05,
+              "max_p99_kl": 0.00131,
+              "near_tie": 0.0119,
+              "max_far_flips": 0,
+              "source": "tools/logit_floors/nemotron-3.5-bolt-24gb.m5.json: the decode passes' gate (the prefill rows are bitwise the same)"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (0f1db298)",
+              "model": "nemotron-3.5-bolt-24gb",
+              "path": "batch",
+              "batch": {
+                "members": 4,
+                "rows": 1
+              },
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1200,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 131072,
+              "date": "2026-11-10T19:47:42Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (24f9182b)",
+              "model": "nemotron-3.5-bolt-24gb",
+              "path": "batch",
+              "batch": {
+                "members": 4,
+                "rows": 1
+              },
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1200,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 131072,
+              "date": "2026-11-10T19:48:15Z",
+              "env": {}
+            }
+          },
+          "step": {
+            "records": 192,
+            "bitwise": 192,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "near_tie": 0.0119,
+            "near_tie_flips": 0,
+            "failures": [],
+            "gate": {
+              "min_top1": 0.989583,
+              "max_mean_kl": 8.03e-05,
+              "max_p99_kl": 0.00131,
+              "near_tie": 0.0119,
+              "max_far_flips": 0,
+              "source": "tools/logit_floors/nemotron-3.5-bolt-24gb.m5.json: the decode passes' gate (the prefill rows are bitwise the same)"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (0f1db298)",
+              "model": "nemotron-3.5-bolt-24gb",
+              "path": "step",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1200,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 131072,
+              "date": "2026-11-10T19:47:42Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (24f9182b)",
+              "model": "nemotron-3.5-bolt-24gb",
+              "path": "step",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1200,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 131072,
+              "date": "2026-11-10T19:48:15Z",
+              "env": {}
+            }
+          },
+          "verify": {
+            "records": 192,
+            "bitwise": 192,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "near_tie": 0.0119,
+            "near_tie_flips": 0,
+            "failures": [],
+            "gate": {
+              "min_top1": 0.989583,
+              "max_mean_kl": 8.03e-05,
+              "max_p99_kl": 0.00131,
+              "near_tie": 0.0119,
+              "max_far_flips": 0,
+              "source": "tools/logit_floors/nemotron-3.5-bolt-24gb.m5.json: the decode passes' gate (the prefill rows are bitwise the same)"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (0f1db298)",
+              "model": "nemotron-3.5-bolt-24gb",
+              "path": "verify",
+              "verify": "8 rows",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1200,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 131072,
+              "date": "2026-11-10T19:47:42Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.33 (24f9182b)",
+              "model": "nemotron-3.5-bolt-24gb",
+              "path": "verify",
+              "verify": "8 rows",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 10,
+                "evals": 1200,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 131072,
+              "date": "2026-11-10T19:48:15Z",
+              "env": {}
+            }
+          }
+        }
+      }
+    }
+  }
+}

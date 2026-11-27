@@ -1,0 +1,9 @@
+06:30:43 1 nhq8 arm=P rc=0 load 1.23->1.68 ok |  server kapitsa bench did not start (KAPITSA_BENCH_SERVER), so its settings are unknown Saved /Users/alisheramantay/Documents/nace/k363/nhq8-try5/1-nhq8-P.json 
+06:36:56 2 nhq8 arm=Q rc=0 load 1.68->1.24 ok |  server kapitsa bench did not start (KAPITSA_BENCH_SERVER), so its settings are unknown Saved /Users/alisheramantay/Documents/nace/k363/nhq8-try5/2-nhq8-Q.json 
+06:42:57 3 nhq8 arm=Q rc=0 load 1.24->0.76 ok |  server kapitsa bench did not start (KAPITSA_BENCH_SERVER), so its settings are unknown Saved /Users/alisheramantay/Documents/nace/k363/nhq8-try5/3-nhq8-Q.json 
+06:48:59 4 nhq8 arm=P rc=0 load 0.76->1.29 ok |  server kapitsa bench did not start (KAPITSA_BENCH_SERVER), so its settings are unknown Saved /Users/alisheramantay/Documents/nace/k363/nhq8-try5/4-nhq8-P.json 
+06:54:56 5 nhq8 arm=Q rc=0 load 1.29->0.97 ok |  server kapitsa bench did not start (KAPITSA_BENCH_SERVER), so its settings are unknown Saved /Users/alisheramantay/Documents/nace/k363/nhq8-try5/5-nhq8-Q.json 
+07:01:12 6 nhq8 arm=P rc=0 load 0.97->0.81 ok |  server kapitsa bench did not start (KAPITSA_BENCH_SERVER), so its settings are unknown Saved /Users/alisheramantay/Documents/nace/k363/nhq8-try5/6-nhq8-P.json 
+07:07:31 7 nhq8 arm=P rc=0 load 0.81->1.05 ok |  server kapitsa bench did not start (KAPITSA_BENCH_SERVER), so its settings are unknown Saved /Users/alisheramantay/Documents/nace/k363/nhq8-try5/7-nhq8-P.json 
+07:13:32 8 nhq8 arm=Q rc=0 load 1.05->1.04 ok |  server kapitsa bench did not start (KAPITSA_BENCH_SERVER), so its settings are unknown Saved /Users/alisheramantay/Documents/nace/k363/nhq8-try5/8-nhq8-Q.json 
+07:13:32 NHQ8DONE

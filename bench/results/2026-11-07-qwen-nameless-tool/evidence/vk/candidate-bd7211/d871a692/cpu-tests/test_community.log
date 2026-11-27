@@ -1,0 +1,83 @@
+PASS the catalog's models, in order
+PASS the 35B's precisions
+PASS Bolt's precision and the 4B's title
+PASS the Mac table
+PASS a variant whose .quant string spans several lines is still read
+PASS a known version from CMakeLists.txt
+PASS a full result passes
+PASS its contention flag is a warning, not an error (full)
+PASS a quick result passes
+PASS its contention flag is a warning, not an error (quick)
+PASS refused: a version never released
+PASS refused: a model outside the catalog
+PASS refused: a precision the model has not
+PASS refused: a precision that is not its variant's
+PASS refused: a wrong title
+PASS refused: a --ctx report
+PASS refused: a --quick --ctx report
+PASS refused: a --prefill-chunk report
+PASS refused: a --quick --prefill-chunk report
+PASS DSpark decoding (Lightning) passes
+PASS refused: DSpark decoding without its drafter
+PASS KFlash decoding with its drafter passes
+PASS prompt-lookup decoding, no drafter passes
+PASS refused: KFlash decoding without its drafter
+PASS refused: a decoding name outside the schema's
+PASS the table names a result 0.2.0-0.2.14 recorded as unknown by its detail: KFlash
+PASS the table names a result 0.2.0-0.2.14 recorded as unknown by its detail: KFlash
+PASS the table names a result 0.2.0-0.2.14 recorded as unknown by its detail: prompt-lookup
+PASS the table names a result 0.2.0-0.2.14 recorded as unknown by its detail: unknown
+PASS the table keeps a recorded decoding as it is
+PASS a title from an earlier release passes (Dory's, until 0.1.35)
+PASS the table names a model as the catalog does now
+PASS Flint's prompts pass against its own reference (3,874 and 15,066 tokens)
+PASS refused: Flint with the Qwen templates' prompt sizes
+PASS refused: Flint writing at 0.6, not its 1.0
+PASS a result from before the temperature was recorded passes
+PASS refused: the 35B writing at 1.0, not its 0.6
+PASS refused: a Mac name that is not its identifier's
+PASS refused: a name for an identifier the table does not have
+PASS refused: invalid measurements
+PASS refused: a median that is not its runs'
+PASS refused: too few runs for the mode
+PASS refused: a prompt 4% off the reference
+PASS refused: a rate that is not tokens / time
+PASS refused: follow-ups and a median that disagree
+PASS refused: a protocol that is not its mode's
+PASS refused: prompts from another corpus
+PASS refused: more memory than the Mac has
+PASS refused: a run in the future
+PASS refused: an impossible rate
+PASS refused: a copy of a result already in the table
+PASS refused: an extra field (a serial number)
+PASS refused: a chip that is not Apple's
+PASS refused: a phase name that is not a phase
+PASS an unknown Mac (no name) passes, with a warning
+PASS a failed tool check passes, with a warning
+PASS labels: a quick run with contention
+PASS labels: flagged, and invalid when a check fails
+PASS labels: a High Power Mode run is not flagged
+PASS labels: contention still labels an info-noted High Power Mode run
+PASS the table is written; a file that is not a result is skipped
+PASS grouped by Mac, the newest first, an M5 Mac named with its year
+PASS the table names MacBook Pro (14-inch, M5) MacBook Pro (14-inch, 2025)
+PASS the table names Mac mini (M6) Mac mini (2026)
+PASS the table names MacBook Air (15-inch, M4, 2025) MacBook Air (15-inch, M4, 2025)
+PASS the table names MacBook Pro (16-inch, M5 Pro or M5 Max) MacBook Pro (16-inch, 2026)
+PASS then by model and precision
+PASS a row per run
+PASS every number with its unit
+PASS a disturbed measurement is marked, and its flag listed
+PASS a quick run says so
+PASS Flint's writing is headed T = 1.0 (its model card's), every other model's T = 0.6
+PASS --check: up to date
+PASS --check: a result removed, the table is out of date
+PASS no results: says how to add the first
+PASS --github: one bad file fails the check
+PASS --github: the report names the passing file and why the other fails
+PASS --github: other files the pull request changes are mentioned
+PASS --github: the result files read as data at the head commit
+PASS --github: labels benchmark, invalid, quick, contention
+PASS --github: a stale label it manages is removed
+
+ok: 0 failed

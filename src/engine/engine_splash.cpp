@@ -6,6 +6,8 @@
 #include "engine/engine.h"
 #include "engine/grammar.h"
 #include "engine/output_parser.h"
+#include "engine/stop_filter.h"
+#include "engine/think_control.h"
 #include "model/expert_store.h"
 #include "splash/plan.h"
 #include "splash/runtime.h"
@@ -38,9 +40,10 @@ namespace {
 
 // What a request is told when the engine child has exited: one sentence on every route, without the runtime's own
 // "the splash engine is not running" prefix a second time.
-std::string engine_down_message(std::string why) {
+std::string engine_down_message(std::string why, bool restarting = false) {
   for (const std::string lead : {"the engine is not running", ": "})
     if (why.rfind(lead, 0) == 0) why.erase(0, lead.size());
+  if (restarting) return "the engine timed out waiting for cancellation; restarting";
   return "the engine has exited" + (why.empty() ? std::string() : " (" + why + ")") +
          "; restart kapitsa serve";
 }
@@ -126,6 +129,7 @@ void Engine::init_splash() {
   const std::string src = chat_template_source(tdir);
   if (src.empty()) throw std::runtime_error("no chat template in " + tdir);
   tmpl_ = std::make_unique<minja::chat_template>(src, "", "<|im_end|>");
+  reasoning_effort_template_ = src.find("reasoning_effort") != std::string::npos;
   think_open_ = tok_.find("<think>");
   think_close_ = tok_.find("</think>");
   tc_open_ = tok_.find("<tool_call>");
@@ -209,9 +213,17 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
 
   ChatResult res;
   std::string text, base;
+  // a thinking budget of 0 is thinking turned off, as in Kapitsa's own engine (src/engine/think_control.h)
+  ChatRequest r_off;
+  const bool cap0 = think_cap_of(r.think_cap, r.thinking_budget) == 0;
+  if (cap0) {
+    r_off = r;
+    r_off.template_kwargs["enable_thinking"] = false;
+  }
+  const ChatRequest& rq = cap0 ? r_off : r;
   try {
-    text = render(r, true);
-    base = render(r, false);
+    text = render(rq, true);
+    base = render(rq, false);
   } catch (const std::exception& ex) {
     res.finish_reason = "error";
     res.error = std::string("chat template: ") + ex.what();
@@ -232,6 +244,7 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   // reasoning is on when the generation prompt opens the think block (as Engine::chat decides it)
   static const std::string kOpen = "<think>\n";
   const bool think = text.size() >= kOpen.size() && text.compare(text.size() - kOpen.size(), kOpen.size(), kOpen) == 0;
+  res.thinking_level = request_thinking_level(r, think);
 
   const int want = std::max(1, r.max_tokens);
   const int room = ctx - n;  // positions left: Splash would clamp to it, and a length ending there is the context's
@@ -272,11 +285,19 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
   // Splash's rule (server/frontend.py:1153-1162): absent or -1 is random, any other integer is its 64 bits, 0 included
   q.seed = r.splash_seed ? *r.splash_seed : (uint64_t(std::random_device{}()) << 32 | std::random_device{}());
   if (boundary > 0 && boundary < n) q.generation_prompt_tokens = uint32_t(n - boundary);
-  if (think && r.thinking_budget > 0 && r.thinking_budget < max_new && think_close_ >= 0) {
+  // the thinking budget, as Kapitsa's own engine reads it (src/engine/think_control.h): thinking_control's hard cap, else
+  // a positive budget_tokens; its closing text goes before </think> in what Splash forces
+  const int cap = think_cap_of(r.think_cap, r.thinking_budget);
+  if (think && cap >= 0 && cap < max_new && think_close_ >= 0) {
+    // the cap counts the forced close too (think_close_for): Splash forces `end` after `tokens` reasoning tokens
+    ThinkClose c = think_close_for(cap, r.think_close_text.empty() ? std::vector<int>() : tok_.encode(r.think_close_text),
+                                   think_close_);
     splash::ThinkingBudget tb;
-    tb.tokens = uint32_t(r.thinking_budget);
-    tb.end = {uint32_t(think_close_)};
-    tb.also_ends = uint32_t(!r.tools.empty() && tc_open_ >= 0 ? tc_open_ : think_close_);
+    tb.tokens = uint32_t(c.at);
+    for (int t : c.tokens) tb.end.push_back(uint32_t(t));
+    const bool on_call =
+        r.think_end_on_tool_call >= 0 ? r.think_end_on_tool_call > 0 : !(r.tools.empty() && r.deferred_tools.empty());
+    tb.also_ends = uint32_t(on_call && tc_open_ >= 0 ? tc_open_ : think_close_);
     q.thinking = tb;
   }
 
@@ -292,8 +313,9 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     return res;
   } catch (const splash::EngineUnhealthy& ex) {
     res.finish_reason = "error";
-    res.engine_down = true;  // a 503 on every route; nothing relaunches the child, so no Retry-After
-    res.error = engine_down_message(ex.what());
+    res.engine_down = true;  // a 503 before the stream starts while the engine is unavailable
+    res.engine_restarting = ex.restarting;
+    res.error = engine_down_message(ex.what(), ex.restarting);
     return res;
   } catch (const splash::ProtocolError& ex) {
     return refuse(std::string("the engine refused the request: ") + ex.what());
@@ -306,9 +328,11 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     return res;
   }
 
-  OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools, true, false,
-                      text_tags_, CallFormat::QwenXml);
-  std::string content_so_far, finish;
+  const ojson call_tools = r.call_tools();  // (the deferred tools too)
+  OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !call_tools.empty(), call_tools,
+                      true, false, text_tags_, CallFormat::QwenXml);
+  StopFilter stop_filter(r.stop);
+  std::string finish;
   int gen = 0;
   bool prompted = false, cancel_sent = false;
   bool g_ok = true;  // every committed token was the grammar's
@@ -355,18 +379,10 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     }
     if (parser.in_think()) ++res.reasoning_tokens;
     ChatDelta d = parser.push(int(t));
-    if (!d.content.empty()) {
-      content_so_far += d.content;
-      for (auto& st : r.stop) {
-        const size_t at = st.empty() ? std::string::npos : content_so_far.find(st);
-        if (at != std::string::npos) {
-          const size_t over = content_so_far.size() - at;
-          d.content.resize(d.content.size() > over ? d.content.size() - over : 0);
-          finish = "stop";
-          res.stop_sequence = st;
-          break;
-        }
-      }
+    stop_filter.filter(d.content);
+    if (!stop_filter.matched().empty()) {
+      finish = "stop";
+      res.stop_sequence = stop_filter.matched();
     }
     res.reasoning += d.reasoning;
     res.content += d.content;
@@ -443,7 +459,8 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
       res.error = err.code.empty() ? err.message : err.code + ": " + err.message;
       if (err.failure == splash::FailureClass::kEngineUnhealthy) {  // the child died under the request (Runtime::fail_all)
         res.engine_down = true;
-        res.error = engine_down_message(res.error);
+        res.engine_restarting = err.retryable;
+        res.error = engine_down_message(res.error, err.retryable);
       }
     }
   } else if (finish.empty()) {
@@ -455,6 +472,11 @@ ChatResult Engine::chat_splash(const ChatRequest& r, const std::function<bool(co
     } else finish = "cancelled";
   }
   ChatDelta tail = parser.finish(finish == "stop");
+  stop_filter.filter(tail.content, true);
+  if (!stop_filter.matched().empty() && finish != "cancelled" && finish != "error") {
+    finish = "stop";
+    res.stop_sequence = stop_filter.matched();
+  }
   res.reasoning += tail.reasoning;
   res.content += tail.content;
   for (auto& tc : tail.tool_calls) res.tool_calls.push_back(tc);

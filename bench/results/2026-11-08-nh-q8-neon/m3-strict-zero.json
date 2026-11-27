@@ -1,0 +1,194 @@
+{
+  "record_kind": "Privacy-filtered derived comparison report; metrics and gates unchanged",
+  "paths": {
+    "prefill": {
+      "records": 8,
+      "bitwise": 8,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "failures": [],
+      "gate": {
+        "source": "flags"
+      },
+      "source_builds": {
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (95a0a552fab5c359dd91b716e9936918d436d713)",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "records": 8,
+          "vocab": 131072
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (7ece78ea37e6f68a2d35ff8fa5e20753645b84c7)",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "records": 8,
+          "vocab": 131072
+        }
+      }
+    },
+    "batch": {
+      "records": 192,
+      "bitwise": 192,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "near_tie": 0.0,
+      "near_tie_flips": 0,
+      "failures": [],
+      "gate": {
+        "min_top1": 1.0,
+        "max_mean_kl": 0.0,
+        "max_median_kl": 0.0,
+        "max_p99_kl": 0.0,
+        "near_tie": 0.0,
+        "max_far_flips": 0,
+        "max_nll_change": 0.0,
+        "source": "flags"
+      },
+      "source_builds": {
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (95a0a552fab5c359dd91b716e9936918d436d713)",
+          "path": "batch",
+          "prefill_chunk": 2048,
+          "records": 192,
+          "vocab": 131072,
+          "batch": {
+            "members": 4,
+            "rows": 1
+          }
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (7ece78ea37e6f68a2d35ff8fa5e20753645b84c7)",
+          "path": "batch",
+          "prefill_chunk": 2048,
+          "records": 192,
+          "vocab": 131072,
+          "batch": {
+            "members": 4,
+            "rows": 1
+          }
+        }
+      }
+    },
+    "step": {
+      "records": 192,
+      "bitwise": 192,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "near_tie": 0.0,
+      "near_tie_flips": 0,
+      "failures": [],
+      "gate": {
+        "min_top1": 1.0,
+        "max_mean_kl": 0.0,
+        "max_median_kl": 0.0,
+        "max_p99_kl": 0.0,
+        "near_tie": 0.0,
+        "max_far_flips": 0,
+        "max_nll_change": 0.0,
+        "source": "flags"
+      },
+      "source_builds": {
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (95a0a552fab5c359dd91b716e9936918d436d713)",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "records": 192,
+          "vocab": 131072
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (7ece78ea37e6f68a2d35ff8fa5e20753645b84c7)",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "records": 192,
+          "vocab": 131072
+        }
+      }
+    },
+    "verify": {
+      "records": 192,
+      "bitwise": 192,
+      "non_finite": [],
+      "top1": 1.0,
+      "flips": 0,
+      "kl_mean": 0.0,
+      "kl_median": 0.0,
+      "kl_p99": 0.0,
+      "kl_max": 0.0,
+      "margin_change_max": 0.0,
+      "tie_margin": 0.0,
+      "nll_change_mean": 0.0,
+      "max_abs_diff": 0.0,
+      "flip_list": [],
+      "near_tie": 0.0,
+      "near_tie_flips": 0,
+      "failures": [],
+      "gate": {
+        "min_top1": 1.0,
+        "max_mean_kl": 0.0,
+        "max_median_kl": 0.0,
+        "max_p99_kl": 0.0,
+        "near_tie": 0.0,
+        "max_far_flips": 0,
+        "max_nll_change": 0.0,
+        "source": "flags"
+      },
+      "source_builds": {
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (95a0a552fab5c359dd91b716e9936918d436d713)",
+          "path": "verify",
+          "prefill_chunk": 2048,
+          "records": 192,
+          "vocab": 131072,
+          "verify": "8 rows"
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (7ece78ea37e6f68a2d35ff8fa5e20753645b84c7)",
+          "path": "verify",
+          "prefill_chunk": 2048,
+          "records": 192,
+          "vocab": 131072,
+          "verify": "8 rows"
+        }
+      }
+    }
+  }
+}

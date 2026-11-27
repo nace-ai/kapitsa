@@ -1,0 +1,78 @@
+[
+  {
+    "check": "test_update",
+    "command": [
+      "python3",
+      "tests/test_update.py",
+      "build"
+    ],
+    "returncode": 0
+  },
+  {
+    "check": "test_pr_size",
+    "command": [
+      "python3",
+      "tests/test_pr_size.py"
+    ],
+    "returncode": 0
+  },
+  {
+    "check": "test_logit_compare",
+    "command": [
+      "python3",
+      "tests/test_logit_compare.py"
+    ],
+    "returncode": 0
+  },
+  {
+    "check": "test_sampled_tokens_harness",
+    "command": [
+      "python3",
+      "tests/test_sampled_tokens_harness.py"
+    ],
+    "returncode": 0
+  },
+  {
+    "check": "test_structured_cli",
+    "command": [
+      "python3",
+      "tests/test_structured.py",
+      "--cli",
+      "build"
+    ],
+    "returncode": 0
+  },
+  {
+    "check": "lint",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/prek",
+      "run",
+      "--all-files"
+    ],
+    "returncode": 0
+  },
+  {
+    "check": "profile-gates",
+    "command": [
+      "python3",
+      "tests/test_profile_gates.py"
+    ],
+    "returncode": 0
+  },
+  {
+    "check": "comment-gates",
+    "command": [
+      "python3",
+      "tests/test_comment_gates.py"
+    ],
+    "returncode": 0
+  },
+  {
+    "check": "docs-links",
+    "command": [
+      "python3",
+      "tests/test_docs_links.py"
+    ],
+    "returncode": 0
+  }
+]

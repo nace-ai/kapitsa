@@ -1,6 +1,6 @@
 // Prefill attention microbenchmark: T queries (positions L-T..L-1) against L cached keys, D=256,
 // 16 query heads / 2 kv heads (Qwen3.5/3.6 shapes; NI_HQ=24 NI_HKV=4 for the 27B's G=6).
-// usage: bench_attn [T] [L] kernels...
+// usage: bench_attn [--bidi] [--all-rows] [T] [L] kernels...
 // Short-prefill forms (NI_SHORTPF): attn_prefill11g (rows = (query, head) pairs of one KV head),
 // attn_prefill11gs:NS (the same with the keys split over NS threadgroups + attn11_reduce;
 // NS = auto: the engine's choice; segN: splits of N fixed key tiles, as NI_SHORTPF_EXACT runs them).
@@ -9,6 +9,7 @@
 #include "metal/gpu.h"
 #include "util/log.h"
 #include <algorithm>
+#include <charconv>
 #include <cmath>
 #include <cstring>
 #include <random>
@@ -22,11 +23,51 @@ struct AttnPrefParams {
 namespace ni { extern const char* const kTensorKernelSource; }
 using ni::kTensorKernelSource;
 int main(int argc, char** argv) {
-  uint32_t T = argc > 1 ? atoi(argv[1]) : 2048, L = argc > 2 ? atoi(argv[2]) : 16384;
-  Gpu& g = Gpu::get();
-  const uint32_t Hq = getenv("NI_HQ") ? atoi(getenv("NI_HQ")) : 16, Hkv = getenv("NI_HKV") ? atoi(getenv("NI_HKV")) : 2;
+  struct Options {
+    bool bidi = false, all_rows = false;
+    std::vector<std::string> positional;
+  } options;
+  for (int i = 1; i < argc; ++i) {
+    if (strcmp(argv[i], "--bidi") == 0) options.bidi = true;
+    else if (strcmp(argv[i], "--all-rows") == 0) options.all_rows = true;
+    else if (strncmp(argv[i], "--", 2) == 0) fatal("unknown option %s", argv[i]);
+    else options.positional.emplace_back(argv[i]);
+  }
+  auto positive = [](const char* text, const char* label) {
+    uint32_t value = 0;
+    const char* end = text + strlen(text);
+    const auto result = std::from_chars(text, end, value);
+    if (result.ec != std::errc{} || result.ptr != end || value == 0 || value > uint32_t(INT32_MAX))
+      fatal("%s must be a positive integer <= %d", label, INT32_MAX);
+    return value;
+  };
+  const auto& args = options.positional;
+  const uint32_t T = args.empty() ? 2048 : positive(args[0].c_str(), "T");
+  const uint32_t L = args.size() < 2 ? 16384 : positive(args[1].c_str(), "L");
+  const uint32_t Hq = getenv("NI_HQ") ? positive(getenv("NI_HQ"), "NI_HQ") : 16;
+  const uint32_t Hkv = getenv("NI_HKV") ? positive(getenv("NI_HKV"), "NI_HKV") : 2;
+  if (L < T || Hq % Hkv != 0) fatal("require L >= T and Hq divisible by Hkv");
+  if (args.size() < 3) fatal("usage: bench_attn [--bidi] [--all-rows] T L kernels...");
   const uint32_t D = 256, G = Hq / Hkv;
-  Buffer q = g.alloc(size_t(T) * Hq * D * 4), qg = g.alloc(size_t(T) * Hq * 2 * D * 4), out = g.alloc(size_t(T) * Hq * D * 4);
+  if (uint64_t(T) * Hq > UINT32_MAX / (2 * D) || uint64_t(Hkv) * L > UINT32_MAX / D)
+    fatal("attention shape exceeds 32-bit kernel indexing");
+  const int nrep = getenv("BENCH_ATTN_REPS") ? positive(getenv("BENCH_ATTN_REPS"), "BENCH_ATTN_REPS") : 8;
+  for (size_t k = 2; k < args.size(); ++k) {
+    const std::string name = args[k].substr(0, args[k].find(':'));
+    if ((name.find("_bidi") != std::string::npos) != options.bidi)
+      fatal("kernel %s does not match %s attention", name.c_str(), options.bidi ? "bidirectional" : "causal");
+    if (name == "qattn_t_g6d2s8_bidi" && G != 6) fatal("%s requires Hq/Hkv = 6", name.c_str());
+    if (options.bidi && args[k].find(':') != std::string::npos)
+      fatal("bidirectional split-key kernels are not supported by this benchmark");
+  }
+  Gpu& g = Gpu::get();
+  const size_t nout = size_t(T) * Hq * D, out_bytes = nout * sizeof(float);
+  constexpr size_t guard_words = 256;
+  constexpr uint32_t canary = 0x5a17c0de;
+  Buffer out_backing = g.alloc(out_bytes + guard_words * sizeof(uint32_t));
+  Buffer out = out_backing.view(0, out_bytes);
+  uint32_t* guard = out_backing.view(out_bytes, guard_words * sizeof(uint32_t)).as<uint32_t>();
+  Buffer q = g.alloc(size_t(T) * Hq * D * 4), qg = g.alloc(size_t(T) * Hq * 2 * D * 4);
   Buffer kc = g.alloc(size_t(Hkv) * L * D * 2), vc = g.alloc(size_t(Hkv) * L * D * 2);
   std::mt19937 rng(1);
   std::normal_distribution<float> nd(0, 1);
@@ -38,7 +79,7 @@ int main(int argc, char** argv) {
     vc.as<__fp16>()[i] = b;
   }
   AttnPrefParams p{T, Hq, Hkv, L - T, L, 1.0f / 16.0f};
-  double pairs = double(T) * L - double(T) * T / 2;
+  const double pairs = options.bidi ? double(T) * L : double(T) * L - double(T) * (T - 1) / 2;
 
   // CPU reference for sampled queries x all heads: block edges, the last (partial) block, and
   // queries in every 8-row group of a 32-query block (11, 20, 45, T-19, T-11) for v11's layout
@@ -46,6 +87,10 @@ int main(int argc, char** argv) {
   for (int64_t t : {int64_t(0), int64_t(1), int64_t(11), int64_t(20), int64_t(31), int64_t(32), int64_t(45),
                     int64_t(T / 2), int64_t(T) - 33, int64_t(T) - 19, int64_t(T) - 11, int64_t(T) - 2, int64_t(T) - 1})
     if (t >= 0 && t < T) ts.push_back(uint32_t(t));
+  if (options.all_rows) {
+    ts.resize(T);
+    for (uint32_t t = 0; t < T; ++t) ts[t] = t;
+  }
   std::sort(ts.begin(), ts.end());
   ts.erase(std::unique(ts.begin(), ts.end()), ts.end());
   std::vector<double> ref(ts.size() * Hq * D);
@@ -56,7 +101,7 @@ int main(int argc, char** argv) {
     std::vector<double> sc(L), o(D);
     for (size_t si = 0; si < ts.size(); ++si)
       for (uint32_t h = 0; h < Hq; ++h) {
-        const uint32_t t = ts[si], kvh = h / G, n = p.pos0 + t + 1;
+        const uint32_t t = ts[si], kvh = h / G, n = options.bidi ? L : p.pos0 + t + 1;
         const float* qr = q.as<float>() + (size_t(t) * Hq + h) * D;
         double mx = -1e300;
         for (uint32_t j = 0; j < n; ++j) {
@@ -86,12 +131,12 @@ int main(int argc, char** argv) {
   // nsplit * T rows per head (the engine's part_o_ holds 1024 and runs the queries in groups beyond: here one
   // dispatch, so the buffer is as large as the largest case asks)
   uint32_t max_rows = 1024;
-  for (int k = 3; k < argc; ++k)
-    if (const char* a = strstr(argv[k], ":seg"))
+  for (size_t k = 2; k < args.size(); ++k)
+    if (const char* a = strstr(args[k].c_str(), ":seg"))
       max_rows = std::max(max_rows, T * (((L + 31) / 32 + std::max(1, atoi(a + 4)) - 1) / std::max(1, atoi(a + 4))));
   Buffer part_o = g.alloc(size_t(Hq) * max_rows * D * 4), part_ml = g.alloc(size_t(Hq) * max_rows * 2 * 4);
-  for (int k = 3; k < argc; ++k) {
-    std::string name = argv[k];
+  for (size_t k = 2; k < args.size(); ++k) {
+    std::string name = args[k];
     uint32_t ns = 0, seg = 0;
     const bool gq = name.rfind("attn_prefill11g", 0) == 0;
     if (name.find(':') != std::string::npos) {
@@ -111,6 +156,8 @@ int main(int argc, char** argv) {
     }
     if (name.rfind("qattn_t", 0) == 0) g.compile_extra("tensor", kTensorKernelSource, true);
     Pipeline pl = g.pipeline(name);
+    printf("kernel_limits %s static_threadgroup_bytes=%u device_threadgroup_limit=%zu\n",
+           name.c_str(), pl.tg_mem, g.max_threadgroup_memory());
     static Pipeline red = g.pipeline("attn11_reduce");
     uint32_t qb = (name == "attn_prefill" || name == "attn_prefill5" || name == "attn_prefill6" || name.rfind("attn_prefill7", 0) == 0) ? 4 : 8;
     uint32_t th = name == "attn_prefill" ? 128 : 256, gy = Hkv;
@@ -158,24 +205,29 @@ int main(int argc, char** argv) {
     };
     if (ns) name += ":" + std::to_string(ns) + (seg ? "x" + std::to_string(seg) : "");
     memset(out.ptr(), 0xff, out.size);  // NaN: rows a kernel fails to write show up as errors
+    std::fill(guard, guard + guard_words, canary);
+    auto check_output = [&] {
+      for (size_t i = 0; i < nout; ++i)
+        if (!std::isfinite(out.as<float>()[i])) fatal("%s nonfinite output at %zu", name.c_str(), i);
+      for (size_t i = 0; i < guard_words; ++i)
+        if (guard[i] != canary) fatal("%s overwrote trailing output canary at %zu", name.c_str(), i);
+    };
     run();
+    check_output();
     double err = 0;
-    bool nan = false;  // sticky: one NaN (unwritten or broken output) makes err NaN
     for (size_t si = 0; si < ts.size(); ++si)
       for (uint32_t h = 0; h < Hq; ++h)
         for (uint32_t d = 0; d < D; ++d) {
           const double gv = out.as<float>()[(size_t(ts[si]) * Hq + h) * D + d];
           const double e = std::fabs(gv - ref[(si * Hq + h) * D + d]);
-          if (std::isnan(e)) nan = true;
-          else err = std::max(err, e);
+          if (!std::isfinite(e)) fatal("%s nonfinite reference error", name.c_str());
+          err = std::max(err, e);
         }
-    if (nan) err = NAN;
     // vs the first kernel named: each output's distance from that kernel's, in half-precision steps at the reference's
     // magnitude (one step: the spacing of halfs around |ref|), max and the count past one step
     static std::vector<float> first_out;
     double vs_max = 0;
     size_t vs_over = 0;
-    const size_t nout = size_t(T) * Hq * D;
     if (first_out.empty()) {
       first_out.assign(out.as<float>(), out.as<float>() + nout);
     } else {
@@ -188,9 +240,11 @@ int main(int argc, char** argv) {
       }
     }
     // median of 9 trials of 8 calls each (BENCH_ATTN_REPS overrides the 8)
-    static const int nrep = getenv("BENCH_ATTN_REPS") ? atoi(getenv("BENCH_ATTN_REPS")) : 8;
     std::vector<double> tv;
-    for (int i = 0; i < 9; ++i) tv.push_back(run(nrep));
+    for (int i = 0; i < 9; ++i) {
+      tv.push_back(run(nrep));
+      check_output();
+    }
     std::sort(tv.begin(), tv.end());
     const double best = tv[tv.size() / 2];
     double cs = 0;
@@ -198,8 +252,10 @@ int main(int argc, char** argv) {
     uint64_t hash = 1469598103934665603ull;  // FNV-1a over every output bit: equal hashes = bitwise-equal outputs
     const uint8_t* ob = (const uint8_t*)out.ptr();
     for (size_t i = 0; i < size_t(T) * Hq * D * 4; ++i) hash = (hash ^ ob[i]) * 1099511628211ull;
-    printf("%-24s T=%u L=%u Hq=%u Hkv=%u  %8.3f ms  %5.2f TFLOP/s  err=%.2e  checksum=%.4f  bits=%016llx  vs first: max %.2f"
+    printf("%-24s T=%u L=%u Hq=%u Hkv=%u  %8.3f ms  %5.2f TFLOP/s  err=%.2e  abs_err=%.9g ref_max=%.9g"
+           " mode=%s ref_rows=%zu finite=ok canary=ok checksum=%.4f  bits=%016llx  vs first: max %.2f"
            " half steps, %zu of %zu past one\n", name.c_str(), T, L, Hq, Hkv, best, pairs * Hq * 1024 / (best * 1e-3) / 1e12,
-           err / ref_max, cs, (unsigned long long)hash, vs_max, vs_over, nout);
+           ref_max > 0 ? err / ref_max : err, err, ref_max, options.bidi ? "bidi" : "causal", ts.size(), cs,
+           (unsigned long long)hash, vs_max, vs_over, nout);
   }
 }

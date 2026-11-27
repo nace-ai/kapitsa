@@ -1,0 +1,15 @@
+Privacy-filtered derived report; model label substituted; not a verbatim execution log.
+
+prefill: 8 records (Flash-Next hybrid Q2_0)
+  reference: 0.2.31 (f22effb9), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_EXPERT_STORE":"4","NI_ROWS_OLD":"0"}
+  candidate: 0.2.31 (dc82cf0f), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_EXPERT_STORE":"4","NI_ROWS_OLD":"0"}
+  every row bitwise identical
+step: 192 records (Flash-Next hybrid Q2_0)
+  reference: 0.2.31 (f22effb9), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_EXPERT_STORE":"4","NI_ROWS_OLD":"0"}
+  candidate: 0.2.31 (dc82cf0f), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_EXPERT_STORE":"4","NI_ROWS_OLD":"0"}
+  every row bitwise identical
+verify: 192 records (Flash-Next hybrid Q2_0)
+  reference: 0.2.31 (f22effb9), verify "MTP cycle's chain of 3 rows", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_EXPERT_STORE":"4","NI_ROWS_OLD":"0"}
+  candidate: 0.2.31 (dc82cf0f), verify "MTP cycle's chain of 3 rows", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_EXPERT_STORE":"4","NI_ROWS_OLD":"0"}
+  every row bitwise identical
+no noise floor for this model and no bounds given: reported only (tools/logit_floor.py measures one)

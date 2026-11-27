@@ -1,0 +1,80 @@
+[
+  {
+    "label": "host-os",
+    "argv": [
+      "/usr/bin/sw_vers"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793995172.968009,
+    "elapsed_seconds": 0.015431880950927734
+  },
+  {
+    "label": "host-hardware",
+    "argv": [
+      "/usr/sbin/sysctl",
+      "machdep.cpu.brand_string",
+      "hw.memsize",
+      "hw.ncpu"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793995172.984958,
+    "elapsed_seconds": 0.004703044891357422
+  },
+  {
+    "label": "disk-before-gpu",
+    "argv": [
+      "/bin/df",
+      "-h",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793995172.990705,
+    "elapsed_seconds": 0.005978107452392578
+  },
+  {
+    "label": "logits-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/base/build/logit_dump",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/logits-base",
+      "--paths",
+      "step,verify"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107/base",
+    "exit": 0,
+    "start": 1793995173.2240372,
+    "elapsed_seconds": 33.90473985671997
+  },
+  {
+    "label": "logits-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/candidate/build/logit_dump",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/logits-candidate",
+      "--paths",
+      "step,verify",
+      "--from",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/logits-base"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107/candidate",
+    "exit": 0,
+    "start": 1793995207.349251,
+    "elapsed_seconds": 31.637911796569824
+  },
+  {
+    "label": "logit-compare",
+    "argv": [
+      "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/candidate/tools/logit_compare.py",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/logits-base",
+      "/Users/bytedance/kapitsa-ngram-remote-20261107/logits-candidate"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-remote-20261107",
+    "exit": 0,
+    "start": 1793995239.468043,
+    "elapsed_seconds": 1.9918310642242432
+  }
+]

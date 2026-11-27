@@ -1,0 +1,2 @@
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (224 ms)
+{"output":"/Users/bytedance/kapitsa-ngram-affine-20261107/trained-1927/greedy-0-base.text.json","sequences":1,"unique_rows":3328}

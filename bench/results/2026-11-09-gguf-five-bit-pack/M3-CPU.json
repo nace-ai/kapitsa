@@ -1,0 +1,850 @@
+{
+  "format": "Privacy-filtered derived CPU evidence; measurement values preserved, not raw execution logs.",
+  "source_candidate": "90e10efce8462ede4c756ca77ccdb1510f4e9faf",
+  "source_reference": "66a5f3bc473df9af8b72ded9090c3a8acc16a43e",
+  "environment": {
+    "chip": "M3 Ultra",
+    "GPU_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "flags": [
+    "-O3",
+    "-std=c++20",
+    "-arch",
+    "arm64"
+  ],
+  "NDEBUG": false,
+  "method": "Standalone exact candidate quant.cpp and gguf.cpp; A is the baseline pack_codes function copied and renamed in a separate translation unit, B is candidate pack_codes. Shared candidate dequantize/quantize are outside the changed function. No LTO. Timing calls each row separately, eight alternating A/B legs, with complete code/scale/bias/packed-byte gates after every leg. CPU timing was not isolated from all other host CPU activity.",
+  "synthetic": {
+    "input": "Uniform synthetic floats from mt19937 seed 34797, 64 rows per width",
+    "oracle_cases_before_timing": 19392,
+    "legs": [
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 1,
+        "arm": "A",
+        "ns_per_row": 12979.838,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 2,
+        "arm": "B",
+        "ns_per_row": 2075.455,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 3,
+        "arm": "A",
+        "ns_per_row": 13055.819,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 4,
+        "arm": "B",
+        "ns_per_row": 2083.85,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 5,
+        "arm": "A",
+        "ns_per_row": 12762.8,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 6,
+        "arm": "B",
+        "ns_per_row": 2078.979,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 7,
+        "arm": "A",
+        "ns_per_row": 13034.528,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 8,
+        "arm": "B",
+        "ns_per_row": 2083.616,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 1,
+        "arm": "A",
+        "ns_per_row": 125374.676,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 2,
+        "arm": "B",
+        "ns_per_row": 112345.215,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 3,
+        "arm": "A",
+        "ns_per_row": 124203.773,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 4,
+        "arm": "B",
+        "ns_per_row": 114888.184,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 5,
+        "arm": "A",
+        "ns_per_row": 123127.77,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 6,
+        "arm": "B",
+        "ns_per_row": 112282.062,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 7,
+        "arm": "A",
+        "ns_per_row": 124679.688,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 8,
+        "arm": "B",
+        "ns_per_row": 112399.902,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "pack",
+        "leg": 1,
+        "arm": "A",
+        "ns_per_row": 15994.385,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "pack",
+        "leg": 2,
+        "arm": "B",
+        "ns_per_row": 2546.908,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "pack",
+        "leg": 3,
+        "arm": "A",
+        "ns_per_row": 16117.643,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "pack",
+        "leg": 4,
+        "arm": "B",
+        "ns_per_row": 2589.554,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "pack",
+        "leg": 5,
+        "arm": "A",
+        "ns_per_row": 16173.058,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "pack",
+        "leg": 6,
+        "arm": "B",
+        "ns_per_row": 2564.855,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "pack",
+        "leg": 7,
+        "arm": "A",
+        "ns_per_row": 16093.424,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "pack",
+        "leg": 8,
+        "arm": "B",
+        "ns_per_row": 2563.011,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "quantize_and_pack",
+        "leg": 1,
+        "arm": "A",
+        "ns_per_row": 151452.797,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "quantize_and_pack",
+        "leg": 2,
+        "arm": "B",
+        "ns_per_row": 137657.227,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "quantize_and_pack",
+        "leg": 3,
+        "arm": "A",
+        "ns_per_row": 151796.547,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "quantize_and_pack",
+        "leg": 4,
+        "arm": "B",
+        "ns_per_row": 138314.453,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "quantize_and_pack",
+        "leg": 5,
+        "arm": "A",
+        "ns_per_row": 151035.645,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "quantize_and_pack",
+        "leg": 6,
+        "arm": "B",
+        "ns_per_row": 138615.723,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "quantize_and_pack",
+        "leg": 7,
+        "arm": "A",
+        "ns_per_row": 152033.527,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 3136,
+        "mode": "quantize_and_pack",
+        "leg": 8,
+        "arm": "B",
+        "ns_per_row": 138607.258,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "pack",
+        "leg": 1,
+        "arm": "A",
+        "ns_per_row": 20570.752,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "pack",
+        "leg": 2,
+        "arm": "B",
+        "ns_per_row": 3306.328,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "pack",
+        "leg": 3,
+        "arm": "A",
+        "ns_per_row": 20508.494,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "pack",
+        "leg": 4,
+        "arm": "B",
+        "ns_per_row": 3320.282,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "pack",
+        "leg": 5,
+        "arm": "A",
+        "ns_per_row": 20891.38,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "pack",
+        "leg": 6,
+        "arm": "B",
+        "ns_per_row": 3346.135,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "pack",
+        "leg": 7,
+        "arm": "A",
+        "ns_per_row": 20526.39,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "pack",
+        "leg": 8,
+        "arm": "B",
+        "ns_per_row": 3321.266,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "quantize_and_pack",
+        "leg": 1,
+        "arm": "A",
+        "ns_per_row": 198513.023,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "quantize_and_pack",
+        "leg": 2,
+        "arm": "B",
+        "ns_per_row": 179694.336,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "quantize_and_pack",
+        "leg": 3,
+        "arm": "A",
+        "ns_per_row": 198742.352,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "quantize_and_pack",
+        "leg": 4,
+        "arm": "B",
+        "ns_per_row": 180747.23,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "quantize_and_pack",
+        "leg": 5,
+        "arm": "A",
+        "ns_per_row": 197656.738,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "quantize_and_pack",
+        "leg": 6,
+        "arm": "B",
+        "ns_per_row": 180215.332,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "quantize_and_pack",
+        "leg": 7,
+        "arm": "A",
+        "ns_per_row": 200801.43,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 4096,
+        "mode": "quantize_and_pack",
+        "leg": 8,
+        "arm": "B",
+        "ns_per_row": 179765.137,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "pack",
+        "leg": 1,
+        "arm": "A",
+        "ns_per_row": 41328.946,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "pack",
+        "leg": 2,
+        "arm": "B",
+        "ns_per_row": 6723.221,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "pack",
+        "leg": 3,
+        "arm": "A",
+        "ns_per_row": 42174.26,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "pack",
+        "leg": 4,
+        "arm": "B",
+        "ns_per_row": 6693.888,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "pack",
+        "leg": 5,
+        "arm": "A",
+        "ns_per_row": 41195.129,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "pack",
+        "leg": 6,
+        "arm": "B",
+        "ns_per_row": 6629.819,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "pack",
+        "leg": 7,
+        "arm": "A",
+        "ns_per_row": 41175.471,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "pack",
+        "leg": 8,
+        "arm": "B",
+        "ns_per_row": 6616.725,
+        "rows": 64,
+        "passes": 256,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "quantize_and_pack",
+        "leg": 1,
+        "arm": "A",
+        "ns_per_row": 398475.586,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "quantize_and_pack",
+        "leg": 2,
+        "arm": "B",
+        "ns_per_row": 359697.918,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "quantize_and_pack",
+        "leg": 3,
+        "arm": "A",
+        "ns_per_row": 397690.43,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "quantize_and_pack",
+        "leg": 4,
+        "arm": "B",
+        "ns_per_row": 361475.422,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "quantize_and_pack",
+        "leg": 5,
+        "arm": "A",
+        "ns_per_row": 407629.719,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "quantize_and_pack",
+        "leg": 6,
+        "arm": "B",
+        "ns_per_row": 362727.703,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "quantize_and_pack",
+        "leg": 7,
+        "arm": "A",
+        "ns_per_row": 401627.281,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 8192,
+        "mode": "quantize_and_pack",
+        "leg": 8,
+        "arm": "B",
+        "ns_per_row": 360861.164,
+        "rows": 64,
+        "passes": 4,
+        "full_bytes_gate": true
+      }
+    ]
+  },
+  "real_model_slice": {
+    "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "file": "Qwen_Qwen3.5-4B-IQ4_NL.gguf",
+    "tensor": "blk.0.ffn_up.weight",
+    "first_rows": 1024,
+    "columns": 2560,
+    "byte_offset": 576698336,
+    "bytes": 1474560,
+    "payload_sha256": "038e557ae654a48a0205501ca656b02a5d86c9da3e32f1dd1e8dd82f8542489b",
+    "method": "Retained pinned payload dequantized with candidate GGUF decoder, then quantized to affine five-bit/group64. Both pack functions receive the same codes. Not a complete model import.",
+    "legs": [
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 1,
+        "arm": "A",
+        "ns_per_row": 12706.441,
+        "rows": 1024,
+        "passes": 16,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 2,
+        "arm": "B",
+        "ns_per_row": 2087.051,
+        "rows": 1024,
+        "passes": 16,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 3,
+        "arm": "A",
+        "ns_per_row": 12799.853,
+        "rows": 1024,
+        "passes": 16,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 4,
+        "arm": "B",
+        "ns_per_row": 2085.681,
+        "rows": 1024,
+        "passes": 16,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 5,
+        "arm": "A",
+        "ns_per_row": 12855.425,
+        "rows": 1024,
+        "passes": 16,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 6,
+        "arm": "B",
+        "ns_per_row": 2076.157,
+        "rows": 1024,
+        "passes": 16,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 7,
+        "arm": "A",
+        "ns_per_row": 12762.535,
+        "rows": 1024,
+        "passes": 16,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "pack",
+        "leg": 8,
+        "arm": "B",
+        "ns_per_row": 2092.662,
+        "rows": 1024,
+        "passes": 16,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 1,
+        "arm": "A",
+        "ns_per_row": 123606.699,
+        "rows": 1024,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 2,
+        "arm": "B",
+        "ns_per_row": 112228.821,
+        "rows": 1024,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 3,
+        "arm": "A",
+        "ns_per_row": 123265.523,
+        "rows": 1024,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 4,
+        "arm": "B",
+        "ns_per_row": 112353.465,
+        "rows": 1024,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 5,
+        "arm": "A",
+        "ns_per_row": 123401.906,
+        "rows": 1024,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 6,
+        "arm": "B",
+        "ns_per_row": 112287.048,
+        "rows": 1024,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 7,
+        "arm": "A",
+        "ns_per_row": 123372.437,
+        "rows": 1024,
+        "passes": 4,
+        "full_bytes_gate": true
+      },
+      {
+        "width": 2560,
+        "mode": "quantize_and_pack",
+        "leg": 8,
+        "arm": "B",
+        "ns_per_row": 112111.186,
+        "rows": 1024,
+        "passes": 4,
+        "full_bytes_gate": true
+      }
+    ]
+  },
+  "scope": "Warm CPU components only; no complete import/loading or inference speed claim.",
+  "driver_sha256": {
+    "screen.cpp": "fbe5d093b94ff1b3ca59961d5f2a31a6040b5cb9040d6de1ead1228ea116b6e6",
+    "real-rows.cpp": "6958d30c9b2d626f41c0e6c79a47b057155b7306d3bb0c40edf904da6b5791e8",
+    "reference-pack.cpp": "df0a44bf0a22362d29d5856d2b8f13150b14fdbe6d2d7f9d0b3c83bdf3dbeb6a"
+  },
+  "binary_sha256": {
+    "screen": "3cebed409284f07dbd22c2021f0fb9978f66d03cb15aabe11471ad9bfcdf107b",
+    "real-rows": "bce2d7521f3ce8905a3dd0a894fbba4ae7d31848901a1d9cc9475a053c0548a2"
+  }
+}

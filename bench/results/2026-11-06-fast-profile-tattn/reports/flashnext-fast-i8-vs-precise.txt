@@ -1,0 +1,13 @@
+step: 72 records (flash-next-q20)
+  reference: 0.2.30 (4d9a9ec8), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_EXPERT_STORE":"24"}
+  candidate: 0.2.30 (4d9a9ec8), prefill_chunk 4096, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_EXPERT_STORE":"24","NI_QMT_I8":"1"}
+  bitwise identical rows 0 of 72; max |logit diff| 6.943
+  top-1 agreement 0.9167 (6 flips)
+  KL mean 2.082e-02 median 3.748e-03 p99 2.621e-01 max 5.434e-01; top-2 margin change up to 2.006
+  next-token NLL change +4.296e-02 nats per record (candidate minus reference)
+    flip at sequence 2 prefix 64011: top-1 1414 -> 9559, reference margin 1.287
+    flip at sequence 0 prefix 16405: top-1 321 -> 383, reference margin 0.1243
+    flip at sequence 2 prefix 64002: top-1 220 -> 440, reference margin 0.07426
+    flip at sequence 2 prefix 64016: top-1 18 -> 16, reference margin 0.06827
+    flip at sequence 0 prefix 16393: top-1 15 -> 16, reference margin 0.04151
+    flip at sequence 0 prefix 16385: top-1 220 -> 494, reference margin 0.03259

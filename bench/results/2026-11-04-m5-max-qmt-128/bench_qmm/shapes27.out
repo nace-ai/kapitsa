@@ -1,0 +1,18 @@
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] compiled the tensor kernels in 933 ms
+qmt_m64_n64                M= 2048 N=17408 K= 5120    7526.5 us  med 48.51  best 48.56 TFLOP/s  err=1.5e-06
+qmt_m128_n64               M= 2048 N=17408 K= 5120    6303.9 us  med 57.91  best 57.99 TFLOP/s  err=1.5e-06  vs first: 0 differ
+qmtg_m64_n64               M= 2048 N=17408 K= 5120   14670.8 us  med 49.77  best 49.83 TFLOP/s  err=3.6e-04
+qmtg_m128_n64              M= 2048 N=17408 K= 5120   12279.1 us  med 59.46  best 59.68 TFLOP/s  err=3.6e-04  vs first: 0 differ
+qmt_m64_n64                M= 2048 N= 5120 K=17408    7593.8 us  med 48.07  best 48.50 TFLOP/s  err=5.7e-06
+qmt_m128_n64               M= 2048 N= 5120 K=17408    6829.9 us  med 53.45  best 54.63 TFLOP/s  err=5.7e-06  vs first: 0 differ
+qmtg_m64_n64               M= 2048 N= 5120 K=17408   15076.7 us  med 48.43  best 48.75 TFLOP/s  err=4.5e-04
+qmtg_m128_n64              M= 2048 N= 5120 K=17408   12973.5 us  med 56.28  best 56.47 TFLOP/s  err=4.5e-04  vs first: 0 differ
+qmt_m64_n64                M= 2048 N= 5120 K= 6144    2696.5 us  med 47.78  best 48.14 TFLOP/s  err=2.1e-06
+qmt_m128_n64               M= 2048 N= 5120 K= 6144    2412.6 us  med 53.41  best 53.86 TFLOP/s  err=2.1e-06  vs first: 0 differ
+qmtg_m64_n64               M= 2048 N= 5120 K= 6144    5297.2 us  med 48.65  best 49.09 TFLOP/s  err=3.7e-04
+qmtg_m128_n64              M= 2048 N= 5120 K= 6144    4521.0 us  med 57.00  best 58.12 TFLOP/s  err=3.7e-04  vs first: 0 differ
+qmt_m64_n64                M= 2048 N=16384 K= 5120    7301.6 us  med 47.06  best 48.51 TFLOP/s  err=2.2e-06
+qmt_m128_n64               M= 2048 N=16384 K= 5120    6238.1 us  med 55.08  best 58.01 TFLOP/s  err=2.2e-06  vs first: 0 differ
+qmtg_m64_n64               M= 2048 N=16384 K= 5120   14379.9 us  med 47.79  best 49.85 TFLOP/s  err=3.8e-04
+qmtg_m128_n64              M= 2048 N=16384 K= 5120   12135.2 us  med 56.63  best 58.80 TFLOP/s  err=3.8e-04  vs first: 0 differ

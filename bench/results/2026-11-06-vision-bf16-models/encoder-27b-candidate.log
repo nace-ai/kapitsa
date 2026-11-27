@@ -1,0 +1,4 @@
+[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)
+[kapitsa] compiled kernels in 16 ms
+[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)
+PASS: 6 complete encoder outputs, guarded finite nonzero data; exact reload equality

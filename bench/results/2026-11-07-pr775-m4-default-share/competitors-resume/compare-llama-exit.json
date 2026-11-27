@@ -1,0 +1,14 @@
+{
+  "command": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/tools/logit_compare.py",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/competitors-resume/logits-llama",
+    "--no-gate",
+    "--json",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/competitors-resume/compare-llama.json"
+  ],
+  "returncode": 0,
+  "start": 1793992456.2552168,
+  "end": 1793992458.406483
+}

@@ -1,0 +1,36 @@
+{
+  "name": "cancel-seed",
+  "progress": [
+    {
+      "total": 2058,
+      "cache": 0,
+      "processed": 0,
+      "time_ms": 0
+    },
+    {
+      "total": 2058,
+      "cache": 0,
+      "processed": 2058,
+      "time_ms": 689
+    }
+  ],
+  "text": "The source code defines a function named `forward` within the `GraniteSpeechConformerAttention` class.",
+  "reasoning": "",
+  "cancelled": false,
+  "usage": {
+    "prompt_tokens": 2058,
+    "completion_tokens": 23,
+    "total_tokens": 2081,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "kapitsa": {
+      "prefill_ms": 747.7,
+      "kflash": {
+        "source": "none",
+        "cycles": 22
+      }
+    }
+  },
+  "finish_reason": "stop"
+}

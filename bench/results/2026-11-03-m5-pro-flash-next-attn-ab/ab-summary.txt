@@ -1,0 +1,3 @@
+4k n=2 decode old/new med 45.5/46.9 (+3.1%, pairs +1.1..+5.1%) | prefill 665/651 (-2.0%, -8.3..+4.9%)
+32k n=3 decode old/new med 34.7/32.7 (-5.8%, pairs -12.3..-3.2%) | prefill 498/490 (-1.5%, -10.2..-1.5%)
+128k n=3 decode old/new med 32.7/35.0 (+7.0%, pairs +1.9..+7.0%) | prefill 549/520 (-5.2%, -5.2..+3.1%)

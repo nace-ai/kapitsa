@@ -1,0 +1,21 @@
+{
+  "label": "27b-bench-0-base",
+  "argv": [
+    "/Users/bytedance/kapitsa-mtp-affine-20261107/base/build/kapitsa",
+    "bench",
+    "--model",
+    "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+    "--quick",
+    "--json",
+    "--out",
+    "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-bench-0-base.json"
+  ],
+  "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/base",
+  "started_at": "2026-11-07T09:01:35.781735+00:00",
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-bench-0-base"
+  }
+}

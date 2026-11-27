@@ -1,0 +1,5 @@
+{
+  "hardware": "      Model Name: Mac Studio\n      Model Identifier: Mac15,14\n      Chip: Apple M3 Ultra\n      Total Number of Cores: 28 (20 Performance and 8 Efficiency)\n      Memory: 96 GB\n      Chipset Model: Apple M3 Ultra\n      Total Number of Cores: 60\n      Metal Support: Metal 4",
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.4.1\nBuildVersion:\t\t25E253\n",
+  "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n"
+}

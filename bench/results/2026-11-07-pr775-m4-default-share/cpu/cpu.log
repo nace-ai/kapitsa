@@ -1,0 +1,22 @@
+PASS api_test
+PASS prefix_cache_test
+PASS fn_store_test
+PASS fn_dflash_test
+PASS tokenizer_test
+PASS iq_layout_test
+PASS remote_test
+PASS cluster_test
+PASS split_place_test
+PASS gemm_slices_test
+PASS ws_upgrade_test
+PASS test_server_cli
+PASS test_sidecar
+FAIL test_bench (/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/final-cpu/evidence/ane-pr775-6327c2/9cca6b0d/cpu-tests/test_bench.log)
+PASS test_update
+FAIL test_community (/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/final-cpu/evidence/ane-pr775-6327c2/9cca6b0d/cpu-tests/test_community.log)
+PASS test_reasoning
+PASS test_pr_size
+PASS test_logit_compare
+PASS test_sampled_tokens_harness
+PASS test_structured_cli
+2 failed

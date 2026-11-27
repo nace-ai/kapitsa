@@ -1,0 +1,129 @@
+kapitsa bench: qwen3.8-27b-4bit 4-bit on MacBook Pro (16-inch, 2024): Apple M4 Pro, 20-core GPU, 48 GB, macOS 15.7.1, quick
+Left out of the server, as the harness does: NI_LOCK_HELD
+Starting the server on 127.0.0.1:54161 (log ~/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b-quiet-v2/home-27b-repeat-candidate/logs/bench-54161-ctx32768.log)
+[?2026h  ✓ Loaded qwen3.8-27b-4bit  ·  4-bit in 5.9s  ·  KFlash speculative decoding …
+[?2026lReady after 5.9s: KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)
+Warm-up done in 16s
+GPU quiet after 50s
+  decode T=0.6: 67.70 tok/s (512 tok, finish="length")
+  decode T=0.6: 45.63 tok/s (512 tok, finish="length")
+  decode T=0.6: 47.97 tok/s (512 tok, finish="length")
+decode T=0.6: median 47.97 tok/s over 3/3 valid, accepted drafts 38.32 tok/s (79.9% of tokens)
+  decode T=0: 51.65 tok/s (512 tok, finish="length")
+  decode T=0: 50.99 tok/s (512 tok, finish="length")
+  decode T=0: 54.82 tok/s (512 tok, finish="length")
+decode T=0: median 51.65 tok/s over 3/3 valid, accepted drafts 41.97 tok/s (81.0% of tokens)
+prefill 4000: 4134 tok, 332 tok/s; cached TTFT median 0.27 s (84 tok/s on the uncached suffix)
+tools: pass
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "quick",
+  "time_utc": "2026-11-07T06:20:59Z",
+  "kapitsa": {
+    "version": "0.2.31",
+    "commit": "02e53017"
+  },
+  "mac": {
+    "identifier": "Mac16,7",
+    "name": "MacBook Pro (16-inch, 2024)",
+    "year": 2024,
+    "chip": "Apple M4 Pro",
+    "cpu_cores": 14,
+    "gpu_cores": 20,
+    "memory_gb": 48,
+    "macos": "15.7.1",
+    "macos_build": "24G231"
+  },
+  "model": {
+    "name": "qwen3.8-27b-4bit",
+    "title": "qwen3.8-27b-4bit",
+    "variant": null,
+    "precision": "4-bit",
+    "catalog": false,
+    "revision": null,
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "dflash2",
+    "drafter_kind": "DFlash2",
+    "drafter_source": "dflash2",
+    "drafter_reason": "found in the model's folder"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 3,
+    "greedy_runs": 3,
+    "sizes": [
+      4000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 47.97,
+      "runs_tps": [
+        67.7,
+        45.63,
+        47.97
+      ],
+      "median_accepted_draft_tps": 38.32,
+      "median_accepted_draft_share": 0.7988
+    },
+    "decode_greedy": {
+      "median_tps": 51.65,
+      "runs_tps": [
+        51.65,
+        50.99,
+        54.82
+      ],
+      "median_accepted_draft_tps": 41.97,
+      "median_accepted_draft_share": 0.8105
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4134,
+        "ttft_s": 12.4507,
+        "tps": 332.0,
+        "followup_s": [
+          0.2675,
+          0.3334,
+          0.2567
+        ],
+        "followup_median_s": 0.2675,
+        "followup_suffix_tps": 84.0
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 19.17
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "fair",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 50.2,
+    "gpu_other_mean_pct": 77.32,
+    "gpu_other_max_pct": 98.54,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [
+      "Google Chrome",
+      "Lark",
+      "python3.13"
+    ],
+    "contention": [
+      "decode",
+      "decode_greedy",
+      "prefill_4000",
+      "tools"
+    ]
+  },
+  "flags": [
+    "CONTENTION: sustained foreign GPU load > 5% in ['decode', 'decode_greedy', 'prefill_4000', 'tools'] (mean 77.32%, top ['Google Chrome'])"
+  ],
+  "invalid": []
+}
+flag: CONTENTION: sustained foreign GPU load > 5% in ['decode', 'decode_greedy', 'prefill_4000', 'tools'] (mean 77.32%, top ['Google Chrome'])
+Saved /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b-quiet-v2/27b-repeat-candidate.json

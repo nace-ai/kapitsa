@@ -1,0 +1,139 @@
+[
+  {
+    "arm": "base",
+    "iteration": 0,
+    "exit": 0,
+    "started": "2026-11-07T08:21:37.930522+00:00",
+    "diagnostic": [
+      "WATCH_RESULT {\"fails\": [], \"seen\": [\"0.2.31\", \"0.2.32\"], \"bad\": []}"
+    ]
+  },
+  {
+    "arm": "base",
+    "iteration": 1,
+    "exit": 0,
+    "started": "2026-11-07T08:21:45.602236+00:00",
+    "diagnostic": [
+      "WATCH_RESULT {\"fails\": [], \"seen\": [\"0.2.31\", \"0.2.32\"], \"bad\": []}"
+    ]
+  },
+  {
+    "arm": "base",
+    "iteration": 2,
+    "exit": 0,
+    "started": "2026-11-07T08:21:53.430989+00:00",
+    "diagnostic": [
+      "WATCH_RESULT {\"fails\": [], \"seen\": [\"0.2.31\", \"0.2.32\"], \"bad\": []}"
+    ]
+  },
+  {
+    "arm": "base",
+    "iteration": 3,
+    "exit": 0,
+    "started": "2026-11-07T08:22:01.107573+00:00",
+    "diagnostic": [
+      "WATCH_RESULT {\"fails\": [], \"seen\": [\"0.2.31\", \"0.2.32\"], \"bad\": []}"
+    ]
+  },
+  {
+    "arm": "base",
+    "iteration": 4,
+    "exit": 0,
+    "started": "2026-11-07T08:22:08.958377+00:00",
+    "diagnostic": [
+      "WATCH_RESULT {\"fails\": [], \"seen\": [\"0.2.31\", \"0.2.32\"], \"bad\": []}"
+    ]
+  },
+  {
+    "arm": "base",
+    "iteration": 5,
+    "exit": 0,
+    "started": "2026-11-07T08:22:16.490258+00:00",
+    "diagnostic": [
+      "WATCH_RESULT {\"fails\": [], \"seen\": [\"0.2.31\", \"0.2.32\"], \"bad\": []}"
+    ]
+  },
+  {
+    "arm": "base",
+    "iteration": 6,
+    "exit": 0,
+    "started": "2026-11-07T08:22:24.179141+00:00",
+    "diagnostic": [
+      "WATCH_RESULT {\"fails\": [], \"seen\": [\"0.2.31\", \"0.2.32\"], \"bad\": []}"
+    ]
+  },
+  {
+    "arm": "base",
+    "iteration": 7,
+    "exit": 0,
+    "started": "2026-11-07T08:22:32.331671+00:00",
+    "diagnostic": [
+      "WATCH_RESULT {\"fails\": [], \"seen\": [\"0.2.31\", \"0.2.32\"], \"bad\": []}"
+    ]
+  },
+  {
+    "arm": "candidate",
+    "iteration": 0,
+    "exit": 0,
+    "started": "2026-11-07T08:22:40.095738+00:00",
+    "diagnostic": [
+      "WATCH_RESULT {\"fails\": [], \"seen\": [\"0.2.31\", \"0.2.32\"], \"bad\": []}"
+    ]
+  },
+  {
+    "arm": "candidate",
+    "iteration": 1,
+    "exit": 0,
+    "started": "2026-11-07T08:22:48.499318+00:00",
+    "diagnostic": [
+      "WATCH_RESULT {\"fails\": [], \"seen\": [\"0.2.31\", \"0.2.32\"], \"bad\": []}"
+    ]
+  },
+  {
+    "arm": "candidate",
+    "iteration": 2,
+    "exit": 0,
+    "started": "2026-11-07T08:22:55.881544+00:00",
+    "diagnostic": [
+      "WATCH_RESULT {\"fails\": [], \"seen\": [\"0.2.31\", \"0.2.32\"], \"bad\": []}"
+    ]
+  },
+  {
+    "arm": "candidate",
+    "iteration": 3,
+    "exit": 0,
+    "started": "2026-11-07T08:23:03.338294+00:00",
+    "diagnostic": [
+      "WATCH_RESULT {\"fails\": [], \"seen\": [\"0.2.31\", \"0.2.32\"], \"bad\": []}"
+    ]
+  },
+  {
+    "arm": "candidate",
+    "iteration": 4,
+    "exit": 0,
+    "started": "2026-11-07T08:23:10.964033+00:00",
+    "diagnostic": [
+      "WATCH_RESULT {\"fails\": [], \"seen\": [\"0.2.31\", \"0.2.32\"], \"bad\": []}"
+    ]
+  },
+  {
+    "arm": "candidate",
+    "iteration": 5,
+    "exit": 0,
+    "started": "2026-11-07T08:23:18.556504+00:00",
+    "diagnostic": [
+      "WATCH_RESULT {\"fails\": [], \"seen\": [\"0.2.31\", \"0.2.32\"], \"bad\": []}"
+    ]
+  },
+  {
+    "arm": "candidate",
+    "iteration": 6,
+    "exit": 0,
+    "started": "2026-11-07T08:23:25.984230+00:00",
+    "diagnostic": [
+      "VERSION_DIAGNOSTIC {'path': '/private/var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T/kapitsa-update-test-3caqofle/s1/bin/kapitsa', 'exit': -9, 'stdout': '', 'stderr': ''}",
+      "FAIL the binary ran throughout: the old version, then the new one, nothing in between  (seen {'', '0.2.32', '0.2.31'}, bad [''])",
+      "WATCH_RESULT {\"fails\": [\"the binary ran throughout: the old version, then the new one, nothing in between\"], \"seen\": [\"\", \"0.2.31\", \"0.2.32\"], \"bad\": [\"\"]}"
+    ]
+  }
+]

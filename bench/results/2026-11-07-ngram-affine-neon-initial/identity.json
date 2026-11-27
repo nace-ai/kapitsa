@@ -1,0 +1,30 @@
+{
+  "base": "01b4c6d69fbe69e862c00358f88c94a363129592",
+  "candidate_ngram_sha256": "f6012c692374a9c80d398845445e63d38db74776c8d84ba4fc273f43487b9c18",
+  "source": "The isolated functions contain the exact affine case body from base01b4c6d6 and source8c0a7ec3. Compile flags: clang++ -O3 -std=c++20, separate translation units, no LTO. This is a resident arithmetic-loop screen, not NgramTable row/gather timing or model speed.",
+  "files": {
+    "original.cpp": "5b782d6f8b32a9a4862c8f5e5ac4c171c23c4225385d5d532fb101681e7e6380",
+    "vector.cpp": "5745be6324853e886334bd0e9d6877ddc697973a8f2a7e6b80d6d79aae0bc361",
+    "screen.cpp": "317354d763c2b304d778718689a6097dcf6fdbe00a40e67c6c4b7f6faac29bfd"
+  },
+  "candidate_commit": "8c0a7ec3bf72623f6c7f92524ef229f3643a9e67",
+  "full_local_build": {
+    "source_base_version": "01b4c6d6 (working tree with the subsequently committed8c0a7ec3 patch)",
+    "library_sha256": "74d1e7d8e28e31f95869b91798ba26c4438e466649a363ad14519c4a229d9bed",
+    "test_binary_sha256": "02a2cc1c871c19b4a376530fb52652c3226b8e4dc0479c4cb5cc9ca9f669922d",
+    "regression": "Full fn_store_test PASS; new mapped-table checks compare1,449,984float values including exceptional BF16 coefficients, with guards and4roundingmodes."
+  },
+  "remote_screen_environment": {
+    "cpu": "Apple M3 Ultra",
+    "ram_gib": 96,
+    "background_activity": "The separately tracked #1019 weight and range downloads were active; this CPU-only screen makes no GPU/whole-model speed claim.",
+    "macos": "26.4.1 (25E253)",
+    "compiler": "Apple Clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "local_environment": {
+    "cpu": "Apple M4 Pro",
+    "ram_gib": 48,
+    "macos": "15.7.1 (24G231)",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)"
+  }
+}

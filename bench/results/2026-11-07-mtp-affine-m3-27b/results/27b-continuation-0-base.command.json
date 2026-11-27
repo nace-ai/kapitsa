@@ -1,0 +1,22 @@
+{
+  "label": "27b-continuation-0-base",
+  "argv": [
+    "/Users/bytedance/kapitsa-mtp-affine-20261107/base/build/ni_run",
+    "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+    "@/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-prompt.ids",
+    "256",
+    "0",
+    "--dflash",
+    "none",
+    "--spec",
+    "2"
+  ],
+  "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/base",
+  "started_at": "2026-11-07T08:55:39.292366+00:00",
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-continuation-0-base"
+  }
+}

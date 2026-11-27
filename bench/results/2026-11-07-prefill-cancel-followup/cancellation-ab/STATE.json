@@ -1,0 +1,6770 @@
+{
+  "pid": 56293,
+  "started_at": "2026-11-07T14:06:30.827346+00:00",
+  "status": "complete",
+  "config": {
+    "output": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/cancellation-ab",
+    "test": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/test-snapshot/tests/test_prefill_cancel.py",
+    "test_commit": "d1b3c89154ecceb5e6ff1c792d7d4934bfc94c31",
+    "binaries": {
+      "base": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+      "candidate": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/build/kapitsa"
+    },
+    "heads": {
+      "base": "2c41b56cc6c5f0895d4359d5ff33d1459b22bc39",
+      "candidate": "3ce432031569e364af6731ffb59aec1bc67355ef"
+    },
+    "models": [
+      {
+        "path": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "name": "4b",
+        "mtp": true
+      },
+      {
+        "path": "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+        "name": "35b",
+        "mtp": false
+      }
+    ]
+  },
+  "test_sha256": "d4c0c7f2c407208cfc670f31f4d1e6b4ff398bf14804dd0f897dccb6f7e53f58",
+  "arms": [
+    {
+      "label": "4b-0-base",
+      "exit": 1,
+      "checks": [
+        {
+          "name": "control has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "uninterrupted continuation has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "cancel has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "retry keeps the completed prefix",
+          "pass": false
+        },
+        {
+          "name": "completed retry can be reused",
+          "pass": true
+        },
+        {
+          "name": "repeat output matches",
+          "pass": true
+        },
+        {
+          "name": "cold cancellation discards unfinished checkpoints",
+          "pass": true
+        },
+        {
+          "name": "seed output matches reference",
+          "pass": true
+        },
+        {
+          "name": "retry output matches uninterrupted reference",
+          "pass": true
+        }
+      ],
+      "telemetry": [
+        {
+          "event": "server_ready",
+          "pid": 56347,
+          "rss_bytes": 3535159296,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "control-seed",
+          "seconds": 1.133940499741584,
+          "rss_before": 3535159296,
+          "rss_after": 3537715200,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 32,
+            "total_tokens": 2090,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 1007.8,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 9
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-short",
+          "seconds": 0.144080082885921,
+          "rss_before": 3537715200,
+          "rss_after": 3538173952,
+          "usage": {
+            "prompt_tokens": 2108,
+            "completion_tokens": 32,
+            "total_tokens": 2140,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 51.9,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 8
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-reply",
+          "seconds": 6.886526792310178,
+          "rss_before": 3538173952,
+          "rss_after": 3538780160,
+          "usage": {
+            "prompt_tokens": 15223,
+            "completion_tokens": 32,
+            "total_tokens": 15255,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 6717.4,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 10
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "server_ready",
+          "pid": 56404,
+          "rss_bytes": 3550314496,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "cancel-seed",
+          "seconds": 1.129859917331487,
+          "rss_before": 3550314496,
+          "rss_after": 3552870400,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 32,
+            "total_tokens": 2090,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 1004.7,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 9
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-short",
+          "seconds": 0.13800162496045232,
+          "rss_before": 3552870400,
+          "rss_after": 3553427456,
+          "usage": {
+            "prompt_tokens": 2108,
+            "completion_tokens": 32,
+            "total_tokens": 2140,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 45.8,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 8
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-first",
+          "seconds": 0.9094856246374547,
+          "rss_before": 3553427456,
+          "rss_after": 3555704832,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.8062091669999063,
+          "rss_bytes": 3555672064
+        },
+        {
+          "event": "request",
+          "name": "cancel-second",
+          "seconds": 0.8805532497353852,
+          "rss_before": 3555672064,
+          "rss_after": 3556098048,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.65903150010854,
+          "rss_bytes": 3556065280
+        },
+        {
+          "event": "request",
+          "name": "cancel-reply",
+          "seconds": 7.769308542367071,
+          "rss_before": 3556065280,
+          "rss_after": 3556163584,
+          "usage": {
+            "prompt_tokens": 15223,
+            "completion_tokens": 32,
+            "total_tokens": 15255,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 7615.1,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 10
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-repeat",
+          "seconds": 0.13720154110342264,
+          "rss_before": 3556163584,
+          "rss_after": 3556343808,
+          "usage": {
+            "prompt_tokens": 15223,
+            "completion_tokens": 32,
+            "total_tokens": 15255,
+            "prompt_tokens_details": {
+              "cached_tokens": 15216
+            },
+            "kapitsa": {
+              "prefill_ms": 11.9,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 10
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cold-cancel",
+          "seconds": 2.809213791973889,
+          "rss_before": 3556343808,
+          "rss_after": 3556818944,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 4.802791249938309,
+          "rss_bytes": 3556786176
+        },
+        {
+          "event": "request",
+          "name": "cold-retry",
+          "seconds": 8.159573792014271,
+          "rss_before": 3556786176,
+          "rss_after": 3557048320,
+          "usage": {
+            "prompt_tokens": 16026,
+            "completion_tokens": 32,
+            "total_tokens": 16058,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 8040.8,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 7
+              }
+            }
+          },
+          "cancelled": false
+        }
+      ],
+      "quiet": [
+        true,
+        19.16561508178711,
+        []
+      ],
+      "contention": {
+        "samples": 74,
+        "mean_foreign_gpu_pct": 0.18,
+        "max_foreign_gpu_pct": 8.27,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 1,
+        "longest_busy_run": 1,
+        "top": [
+          "loginwindow"
+        ],
+        "flagged": false
+      },
+      "samples": [
+        [
+          1794060410.557,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060411.106,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060411.647,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060412.195,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060412.741,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060413.329,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060413.927,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060414.48,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060415.028,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060415.577,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060416.125,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060416.671,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060417.219,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060417.767,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060418.315,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060418.865,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060419.415,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060419.965,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060420.508,
+          3.98,
+          "loginwindow",
+          3.98,
+          0.0
+        ],
+        [
+          1794060421.058,
+          8.27,
+          "loginwindow",
+          8.27,
+          0.0
+        ],
+        [
+          1794060421.606,
+          0.9,
+          "loginwindow",
+          0.9,
+          0.0
+        ],
+        [
+          1794060422.157,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060422.705,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060423.252,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060423.843,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060424.44,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060424.996,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060425.542,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060426.094,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060426.64,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060427.188,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060427.739,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060428.289,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060428.838,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060429.383,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060429.93,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060430.478,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060431.028,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060431.574,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060432.123,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060432.669,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060433.216,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060433.762,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060434.31,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060434.859,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060435.406,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060435.954,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060436.502,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060437.049,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060437.595,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060438.148,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060438.696,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060439.243,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060439.792,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060440.34,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060440.887,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060441.433,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060441.982,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060442.529,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060443.079,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060443.629,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060444.178,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060444.727,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060445.275,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060445.824,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060446.372,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060446.92,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060447.468,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060448.016,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060448.564,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060449.113,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060449.659,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060450.207,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060450.755,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "label": "4b-1-candidate",
+      "exit": 0,
+      "checks": [
+        {
+          "name": "control has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "uninterrupted continuation has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "cancel has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "retry keeps the completed prefix",
+          "pass": true
+        },
+        {
+          "name": "completed retry can be reused",
+          "pass": true
+        },
+        {
+          "name": "repeat output matches",
+          "pass": true
+        },
+        {
+          "name": "cold cancellation discards unfinished checkpoints",
+          "pass": true
+        },
+        {
+          "name": "seed output matches reference",
+          "pass": true
+        },
+        {
+          "name": "retry output matches uninterrupted reference",
+          "pass": true
+        }
+      ],
+      "telemetry": [
+        {
+          "event": "server_ready",
+          "pid": 56702,
+          "rss_bytes": 3547398144,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "control-seed",
+          "seconds": 1.1223717089742422,
+          "rss_before": 3547398144,
+          "rss_after": 3550052352,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 32,
+            "total_tokens": 2090,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 998.1,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 9
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-short",
+          "seconds": 0.1415679999627173,
+          "rss_before": 3550052352,
+          "rss_after": 3550445568,
+          "usage": {
+            "prompt_tokens": 2108,
+            "completion_tokens": 32,
+            "total_tokens": 2140,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 51.0,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 8
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-reply",
+          "seconds": 6.8883981253020465,
+          "rss_before": 3550445568,
+          "rss_after": 3551084544,
+          "usage": {
+            "prompt_tokens": 15223,
+            "completion_tokens": 32,
+            "total_tokens": 15255,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 6716.1,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 10
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "server_ready",
+          "pid": 56760,
+          "rss_bytes": 3535798272,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "cancel-seed",
+          "seconds": 1.1282145832665265,
+          "rss_before": 3535798272,
+          "rss_after": 3538370560,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 32,
+            "total_tokens": 2090,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 1003.1,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 9
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-short",
+          "seconds": 0.13847783394157887,
+          "rss_before": 3538370560,
+          "rss_after": 3538550784,
+          "usage": {
+            "prompt_tokens": 2108,
+            "completion_tokens": 32,
+            "total_tokens": 2140,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 49.3,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 8
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-first",
+          "seconds": 0.9055088330060244,
+          "rss_before": 3538550784,
+          "rss_after": 3541843968,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.8027962907217443,
+          "rss_bytes": 3541811200
+        },
+        {
+          "event": "request",
+          "name": "cancel-second",
+          "seconds": 0.90120470803231,
+          "rss_before": 3541811200,
+          "rss_after": 3542155264,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.7867742078378797,
+          "rss_bytes": 3542073344
+        },
+        {
+          "event": "request",
+          "name": "cancel-reply",
+          "seconds": 6.877310709096491,
+          "rss_before": 3542073344,
+          "rss_after": 3542597632,
+          "usage": {
+            "prompt_tokens": 15223,
+            "completion_tokens": 32,
+            "total_tokens": 15255,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 6720.1,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 10
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-repeat",
+          "seconds": 0.13670195825397968,
+          "rss_before": 3542597632,
+          "rss_after": 3542646784,
+          "usage": {
+            "prompt_tokens": 15223,
+            "completion_tokens": 32,
+            "total_tokens": 15255,
+            "prompt_tokens_details": {
+              "cached_tokens": 15216
+            },
+            "kapitsa": {
+              "prefill_ms": 11.8,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 10
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cold-cancel",
+          "seconds": 2.765895042102784,
+          "rss_before": 3542646784,
+          "rss_after": 3542990848,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 4.871526916977018,
+          "rss_bytes": 3542958080
+        },
+        {
+          "event": "request",
+          "name": "cold-retry",
+          "seconds": 8.173155082855374,
+          "rss_before": 3542958080,
+          "rss_after": 3543711744,
+          "usage": {
+            "prompt_tokens": 16026,
+            "completion_tokens": 32,
+            "total_tokens": 16058,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 8046.4,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 7
+              }
+            }
+          },
+          "cancelled": false
+        }
+      ],
+      "quiet": [
+        true,
+        19.11871910095215,
+        []
+      ],
+      "contention": {
+        "samples": 73,
+        "mean_foreign_gpu_pct": 0.26,
+        "max_foreign_gpu_pct": 11.33,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 2,
+        "longest_busy_run": 2,
+        "top": [
+          "loginwindow"
+        ],
+        "flagged": false
+      },
+      "samples": [
+        [
+          1794060470.836,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060471.383,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060471.933,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060472.479,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060473.025,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060473.611,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060474.201,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060474.752,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060475.298,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060475.845,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060476.391,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060476.936,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060477.483,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060478.03,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060478.576,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060479.124,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060479.672,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060480.221,
+          5.16,
+          "loginwindow",
+          5.16,
+          0.0
+        ],
+        [
+          1794060480.768,
+          11.33,
+          "loginwindow",
+          11.33,
+          0.0
+        ],
+        [
+          1794060481.318,
+          2.34,
+          "loginwindow",
+          2.34,
+          0.0
+        ],
+        [
+          1794060481.867,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060482.416,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060482.953,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060483.499,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060484.087,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060484.66,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060485.216,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060485.765,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060486.312,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060486.859,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060487.405,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060487.957,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060488.51,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060489.056,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060489.604,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060490.153,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060490.733,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060491.287,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060491.834,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060492.382,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060492.929,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060493.478,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060494.025,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060494.572,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060495.12,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060495.667,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060496.214,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060496.761,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060497.308,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060497.858,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060498.404,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060498.951,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060499.497,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060500.043,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060500.59,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060501.138,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060501.693,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060502.241,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060502.79,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060503.338,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060503.887,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060504.436,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060504.985,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060505.533,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060506.08,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060506.629,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060507.178,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060507.725,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060508.271,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060508.818,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060509.366,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060509.913,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060510.46,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "label": "4b-2-base",
+      "exit": 1,
+      "checks": [
+        {
+          "name": "control has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "uninterrupted continuation has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "cancel has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "retry keeps the completed prefix",
+          "pass": false
+        },
+        {
+          "name": "completed retry can be reused",
+          "pass": true
+        },
+        {
+          "name": "repeat output matches",
+          "pass": true
+        },
+        {
+          "name": "cold cancellation discards unfinished checkpoints",
+          "pass": true
+        },
+        {
+          "name": "seed output matches reference",
+          "pass": true
+        },
+        {
+          "name": "retry output matches uninterrupted reference",
+          "pass": true
+        }
+      ],
+      "telemetry": [
+        {
+          "event": "server_ready",
+          "pid": 56972,
+          "rss_bytes": 3547725824,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "control-seed",
+          "seconds": 1.132025916595012,
+          "rss_before": 3547725824,
+          "rss_after": 3550199808,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 32,
+            "total_tokens": 2090,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 1006.7,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 9
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-short",
+          "seconds": 0.1437347079627216,
+          "rss_before": 3550199808,
+          "rss_after": 3550658560,
+          "usage": {
+            "prompt_tokens": 2108,
+            "completion_tokens": 32,
+            "total_tokens": 2140,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 51.5,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 8
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-reply",
+          "seconds": 6.886594041716307,
+          "rss_before": 3550658560,
+          "rss_after": 3551379456,
+          "usage": {
+            "prompt_tokens": 15223,
+            "completion_tokens": 32,
+            "total_tokens": 15255,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 6717.2,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 10
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "server_ready",
+          "pid": 57027,
+          "rss_bytes": 3535257600,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "cancel-seed",
+          "seconds": 1.126778292004019,
+          "rss_before": 3535257600,
+          "rss_after": 3537895424,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 32,
+            "total_tokens": 2090,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 1001.8,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 9
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-short",
+          "seconds": 0.13688204204663634,
+          "rss_before": 3537895424,
+          "rss_after": 3538075648,
+          "usage": {
+            "prompt_tokens": 2108,
+            "completion_tokens": 32,
+            "total_tokens": 2140,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 46.9,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 8
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-first",
+          "seconds": 0.9170252503827214,
+          "rss_before": 3538075648,
+          "rss_after": 3540762624,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.811262832954526,
+          "rss_bytes": 3540680704
+        },
+        {
+          "event": "request",
+          "name": "cancel-second",
+          "seconds": 0.9077872498892248,
+          "rss_before": 3540680704,
+          "rss_after": 3541008384,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.6872760830447078,
+          "rss_bytes": 3540942848
+        },
+        {
+          "event": "request",
+          "name": "cancel-reply",
+          "seconds": 7.768075458239764,
+          "rss_before": 3540942848,
+          "rss_after": 3541057536,
+          "usage": {
+            "prompt_tokens": 15223,
+            "completion_tokens": 32,
+            "total_tokens": 15255,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 7614.8,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 10
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-repeat",
+          "seconds": 0.1365602919831872,
+          "rss_before": 3541057536,
+          "rss_after": 3541155840,
+          "usage": {
+            "prompt_tokens": 15223,
+            "completion_tokens": 32,
+            "total_tokens": 15255,
+            "prompt_tokens_details": {
+              "cached_tokens": 15216
+            },
+            "kapitsa": {
+              "prefill_ms": 11.8,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 10
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cold-cancel",
+          "seconds": 2.7663731249049306,
+          "rss_before": 3541155840,
+          "rss_after": 3541532672,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 4.8727534590289,
+          "rss_bytes": 3541516288
+        },
+        {
+          "event": "request",
+          "name": "cold-retry",
+          "seconds": 8.177695417311043,
+          "rss_before": 3541516288,
+          "rss_after": 3543187456,
+          "usage": {
+            "prompt_tokens": 16026,
+            "completion_tokens": 32,
+            "total_tokens": 16058,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 8053.1,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 7
+              }
+            }
+          },
+          "cancelled": false
+        }
+      ],
+      "quiet": [
+        true,
+        19.146539211273193,
+        []
+      ],
+      "contention": {
+        "samples": 74,
+        "mean_foreign_gpu_pct": 0.14,
+        "max_foreign_gpu_pct": 5.14,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 1,
+        "longest_busy_run": 1,
+        "top": [
+          "loginwindow"
+        ],
+        "flagged": false
+      },
+      "samples": [
+        [
+          1794060530.465,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060531.015,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060531.562,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060532.11,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060532.66,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060533.25,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060533.842,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060534.394,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060534.943,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060535.49,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060536.038,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060536.585,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060537.133,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060537.681,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060538.229,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060538.777,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060539.326,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060539.876,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060540.424,
+          4.41,
+          "loginwindow",
+          4.41,
+          0.0
+        ],
+        [
+          1794060540.976,
+          5.14,
+          "loginwindow",
+          5.14,
+          0.0
+        ],
+        [
+          1794060541.527,
+          0.6,
+          "loginwindow",
+          0.6,
+          0.0
+        ],
+        [
+          1794060542.079,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060542.628,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060543.177,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060543.77,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060544.37,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060544.929,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060545.478,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060546.025,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060546.584,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060547.144,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060547.684,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060548.234,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060548.783,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060549.332,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060549.895,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060550.446,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060550.995,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060551.543,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060552.09,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060552.637,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060553.183,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060553.731,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060554.278,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060554.825,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060555.373,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060555.92,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060556.468,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060557.016,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060557.565,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060558.113,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060558.662,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060559.208,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060559.757,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060560.306,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060560.854,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060561.402,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060561.95,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060562.497,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060563.057,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060563.608,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060564.155,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060564.705,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060565.255,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060565.804,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060566.355,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060566.904,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060567.453,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060568.001,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060568.55,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060569.099,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060569.648,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060570.198,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060570.748,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "label": "4b-3-candidate",
+      "exit": 0,
+      "checks": [
+        {
+          "name": "control has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "uninterrupted continuation has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "cancel has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "retry keeps the completed prefix",
+          "pass": true
+        },
+        {
+          "name": "completed retry can be reused",
+          "pass": true
+        },
+        {
+          "name": "repeat output matches",
+          "pass": true
+        },
+        {
+          "name": "cold cancellation discards unfinished checkpoints",
+          "pass": true
+        },
+        {
+          "name": "seed output matches reference",
+          "pass": true
+        },
+        {
+          "name": "retry output matches uninterrupted reference",
+          "pass": true
+        }
+      ],
+      "telemetry": [
+        {
+          "event": "server_ready",
+          "pid": 57567,
+          "rss_bytes": 3547758592,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "control-seed",
+          "seconds": 1.1180455419234931,
+          "rss_before": 3547758592,
+          "rss_after": 3550281728,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 32,
+            "total_tokens": 2090,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 995.6,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 9
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-short",
+          "seconds": 0.14152799965813756,
+          "rss_before": 3550281728,
+          "rss_after": 3550724096,
+          "usage": {
+            "prompt_tokens": 2108,
+            "completion_tokens": 32,
+            "total_tokens": 2140,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 47.9,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 8
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-reply",
+          "seconds": 6.88447849964723,
+          "rss_before": 3550724096,
+          "rss_after": 3553214464,
+          "usage": {
+            "prompt_tokens": 15223,
+            "completion_tokens": 32,
+            "total_tokens": 15255,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 6719.4,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 10
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "server_ready",
+          "pid": 57812,
+          "rss_bytes": 3548430336,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "cancel-seed",
+          "seconds": 1.1121089169755578,
+          "rss_before": 3548430336,
+          "rss_after": 3550969856,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 32,
+            "total_tokens": 2090,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 989.6,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 9
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-short",
+          "seconds": 0.1409209999255836,
+          "rss_before": 3550969856,
+          "rss_after": 3551444992,
+          "usage": {
+            "prompt_tokens": 2108,
+            "completion_tokens": 32,
+            "total_tokens": 2140,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 48.5,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 8
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-first",
+          "seconds": 0.9586804579012096,
+          "rss_before": 3551444992,
+          "rss_after": 3554033664,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.74082533409819,
+          "rss_bytes": 3554066432
+        },
+        {
+          "event": "request",
+          "name": "cancel-second",
+          "seconds": 0.8960615410469472,
+          "rss_before": 3554066432,
+          "rss_after": 3556327424,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.782866124995053,
+          "rss_bytes": 3556360192
+        },
+        {
+          "event": "request",
+          "name": "cancel-reply",
+          "seconds": 6.86791279213503,
+          "rss_before": 3556360192,
+          "rss_after": 3557212160,
+          "usage": {
+            "prompt_tokens": 15223,
+            "completion_tokens": 32,
+            "total_tokens": 15255,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 6716.1,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 10
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-repeat",
+          "seconds": 0.13691508397459984,
+          "rss_before": 3557212160,
+          "rss_after": 3559129088,
+          "usage": {
+            "prompt_tokens": 15223,
+            "completion_tokens": 32,
+            "total_tokens": 15255,
+            "prompt_tokens_details": {
+              "cached_tokens": 15216
+            },
+            "kapitsa": {
+              "prefill_ms": 11.8,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 10
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cold-cancel",
+          "seconds": 2.818742999807,
+          "rss_before": 3559129088,
+          "rss_after": 3559686144,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 4.806216875091195,
+          "rss_bytes": 3559653376
+        },
+        {
+          "event": "request",
+          "name": "cold-retry",
+          "seconds": 8.160122333094478,
+          "rss_before": 3559653376,
+          "rss_after": 3559866368,
+          "usage": {
+            "prompt_tokens": 16026,
+            "completion_tokens": 32,
+            "total_tokens": 16058,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 8043.1,
+              "kflash": {
+                "source": "DFlash2",
+                "cycles": 7
+              }
+            }
+          },
+          "cancelled": false
+        }
+      ],
+      "quiet": [
+        true,
+        18.89756989479065,
+        []
+      ],
+      "contention": {
+        "samples": 72,
+        "mean_foreign_gpu_pct": 0.23,
+        "max_foreign_gpu_pct": 9.67,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 2,
+        "longest_busy_run": 2,
+        "top": [
+          "loginwindow"
+        ],
+        "flagged": false
+      },
+      "samples": [
+        [
+          1794060590.658,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060591.21,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060591.767,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060592.317,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060592.868,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060593.443,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060594.024,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060594.576,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060595.127,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060595.676,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060596.226,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060596.776,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060597.327,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060597.879,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060598.429,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060598.974,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060599.524,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060600.074,
+          0.55,
+          "loginwindow",
+          0.55,
+          0.0
+        ],
+        [
+          1794060600.625,
+          9.67,
+          "loginwindow",
+          9.67,
+          0.0
+        ],
+        [
+          1794060601.174,
+          5.55,
+          "loginwindow",
+          5.55,
+          0.0
+        ],
+        [
+          1794060601.726,
+          0.76,
+          "loginwindow",
+          0.76,
+          0.0
+        ],
+        [
+          1794060602.277,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060602.825,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060603.377,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060603.95,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060604.524,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060605.073,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060605.623,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060606.172,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060606.72,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060607.269,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060607.819,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060608.368,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060608.92,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060609.47,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060610.018,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060610.591,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060611.145,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060611.696,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060612.254,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060612.805,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060613.356,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060613.905,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060614.454,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060615.003,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060615.556,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060616.106,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060616.655,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060617.206,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060617.758,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060618.307,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060618.858,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060619.408,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060619.959,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060620.51,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060621.061,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060621.61,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060622.158,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060622.71,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060623.26,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060623.811,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060624.365,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060624.915,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060625.492,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060626.043,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060626.591,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060627.144,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060627.692,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060628.241,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060628.79,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060629.338,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060629.889,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "label": "35b-0-base",
+      "exit": 1,
+      "checks": [
+        {
+          "name": "control has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "uninterrupted continuation has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "cancel has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "retry keeps the completed prefix",
+          "pass": false
+        },
+        {
+          "name": "completed retry can be reused",
+          "pass": true
+        },
+        {
+          "name": "repeat output matches",
+          "pass": true
+        },
+        {
+          "name": "cold cancellation discards unfinished checkpoints",
+          "pass": true
+        },
+        {
+          "name": "seed output matches reference",
+          "pass": true
+        },
+        {
+          "name": "retry output matches uninterrupted reference",
+          "pass": true
+        }
+      ],
+      "telemetry": [
+        {
+          "event": "server_ready",
+          "pid": 58403,
+          "rss_bytes": 19711557632,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "control-seed",
+          "seconds": 0.8621155410073698,
+          "rss_before": 19711557632,
+          "rss_after": 19714146304,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 23,
+            "total_tokens": 2081,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 729.6,
+              "kflash": {
+                "source": "none",
+                "cycles": 22
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-short",
+          "seconds": 0.21771579142659903,
+          "rss_before": 19714392064,
+          "rss_after": 19714768896,
+          "usage": {
+            "prompt_tokens": 2102,
+            "completion_tokens": 32,
+            "total_tokens": 2134,
+            "prompt_tokens_details": {
+              "cached_tokens": 2081
+            },
+            "kapitsa": {
+              "prefill_ms": 32.8,
+              "kflash": {
+                "source": "none",
+                "cycles": 31
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-reply",
+          "seconds": 5.858360999729484,
+          "rss_before": 19714768896,
+          "rss_after": 19718356992,
+          "usage": {
+            "prompt_tokens": 15217,
+            "completion_tokens": 22,
+            "total_tokens": 15239,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 5687.3,
+              "kflash": {
+                "source": "none",
+                "cycles": 21
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "server_ready",
+          "pid": 58468,
+          "rss_bytes": 19711246336,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "cancel-seed",
+          "seconds": 0.8799577909521759,
+          "rss_before": 19711246336,
+          "rss_after": 19713687552,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 23,
+            "total_tokens": 2081,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 744.9,
+              "kflash": {
+                "source": "none",
+                "cycles": 22
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-short",
+          "seconds": 0.2075244588777423,
+          "rss_before": 19713884160,
+          "rss_after": 19714113536,
+          "usage": {
+            "prompt_tokens": 2102,
+            "completion_tokens": 32,
+            "total_tokens": 2134,
+            "prompt_tokens_details": {
+              "cached_tokens": 2081
+            },
+            "kapitsa": {
+              "prefill_ms": 26.6,
+              "kflash": {
+                "source": "none",
+                "cycles": 31
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-first",
+          "seconds": 0.7344584590755403,
+          "rss_before": 19714113536,
+          "rss_after": 19717210112,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.305099666118622,
+          "rss_bytes": 19717177344
+        },
+        {
+          "event": "request",
+          "name": "cancel-second",
+          "seconds": 0.7212034580297768,
+          "rss_before": 19717177344,
+          "rss_after": 19717505024,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.1728594158776104,
+          "rss_bytes": 19717472256
+        },
+        {
+          "event": "request",
+          "name": "cancel-reply",
+          "seconds": 6.560489208903164,
+          "rss_before": 19717472256,
+          "rss_after": 19717767168,
+          "usage": {
+            "prompt_tokens": 15217,
+            "completion_tokens": 22,
+            "total_tokens": 15239,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 6412.2,
+              "kflash": {
+                "source": "none",
+                "cycles": 21
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-repeat",
+          "seconds": 0.15917183319106698,
+          "rss_before": 19717767168,
+          "rss_after": 19717898240,
+          "usage": {
+            "prompt_tokens": 15217,
+            "completion_tokens": 22,
+            "total_tokens": 15239,
+            "prompt_tokens_details": {
+              "cached_tokens": 15210
+            },
+            "kapitsa": {
+              "prefill_ms": 15.7,
+              "kflash": {
+                "source": "none",
+                "cycles": 21
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cold-cancel",
+          "seconds": 2.226467833854258,
+          "rss_before": 19717898240,
+          "rss_after": 19718275072,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 3.893263790756464,
+          "rss_bytes": 19718242304
+        },
+        {
+          "event": "request",
+          "name": "cold-retry",
+          "seconds": 6.79443437512964,
+          "rss_before": 19718242304,
+          "rss_after": 19718242304,
+          "usage": {
+            "prompt_tokens": 16026,
+            "completion_tokens": 4,
+            "total_tokens": 16030,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 6760.2,
+              "kflash": {
+                "source": "none",
+                "cycles": 3
+              }
+            }
+          },
+          "cancelled": false
+        }
+      ],
+      "quiet": [
+        true,
+        19.121556043624878,
+        []
+      ],
+      "contention": {
+        "samples": 72,
+        "mean_foreign_gpu_pct": 0.26,
+        "max_foreign_gpu_pct": 11.03,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 2,
+        "longest_busy_run": 2,
+        "top": [
+          "loginwindow"
+        ],
+        "flagged": false
+      },
+      "samples": [
+        [
+          1794060650.051,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060650.604,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060651.156,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060651.709,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060652.261,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060652.811,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060653.36,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060653.909,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060654.504,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060655.107,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060655.673,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060656.233,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060656.782,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060657.331,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060657.881,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060658.431,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060658.982,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060659.532,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060660.083,
+          0.84,
+          "loginwindow",
+          0.84,
+          0.0
+        ],
+        [
+          1794060660.633,
+          6.87,
+          "loginwindow",
+          6.87,
+          0.0
+        ],
+        [
+          1794060661.182,
+          11.03,
+          "loginwindow",
+          11.03,
+          0.0
+        ],
+        [
+          1794060661.735,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060662.289,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060662.833,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060663.384,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060663.939,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060664.493,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060665.045,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060665.597,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060666.146,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060666.741,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060667.351,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060667.912,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060668.462,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060669.011,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060669.561,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060670.12,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060670.683,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060671.234,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060671.784,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060672.339,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060672.888,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060673.437,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060673.985,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060674.533,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060675.082,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060675.63,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060676.179,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060676.727,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060677.275,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060677.822,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060678.369,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060678.917,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060679.465,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060680.015,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060680.565,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060681.113,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060681.662,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060682.21,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060682.758,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060683.308,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060683.857,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060684.406,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060684.956,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060685.505,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060686.061,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060686.61,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060687.16,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060687.708,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060688.257,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060688.807,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060689.358,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "label": "35b-1-candidate",
+      "exit": 0,
+      "checks": [
+        {
+          "name": "control has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "uninterrupted continuation has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "cancel has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "retry keeps the completed prefix",
+          "pass": true
+        },
+        {
+          "name": "completed retry can be reused",
+          "pass": true
+        },
+        {
+          "name": "repeat output matches",
+          "pass": true
+        },
+        {
+          "name": "cold cancellation discards unfinished checkpoints",
+          "pass": true
+        },
+        {
+          "name": "seed output matches reference",
+          "pass": true
+        },
+        {
+          "name": "retry output matches uninterrupted reference",
+          "pass": true
+        }
+      ],
+      "telemetry": [
+        {
+          "event": "server_ready",
+          "pid": 58729,
+          "rss_bytes": 19711344640,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "control-seed",
+          "seconds": 0.8646534997969866,
+          "rss_before": 19711344640,
+          "rss_after": 19713916928,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 23,
+            "total_tokens": 2081,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 732.1,
+              "kflash": {
+                "source": "none",
+                "cycles": 22
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-short",
+          "seconds": 0.21816087514162064,
+          "rss_before": 19714080768,
+          "rss_after": 19714490368,
+          "usage": {
+            "prompt_tokens": 2102,
+            "completion_tokens": 32,
+            "total_tokens": 2134,
+            "prompt_tokens_details": {
+              "cached_tokens": 2081
+            },
+            "kapitsa": {
+              "prefill_ms": 33.7,
+              "kflash": {
+                "source": "none",
+                "cycles": 31
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-reply",
+          "seconds": 5.854179500136524,
+          "rss_before": 19714490368,
+          "rss_after": 19717865472,
+          "usage": {
+            "prompt_tokens": 15217,
+            "completion_tokens": 22,
+            "total_tokens": 15239,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 5684.5,
+              "kflash": {
+                "source": "none",
+                "cycles": 21
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "server_ready",
+          "pid": 58811,
+          "rss_bytes": 19712671744,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "cancel-seed",
+          "seconds": 0.8575134999118745,
+          "rss_before": 19712671744,
+          "rss_after": 19715473408,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 23,
+            "total_tokens": 2081,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 726.6,
+              "kflash": {
+                "source": "none",
+                "cycles": 22
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-short",
+          "seconds": 0.2085404172539711,
+          "rss_before": 19715833856,
+          "rss_after": 19715981312,
+          "usage": {
+            "prompt_tokens": 2102,
+            "completion_tokens": 32,
+            "total_tokens": 2134,
+            "prompt_tokens_details": {
+              "cached_tokens": 2081
+            },
+            "kapitsa": {
+              "prefill_ms": 26.6,
+              "kflash": {
+                "source": "none",
+                "cycles": 31
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-first",
+          "seconds": 0.7845345409587026,
+          "rss_before": 19715981312,
+          "rss_after": 19719585792,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.3577462090179324,
+          "rss_bytes": 19719553024
+        },
+        {
+          "event": "request",
+          "name": "cancel-second",
+          "seconds": 0.7118705827742815,
+          "rss_before": 19719553024,
+          "rss_after": 19720077312,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.2908723750151694,
+          "rss_bytes": 19720044544
+        },
+        {
+          "event": "request",
+          "name": "cancel-reply",
+          "seconds": 5.8346809996291995,
+          "rss_before": 19720044544,
+          "rss_after": 19720503296,
+          "usage": {
+            "prompt_tokens": 15217,
+            "completion_tokens": 22,
+            "total_tokens": 15239,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 5685.8,
+              "kflash": {
+                "source": "none",
+                "cycles": 21
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-repeat",
+          "seconds": 0.1601585829630494,
+          "rss_before": 19720503296,
+          "rss_after": 19720601600,
+          "usage": {
+            "prompt_tokens": 15217,
+            "completion_tokens": 22,
+            "total_tokens": 15239,
+            "prompt_tokens_details": {
+              "cached_tokens": 15210
+            },
+            "kapitsa": {
+              "prefill_ms": 15.2,
+              "kflash": {
+                "source": "none",
+                "cycles": 21
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cold-cancel",
+          "seconds": 2.2261169590055943,
+          "rss_before": 19720601600,
+          "rss_after": 19721027584,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 3.8951769159175456,
+          "rss_bytes": 19720994816
+        },
+        {
+          "event": "request",
+          "name": "cold-retry",
+          "seconds": 6.794412999879569,
+          "rss_before": 19720994816,
+          "rss_after": 19721125888,
+          "usage": {
+            "prompt_tokens": 16026,
+            "completion_tokens": 4,
+            "total_tokens": 16030,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 6760.3,
+              "kflash": {
+                "source": "none",
+                "cycles": 3
+              }
+            }
+          },
+          "cancelled": false
+        }
+      ],
+      "quiet": [
+        true,
+        19.03410530090332,
+        []
+      ],
+      "contention": {
+        "samples": 71,
+        "mean_foreign_gpu_pct": 0.2,
+        "max_foreign_gpu_pct": 10.5,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 1,
+        "longest_busy_run": 1,
+        "top": [
+          "loginwindow"
+        ],
+        "flagged": false
+      },
+      "samples": [
+        [
+          1794060709.329,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060709.88,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060710.431,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060710.984,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060711.535,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060712.088,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060712.641,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060713.192,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060713.785,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060714.379,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060714.95,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060715.51,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060716.059,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060716.604,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060717.154,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060717.704,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060718.253,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060718.802,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060719.352,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060719.903,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060720.451,
+          10.5,
+          "loginwindow",
+          10.5,
+          0.0
+        ],
+        [
+          1794060721.002,
+          2.95,
+          "loginwindow",
+          2.95,
+          0.0
+        ],
+        [
+          1794060721.555,
+          0.58,
+          "loginwindow",
+          0.58,
+          0.0
+        ],
+        [
+          1794060722.106,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060722.667,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060723.218,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060723.769,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060724.324,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060724.875,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060725.424,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060725.993,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060726.581,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060727.131,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060727.681,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060728.235,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060728.786,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060729.368,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060729.924,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060730.476,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060731.025,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060731.604,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060732.161,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060732.71,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060733.26,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060733.81,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060734.363,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060734.913,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060735.463,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060736.012,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060736.561,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060737.109,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060737.659,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060738.208,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060738.757,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060739.305,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060739.852,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060740.401,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060740.949,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060741.496,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060742.045,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060742.593,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060743.14,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060743.688,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060744.235,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060744.784,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060745.33,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060745.879,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060746.428,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060746.977,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060747.526,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060748.074,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "label": "35b-2-base",
+      "exit": 1,
+      "checks": [
+        {
+          "name": "control has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "uninterrupted continuation has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "cancel has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "retry keeps the completed prefix",
+          "pass": false
+        },
+        {
+          "name": "completed retry can be reused",
+          "pass": true
+        },
+        {
+          "name": "repeat output matches",
+          "pass": true
+        },
+        {
+          "name": "cold cancellation discards unfinished checkpoints",
+          "pass": true
+        },
+        {
+          "name": "seed output matches reference",
+          "pass": true
+        },
+        {
+          "name": "retry output matches uninterrupted reference",
+          "pass": true
+        }
+      ],
+      "telemetry": [
+        {
+          "event": "server_ready",
+          "pid": 59026,
+          "rss_bytes": 19711148032,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "control-seed",
+          "seconds": 0.8563939998857677,
+          "rss_before": 19711148032,
+          "rss_after": 19713622016,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 23,
+            "total_tokens": 2081,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 724.0,
+              "kflash": {
+                "source": "none",
+                "cycles": 22
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-short",
+          "seconds": 0.21321470895782113,
+          "rss_before": 19713998848,
+          "rss_after": 19714408448,
+          "usage": {
+            "prompt_tokens": 2102,
+            "completion_tokens": 32,
+            "total_tokens": 2134,
+            "prompt_tokens_details": {
+              "cached_tokens": 2081
+            },
+            "kapitsa": {
+              "prefill_ms": 28.2,
+              "kflash": {
+                "source": "none",
+                "cycles": 31
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-reply",
+          "seconds": 5.857938999775797,
+          "rss_before": 19714408448,
+          "rss_after": 19718406144,
+          "usage": {
+            "prompt_tokens": 15217,
+            "completion_tokens": 22,
+            "total_tokens": 15239,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 5683.5,
+              "kflash": {
+                "source": "none",
+                "cycles": 21
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "server_ready",
+          "pid": 59134,
+          "rss_bytes": 19711393792,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "cancel-seed",
+          "seconds": 0.8800883749499917,
+          "rss_before": 19711393792,
+          "rss_after": 19713851392,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 23,
+            "total_tokens": 2081,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 745.4,
+              "kflash": {
+                "source": "none",
+                "cycles": 22
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-short",
+          "seconds": 0.21104962518438697,
+          "rss_before": 19713884160,
+          "rss_after": 19714441216,
+          "usage": {
+            "prompt_tokens": 2102,
+            "completion_tokens": 32,
+            "total_tokens": 2134,
+            "prompt_tokens_details": {
+              "cached_tokens": 2081
+            },
+            "kapitsa": {
+              "prefill_ms": 26.8,
+              "kflash": {
+                "source": "none",
+                "cycles": 31
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-first",
+          "seconds": 0.734854375012219,
+          "rss_before": 19714441216,
+          "rss_after": 19717586944,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.3007081667892635,
+          "rss_bytes": 19717554176
+        },
+        {
+          "event": "request",
+          "name": "cancel-second",
+          "seconds": 0.7263112915679812,
+          "rss_before": 19717554176,
+          "rss_after": 19719880704,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.173658291809261,
+          "rss_bytes": 19719847936
+        },
+        {
+          "event": "request",
+          "name": "cancel-reply",
+          "seconds": 6.5658605000935495,
+          "rss_before": 19719847936,
+          "rss_after": 19720208384,
+          "usage": {
+            "prompt_tokens": 15217,
+            "completion_tokens": 22,
+            "total_tokens": 15239,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 6418.1,
+              "kflash": {
+                "source": "none",
+                "cycles": 21
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-repeat",
+          "seconds": 0.1592472498305142,
+          "rss_before": 19720208384,
+          "rss_after": 19720667136,
+          "usage": {
+            "prompt_tokens": 15217,
+            "completion_tokens": 22,
+            "total_tokens": 15239,
+            "prompt_tokens_details": {
+              "cached_tokens": 15210
+            },
+            "kapitsa": {
+              "prefill_ms": 15.8,
+              "kflash": {
+                "source": "none",
+                "cycles": 21
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cold-cancel",
+          "seconds": 2.2243660422973335,
+          "rss_before": 19720667136,
+          "rss_after": 19721355264,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 3.893625416327268,
+          "rss_bytes": 19721322496
+        },
+        {
+          "event": "request",
+          "name": "cold-retry",
+          "seconds": 6.803678540978581,
+          "rss_before": 19721322496,
+          "rss_after": 19721355264,
+          "usage": {
+            "prompt_tokens": 16026,
+            "completion_tokens": 4,
+            "total_tokens": 16030,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 6769.3,
+              "kflash": {
+                "source": "none",
+                "cycles": 3
+              }
+            }
+          },
+          "cancelled": false
+        }
+      ],
+      "quiet": [
+        true,
+        19.152232885360718,
+        []
+      ],
+      "contention": {
+        "samples": 72,
+        "mean_foreign_gpu_pct": 0.06,
+        "max_foreign_gpu_pct": 2.35,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 0,
+        "longest_busy_run": 0,
+        "top": [],
+        "flagged": false
+      },
+      "samples": [
+        [
+          1794060768.045,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060768.599,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060769.151,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060769.705,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060770.259,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060770.81,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060771.367,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060771.916,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060772.508,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060773.106,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060773.678,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060774.236,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060774.784,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060775.325,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060775.875,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060776.427,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060776.976,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060777.525,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060778.073,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060778.621,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060779.17,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060779.712,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060780.265,
+          0.73,
+          "loginwindow",
+          0.73,
+          0.0
+        ],
+        [
+          1794060780.819,
+          2.35,
+          "loginwindow",
+          2.35,
+          0.0
+        ],
+        [
+          1794060781.37,
+          0.95,
+          "loginwindow",
+          0.95,
+          0.0
+        ],
+        [
+          1794060781.921,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060782.474,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060783.028,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060783.589,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060784.142,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060784.742,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060785.375,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060785.933,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060786.478,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060787.026,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060787.576,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060788.126,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060788.674,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060789.223,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060789.773,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060790.325,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060790.874,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060791.424,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060791.973,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060792.523,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060793.072,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060793.62,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060794.168,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060794.717,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060795.267,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060795.815,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060796.372,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060796.922,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060797.472,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060798.021,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060798.57,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060799.118,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060799.659,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060800.208,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060800.758,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060801.309,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060801.858,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060802.409,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060802.958,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060803.507,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060804.056,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060804.604,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060805.155,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060805.705,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060806.255,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060806.804,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060807.346,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "label": "35b-3-candidate",
+      "exit": 0,
+      "checks": [
+        {
+          "name": "control has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "uninterrupted continuation has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "cancel has a cached prefix",
+          "pass": true
+        },
+        {
+          "name": "retry keeps the completed prefix",
+          "pass": true
+        },
+        {
+          "name": "completed retry can be reused",
+          "pass": true
+        },
+        {
+          "name": "repeat output matches",
+          "pass": true
+        },
+        {
+          "name": "cold cancellation discards unfinished checkpoints",
+          "pass": true
+        },
+        {
+          "name": "seed output matches reference",
+          "pass": true
+        },
+        {
+          "name": "retry output matches uninterrupted reference",
+          "pass": true
+        }
+      ],
+      "telemetry": [
+        {
+          "event": "server_ready",
+          "pid": 59476,
+          "rss_bytes": 19711066112,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "control-seed",
+          "seconds": 0.8649150407873094,
+          "rss_before": 19711066112,
+          "rss_after": 19713622016,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 23,
+            "total_tokens": 2081,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 732.0,
+              "kflash": {
+                "source": "none",
+                "cycles": 22
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-short",
+          "seconds": 0.21231583319604397,
+          "rss_before": 19713785856,
+          "rss_after": 19714129920,
+          "usage": {
+            "prompt_tokens": 2102,
+            "completion_tokens": 32,
+            "total_tokens": 2134,
+            "prompt_tokens_details": {
+              "cached_tokens": 2081
+            },
+            "kapitsa": {
+              "prefill_ms": 27.9,
+              "kflash": {
+                "source": "none",
+                "cycles": 31
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "control-reply",
+          "seconds": 5.856938874814659,
+          "rss_before": 19714129920,
+          "rss_after": 19717275648,
+          "usage": {
+            "prompt_tokens": 15217,
+            "completion_tokens": 22,
+            "total_tokens": 15239,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 5685.6,
+              "kflash": {
+                "source": "none",
+                "cycles": 21
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "server_ready",
+          "pid": 59533,
+          "rss_bytes": 19711262720,
+          "command": [
+            "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/build/kapitsa",
+            "serve",
+            "--model",
+            "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+            "--host",
+            "127.0.0.1",
+            "--private",
+            "--port",
+            "8298",
+            "--ctx",
+            "32768",
+            "--slots",
+            "1",
+            "--disk-cache",
+            "0"
+          ]
+        },
+        {
+          "event": "request",
+          "name": "cancel-seed",
+          "seconds": 0.873718083370477,
+          "rss_before": 19711262720,
+          "rss_after": 19713835008,
+          "usage": {
+            "prompt_tokens": 2058,
+            "completion_tokens": 23,
+            "total_tokens": 2081,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 739.2,
+              "kflash": {
+                "source": "none",
+                "cycles": 22
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-short",
+          "seconds": 0.20604425016790628,
+          "rss_before": 19714031616,
+          "rss_after": 19714260992,
+          "usage": {
+            "prompt_tokens": 2102,
+            "completion_tokens": 32,
+            "total_tokens": 2134,
+            "prompt_tokens_details": {
+              "cached_tokens": 2081
+            },
+            "kapitsa": {
+              "prefill_ms": 25.0,
+              "kflash": {
+                "source": "none",
+                "cycles": 31
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-first",
+          "seconds": 0.7365867919288576,
+          "rss_before": 19714260992,
+          "rss_after": 19717619712,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-first",
+          "seconds": 2.305735250003636,
+          "rss_bytes": 19717586944
+        },
+        {
+          "event": "request",
+          "name": "cancel-second",
+          "seconds": 0.7179002501070499,
+          "rss_before": 19717586944,
+          "rss_after": 19717898240,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cancel-second",
+          "seconds": 2.2693533338606358,
+          "rss_bytes": 19717865472
+        },
+        {
+          "event": "request",
+          "name": "cancel-reply",
+          "seconds": 5.830003082752228,
+          "rss_before": 19717865472,
+          "rss_after": 19718045696,
+          "usage": {
+            "prompt_tokens": 15217,
+            "completion_tokens": 22,
+            "total_tokens": 15239,
+            "prompt_tokens_details": {
+              "cached_tokens": 2051
+            },
+            "kapitsa": {
+              "prefill_ms": 5681.6,
+              "kflash": {
+                "source": "none",
+                "cycles": 21
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cancel-repeat",
+          "seconds": 0.15919033391401172,
+          "rss_before": 19718045696,
+          "rss_after": 19718144000,
+          "usage": {
+            "prompt_tokens": 15217,
+            "completion_tokens": 22,
+            "total_tokens": 15239,
+            "prompt_tokens_details": {
+              "cached_tokens": 15210
+            },
+            "kapitsa": {
+              "prefill_ms": 15.8,
+              "kflash": {
+                "source": "none",
+                "cycles": 21
+              }
+            }
+          },
+          "cancelled": false
+        },
+        {
+          "event": "request",
+          "name": "cold-cancel",
+          "seconds": 2.22389345895499,
+          "rss_before": 19718144000,
+          "rss_after": 19718586368,
+          "usage": null,
+          "cancelled": true
+        },
+        {
+          "event": "cancel_confirmed",
+          "name": "cold-cancel",
+          "seconds": 3.9915878754109144,
+          "rss_bytes": 19718553600
+        },
+        {
+          "event": "request",
+          "name": "cold-retry",
+          "seconds": 6.802472208626568,
+          "rss_before": 19718553600,
+          "rss_after": 19718586368,
+          "usage": {
+            "prompt_tokens": 16026,
+            "completion_tokens": 4,
+            "total_tokens": 16030,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "kapitsa": {
+              "prefill_ms": 6765.8,
+              "kflash": {
+                "source": "none",
+                "cycles": 3
+              }
+            }
+          },
+          "cancelled": false
+        }
+      ],
+      "quiet": [
+        true,
+        19.151017904281616,
+        []
+      ],
+      "contention": {
+        "samples": 71,
+        "mean_foreign_gpu_pct": 0.04,
+        "max_foreign_gpu_pct": 1.87,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 0,
+        "longest_busy_run": 0,
+        "top": [],
+        "flagged": false
+      },
+      "samples": [
+        [
+          1794060827.34,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060827.891,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060828.442,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060828.995,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060829.548,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060830.098,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060830.651,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060831.199,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060831.788,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060832.387,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060832.96,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060833.514,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060834.062,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060834.614,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060835.164,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060835.714,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060836.263,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060836.812,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060837.362,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060837.91,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060838.459,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060839.009,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060839.553,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060840.106,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060840.658,
+          1.87,
+          "loginwindow",
+          1.87,
+          0.0
+        ],
+        [
+          1794060841.21,
+          0.93,
+          "loginwindow",
+          0.93,
+          0.0
+        ],
+        [
+          1794060841.761,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060842.313,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060842.863,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060843.414,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060844.008,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060844.61,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060845.17,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060845.718,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060846.268,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060846.818,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060847.39,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060847.949,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060848.5,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060849.046,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060849.629,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060850.187,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060850.737,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060851.288,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060851.837,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060852.387,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060852.936,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060853.486,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060854.035,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060854.584,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060855.132,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060855.68,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060856.22,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060856.768,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060857.316,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060857.863,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060858.406,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060858.956,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060859.529,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060860.088,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060860.637,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060861.188,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060861.736,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060862.286,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060862.837,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060863.386,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060863.934,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060864.484,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060865.033,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060865.584,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794060866.132,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ]
+    }
+  ]
+}

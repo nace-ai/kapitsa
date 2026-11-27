@@ -1,0 +1,52 @@
+{
+  "format": "Privacy-filtered derived evidence; not raw execution logs.",
+  "source": "8be65afbcd4edc0727a8c67d6b72344b1e2b64e4",
+  "previous_head": "ff16d70caf66bd97063acbc43a8090a3348f1d89",
+  "original_main_kernel": "065c4e36d611d3767acec1ba45b6a7ce965d420a",
+  "source_equivalence": {
+    "release_tokens_equal_to_original_main": true,
+    "validation_tokens_equal_to_preceding_head": true,
+    "method": "Clang preprocessing of qattn_t.metal after removing its four include lines in every arm, then token comparison. Diagnostic source-equivalence check only; no GPU or Metal compiler result.",
+    "baseline": "065c4e36d611d3767acec1ba45b6a7ce965d420a",
+    "prior_head": "ff16d70caf66bd97063acbc43a8090a3348f1d89",
+    "source_sha256": {
+      "src/kernels/tensor/qattn_t.metal": "a0c744d52de91b9729f9d3a60d15020e2625d2b6f51fb0bd972dfb2279d58f4f",
+      "src/metal/gpu.mm": "9124cbbbd83a864fcbb0d32e9f21a74f38071ce7c48ca11427a0bed561871439"
+    },
+    "preprocessed_sha256": {
+      "main0": "1e4c0165c20613b05fb07fcb6b1a0256abe3da8efb24ade268109ad514d55e4f",
+      "previous0": "7e3db892217aa6ffbfe6c9281dec4f47b112034bd4fa0ac758e8b423070d01df",
+      "candidate0": "1e4c0165c20613b05fb07fcb6b1a0256abe3da8efb24ade268109ad514d55e4f",
+      "candidate1": "7e3db892217aa6ffbfe6c9281dec4f47b112034bd4fa0ac758e8b423070d01df"
+    }
+  },
+  "M3_configuration": {
+    "chip": "M3 Ultra",
+    "GPU_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "M3_offline_attempts": {
+    "rcs": [
+      72,
+      72
+    ],
+    "limitation": "The offline Metal compiler command was unavailable; neither attempt compiled a shader. This does not imply runtime Metal4 is unsupported."
+  },
+  "M3_runtime_library_compilation": {
+    "helper_build_rc": 0,
+    "validation_unset_rc": 0,
+    "validation_1_and_debug_layer_1_rc": 0,
+    "tensor_blob_sha256": "559c448eee4ca47d7a7042a20f9215c2523b35940769b85cdca43b203f76b881",
+    "helper_sha256": "42e4cbc209650723c8a01e589178e352d841aed05705c97ea8c524b08fffbd44",
+    "exclusive_GPU_lock": true,
+    "kernel_dispatches": 0,
+    "method": "Standalone Objective-C++ helper compiles the exact CMake-generated tensor library through MTLLibrary, using the host compile macro condition. It is not a new-head engine execution, pipeline memory probe, numerical check or performance test."
+  },
+  "outstanding": [
+    "New-head M5 release T4224/L8448 interleaved performance against main.",
+    "New-head small shader-validation dispatch and full model logit gate on applicable M5 path."
+  ],
+  "historical_limitations": "Old M3 tiny old/new err1.28 numerical failures remain; no old probe was rerun. Previous-head maintainer M5 numbers remain separately attributed in PR body."
+}

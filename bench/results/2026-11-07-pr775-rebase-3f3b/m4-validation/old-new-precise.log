@@ -1,0 +1,19 @@
+prefill: 8 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (9cca6b0d), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.31 (50fadecc), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+batch: 192 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (9cca6b0d), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.31 (50fadecc), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+  PASS (flags)
+step: 192 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (9cca6b0d), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.31 (50fadecc), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+  PASS (flags)
+verify: 192 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (9cca6b0d), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.31 (50fadecc), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+  PASS (flags)

@@ -1,0 +1,1 @@
+PASS: 12 complete old/new image-encoder outputs equal; both models reload with equal outputs

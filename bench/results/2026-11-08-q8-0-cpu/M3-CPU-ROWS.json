@@ -1,0 +1,526 @@
+{
+  "evidence_kind": "Explicitly filtered and derived public copy; private originals retained",
+  "source_reference": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+  "source_candidate": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+  "GPU_or_full_model_claim": false,
+  "method": "Each width has 1024 separately called real GGUF rows, eight alternating A/B legs and 16 passes per leg. Entire output bytes and finite values checked on every timed pass; input and binary digests checked before and after each leg.",
+  "scope": "Warm CPU row dequantization only; no whole import, model load or inference speed conclusion",
+  "environment": {
+    "chip": "M3 Ultra",
+    "GPU_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang17(clang-1700.6.4.2)",
+    "actual_Release_flags": {
+      "O3": true,
+      "arm64": true,
+      "no_NDEBUG": true,
+      "no_fast_math": true
+    }
+  },
+  "widths": [
+    {
+      "schema": "kapitsa-q8-0-cpu-ab-summary-v1",
+      "scope": "warm official CPU per-row dequantization of 1024 real Q8_0 rows; no loading or inference speed claim",
+      "source_reference": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+      "source_candidate": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+      "fixture_sha256": "198e0b839d0adf35382d50487bc10bf63b3c3ae277f44688785357074e027541",
+      "full_output_bytes": 16777216,
+      "oracle_output_sha256": "68e0bbf04504ec10f2941f45ebfba065f7a53ac801a43f115a1d120ee6975811",
+      "legs": [
+        {
+          "label": "A1",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            6907.552734375,
+            6940.71484375,
+            7038.0048828125,
+            6954.142578125,
+            6907.470703125,
+            6925.251953125,
+            6975.830078125,
+            6907.3076171875,
+            6921.46875,
+            6979.0849609375,
+            6942.056640625,
+            6925.740234375,
+            7201.7822265625,
+            7036.662109375,
+            6934.0009765625,
+            7016.11328125
+          ],
+          "median_ns_per_row": 6941.3857421875,
+          "mean_ns_per_row": 6969.574035644531
+        },
+        {
+          "label": "B1",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            1988.4443359375,
+            2023.681640625,
+            1995.9716796875,
+            2012.8984375,
+            2020.3447265625,
+            1999.30859375,
+            2010.05078125,
+            1999.3486328125,
+            2037.068359375,
+            1993.734375,
+            1994.2626953125,
+            1995.564453125,
+            2049.7646484375,
+            2082.763671875,
+            2113.76953125,
+            2010.4169921875
+          ],
+          "median_ns_per_row": 2010.23388671875,
+          "mean_ns_per_row": 2020.4620971679688
+        },
+        {
+          "label": "A2",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            7033.1630859375,
+            6942.0576171875,
+            6923.1767578125,
+            7106.119140625,
+            6934.4892578125,
+            6997.7626953125,
+            7059.2861328125,
+            6983.8466796875,
+            6930.419921875,
+            6932.2509765625,
+            6977.2138671875,
+            6944.7431640625,
+            7032.1455078125,
+            6968.302734375,
+            7003.7841796875,
+            6933.7978515625
+          ],
+          "median_ns_per_row": 6972.75830078125,
+          "mean_ns_per_row": 6981.409973144531
+        },
+        {
+          "label": "B2",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            2017.78125,
+            2014.119140625,
+            2004.5576171875,
+            2098.0224609375,
+            2093.83203125,
+            1991.49609375,
+            2031.982421875,
+            2011.5966796875,
+            2003.255859375,
+            2129.4755859375,
+            2046.46875,
+            2037.1494140625,
+            2011.0263671875,
+            1997.720703125,
+            2088.337890625,
+            2068.115234375
+          ],
+          "median_ns_per_row": 2024.8818359375,
+          "mean_ns_per_row": 2040.30859375
+        },
+        {
+          "label": "A3",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            6968.505859375,
+            6939.7783203125,
+            7046.3466796875,
+            7020.2236328125,
+            6980.55078125,
+            6958.0078125,
+            6943.2373046875,
+            6928.0595703125,
+            6935.7099609375,
+            7002.970703125,
+            6927.775390625,
+            6929.443359375,
+            6993.08203125,
+            6931.0302734375,
+            6934.5703125,
+            6980.427734375
+          ],
+          "median_ns_per_row": 6950.62255859375,
+          "mean_ns_per_row": 6963.732482910156
+        },
+        {
+          "label": "B3",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            2180.5419921875,
+            2093.46484375,
+            2188.55859375,
+            2277.6689453125,
+            2185.994140625,
+            1998.494140625,
+            2200.439453125,
+            2389.689453125,
+            2124.1865234375,
+            2130.4931640625,
+            2067.4228515625,
+            2181.0712890625,
+            2198.201171875,
+            2215.12890625,
+            2202.7177734375,
+            2000.732421875
+          ],
+          "median_ns_per_row": 2183.53271484375,
+          "mean_ns_per_row": 2164.6753540039062
+        },
+        {
+          "label": "A4",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            7532.958984375,
+            7732.951171875,
+            7372.3955078125,
+            6968.505859375,
+            7608.0322265625,
+            7312.5,
+            7079.060546875,
+            7345.7841796875,
+            7128.865234375,
+            7034.66796875,
+            7258.30078125,
+            7350.2197265625,
+            7591.5126953125,
+            7987.9150390625,
+            7554.8095703125,
+            7645.7119140625
+          ],
+          "median_ns_per_row": 7361.3076171875,
+          "mean_ns_per_row": 7406.511962890625
+        },
+        {
+          "label": "B4",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            2061.767578125,
+            2111.2060546875,
+            2085.3681640625,
+            2170.083984375,
+            2070.109375,
+            2063.4765625,
+            2010.5390625,
+            2035.15625,
+            2039.3876953125,
+            2030.5986328125,
+            1998.046875,
+            2151.9365234375,
+            2064.6162109375,
+            2002.84765625,
+            2007.650390625,
+            2010.0498046875
+          ],
+          "median_ns_per_row": 2050.57763671875,
+          "mean_ns_per_row": 2057.0525512695312
+        }
+      ],
+      "pairs": [
+        {
+          "pair": 1,
+          "reference": "A1",
+          "candidate": "B1",
+          "reference_median_ns_per_row": 6941.3857421875,
+          "candidate_median_ns_per_row": 2010.23388671875,
+          "candidate_time_change_percent": -71.03987645433392
+        },
+        {
+          "pair": 2,
+          "reference": "A2",
+          "candidate": "B2",
+          "reference_median_ns_per_row": 6972.75830078125,
+          "candidate_median_ns_per_row": 2024.8818359375,
+          "candidate_time_change_percent": -70.9601028948526
+        },
+        {
+          "pair": 3,
+          "reference": "A3",
+          "candidate": "B3",
+          "reference_median_ns_per_row": 6950.62255859375,
+          "candidate_median_ns_per_row": 2183.53271484375,
+          "candidate_time_change_percent": -68.58507714328366
+        },
+        {
+          "pair": 4,
+          "reference": "A4",
+          "candidate": "B4",
+          "reference_median_ns_per_row": 7361.3076171875,
+          "candidate_median_ns_per_row": 2050.57763671875,
+          "candidate_time_change_percent": -72.14383988068951
+        }
+      ],
+      "all_128_timed_passes_byte_equal_finite_input_unchanged": true,
+      "input_and_binary_sha256_before_after_all_legs": true,
+      "finished_at": "2026-11-08T13:54:43.142009+00:00"
+    },
+    {
+      "schema": "kapitsa-q8-0-cpu-ab-summary-v1",
+      "scope": "warm official CPU per-row dequantization of 1024 real Q8_0 rows; no loading or inference speed claim",
+      "source_reference": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+      "source_candidate": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+      "fixture_sha256": "33ab9892fe21218a58d5e7e56c2353689f48b0d57383ce94cc4ec8483cba7576",
+      "full_output_bytes": 10485760,
+      "oracle_output_sha256": "9cc4e3799d11be32b8aec372af5701951539f2da5061468719e7394ae97e661c",
+      "legs": [
+        {
+          "label": "A1",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            4349.2021484375,
+            4368.7744140625,
+            4364.6650390625,
+            4408.48828125,
+            4412.39453125,
+            4327.7177734375,
+            4344.64453125,
+            4398.3154296875,
+            4329.99609375,
+            4327.1484375,
+            4411.091796875,
+            4533.447265625,
+            4331.705078125,
+            4361.369140625,
+            4335.5712890625,
+            4327.3115234375
+          ],
+          "median_ns_per_row": 4355.28564453125,
+          "mean_ns_per_row": 4370.740173339844
+        },
+        {
+          "label": "B1",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            1258.87109375,
+            1259.5615234375,
+            1258.70703125,
+            1258.748046875,
+            1272.4609375,
+            1266.68359375,
+            1263.5908203125,
+            1268.26953125,
+            1272.3798828125,
+            1262.857421875,
+            1267.1708984375,
+            1261.8408203125,
+            1265.5029296875,
+            1262.3291015625,
+            1280.3134765625,
+            1259.318359375
+          ],
+          "median_ns_per_row": 1263.22412109375,
+          "mean_ns_per_row": 1264.912841796875
+        },
+        {
+          "label": "A2",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            4389.3232421875,
+            4422.404296875,
+            4501.912109375,
+            4338.94921875,
+            4322.9169921875,
+            4377.03515625,
+            4445.271484375,
+            4363.322265625,
+            4376.3828125,
+            4326.7421875,
+            4339.517578125,
+            4332.8857421875,
+            4358.68359375,
+            4329.671875,
+            4356.6484375,
+            4331.1357421875
+          ],
+          "median_ns_per_row": 4357.666015625,
+          "mean_ns_per_row": 4369.5501708984375
+        },
+        {
+          "label": "B2",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            1280.9248046875,
+            1322.46875,
+            1264.4853515625,
+            1275.5126953125,
+            1264.3642578125,
+            1261.9228515625,
+            1263.916015625,
+            1263.021484375,
+            1259.6845703125,
+            1260.7021484375,
+            1258.6669921875,
+            1293.0908203125,
+            1266.154296875,
+            1274.0888671875,
+            1267.2119140625,
+            1344.3603515625
+          ],
+          "median_ns_per_row": 1265.31982421875,
+          "mean_ns_per_row": 1276.2860107421875
+        },
+        {
+          "label": "A3",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            4355.712890625,
+            4337.7275390625,
+            4323.6083984375,
+            4334.228515625,
+            4334.67578125,
+            4390.7060546875,
+            4351.64453125,
+            4402.1806640625,
+            4388.95703125,
+            4351.033203125,
+            4396.322265625,
+            4349.2431640625,
+            4334.47265625,
+            4380.8193359375,
+            4340.6982421875,
+            4337.0771484375
+          ],
+          "median_ns_per_row": 4350.13818359375,
+          "mean_ns_per_row": 4356.8192138671875
+        },
+        {
+          "label": "B3",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            1259.033203125,
+            1259.521484375,
+            1258.9111328125,
+            1278.5244140625,
+            1258.9111328125,
+            1258.6669921875,
+            1265.0966796875,
+            1311.6865234375,
+            1339.35546875,
+            1259.6435546875,
+            1268.6357421875,
+            1263.142578125,
+            1259.1142578125,
+            1260.7421875,
+            1278.60546875,
+            1286.90625
+          ],
+          "median_ns_per_row": 1261.9423828125,
+          "mean_ns_per_row": 1272.9060668945312
+        },
+        {
+          "label": "A4",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            4386.189453125,
+            4367.0654296875,
+            4341.3896484375,
+            4387.7353515625,
+            4350.912109375,
+            4325.0322265625,
+            4344.15625,
+            4368.326171875,
+            4337.2392578125,
+            4324.259765625,
+            4402.546875,
+            4350.66796875,
+            4321.0849609375,
+            4340.373046875,
+            4344.9296875,
+            4323.2822265625
+          ],
+          "median_ns_per_row": 4344.54296875,
+          "mean_ns_per_row": 4350.949401855469
+        },
+        {
+          "label": "B4",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            1323.16015625,
+            1261.71875,
+            1260.2138671875,
+            1253.90625,
+            1324.8701171875,
+            1340.861328125,
+            1265.4619140625,
+            1275.59375,
+            1261.271484375,
+            1270.9150390625,
+            1258.7080078125,
+            1262.2880859375,
+            1274.5361328125,
+            1274.861328125,
+            1259.236328125,
+            1261.23046875
+          ],
+          "median_ns_per_row": 1263.875,
+          "mean_ns_per_row": 1276.8020629882812
+        }
+      ],
+      "pairs": [
+        {
+          "pair": 1,
+          "reference": "A1",
+          "candidate": "B1",
+          "reference_median_ns_per_row": 4355.28564453125,
+          "candidate_median_ns_per_row": 1263.22412109375,
+          "candidate_time_change_percent": -70.99560799921521
+        },
+        {
+          "pair": 2,
+          "reference": "A2",
+          "candidate": "B2",
+          "reference_median_ns_per_row": 4357.666015625,
+          "candidate_median_ns_per_row": 1265.31982421875,
+          "candidate_time_change_percent": -70.96335929183708
+        },
+        {
+          "pair": 3,
+          "reference": "A3",
+          "candidate": "B3",
+          "reference_median_ns_per_row": 4350.13818359375,
+          "candidate_median_ns_per_row": 1261.9423828125,
+          "candidate_time_change_percent": -70.99075179791231
+        },
+        {
+          "pair": 4,
+          "reference": "A4",
+          "candidate": "B4",
+          "reference_median_ns_per_row": 4344.54296875,
+          "candidate_median_ns_per_row": 1263.875,
+          "candidate_time_change_percent": -70.90890781628893
+        }
+      ],
+      "all_128_timed_passes_byte_equal_finite_input_unchanged": true,
+      "input_and_binary_sha256_before_after_all_legs": true,
+      "finished_at": "2026-11-08T13:54:48.161662+00:00"
+    }
+  ],
+  "focused_execution": {
+    "binary_sha256": "53fbf9f42f3ae36d43e87a6310a4fe25abcac658d2b429969f1057adf0ff74a7",
+    "actual_invocations": 1,
+    "rc": 0,
+    "exhaustive_blocks": 67108864,
+    "lane_products": 2147483648,
+    "reused_M4_execution": false
+  },
+  "model_validation": "Full model validation remains incomplete. The original candidate import stopped before conversion at the unchanged workspace reserve guard; no model-output or default-performance result is claimed.",
+  "own_build_binaries_sha256": {
+    "reference": {
+      "libnaceinfer.a": "c840fb4e06df8bd3d194f82deb56a073097e9425e2de549bd6336d45ccfadaed",
+      "kapitsa": "78b3fea3f8c348f23ddfde833dadedd4e97c2027e955c0620060e1a8720f9b1b",
+      "iq_layout_test": "9e4b4c4c645101c45665f7389f686de1459178c546502e753f5a924a92857405",
+      "logit_dump": "07bdfb4c42b29b38745e9976c864be6c1d428dac7a0877867ce619e2a38aa657"
+    },
+    "candidate": {
+      "libnaceinfer.a": "ec6fec5b532c592a1dc5ffd655c4ef1dcc882b4d9711ac77aca1f9a154a1b166",
+      "kapitsa": "bce60d8c4aed7044b657d0b762d82bd775586b706fb89f36f52780f26d2e9797",
+      "iq_layout_test": "53fbf9f42f3ae36d43e87a6310a4fe25abcac658d2b429969f1057adf0ff74a7",
+      "logit_dump": "9921b8c5ea6944929e88486a5bc12a950ad4b080576c719abcf36b71a57586ca"
+    }
+  }
+}

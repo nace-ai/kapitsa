@@ -1,0 +1,1390 @@
+{
+  "pid": 97097,
+  "started_at": "2026-11-07T08:53:33.597570+00:00",
+  "status": "complete; inspect HTTP failures and all benchmark flags before Ready",
+  "config": {
+    "output": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full",
+    "trees": {
+      "base": "/Users/bytedance/kapitsa-mtp-affine-20261107/base",
+      "candidate": "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate"
+    },
+    "builds": {
+      "base": "/Users/bytedance/kapitsa-mtp-affine-20261107/base/build",
+      "candidate": "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/build"
+    },
+    "heads": {
+      "base": "b171f98363abd5dfd8ae5d24f786ca77b3801a4a",
+      "candidate": "8e12c3d09ac4118775755000d75f5fdbe6cbca35"
+    },
+    "ready_files": [
+      "/Users/bytedance/kapitsa-mtp-affine-20261107/base-built-1041",
+      "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate-built-1041"
+    ],
+    "models": [
+      {
+        "name": "27b",
+        "path": "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+        "mtp": true
+      }
+    ],
+    "tokenizer_source": "/Users/bytedance/kapitsa-mtp-affine-20261107/tokenizer.cpp",
+    "loader_test": false,
+    "min_free_bytes": 6442450944
+  },
+  "commands": [
+    {
+      "label": "tokenizer-build",
+      "argv": [
+        "/usr/bin/c++",
+        "-std=c++20",
+        "-O3",
+        "-arch",
+        "arm64",
+        "-mmacosx-version-min=14.0",
+        "-I/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/src",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/tokenizer.cpp",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/build/libnaceinfer.a",
+        "-framework",
+        "Foundation",
+        "-framework",
+        "CoreFoundation",
+        "-o",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/tokenizer"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate",
+      "started_at": "2026-11-07T08:53:34.128675+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-tokenizer-build"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T08:53:34.818375+00:00"
+    },
+    {
+      "label": "27b-logits-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/base/build/logit_dump",
+        "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-logits-base",
+        "--corpus",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/base/bench/corpus.txt"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/base",
+      "started_at": "2026-11-07T08:53:34.927138+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-logits-base"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T08:54:25.982727+00:00"
+    },
+    {
+      "label": "27b-logits-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/build/logit_dump",
+        "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-logits-candidate",
+        "--corpus",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/bench/corpus.txt",
+        "--from",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-logits-base"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate",
+      "started_at": "2026-11-07T08:54:25.987780+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-logits-candidate"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T08:55:16.340229+00:00"
+    },
+    {
+      "label": "27b-compare",
+      "argv": [
+        "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/tools/logit_compare.py",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-logits-base",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-logits-candidate",
+        "--json",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-compare.json"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate",
+      "started_at": "2026-11-07T08:55:16.344630+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-compare"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T08:55:18.736111+00:00"
+    },
+    {
+      "label": "27b-continuation-0-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/base/build/ni_run",
+        "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+        "@/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--spec",
+        "2"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/base",
+      "started_at": "2026-11-07T08:55:39.292366+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-continuation-0-base"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T08:55:44.054831+00:00"
+    },
+    {
+      "label": "27b-continuation-1-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/build/ni_run",
+        "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+        "@/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--spec",
+        "2"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate",
+      "started_at": "2026-11-07T08:56:20.414687+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-continuation-1-candidate"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T08:56:25.102851+00:00"
+    },
+    {
+      "label": "27b-continuation-2-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/base/build/ni_run",
+        "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+        "@/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--spec",
+        "2"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/base",
+      "started_at": "2026-11-07T08:56:44.499451+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-continuation-2-base"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T08:56:49.194788+00:00"
+    },
+    {
+      "label": "27b-continuation-3-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/build/ni_run",
+        "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+        "@/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--spec",
+        "2"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate",
+      "started_at": "2026-11-07T08:57:21.204534+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-continuation-3-candidate"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T08:57:25.876385+00:00"
+    },
+    {
+      "label": "27b-http-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/base/tests/test_server.py",
+        "http://127.0.0.1:59031"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/base",
+      "started_at": "2026-11-07T08:57:28.234664+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-http-base"
+      },
+      "exit": 1,
+      "completed_at": "2026-11-07T08:59:08.428432+00:00"
+    },
+    {
+      "label": "27b-http-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/tests/test_server.py",
+        "http://127.0.0.1:59166"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate",
+      "started_at": "2026-11-07T08:59:10.620804+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-http-candidate"
+      },
+      "exit": 1,
+      "completed_at": "2026-11-07T09:00:51.042796+00:00"
+    },
+    {
+      "label": "27b-bench-0-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/base/build/kapitsa",
+        "bench",
+        "--model",
+        "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-bench-0-base.json"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/base",
+      "started_at": "2026-11-07T09:01:35.781735+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-bench-0-base"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T09:02:55.284542+00:00"
+    },
+    {
+      "label": "27b-bench-1-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/build/kapitsa",
+        "bench",
+        "--model",
+        "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-bench-1-candidate.json"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate",
+      "started_at": "2026-11-07T09:03:35.623313+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-bench-1-candidate"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T09:04:56.520497+00:00"
+    },
+    {
+      "label": "27b-bench-2-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/base/build/kapitsa",
+        "bench",
+        "--model",
+        "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-bench-2-base.json"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/base",
+      "started_at": "2026-11-07T09:05:34.426187+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-bench-2-base"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T09:06:54.879304+00:00"
+    },
+    {
+      "label": "27b-bench-3-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/build/kapitsa",
+        "bench",
+        "--model",
+        "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-bench-3-candidate.json"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate",
+      "started_at": "2026-11-07T09:07:35.180090+00:00",
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/home-27b-bench-3-candidate"
+      },
+      "exit": 0,
+      "completed_at": "2026-11-07T09:08:54.630361+00:00"
+    }
+  ],
+  "models": [
+    {
+      "name": "27b",
+      "path": "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+      "metadata": {
+        "config.json": "14b65a0ee06517060a6bbd979bb1a8ff54e7b304b1a1f01d54344b88b8285e85",
+        "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+      },
+      "mtp_requested": true,
+      "mtp_sha256": "c58feddc584f37971c72af1f0da95e0099478487009936b3c26ddd88844fab10",
+      "logits": {
+        "paths": {
+          "prefill": {
+            "records": 8,
+            "bitwise": 8,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "failures": [],
+            "gate": {
+              "source": "tools/logit_floors/qwen3.8-27b-4bit.json"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (b171f98)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+              "path": "prefill",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 0,
+                "evals": 0,
+                "reruns": 0
+              },
+              "records": 8,
+              "vocab": 248320,
+              "source": "/Users/bytedance/kapitsa-mtp-affine-20261107/base/bench/corpus.txt",
+              "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+              "macos": "26.4.1",
+              "date": "2026-11-07T08:54:25Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (8e12c3d)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+              "path": "prefill",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 0,
+                "evals": 0,
+                "reruns": 0
+              },
+              "records": 8,
+              "vocab": 248320,
+              "source": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-logits-base",
+              "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+              "macos": "26.4.1",
+              "date": "2026-11-07T08:55:16Z",
+              "env": {}
+            }
+          },
+          "batch": {
+            "records": 192,
+            "bitwise": 192,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "near_tie": 0.0,
+            "near_tie_flips": 0,
+            "failures": [],
+            "gate": {
+              "min_top1": 0.989583,
+              "max_mean_kl": 4.08e-07,
+              "max_p99_kl": 6.63e-06,
+              "near_tie": 0.0,
+              "max_far_flips": 0,
+              "source": "tools/logit_floors/qwen3.8-27b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (b171f98)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+              "path": "batch",
+              "batch": {
+                "members": 4,
+                "rows": 2
+              },
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 0,
+                "evals": 0,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "source": "/Users/bytedance/kapitsa-mtp-affine-20261107/base/bench/corpus.txt",
+              "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+              "macos": "26.4.1",
+              "date": "2026-11-07T08:54:25Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (8e12c3d)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+              "path": "batch",
+              "batch": {
+                "members": 4,
+                "rows": 2
+              },
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 0,
+                "evals": 0,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "source": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-logits-base",
+              "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+              "macos": "26.4.1",
+              "date": "2026-11-07T08:55:16Z",
+              "env": {}
+            }
+          },
+          "step": {
+            "records": 192,
+            "bitwise": 192,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "near_tie": 0.0,
+            "near_tie_flips": 0,
+            "failures": [],
+            "gate": {
+              "min_top1": 0.989583,
+              "max_mean_kl": 4.08e-07,
+              "max_p99_kl": 6.63e-06,
+              "near_tie": 0.0,
+              "max_far_flips": 0,
+              "source": "tools/logit_floors/qwen3.8-27b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (b171f98)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+              "path": "step",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 0,
+                "evals": 0,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "source": "/Users/bytedance/kapitsa-mtp-affine-20261107/base/bench/corpus.txt",
+              "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+              "macos": "26.4.1",
+              "date": "2026-11-07T08:54:25Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (8e12c3d)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+              "path": "step",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 0,
+                "evals": 0,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "source": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-logits-base",
+              "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+              "macos": "26.4.1",
+              "date": "2026-11-07T08:55:16Z",
+              "env": {}
+            }
+          },
+          "verify": {
+            "records": 192,
+            "bitwise": 192,
+            "non_finite": [],
+            "top1": 1.0,
+            "flips": 0,
+            "kl_mean": 0.0,
+            "kl_median": 0.0,
+            "kl_p99": 0.0,
+            "kl_max": 0.0,
+            "margin_change_max": 0.0,
+            "tie_margin": 0.0,
+            "nll_change_mean": 0.0,
+            "max_abs_diff": 0.0,
+            "flip_list": [],
+            "near_tie": 0.0,
+            "near_tie_flips": 0,
+            "failures": [],
+            "gate": {
+              "min_top1": 0.989583,
+              "max_mean_kl": 4.08e-07,
+              "max_p99_kl": 6.63e-06,
+              "near_tie": 0.0,
+              "max_far_flips": 0,
+              "source": "tools/logit_floors/qwen3.8-27b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+            },
+            "reference": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (b171f98)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+              "path": "verify",
+              "verify": "KFlash tree (a chain of 8 live rows)",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 0,
+                "evals": 0,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "source": "/Users/bytedance/kapitsa-mtp-affine-20261107/base/bench/corpus.txt",
+              "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+              "macos": "26.4.1",
+              "date": "2026-11-07T08:54:25Z",
+              "env": {}
+            },
+            "candidate": {
+              "engine": "kapitsa",
+              "build": "0.2.31 (8e12c3d)",
+              "model": "qwen3.8-27b-4bit",
+              "model_dir": "/Volumes/Kapitsa1041/qwen3.8-27b-4bit",
+              "path": "verify",
+              "verify": "KFlash tree (a chain of 8 live rows)",
+              "prefill_chunk": 2048,
+              "ane": {
+                "chunks": 0,
+                "evals": 0,
+                "reruns": 0
+              },
+              "records": 192,
+              "vocab": 248320,
+              "source": "/Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-logits-base",
+              "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+              "macos": "26.4.1",
+              "date": "2026-11-07T08:55:16Z",
+              "env": {}
+            }
+          }
+        }
+      },
+      "continuations": [
+        {
+          "label": "27b-continuation-0-base",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "bf9bd80862daa6d72d4dd83f0341dc9f7f0b60de161ee9f28397a35bf0f84b6b",
+          "load_lines": [
+            "[kapitsa] MTP head loaded in 14 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)"
+          ],
+          "decode_lines": [
+            "prompt 63 tok in 271 ms (232.1 tok/s); spec decode D=2: 255 tok in 3491 ms (73.1 tok/s), 96 cycles, 2.66 tok/cycle, accepted/drafted 0.83, 34.605 ms GPU/cycle, 36.361 ms wall/cycle, hist 7 19 70"
+          ],
+          "contention": {
+            "samples": 8,
+            "mean_foreign_gpu_pct": 0.0,
+            "max_foreign_gpu_pct": 0,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 0,
+            "longest_busy_run": 0,
+            "top": [],
+            "flagged": false
+          },
+          "samples": [
+            [
+              1794041739.846,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041740.403,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041740.952,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041741.499,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041742.04,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041742.587,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041743.134,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041743.682,
+              0,
+              "-",
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "label": "27b-continuation-1-candidate",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "bf9bd80862daa6d72d4dd83f0341dc9f7f0b60de161ee9f28397a35bf0f84b6b",
+          "load_lines": [
+            "[kapitsa] MTP head loaded in 14 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)"
+          ],
+          "decode_lines": [
+            "prompt 63 tok in 264 ms (238.3 tok/s); spec decode D=2: 255 tok in 3374 ms (75.6 tok/s), 96 cycles, 2.66 tok/cycle, accepted/drafted 0.83, 34.453 ms GPU/cycle, 35.147 ms wall/cycle, hist 7 19 70"
+          ],
+          "contention": {
+            "samples": 8,
+            "mean_foreign_gpu_pct": 0.0,
+            "max_foreign_gpu_pct": 0,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 0,
+            "longest_busy_run": 0,
+            "top": [],
+            "flagged": false
+          },
+          "samples": [
+            [
+              1794041780.967,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041781.521,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041782.068,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041782.62,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041783.167,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041783.714,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041784.262,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041784.81,
+              0,
+              "-",
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "label": "27b-continuation-2-base",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "bf9bd80862daa6d72d4dd83f0341dc9f7f0b60de161ee9f28397a35bf0f84b6b",
+          "load_lines": [
+            "[kapitsa] MTP head loaded in 13 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)"
+          ],
+          "decode_lines": [
+            "prompt 63 tok in 269 ms (233.9 tok/s); spec decode D=2: 255 tok in 3394 ms (75.1 tok/s), 96 cycles, 2.66 tok/cycle, accepted/drafted 0.83, 34.698 ms GPU/cycle, 35.353 ms wall/cycle, hist 7 19 70"
+          ],
+          "contention": {
+            "samples": 8,
+            "mean_foreign_gpu_pct": 0.0,
+            "max_foreign_gpu_pct": 0,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 0,
+            "longest_busy_run": 0,
+            "top": [],
+            "flagged": false
+          },
+          "samples": [
+            [
+              1794041805.053,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041805.607,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041806.156,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041806.694,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041807.239,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041807.78,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041808.32,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041808.867,
+              0,
+              "-",
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        {
+          "label": "27b-continuation-3-candidate",
+          "tokens": 256,
+          "text_nonempty": true,
+          "eos_count": 0,
+          "before_first_eos": 256,
+          "ids_sha256": "bf9bd80862daa6d72d4dd83f0341dc9f7f0b60de161ee9f28397a35bf0f84b6b",
+          "load_lines": [
+            "[kapitsa] MTP head loaded in 13 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)"
+          ],
+          "decode_lines": [
+            "prompt 63 tok in 263 ms (239.4 tok/s); spec decode D=2: 255 tok in 3381 ms (75.4 tok/s), 96 cycles, 2.66 tok/cycle, accepted/drafted 0.83, 34.555 ms GPU/cycle, 35.215 ms wall/cycle, hist 7 19 70"
+          ],
+          "contention": {
+            "samples": 8,
+            "mean_foreign_gpu_pct": 0.0,
+            "max_foreign_gpu_pct": 0,
+            "mean_ambient_gpu_pct": 0.0,
+            "busy_samples": 0,
+            "longest_busy_run": 0,
+            "top": [],
+            "flagged": false
+          },
+          "samples": [
+            [
+              1794041841.758,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041842.315,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041842.865,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041843.412,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041843.96,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041844.508,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041845.058,
+              0,
+              "-",
+              0.0,
+              0.0
+            ],
+            [
+              1794041845.606,
+              0,
+              "-",
+              0.0,
+              0.0
+            ]
+          ]
+        }
+      ],
+      "quiet_checks": [
+        {
+          "label": "27b-continuation-0-base",
+          "result": [
+            true,
+            19.044498920440674,
+            []
+          ]
+        },
+        {
+          "label": "27b-continuation-1-candidate",
+          "result": [
+            true,
+            36.05640912055969,
+            []
+          ]
+        },
+        {
+          "label": "27b-continuation-2-base",
+          "result": [
+            true,
+            19.085442781448364,
+            []
+          ]
+        },
+        {
+          "label": "27b-continuation-3-candidate",
+          "result": [
+            true,
+            31.704995155334473,
+            []
+          ]
+        },
+        {
+          "label": "27b-bench-0-base",
+          "result": [
+            true,
+            44.57958984375,
+            []
+          ]
+        },
+        {
+          "label": "27b-bench-1-candidate",
+          "result": [
+            true,
+            40.32358503341675,
+            []
+          ]
+        },
+        {
+          "label": "27b-bench-2-base",
+          "result": [
+            true,
+            37.89113664627075,
+            []
+          ]
+        },
+        {
+          "label": "27b-bench-3-candidate",
+          "result": [
+            true,
+            40.285547971725464,
+            []
+          ]
+        }
+      ],
+      "http": [
+        {
+          "label": "27b-http-base",
+          "exit": 1,
+          "passes": 48,
+          "failures": [
+            "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0008471012115478516, {'id': 'chatcmpl-179404190391745', 'object': 'chat.completion.chunk', 'created': 1794041903, 'model': 'qwen3.8-27b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [], first token at 0.2635231018066406"
+          ]
+        },
+        {
+          "label": "27b-http-candidate",
+          "exit": 1,
+          "passes": 48,
+          "failures": [
+            "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0009479522705078125, {'id': 'chatcmpl-179404200591745', 'object': 'chat.completion.chunk', 'created': 1794042005, 'model': 'qwen3.8-27b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [], first token at 0.2627408504486084"
+          ]
+        }
+      ],
+      "http_same_outcomes": true,
+      "benchmarks": [
+        {
+          "label": "27b-bench-0-base",
+          "exit": 0,
+          "kapitsa": {
+            "version": "0.2.31",
+            "commit": "b171f98"
+          },
+          "model": {
+            "name": "qwen3.8-27b-4bit",
+            "title": "qwen3.8-27b-4bit",
+            "variant": null,
+            "precision": "4-bit",
+            "catalog": false,
+            "revision": null,
+            "decoding": "KFlash",
+            "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+            "drafter": "dflash2",
+            "drafter_kind": "DFlash2",
+            "drafter_source": "dflash2",
+            "drafter_reason": "found in the model's folder"
+          },
+          "results": {
+            "decode": {
+              "median_tps": 131.72,
+              "runs_tps": [
+                131.72,
+                149.17,
+                128.78
+              ],
+              "median_accepted_draft_tps": 104.7,
+              "median_accepted_draft_share": 0.7949
+            },
+            "decode_greedy": {
+              "median_tps": 145.32,
+              "runs_tps": [
+                146.04,
+                145.32,
+                144.71
+              ],
+              "median_accepted_draft_tps": 117.79,
+              "median_accepted_draft_share": 0.8105
+            },
+            "prefill": [
+              {
+                "size": 4000,
+                "prompt_tokens": 4131,
+                "ttft_s": 11.995,
+                "tps": 344.4,
+                "followup_s": [
+                  0.1368,
+                  0.1547,
+                  0.1212
+                ],
+                "followup_median_s": 0.1368,
+                "followup_suffix_tps": 173.3
+              }
+            ],
+            "tool_calls": "pass",
+            "peak_memory_gb": 19.39
+          },
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "nominal",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.2,
+            "gpu_other_mean_pct": 0.0,
+            "gpu_other_max_pct": 0.0,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [],
+            "contention": []
+          },
+          "flags": [],
+          "invalid": []
+        },
+        {
+          "label": "27b-bench-1-candidate",
+          "exit": 0,
+          "kapitsa": {
+            "version": "0.2.31",
+            "commit": "8e12c3d"
+          },
+          "model": {
+            "name": "qwen3.8-27b-4bit",
+            "title": "qwen3.8-27b-4bit",
+            "variant": null,
+            "precision": "4-bit",
+            "catalog": false,
+            "revision": null,
+            "decoding": "KFlash",
+            "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+            "drafter": "dflash2",
+            "drafter_kind": "DFlash2",
+            "drafter_source": "dflash2",
+            "drafter_reason": "found in the model's folder"
+          },
+          "results": {
+            "decode": {
+              "median_tps": 135.29,
+              "runs_tps": [
+                126.52,
+                142.66,
+                135.29
+              ],
+              "median_accepted_draft_tps": 107.28,
+              "median_accepted_draft_share": 0.793
+            },
+            "decode_greedy": {
+              "median_tps": 144.73,
+              "runs_tps": [
+                143.18,
+                144.73,
+                144.8
+              ],
+              "median_accepted_draft_tps": 117.31,
+              "median_accepted_draft_share": 0.8105
+            },
+            "prefill": [
+              {
+                "size": 4000,
+                "prompt_tokens": 4132,
+                "ttft_s": 12.0,
+                "tps": 344.3,
+                "followup_s": [
+                  0.1531,
+                  0.1603,
+                  0.1331
+                ],
+                "followup_median_s": 0.1531,
+                "followup_suffix_tps": 157.8
+              }
+            ],
+            "tool_calls": "pass",
+            "peak_memory_gb": 19.39
+          },
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "nominal",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.2,
+            "gpu_other_mean_pct": 0.0,
+            "gpu_other_max_pct": 0.0,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [],
+            "contention": []
+          },
+          "flags": [],
+          "invalid": []
+        },
+        {
+          "label": "27b-bench-2-base",
+          "exit": 0,
+          "kapitsa": {
+            "version": "0.2.31",
+            "commit": "b171f98"
+          },
+          "model": {
+            "name": "qwen3.8-27b-4bit",
+            "title": "qwen3.8-27b-4bit",
+            "variant": null,
+            "precision": "4-bit",
+            "catalog": false,
+            "revision": null,
+            "decoding": "KFlash",
+            "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+            "drafter": "dflash2",
+            "drafter_kind": "DFlash2",
+            "drafter_source": "dflash2",
+            "drafter_reason": "found in the model's folder"
+          },
+          "results": {
+            "decode": {
+              "median_tps": 130.08,
+              "runs_tps": [
+                117.34,
+                130.08,
+                143.12
+              ],
+              "median_accepted_draft_tps": 102.64,
+              "median_accepted_draft_share": 0.7891
+            },
+            "decode_greedy": {
+              "median_tps": 143.15,
+              "runs_tps": [
+                141.66,
+                143.15,
+                144.71
+              ],
+              "median_accepted_draft_tps": 115.75,
+              "median_accepted_draft_share": 0.8086
+            },
+            "prefill": [
+              {
+                "size": 4000,
+                "prompt_tokens": 4130,
+                "ttft_s": 12.0014,
+                "tps": 344.1,
+                "followup_s": [
+                  0.1348,
+                  0.1678,
+                  0.1371
+                ],
+                "followup_median_s": 0.1371,
+                "followup_suffix_tps": 166.9
+              }
+            ],
+            "tool_calls": "pass",
+            "peak_memory_gb": 19.4
+          },
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "nominal",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.2,
+            "gpu_other_mean_pct": 0.0,
+            "gpu_other_max_pct": 0.0,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [],
+            "contention": []
+          },
+          "flags": [],
+          "invalid": []
+        },
+        {
+          "label": "27b-bench-3-candidate",
+          "exit": 0,
+          "kapitsa": {
+            "version": "0.2.31",
+            "commit": "8e12c3d"
+          },
+          "model": {
+            "name": "qwen3.8-27b-4bit",
+            "title": "qwen3.8-27b-4bit",
+            "variant": null,
+            "precision": "4-bit",
+            "catalog": false,
+            "revision": null,
+            "decoding": "KFlash",
+            "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+            "drafter": "dflash2",
+            "drafter_kind": "DFlash2",
+            "drafter_source": "dflash2",
+            "drafter_reason": "found in the model's folder"
+          },
+          "results": {
+            "decode": {
+              "median_tps": 137.22,
+              "runs_tps": [
+                124.6,
+                141.27,
+                137.22
+              ],
+              "median_accepted_draft_tps": 109.35,
+              "median_accepted_draft_share": 0.7969
+            },
+            "decode_greedy": {
+              "median_tps": 146.13,
+              "runs_tps": [
+                146.13,
+                144.95,
+                146.55
+              ],
+              "median_accepted_draft_tps": 118.73,
+              "median_accepted_draft_share": 0.8125
+            },
+            "prefill": [
+              {
+                "size": 4000,
+                "prompt_tokens": 4133,
+                "ttft_s": 11.9978,
+                "tps": 344.5,
+                "followup_s": [
+                  0.1378,
+                  0.149,
+                  0.1225
+                ],
+                "followup_median_s": 0.1378,
+                "followup_suffix_tps": 171.4
+              }
+            ],
+            "tool_calls": "pass",
+            "peak_memory_gb": 19.39
+          },
+          "conditions": {
+            "power_source": "ac",
+            "power_mode": "automatic",
+            "low_power_mode": false,
+            "thermal_state": "nominal",
+            "swapouts": 0,
+            "gpu_quiet_wait_s": 18.2,
+            "gpu_other_mean_pct": 0.0,
+            "gpu_other_max_pct": 0.0,
+            "gpu_ambient_mean_pct": 0.0,
+            "gpu_users": [],
+            "contention": []
+          },
+          "flags": [],
+          "invalid": []
+        }
+      ]
+    }
+  ],
+  "identities": {
+    "base": {
+      "head": "b171f98363abd5dfd8ae5d24f786ca77b3801a4a",
+      "version": "kapitsa 0.2.31 (b171f98)",
+      "binaries": {
+        "kapitsa": "539ca80fc46917acb0a3c6768121d871ed95ef25a0aa8f0296aa9655e6d30b03",
+        "ni_run": "8d04a449fa7a30421d8de221d99399435a084599ee0462ea61ec1bc0fb809ab3",
+        "logit_dump": "1fe252dc53f6cf8da73059b74fcd374bd432cc2f5d4408b98b24504e4c170988"
+      },
+      "sources": {
+        "src/model/affine_pack.h": "bde8632354ce54e1ee40ebb30f2df2da1abe5569928991ffe84129de065d85dd",
+        "src/model/qwen35_spec.cpp": "5ca89d5a1823d2bf31d9656ff949f6758a0c9aead368455b2a58cf59d46009e2"
+      }
+    },
+    "candidate": {
+      "head": "8e12c3d09ac4118775755000d75f5fdbe6cbca35",
+      "version": "kapitsa 0.2.31 (8e12c3d)",
+      "binaries": {
+        "kapitsa": "f2405d97dbb7bf7d6047bdf081f0d0e389976b9a21b6b271f3ec6fc0b7382306",
+        "ni_run": "2afcf33b5c84f697155aae2ce50117da93f710d6accb23ecfaa623b5982381c2",
+        "logit_dump": "7b095a7349363be5261a3503ad1f9ea32bc9c378de863da07ba1c9f0a585ed52"
+      },
+      "sources": {
+        "src/model/affine_pack.h": "c008bcbacf24ab0c137312027960101386e5a60e8285ae0a19ed7608966f20c6",
+        "src/model/qwen35_spec.cpp": "b1b7df3ebc16e3b25ead07429303706505aef36d707d235cab8d9fc644258331"
+      }
+    }
+  },
+  "gpu_lock_acquired_at": "2026-11-07T08:53:34.821971+00:00"
+}

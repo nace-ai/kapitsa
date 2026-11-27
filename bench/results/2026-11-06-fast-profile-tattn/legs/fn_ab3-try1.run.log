@@ -1,0 +1,27 @@
+17:52:02 1 32K arm=P rc=0 load 2.08->2.47 ok prompt 32768 tok in 43484 ms (753.6 tok/s); spec decode D=2: 127 tok in 3404 ms (37.3 tok/s), 62 cycles, 2.05 tok/cycle, accepted/drafted 0.
+17:52:50 2 32K arm=F rc=0 load 2.47->2.38 ok+mempressure prompt 32768 tok in 40481 ms (809.5 tok/s); spec decode D=2: 127 tok in 3790 ms (33.5 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+17:53:36 3 32K arm=G rc=0 load 2.38->3.20 ok prompt 32768 tok in 39043 ms (839.3 tok/s); spec decode D=2: 127 tok in 3481 ms (36.5 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+17:54:22 4 32K arm=G rc=0 load 3.20->3.09 ok prompt 32768 tok in 38895 ms (842.5 tok/s); spec decode D=2: 127 tok in 3525 ms (36.0 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+17:55:07 5 32K arm=F rc=0 load 3.09->2.58 ok+mempressure prompt 32768 tok in 36957 ms (886.6 tok/s); spec decode D=2: 127 tok in 3839 ms (33.1 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+17:55:57 6 32K arm=P rc=0 load 2.58->2.83 ok prompt 32768 tok in 42327 ms (774.2 tok/s); spec decode D=2: 127 tok in 3328 ms (38.2 tok/s), 62 cycles, 2.05 tok/cycle, accepted/drafted 0.
+17:56:44 7 32K arm=G rc=0 load 2.83->2.18 ok prompt 32768 tok in 39216 ms (835.6 tok/s); spec decode D=2: 127 tok in 3524 ms (36.0 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+17:57:34 8 32K arm=P rc=0 load 2.18->2.13 ok prompt 32768 tok in 42402 ms (772.8 tok/s); spec decode D=2: 127 tok in 3363 ms (37.8 tok/s), 62 cycles, 2.05 tok/cycle, accepted/drafted 0.
+17:58:19 9 32K arm=F rc=0 load 2.13->1.44 ok+mempressure prompt 32768 tok in 36597 ms (895.4 tok/s); spec decode D=2: 127 tok in 3967 ms (32.0 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+17:59:02 10 32K arm=F rc=0 load 1.48->1.70 ok prompt 32768 tok in 35334 ms (927.4 tok/s); spec decode D=2: 127 tok in 3659 ms (34.7 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+17:59:52 11 32K arm=P rc=0 load 1.70->2.26 ok prompt 32768 tok in 42460 ms (771.7 tok/s); spec decode D=2: 127 tok in 3361 ms (37.8 tok/s), 62 cycles, 2.05 tok/cycle, accepted/drafted 0.
+18:00:39 12 32K arm=G rc=0 load 2.26->2.81 ok prompt 32768 tok in 39881 ms (821.7 tok/s); spec decode D=2: 127 tok in 3545 ms (35.8 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+18:02:18 13 64K arm=P rc=0 load 2.67->2.92 ok prompt 65000 tok in 91755 ms (708.4 tok/s); spec decode D=2: 127 tok in 3135 ms (40.5 tok/s), 52 cycles, 2.44 tok/cycle, accepted/drafted 0.
+18:03:47 14 64K arm=F rc=0 load 2.92->3.41 ok+mempressure prompt 65000 tok in 81535 ms (797.2 tok/s); spec decode D=2: 127 tok in 3647 ms (34.8 tok/s), 53 cycles, 2.40 tok/cycle, accepted/drafted 0.
+18:05:17 15 64K arm=G rc=0 load 3.41->2.08 ok prompt 65000 tok in 82892 ms (784.2 tok/s); spec decode D=2: 127 tok in 3053 ms (41.6 tok/s), 53 cycles, 2.40 tok/cycle, accepted/drafted 0.
+18:06:46 16 64K arm=G rc=0 load 2.08->2.38 ok prompt 65000 tok in 82814 ms (784.9 tok/s); spec decode D=2: 127 tok in 3046 ms (41.7 tok/s), 53 cycles, 2.40 tok/cycle, accepted/drafted 0.
+18:08:11 17 64K arm=F rc=0 load 2.38->2.66 ok+mempressure prompt 65000 tok in 77601 ms (837.6 tok/s); spec decode D=2: 127 tok in 3294 ms (38.6 tok/s), 53 cycles, 2.40 tok/cycle, accepted/drafted 0.
+18:09:49 18 64K arm=P rc=0 load 2.66->2.25 ok prompt 65000 tok in 90922 ms (714.9 tok/s); spec decode D=2: 127 tok in 3054 ms (41.6 tok/s), 52 cycles, 2.44 tok/cycle, accepted/drafted 0.
+18:11:18 19 64K arm=G rc=0 load 2.25->2.67 ok prompt 65000 tok in 82872 ms (784.3 tok/s); spec decode D=2: 127 tok in 3053 ms (41.6 tok/s), 53 cycles, 2.40 tok/cycle, accepted/drafted 0.
+18:12:56 20 64K arm=P rc=0 load 2.67->3.32 ok prompt 65000 tok in 90610 ms (717.4 tok/s); spec decode D=2: 127 tok in 3113 ms (40.8 tok/s), 52 cycles, 2.44 tok/cycle, accepted/drafted 0.
+18:14:21 21 64K arm=F rc=0 load 3.32->1.98 ok+mempressure prompt 65000 tok in 78026 ms (833.1 tok/s); spec decode D=2: 127 tok in 3544 ms (35.8 tok/s), 53 cycles, 2.40 tok/cycle, accepted/drafted 0.
+18:15:45 22 64K arm=F rc=0 load 1.98->1.87 ok+mempressure prompt 65000 tok in 77073 ms (843.4 tok/s); spec decode D=2: 127 tok in 3235 ms (39.3 tok/s), 53 cycles, 2.40 tok/cycle, accepted/drafted 0.
+18:17:25 23 64K arm=P rc=0 load 1.87->2.82 ok prompt 65000 tok in 91559 ms (709.9 tok/s); spec decode D=2: 127 tok in 3856 ms (32.9 tok/s), 52 cycles, 2.44 tok/cycle, accepted/drafted 0.
+18:18:57 24 64K arm=G rc=0 load 2.82->3.35 ok prompt 65000 tok in 85483 ms (760.4 tok/s); spec decode D=2: 127 tok in 3132 ms (40.6 tok/s), 53 cycles, 2.40 tok/cycle, accepted/drafted 0.
+18:18:57 QDONE
+detach: resumed cpu-heavy k1003-ab
+detach: resumed cpu-heavy k365-pr-tests3

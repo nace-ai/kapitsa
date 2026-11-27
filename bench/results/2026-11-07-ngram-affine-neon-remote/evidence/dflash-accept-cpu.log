@@ -1,0 +1,41 @@
+[kapitsa] KFlash: budget saved (32 cycles) to /var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T//kf_cache_EnIyOX/kflash/t.json
+[kapitsa] KFlash: budget saved (33 cycles) to /var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T//kf_cache_EnIyOX/kflash/t.json
+[fit] alpha -1.18 beta 0.62 from 2048 records drawn with alpha -1.20 beta 0.60: PASS
+[fit] alpha -0.90 beta 0.77 from 2048 records drawn with alpha -0.80 beta 0.85: PASS
+[fit] alpha -0.21 beta 1.15 from 2048 records drawn with alpha -0.40 beta 1.10: PASS
+[fit] alpha 0.07 beta 1.26 from 2048 records drawn with alpha -0.00 beta 1.35: PASS
+[fit] alpha 0.35 beta 1.54 from 2048 records drawn with alpha 0.40 beta 1.60: PASS
+[fit] alpha 0.89 beta 1.90 from 2048 records drawn with alpha 0.80 beta 1.85: PASS
+[cache] 31 cycles, save(): no file (32 needed): PASS
+[cache] 32 cycles, save(kSaveEvery): no file (kSaveEvery new cycles needed): PASS
+[cache] 32 cycles, save(): written: PASS
+[cache] no cycle since the last save, save(): not written again: PASS
+[cache] the destructor wrote it, whole (no temporary file left): PASS
+[cache] loaded: the cost table counts as measured: PASS
+[cache] a table without cost_of: measured again (8 rows forced), the calibration kept: PASS
+[cache] saves from another thread while cycles are observed: one whole file: PASS
+[costs] exploration: forced cycles: 24.000 (expected 24.000): PASS
+[costs] 8 rows (verified) after the drift: 28.685 (expected 28.700): PASS
+[costs] 1 row (not verified since) after the drift: 20.542 (expected 21.000): PASS
+[costs] 8 rows over 1 row: 8.143 (expected 7.700): PASS
+[costs] rate (tokens per ms): 0.109 (expected 0.109): PASS
+[costs] loaded: the first cycle verifies a count the cache holds: 8.000 (expected 8.000): PASS
+[costs] loaded, +7 ms: 1 row's cost from the base: 27.557 (expected 28.000): PASS
+[costs] wide, a cache of 8-row verifies: the first cycle verifies capacity 8: 8.000 (expected 8.000): PASS
+[costs] wide: capacity 8 offers the 8-row verify only: 128.000 (expected 128.000): PASS
+[costs] wide: then a wide 8-row verify sets the base: 8.000 (expected 8.000): PASS
+[costs] wide: every allowed count measured twice, 16 and 32: 1.000 (expected 1.000): PASS
+[costs] wide: the wider counts don't pay, the capacity stays 8: 8.000 (expected 8.000): PASS
+[costs] the wide cache read by an 8-row run: 8 rows only: 8.000 (expected 8.000): PASS
+[batch] rule on 20000 random batches: bounds and forced counts (0 broken): PASS
+[batch] rate rule optimal against every allocation: 0 of 11428 not: PASS
+[batch] a draft's place independent of its member's later survivals: 0 of 367892 moved: PASS
+[batch] cost line: an outlier at 3 rows leaves 20 + 1.2 n; a falling table is flat; one count: flat: PASS
+[batch] 2 members: rows 2 .. 8 explored 3 times each: PASS
+[batch] 2 members: the costs of 3 and 8 rows as measured: PASS
+[batch] greedy members' records reach the drafter's budget (alpha < -1 at depth 1), not the sampled calibration: PASS
+[batch] the cache: written whole; read back, the first cycle verifies 8 rows (a count it holds): PASS
+[batch] sampled members' records reach the batch's own calibration, not the drafter's: PASS
+[batch] refresh: every count measured again, 3 rows' cost back from +30 ms; 8 rows in 9 cycles of 10 meanwhile: PASS
+[batch] a floor of one draft: 4 members verify one draft each at least: PASS
+ALL PASSED

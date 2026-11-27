@@ -3,8 +3,11 @@
 Messages and OpenAI Responses (tool loops, the cache across them, errors).
 usage: test_server.py [base_url] [--api-key KEY] [--model-id ID]   (default http://127.0.0.1:8090)
        test_server.py --cli <path to kapitsa>    offline checks of the command line: model names and aliases,
-                                                 `pull --dry-run`, `list`, `rm`, early port errors (no server)"""
-import json, os, re, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
+                                                 `pull --dry-run`, `list`, `rm`, early port errors (no server)
+       --cli starts `kapitsa serve` on stand-in models, so it takes the GPU lock ($BENCH_GPU_LOCK, default
+       /tmp/kapitsa-gpu.lock) before anything starts, waiting for it, unless NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1 says the
+       caller holds it (lockf -k /tmp/kapitsa-gpu.lock env NI_LOCK_HELD=1 NACE_GPU_LOCK_HELD=1 python3 tests/test_server.py ...)"""
+import fcntl, json, os, re, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
 
 ARGS = sys.argv[1:]
 def opt(name):
@@ -15,6 +18,37 @@ def opt(name):
         return v
     return None
 CLI = opt("--cli")
+LOCK_ONLY = "--lock-only" in ARGS  # tests/test_server_lock.py: take the lock, say so, stop
+if LOCK_ONLY:
+    ARGS.remove("--lock-only")
+
+
+def take_gpu_lock():
+    """The GPU lock as GpuLock does it (src/bench/system.mm): one flock on the shared file, waited for, held until this
+    process exits, and children told with NI_LOCK_HELD so they do not take it again (flock is per open file description)."""
+    if any(os.environ.get(n) not in (None, "", "0") for n in ("NI_LOCK_HELD", "NACE_GPU_LOCK_HELD")):
+        return None
+    path = os.path.expanduser(os.environ.get("BENCH_GPU_LOCK") or "/tmp/kapitsa-gpu.lock")
+    fd = os.open(path, os.O_RDONLY | os.O_CREAT, 0o644)  # not inherited by children
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print(f"waiting for GPU lock ({path})", flush=True)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+    os.environ["NI_LOCK_HELD"] = os.environ["NACE_GPU_LOCK_HELD"] = "1"
+    return fd
+
+
+GPU_LOCK_FD = take_gpu_lock() if CLI else None
+if LOCK_ONLY:
+    # what a child (every `kapitsa serve` / `doctor` the script starts) inherits: without both markers it would open the
+    # lock file itself and block on the lock this process holds
+    seen = subprocess.run([sys.executable, "-c", "import os; print(os.environ.get('NI_LOCK_HELD', ''), "
+                           "os.environ.get('NACE_GPU_LOCK_HELD', ''), sep='|')"], capture_output=True, text=True).stdout
+    ni, _, nace = seen.strip().partition("|")
+    print(("GPU lock held" if GPU_LOCK_FD is not None else "GPU lock not taken")
+          + f"; children see NI_LOCK_HELD={ni} NACE_GPU_LOCK_HELD={nace}", flush=True)
+    sys.exit(0)
 API_KEY = opt("--api-key")
 MODEL_ID = opt("--model-id")
 BASE = ARGS[0] if ARGS else "http://127.0.0.1:8090"
@@ -66,6 +100,16 @@ def auth():
 def get(path, headers=None):
     """(status, headers, body) of a GET; HTTP errors are returned, not raised."""
     req = urllib.request.Request(BASE + path, headers=headers or {})
+    try:
+        r = urllib.request.urlopen(req, timeout=30)
+        return r.status, r.headers, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.headers, e.read()
+
+def post_raw(path, data, stream=False):
+    """(status, headers, body) of a POST to an arbitrary path; HTTP errors are returned, not raised."""
+    req = urllib.request.Request(BASE + path, data=data,
+                                 headers={"Content-Type": "application/json", **auth()})
     try:
         r = urllib.request.urlopen(req, timeout=30)
         return r.status, r.headers, r.read()
@@ -128,22 +172,22 @@ def check(name, ok, detail=""):
     if not ok:
         fails += 1
 
-# The app and the CLI download the same pinned files for the 4-bit variants (src/hub/catalog.cpp), which are the
-# defaults.
-DEFAULTS = {"qwen3.6-35b-a3b": ("4bit", "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed", "95460516fbfe34c48f577f67c9ed191f5d61fbaf"),
-            "qwen3.8-27b": ("4bit", "lmstudio-community/Qwen3.8-27B-MLX-4bit", "6067b15cf581666a4aecf6af3afaba4bb5efc20c"),
-            "qwen3.5-4b": ("4bit", "lmstudio-community/Qwen3.5-4B-MLX-4bit", "c43ee1d65576a5d98de1e8405cac93c371a655c1"),
-            "qwen3.5-9b": ("4bit", "lmstudio-community/Qwen3.5-9B-MLX-4bit", "b455506b0f574c74616dbcd56879bde38fafcff3")}
+# The app and the CLI download the same pinned files for the 4-bit variants (PINNED) and the defaults (DEFAULTS:
+# the 4-bit variants, except the 27B's Nace Q4 pack, #495) of src/hub/catalog.cpp.
+DEFAULTS = {"qwen3.6-35b-a3b": ("4bit", "nace-ai/Qwen3.6-35B-A3B-MLX", "37e804f90e368a4de866bc34650b9dde67a78c8e"),
+            "qwen3.8-27b": ("q4", "nace-ai/Qwen3.8-27B-MLX", "8e62e9e0d989f71ce2d0ab5c4b8e0249c1e33364"),
+            "qwen3.5-4b": ("4bit", "nace-ai/Qwen3.5-4B-MLX", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"),
+            "qwen3.5-9b": ("4bit", "nace-ai/Qwen3.5-9B-MLX", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")}
 PINNED = {
-    "qwen3.6-35b-a3b": ("Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed", "95460516fbfe34c48f577f67c9ed191f5d61fbaf",
+    "qwen3.6-35b-a3b": ("nace-ai/Qwen3.6-35B-A3B-MLX", "37e804f90e368a4de866bc34650b9dde67a78c8e",
                         [("dflash2", "incoai/Qwen3.6-35B-A3B-DFlash2", "51ef7b6923ad6c14cb1bb41c37a9041446496ab6", "dflash2")]),
-    "qwen3.8-27b": ("lmstudio-community/Qwen3.8-27B-MLX-4bit", "6067b15cf581666a4aecf6af3afaba4bb5efc20c",
+    "qwen3.8-27b": ("nace-ai/Qwen3.8-27B-MLX-4bit", "d76e1f92eb8c16a3f3058d438cd6af30bce86557",
                     [("mtp", "Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed", "1d5087d2062c02b279180a53e4016cf9cd7a3d7e", "."),
-                     ("dflash2", "incoai/Qwen3.8-27B-DFlash2", "015e795645c74b1a0eeef3b570031fb62e769bc5", "dflash2")]),
-    "qwen3.5-4b": ("lmstudio-community/Qwen3.5-4B-MLX-4bit", "c43ee1d65576a5d98de1e8405cac93c371a655c1",
+                     ("dflash2", "nace-ai/Qwen3.8-27B-DFlash2-Kapitsa", "4f950469095a4c799ca2297b1f444b349e672b71", "dflash2")]),
+    "qwen3.5-4b": ("nace-ai/Qwen3.5-4B-MLX", "9f7d3278cdab59ea0d8c23c25f89987b36e8cd89",
                    [("mtp-sidecar", "Qwen/Qwen3.5-4B", "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a", "."),
                     ("dflash", "z-lab/Qwen3.5-4B-DFlash", "9a1996ccf887b79ab3af4fcbf8c1d1f4b5658bcf", "dflash2")]),
-    "qwen3.5-9b": ("lmstudio-community/Qwen3.5-9B-MLX-4bit", "b455506b0f574c74616dbcd56879bde38fafcff3",
+    "qwen3.5-9b": ("nace-ai/Qwen3.5-9B-MLX", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4",
                    [("mtp-sidecar", "Qwen/Qwen3.5-9B", "c202236235762e1c871ad0ccb60c8ee5ba337b9a", "."),
                     ("dflash", "z-lab/Qwen3.5-9B-DFlash", "5fc3b3d474760f18c516db87d84c37edbfd3ede6", "dflash2")]),
 }
@@ -159,7 +203,7 @@ def agent_checks(run, home):
     Pi gets that server's model, nothing downloads or starts, and when the Homebrew service's launchd job serves that
     port the command says so and how to stop it (issue 653: the service's server, the best model for the Mac, outlived
     Pi and came back with its model after Activity Monitor's Quit)"""
-    import http.server, shutil, threading
+    import http.server, plistlib, shutil, threading
     class Models(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             body = json.dumps({"object": "list", "data": [{"id": "qwen3.6-35b-a3b", "object": "model", "owned_by": "nace",
@@ -184,17 +228,20 @@ def agent_checks(run, home):
                 f"open({seen!r}, 'w'))\n")
     os.chmod(os.path.join(bindir, "pi"), 0o755)
     agents = os.path.join(user, "Library", "LaunchAgents")
-    def pi(port_in_plist, label="sh.brew.kapitsa"):
+    def pi(port_in_plist, label="sh.brew.kapitsa", service_args=None, service_env=None, binary=False, workdir=None):
         plist = os.path.join(agents, label + ".plist")
         if os.path.exists(seen):
             os.remove(seen)
         if port_in_plist:  # as `brew services start kapitsa` writes it, with a --port so that the job serves this port
             os.makedirs(os.path.dirname(plist), exist_ok=True)
-            with open(plist, "w") as f:
-                f.write('<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n\t<key>Label</key>\n'
-                        f'\t<string>{label}</string>\n\t<key>ProgramArguments</key>\n\t<array>\n'
-                        '\t\t<string>/opt/homebrew/opt/kapitsa/bin/kapitsa</string>\n\t\t<string>serve</string>\n'
-                        f'\t\t<string>--port</string>\n\t\t<string>{port_in_plist}</string>\n\t</array>\n</dict>\n</plist>\n')
+            args = ["--port", str(port_in_plist)] if service_args is None else service_args
+            job = {"Label": label, "ProgramArguments": ["/opt/homebrew/opt/kapitsa/bin/kapitsa", "serve", *args]}
+            if service_env is not None:
+                job["EnvironmentVariables"] = service_env
+            if workdir is not None:
+                job["WorkingDirectory"] = workdir
+            with open(plist, "wb") as f:
+                plistlib.dump(job, f, fmt=plistlib.FMT_BINARY if binary else plistlib.FMT_XML)
         else:
             shutil.rmtree(agents, ignore_errors=True)
         rc, out, err = run("pi", "--port", str(port), "--", "-p", "hi",
@@ -238,12 +285,49 @@ def agent_checks(run, home):
         pi(None)
     rc, out, got = pi(port + 1 if port < 65535 else port - 1)
     check("cli: a service on another port is not the server found", rc == 0 and "brew services" not in out, out)
+    # A bare Homebrew command gets its port from the service's home, not the attaching agent's KAPITSA_HOME.
+    defaults = os.path.join(user, ".cache", "kapitsa")
+    os.makedirs(defaults)
+    with open(os.path.join(defaults, "serve.json"), "w") as f:
+        json.dump(["--port", str(port)], f)
+    for label in ["sh.brew.kapitsa", "homebrew.mxcl.kapitsa"]:
+        rc, out, _ = pi(port, label, service_args=[])
+        check(f"cli: pi recognizes a Homebrew port from serve.json ({label})",
+              rc == 0 and "Homebrew service" in out, out)
+        pi(None)
+    custom = os.path.join(home, "service & defaults")
+    os.makedirs(custom)
+    with open(os.path.join(custom, "serve.json"), "w") as f:
+        json.dump(["--port", "1", "--api-key", "--port", "--port", str(port)], f)
+    for binary in [False, True]:
+        rc, out, _ = pi(port, service_args=[], service_env={"KAPITSA_HOME": custom}, binary=binary)
+        check(f"cli: service KAPITSA_HOME and last port work in {'binary' if binary else 'XML'} plists",
+              rc == 0 and "Homebrew service" in out, out)
+    rc, out, _ = pi(port, service_args=[], service_env={"HOME": user}, binary=True)
+    check("cli: service HOME supplies its default config path", rc == 0 and "Homebrew service" in out, out)
+    rc, out, _ = pi(port, service_args=[], service_env={"HOME": user, "KAPITSA_HOME": "~/.cache/kapitsa"})
+    check("cli: service KAPITSA_HOME expands its own HOME", rc == 0 and "Homebrew service" in out, out)
+    rc, out, _ = pi(port, service_args=[], service_env={"KAPITSA_HOME": "service & defaults"}, workdir=home)
+    check("cli: relative service KAPITSA_HOME uses its working directory", rc == 0 and "Homebrew service" in out, out)
+    rc, out, _ = pi(port, service_args=["--context", "32k"])
+    check("cli: explicit service arguments bypass serve.json for service recognition",
+          rc == 0 and "Homebrew service" not in out, out)
+    with open(os.path.join(defaults, "serve.json"), "w") as f:
+        f.write("not JSON")
+    rc, out, _ = pi(port, service_args=[])
+    check("cli: a bad service config does not prevent attaching to its server", rc == 0, out)
+    rc, out, _ = pi(port)
+    check("cli: explicit plist port ignores a bad defaults file", rc == 0 and "Homebrew service" in out, out)
+    shutil.rmtree(defaults)
     check("cli: pi on a running server downloads nothing",
           (sorted(os.listdir(models)) if os.path.isdir(models) else []) == had, str(had))
     srv.shutdown()
     srv.server_close()
 
 def cli_checks(kapitsa):
+    from test_hub_download import auth_checks, download_checks
+    download_checks(kapitsa, check)
+    auth_checks(kapitsa, check)
     home = tempfile.mkdtemp(prefix="kapitsa-test-")
     # a closed port as the Hub: any network access in these checks fails loudly
     env = dict(os.environ, KAPITSA_HOME=home, HF_ENDPOINT="http://127.0.0.1:9", NI_LOG="0")
@@ -253,16 +337,26 @@ def cli_checks(kapitsa):
     def plan(name):
         rc, out, err = run("pull", "--dry-run", "--json", name)
         return json.loads(out) if rc == 0 else {"rc": rc, "err": err}
+    # The profile owns device-dependent checkpoint defaults; this command scans no models.
+    rc, out, err = run("doctor", "--print-profile", "--json")
+    check("cli: device profile available before model scan", rc == 0, err)
+    profile = json.loads(out)
+    if profile["chip_class"] in ("matrix", "wide"):
+        q9 = ("nace-ai/Qwen3.5-9B-MLX", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4")
+    else:
+        q9 = ("nace-ai/Qwen3.5-9B-MLX-4bit", "867adaa1c6d84d1fd9b4f37f43836019c877ba59")
+    DEFAULTS["qwen3.5-9b"] = ("4bit", *q9)
+    PINNED["qwen3.5-9b"] = (*q9, PINNED["qwen3.5-9b"][2])
     models = os.path.join(home, "models")
     rc, out, _ = run("list", "--json")
     check("cli: list --json on an empty store", rc == 0 and json.loads(out) == [], out)
     for name, aliases in [("qwen3.6-35b-a3b", ["35b:4bit", "QWEN3.6-35B-A3B:4bit",
-                                               "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed"]),
-                          ("qwen3.8-27b", ["27b:4bit", "27B:4BIT", "lmstudio-community/Qwen3.8-27B-MLX-4bit",
-                                           "hf.co/lmstudio-community/Qwen3.8-27B-MLX-4bit"]),
+                                               "nace-ai/Qwen3.6-35B-A3B-MLX@37e804f90e368a4de866bc34650b9dde67a78c8e"]),
+                          ("qwen3.8-27b", ["27b:4bit", "27B:4BIT", "nace-ai/Qwen3.8-27B-MLX-4bit",
+                                           "hf.co/nace-ai/Qwen3.8-27B-MLX-4bit"]),
                           ("qwen3.5-4b", ["4b:4bit", "qwen3.5-4b:4bit",
-                                          "lmstudio-community/Qwen3.5-4B-MLX-4bit@c43ee1d65576a5d98de1e8405cac93c371a655c1"]),
-                          ("qwen3.5-9b", ["9b:4bit", "QWEN3.5-9B:4bit", "lmstudio-community/Qwen3.5-9B-MLX-4bit"])]:
+                                          "nace-ai/Qwen3.5-4B-MLX@9f7d3278cdab59ea0d8c23c25f89987b36e8cd89"]),
+                          ("qwen3.5-9b", ["9b:4bit", "QWEN3.5-9B:4bit", q9[0], q9[0] + "@" + q9[1]])]:
         repo, rev, comps = PINNED[name]
         dv = DEFAULTS[name][0]
         for a in aliases:
@@ -273,8 +367,40 @@ def cli_checks(kapitsa):
                   j.get("kind") == "catalog" and j.get("variant") == "4bit" and
                   j.get("dir") == os.path.join(models, name + "-4bit") and j.get("repo") == repo and
                   j.get("revision") == rev and got == comps and j.get("downloaded") is False, json.dumps(j))
+    # the 27B's Nace Q4 variant, its default since #495: its own repo and drafter (the MTP head is in the repo), by
+    # name, by repo id or with no variant; `27b:4bit` above is the plain pack with mtp27 and dflash27
+    KQ27 = DEFAULTS["qwen3.8-27b"][1:]
+    for a in ["27b", "qwen3.8-27b", "27b:q4", "27B:KQUANT", "qwen3.8-27b:q4", KQ27[0], KQ27[0] + "@" + KQ27[1],
+              "nace-ai/Qwen3.8-27B-MLX"]:
+        j = plan(a)
+        got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
+        check(f"cli: {a} -> qwen3.8-27b:q4 with the nace-ai drafter",
+              j.get("model") == "qwen3.8-27b:q4" and j.get("id") == "qwen3.8-27b" and j.get("kind") == "catalog" and
+              j.get("variant") == "q4" and j.get("repo") == KQ27[0] and j.get("revision") == KQ27[1] and
+              j.get("dir") == os.path.join(models, "qwen3.8-27b-q4") and got == [PINNED["qwen3.8-27b"][2][1]] and
+              j.get("downloaded") is False, json.dumps(j))
+    # the released Nace packs without a drafter of their own (#495): by name or by repo id each gets its base's
+    # drafter, and the MTP head when the repo has none where the loader looks; the defaults stay as they are
+    D9, D27, D35 = PINNED["qwen3.5-9b"][2], PINNED["qwen3.8-27b"][2], PINNED["qwen3.6-35b-a3b"][2]
+    MTP35 = ("mtp", "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed", "95460516fbfe34c48f577f67c9ed191f5d61fbaf", ".")
+    for name, var, repo, rev, comps in [
+            ("qwen3.5-9b", "q4", "nace-ai/Qwen3.5-9B-MLX", "ff7b61b8c655186cdd50ddc4f485d3d5b93e1af4", D9),
+            ("qwen3.5-9b", "q5", "nace-ai/Qwen3.5-9B-MLX-Q5", "bbddf39f41d3e0f682f2293351c67a9616d5941d", D9),
+            ("qwen3.8-27b", "q5", "nace-ai/Qwen3.8-27B-MLX-Q5", "9f3187857e1940bf32fe7f23b4df0fb65631a874", D27),
+            ("qwen3.6-35b-a3b", "q5", "nace-ai/Qwen3.6-35B-A3B-MLX-Q5", "50b3b1c57e2c096e007de22997ff6824224fccde",
+             [MTP35] + D35)]:
+        for a in [name + ":" + var, repo, "hf.co/" + repo, repo + "@" + rev]:
+            j = plan(a)
+            got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
+            # a Mac with matrix units has the 9B's Q4 pack as `4bit`, listed before `q4`: its repo id finds `4bit`
+            v = "4bit" if (name, var) == ("qwen3.5-9b", "q4") and a != name + ":" + var and q9[0] == repo else var
+            check(f"cli: {a} -> {name}:{v} with its base's drafter",
+                  j.get("model") == name + ":" + v and j.get("kind") == "catalog" and j.get("variant") == v and
+                  j.get("repo") == repo and j.get("revision") == rev and
+                  j.get("dir") == os.path.join(models, name + "-" + v) and got == comps and
+                  j.get("downloaded") is False, json.dumps(j))
     # a name without a variant: the default (offline nothing can be planned, so no fallback for a smaller Mac)
-    for name, aliases in [("qwen3.6-35b-a3b", ["35b", "qwen3.6-35b", "QWEN3.6-35B-A3B"]), ("qwen3.8-27b", ["27b"]),
+    for name, aliases in [("qwen3.6-35b-a3b", ["35b", "qwen3.6-35b", "QWEN3.6-35B-A3B"]), ("qwen3.8-27b", ["27b", "qwen3.8-27b"]),
                           ("qwen3.5-4b", ["4b", "qwen3.5-4b"]), ("qwen3.5-9b", ["9b", "qwen3.5-9b"])]:
         dv, repo, rev = DEFAULTS[name]
         for a in aliases:
@@ -767,6 +893,32 @@ def cli_checks(kapitsa):
     check("cli: a failed repair keeps what is there", rc == 0 and os.path.exists(os.path.join(m4, ".kapitsa", "manifest.json")), out)
     rc, out, _ = run("rm", "4b")
     check("cli: rm deletes it", rc == 0 and "Deleted qwen3.5-4b:4bit" in out and not os.path.exists(m4), out)
+    # a 27B pulled by 0.2.35 sits in `qwen3.8-27b-kquant` and its manifest says `qwen3.8-27b:kquant`: it is the catalog's
+    # `qwen3.8-27b:q4` now, listed once, downloaded, used where it is and not offered for download again
+    old27 = os.path.join(models, "qwen3.8-27b-kquant")
+    os.makedirs(os.path.join(old27, ".kapitsa"))
+    with open(os.path.join(old27, "config.json"), "w") as f:
+        f.write("{}")
+    with open(os.path.join(old27, "mtp.safetensors"), "wb") as f:
+        f.write(b"x" * 10)
+    with open(os.path.join(old27, ".kapitsa", "manifest.json"), "w") as f:
+        json.dump({"name": "qwen3.8-27b:kquant", "variant": "kquant", "repo": "nace-ai/Qwen3.8-27B-MLX-KQuant",  # redirected old id: what 0.2.35 wrote
+                   "revision": KQ27[1], "commit": KQ27[1],
+                   "files": [{"path": "config.json", "size": 2}, {"path": "mtp.safetensors", "size": 10}],
+                   "companions": [{"kind": k, "repo": r, "revision": v, "files": ["mtp.safetensors"]}
+                                  for k, r, v, _ in [PINNED["qwen3.8-27b"][2][1]]]}, f)
+    rc, out, _ = run("list", "--json")
+    lst = json.loads(out) if rc == 0 else []
+    check("cli: a pack pulled before the rename lists once, as the catalog's q4",
+          len(lst) == 1 and lst[0]["name"] == "qwen3.8-27b:q4" and lst[0]["variant"] == "q4" and lst[0]["complete"] and
+          lst[0]["dir"] == old27, out)
+    rc, out, _ = run("list")
+    check("cli: list does not offer the q4 it has for download", rc == 0 and out.count("qwen3.8-27b:q4") == 1, out)
+    rc, out, err = run("pull", "27b")
+    check("cli: pull uses the old folder in place, with no download", rc == 0 and "already downloaded" in out and
+          os.path.isdir(old27) and not os.path.exists(os.path.join(models, "qwen3.8-27b-q4")), out + err)
+    rc, out, _ = run("rm", "27b")
+    check("cli: rm deletes the old folder", rc == 0 and not os.path.exists(old27), out)
     rc, _, err = run("rm", folder)
     check("cli: rm leaves a folder of yours alone", rc == 2 and os.path.exists(folder), err)
     # rm says what it gives back: a model that is an APFS clone of another copy frees nothing
@@ -789,6 +941,73 @@ def cli_checks(kapitsa):
     t0 = time.time()
     rc, _, err = run("serve", "--model", folder, "--port", str(busy))
     check("cli: a busy port fails at once, before loading", rc == 1 and "already in use" in err and time.time() - t0 < 10, err)
+    # The Homebrew invocation reads its defaults through the ordinary serve parser. A listening socket stops
+    # valid configurations before model loading; malformed configurations stop at parsing, also without a GPU.
+    serve_file = os.path.join(home, "serve.json")
+    defaults = ["--model", folder, "--port", str(busy), "--allow-switch", "--context", "32k", "--slots", "2"]
+    with open(serve_file, "w") as f:
+        json.dump(defaults, f)
+    expected = run("serve", *defaults)
+    got = run("serve")
+    check("cli: bare serve reads KAPITSA_HOME/serve.json like explicit arguments",
+          got == expected and got[0] == 1 and "already in use" in got[2], str(got))
+    with open(serve_file, "w") as f:
+        json.dump([folder, "--port", str(busy)], f)
+    expected = run("serve", folder, "--port", str(busy))
+    got = run("serve")
+    check("cli: a leading positional model works in explicit and file arguments",
+          got == expected and got[0] == 1 and "already in use" in got[2], str(got))
+    rc, _, err = run("serve", "--private", "--local", folder, "--port", str(busy))
+    check("cli: a positional model is still only accepted as the first argument",
+          rc == 2 and "unknown option " + folder in err, err)
+    for args, message in [(["--context", "12q"], "--context takes tokens"),
+                          (["--slots", "two"], "--slots needs a whole number"),
+                          (["--context"], "--context needs a value"),
+                          (["--not-a-serve-option"], "unknown option"),
+                          (["--allow-switch", "--host", "0.0.0.0"], "needs --api-key")]:
+        with open(serve_file, "w") as f:
+            json.dump(args, f)
+        expected = run("serve", *args)
+        got = run("serve")
+        check(f"cli: serve defaults keep validation for {args[0]}",
+              got == expected and got[0] == 2 and message in got[2], str(got))
+    for content in ['["--api-key", "secret-value",', '{}', 'null', '["--slots", 2]', '["--help", "a\\u0000b"]']:
+        with open(serve_file, "w") as f:
+            f.write(content)
+        rc, out, err = run("serve")
+        check("cli: invalid serve.json fails clearly without echoing its contents",
+              rc == 2 and serve_file in err and "secret-value" not in out + err, out + err)
+    # A broken defaults file cannot prevent help or affect a command that supplies its own arguments.
+    rc, out, err = run("serve", "--help")
+    check("cli: explicit help bypasses serve.json", rc == 0 and "serve.json" in out, out + err)
+    rc, _, err = run("serve", "--port", "0")
+    check("cli: explicit serve arguments bypass serve.json", rc == 2 and "--port must be 1-65535" in err, err)
+    rc, _, err = run("--port", "0")
+    check("cli: legacy options-only arguments bypass serve.json", rc == 2 and "--port must be 1-65535" in err, err)
+    rc, out, err = run("list", "--json")
+    check("cli: other commands ignore serve.json", rc == 0, out + err)
+    os.remove(serve_file)
+    os.mkdir(serve_file)
+    rc, _, err = run("serve")
+    check("cli: a non-file serve.json is refused", rc == 2 and "regular file" in err, err)
+    os.rmdir(serve_file)
+    # Keep the unconfigured starts apart from the fake downloaded models above; the Hub is a closed port too.
+    with tempfile.TemporaryDirectory(prefix="kapitsa-empty-serve-") as empty_home:
+        missing = run("serve", env_add={"KAPITSA_HOME": empty_home})
+        with open(os.path.join(empty_home, "serve.json"), "w") as f:
+            f.write("[]")
+        empty = run("serve", env_add={"KAPITSA_HOME": empty_home})
+    check("cli: missing and empty serve defaults preserve the unconfigured startup",
+          empty == missing and missing[0] == 1 and
+          ("already in use" in missing[2] or "Can't reach" in missing[2]), str((missing, empty)))
+    marker = os.path.join(home, "not-executed")
+    literal = f"$(touch {marker})"
+    with open(serve_file, "w") as f:
+        json.dump(["--context", literal], f)
+    rc, _, err = run("serve")
+    check("cli: serve defaults pass strings literally without a shell",
+          rc == 2 and literal in err and not os.path.exists(marker), err)
+    os.remove(serve_file)
     # --context: tokens, k or m of them, or max (--ctx too); anything else is refused before the model is looked at
     for ok in ["131072", "128k", "256K", "1m", "max"]:
         for flag in ["--context", "--ctx"]:
@@ -860,17 +1079,53 @@ def cli_checks(kapitsa):
           "naming its YaRN as not applied",
           rc == 2 and "no indexer_* settings" in err and "Not applied either: rope_type yarn" in err and
           "hidden_size" not in err, err)
+    # Invalid Inkling-2 shapes throw std::runtime_error inside read_config()/plan(): serve and doctor must report
+    # the message cleanly instead of escaping as an uncaught exception abort (exit 134).
+    badink = os.path.join(home, "badink")
+    os.makedirs(badink)
+    with open(os.path.join(badink, "config.json"), "w") as f:
+        json.dump({"model_type": "inkling2_loop",
+                   "text_config": {"model_type": "inkling2_loop_text", "hidden_size": 2560,
+                                   "num_hidden_layers": 24, "vocab_size": 201024, "unpadded_vocab_size": 200058,
+                                   "num_attention_heads": 24, "num_key_value_heads": 8, "head_dim": 128,
+                                   "loop_config": {"core_start": 6, "core_end": 18, "num_passes": 3}}}, f)
+    rc, _, err = run("serve", "--model", badink, "--port", str(gemma_port))
+    check("cli: serve refuses an unsupported Inkling-2 shape cleanly without aborting",
+          rc == 1 and "kapitsa: " in err and "an Inkling-2 shape Kapitsa does not run" in err and
+          "terminating" not in err, f"rc={rc} err={err}")
+    rc, out, err = run("doctor", "--model", badink)
+    check("cli: doctor refuses an unsupported Inkling-2 shape cleanly without aborting",
+          rc == 0 and "an Inkling-2 shape Kapitsa does not run" in (out + err) and
+          "terminating" not in err, f"rc={rc} out={out} err={err}")
     rc, _, err = run("doctor", "--context", "max")
     check("cli: doctor --context max asks for a size", rc == 2 and "--context 256k" in err, err)
     s.close()
     rc, _, err = run("serve", "--model", "nonsense")
     check("cli: serve with an unknown model", rc == 2 and "Unknown model" in err, err)
-    for a in ["flash-next:4bit", "flash:4bit", "nace-ai/Qwen3.8-Flash-Next-MLX-4bit"]:
+    for a in ["flash-next", "flash", "qwen3.8-flash-next", "flash-next:4bit", "flash:4bit",
+              "nace-ai/Qwen3.8-Flash-Next-MLX-4bit"]:
         j = plan(a)
         check(f"cli: {a} -> qwen3.8-flash-next:4bit at the app's pinned revision",
               j.get("model") == "qwen3.8-flash-next:4bit" and j.get("kind") == "catalog" and
               j.get("repo") == "nace-ai/Qwen3.8-Flash-Next-MLX-4bit" and
               j.get("revision") == "5d423f9f563c1f1b7ca7945b268e65c0b92b0eae" and j.get("downloaded") is False, json.dumps(j))
+    flash_repo = "nace-ai/Qwen3.8-Flash-Next-MLX"
+    flash_revision = "8fda104737236c4bbe1d6fb2784fb499ffd0a4cd"
+    for a in ["flash-next:q4", "flash:q4", "qwen3.8-flash-next:q4", flash_repo,
+              flash_repo + "@" + flash_revision]:
+        j = plan(a)
+        check(f"cli: {a} -> opt-in qwen3.8-flash-next:q4 at its pinned revision",
+              j.get("model") == "qwen3.8-flash-next:q4" and j.get("kind") == "catalog" and
+              j.get("repo") == flash_repo and j.get("revision") == flash_revision and
+              j.get("downloaded") is False, json.dumps(j))
+    # the combined Nace repos' folders name the catalog entry of the same pack, companions included (#1210)
+    j = plan("nace-ai/Qwen3.5-9B-MLX/Q5")
+    check("cli: nace-ai/Qwen3.5-9B-MLX/Q5 -> 9b:q5 with its drafter and MTP head",
+          j.get("model") == "qwen3.5-9b:q5" and j.get("kind") == "catalog" and
+          j.get("repo") == "nace-ai/Qwen3.5-9B-MLX-Q5" and
+          {c.get("kind") for c in j.get("companions", [])} == {"mtp-sidecar", "dflash"}, json.dumps(j))
+    rc, _, err = run("pull", "--dry-run", "--json", "nace-ai/Qwen3.8-Flash-Next-MLX/Q4")
+    check("cli: Flash-Next's combined Q4/ folder (a later checkpoint) is refused", rc != 0 and "Q4" in err, err)
     rc, _, err = run("serve", "--port", str(busy))
     check("cli: serve with no model, offline and nothing downloaded: a clear error", rc == 1 and "Can't reach" in err, err)
     agent_checks(run, home)
@@ -1350,24 +1605,54 @@ for streamed in (False, True):
           "maximum context length" in e["error"]["message"], str(e)[:300])
 def hold(tag):
     """a stream that writes until its client goes, open once its first token is out (it has a slot)"""
-    body = {"messages": [{"role": "user", "content": f"[{tag}] Count from 1 to 100000, one number per line, nothing else."}],
-            "max_tokens": 20000, "temperature": 0, "top_k": 1, "stream": True, "chat_template_kwargs": {"enable_thinking": False}}
+    # A counting prompt may stop after a few numbers. The grammar forbids EOS until an array far longer than this
+    # observation can finish; the client, not the model's willingness to count, releases the slot.
+    body = {"messages": [{"role": "user", "content": f"[{tag}] Write a JSON array of 100000 ones."}],
+            "max_tokens": 20000, "temperature": 0, "top_k": 1, "stream": True, "chat_template_kwargs": {"enable_thinking": False},
+            "response_format": {"type": "json_schema", "json_schema": {"name": "slot_holder", "schema": {
+                "type": "array", "minItems": 100000, "items": {"const": 1}}}}}
     r = urllib.request.urlopen(urllib.request.Request(BASE + "/v1/chat/completions", data=json.dumps(body).encode(),
                                                       headers={"Content-Type": "application/json", **auth()}), timeout=600)
     for line in r:
         if line.startswith(b"data: {") and choice(json.loads(line[6:])).get("delta", {}).get("content"):
             break
-    return r
-holders = [hold(f"hold {i} {time.time()}") for i in range(SLOTS)]
+    else:
+        r.close()
+        raise RuntimeError("slot holder ended before its first token")
+    release = threading.Event()
+    def drain():
+        try:
+            for _ in r:
+                if release.is_set():
+                    break
+        finally:
+            r.close()
+    reader = threading.Thread(target=drain, daemon=True)
+    reader.start()
+    return release, reader
+holders = []
 ev = []
 waiting = threading.Thread(target=chat_stream, args=(counting(f"wait {time.time()}", 8), ev))
-waiting.start()
-t0 = time.time()
-while time.time() - t0 < 45 and sum(is_keepalive(d) for _, d in list(ev)) < 2:
-    time.sleep(0.2)
-for h in holders:  # their clients go: they stop at their next token, and the waiting request gets a slot
-    h.close()
+held = True
+try:
+    for i in range(SLOTS):
+        holders.append(hold(f"hold {i} {time.time()}"))
+    waiting.start()
+    t0 = time.time()
+    while time.time() - t0 < 45 and sum(is_keepalive(d) for _, d in list(ev)) < 2:
+        if not all(reader.is_alive() for _, reader in holders):
+            held = False
+            break
+        time.sleep(0.2)
+    held = held and all(reader.is_alive() for _, reader in holders)
+finally:
+    for release, _ in holders:
+        release.set()
+    for _, reader in holders:
+        reader.join(timeout=5)
 waiting.join()
+check("chat stream: every holder stays active until the test releases it",
+      held and all(not reader.is_alive() for _, reader in holders), "holder ended early or did not close")
 keep = [t for t, d in ev if is_keepalive(d)]
 first = next((t for t, d in ev if choice(d).get("delta", {}).get("content")), None)
 check("chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first "
@@ -1375,6 +1660,29 @@ check("chat stream: while every slot is busy the stream starts at once, gets an 
       len(ev) > 2 and choice(ev[0][1]).get("delta") == ROLE and ev[0][0] < 1.0 and len(keep) == 2 and
       15 <= keep[0] < 17.5 and 14 <= keep[1] - keep[0] < 17.5 and first is not None and first > keep[1] and
       ev[-1][1] == "[DONE]", f"first chunk {ev[0] if ev else None}, keepalives at {keep}, first token at {first}")
+
+# 12. Ollama API: /api/version, /api/tags, /api/show, /api/embed
+st, _, ver = get("/api/version")
+check("Ollama: GET /api/version", st == 200 and json.loads(ver).get("version"), ver[:100].decode() if ver else "")
+st, _, tags = get("/api/tags")
+check("Ollama: GET /api/tags lists models", st == 200 and "models" in json.loads(tags), tags[:200].decode() if tags else "")
+tag_models = json.loads(tags).get("models", [])
+check("Ollama: /api/tags has at least the running model", len(tag_models) >= 1 and tag_models[0].get("name"),
+      str(len(tag_models)) + " models")
+# /api/show for the running model
+st, _, show = post_raw("/api/show", json.dumps({"model": tag_models[0]["name"]}).encode(), stream=False)
+check("Ollama: POST /api/show for running model", st == 200 and json.loads(show).get("details"),
+      show[:200].decode() if show else "")
+# /api/show for unknown model returns 404
+st, _, show_unk = post_raw("/api/show", b'{"model":"nonexistent-model-xyz"}', stream=False)
+check("Ollama: POST /api/show for unknown model is 404", st == 404, str(st))
+# /api/embed returns 400
+st, _, embed = post_raw("/api/embed", b'{"model":"m","input":"hello"}', stream=False)
+check("Ollama: POST /api/embed not supported", st == 400 and b"not supported" in embed, embed[:100].decode() if embed else "")
+# /api/version does not need an API key
+if API_KEY:
+    st_nokey, _, _ = get("/api/version")
+    check("Ollama: /api/version works without API key", st_nokey == 200)
 
 print("FAILED: %d" % fails if fails else "ALL PASSED")
 sys.exit(1 if fails else 0)

@@ -45,9 +45,10 @@
 #include <mutex>
 #include <set>
 #include <thread>
+#include <utility>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.2.26"
+#define KAPITSA_VERSION "0.2.40"
 #endif
 
 namespace ni::gguf {
@@ -172,7 +173,7 @@ std::string ftype_name(int64_t t) {
       {15, "Q4_K_M"}, {16, "Q5_K_S"}, {17, "Q5_K_M"},  {18, "Q6_K"},    {19, "IQ2_XXS"}, {20, "IQ2_XS"},
       {21, "Q2_K_S"}, {22, "IQ3_XS"}, {23, "IQ3_XXS"}, {24, "IQ1_S"},   {25, "IQ4_NL"},  {26, "IQ3_S"},
       {27, "IQ3_M"},  {28, "IQ2_S"},  {29, "IQ2_M"},   {30, "IQ4_XS"},  {31, "IQ1_M"},   {32, "BF16"},
-      {36, "TQ1_0"},  {37, "TQ2_0"},  {38, "MXFP4"}};
+      {36, "TQ1_0"},  {37, "TQ2_0"},  {38, "MXFP4"},  {39, "NVFP4"}};
   auto it = m.find(t);
   return it == m.end() ? "" : it->second;
 }
@@ -341,12 +342,13 @@ void check_runs(const Hp& h, const std::string& file) {
   std::string why;
   if (h.dk != 128 || h.dv != 128) why = "DeltaNet head size " + std::to_string(h.dk) + "/" + std::to_string(h.dv) + " (128 needed)";
   else if (h.head_dim != 256) why = "attention head size " + std::to_string(h.head_dim) + " (256 needed)";
-  else if (h.hq % h.hkv || h.hq / h.hkv > 8) why = "a grouped-query ratio above 8";
+  else if (h.hq % h.hkv || h.hq / h.hkv > 16) why = "a grouped-query ratio above 16";
   else if (h.conv != 4) why = "a convolution of " + std::to_string(h.conv) + " (4 needed)";
-  else if (h.moe && (h.moe_I % 512 || h.shared_I % 512)) why = "expert sizes that are not multiples of 512";
-  else if (h.moe && (h.topk + 1) * std::max(h.moe_I, h.shared_I) > 4608) why = "experts too large for the decode kernels";
-  else if (h.moe && (h.E != 256 || h.topk > 8)) why = std::to_string(h.E) + " experts, " + std::to_string(h.topk) + " per token (256 and at most 8 run)";
-  else if (h.moe && (h.H > 4096 || h.hv * h.dv > 4096 || h.hq * h.head_dim > 4096)) why = "a hidden size above 4096 for a MoE model";
+  else if (h.moe && (h.moe_I % 64 || h.shared_I % 64)) why = "expert sizes that are not multiples of 64";
+  else if (h.moe && (h.topk + 1) * std::max(h.moe_I, h.shared_I) > 7168) why = "experts too large for the decode kernels";
+  else if (h.moe && (h.E <= 0 || h.E % 32 || h.E > 512 || h.topk <= 0 || h.topk > 16))
+    why = std::to_string(h.E) + " experts, " + std::to_string(h.topk) + " per token (a multiple of 32 up to 512 and at most 16 run)";
+  else if (h.moe && h.H > 4096) why = "a hidden size above 4096 for a MoE model";
   else if (h.H % 64) why = "a hidden size that is not a multiple of 64";
   if (!why.empty()) throw Error(file + " is a Qwen3.5-family model with " + why + ", which Kapitsa does not run.");
 }
@@ -898,6 +900,13 @@ const char* kQwen35Split =
     "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|"
     "\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
 
+const char* kInklingSplit =
+    "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+"
+    "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+    "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*"
+    "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+    "\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+
 struct Tok {
   std::string tokenizer_json, tokenizer_config, template_;
   int eos = -1, endoftext = -1;
@@ -905,7 +914,9 @@ struct Tok {
 
 Tok make_tokenizer(const File& f, const Hp& h) {
   const std::string file = base_name(f.parts()[0]);
-  const std::string model = h.flint ? "Flint" : "Qwen3.5", want = h.flint ? "flint" : "qwen35";
+  const bool inkling = h.arch == "inkling2_loop";
+  const std::string model = inkling ? "Inkling-2" : h.flint ? "Flint" : "Qwen3.5";
+  const std::string want = inkling ? "inkling2" : h.flint ? "flint" : "qwen35";
   if (f.str("tokenizer.ggml.model") != "gpt2")
     throw Error(file + ": tokenizer \"" + f.str("tokenizer.ggml.model") + "\" is not " + model + "'s byte-level BPE.");
   const std::string pre = f.str("tokenizer.ggml.pre");
@@ -955,13 +966,16 @@ Tok make_tokenizer(const File& f, const Hp& h) {
                     "\"post_processor\":null,\"decoder\":{\"type\":\"ByteLevel\",\"add_prefix_space\":true,"
                     "\"trim_offsets\":true,\"use_regex\":true},\"model\":{\"type\":\"BPE\",\"dropout\":null,"
                     "\"unk_token\":null,\"continuing_subword_prefix\":null,\"end_of_word_suffix\":null,"
-              : "{\"type\":\"NFC\"},\"pre_tokenizer\":{\"type\":\"Sequence\",\"pretokenizers\":[" + split(kQwen35Split) +
+              : std::string(inkling ? "null" : "{\"type\":\"NFC\"}") +
+                    ",\"pre_tokenizer\":{\"type\":\"Sequence\",\"pretokenizers\":[" +
+                    split(inkling ? kInklingSplit : kQwen35Split) +
                     bl + "]},\"post_processor\":" + bl + ",\"decoder\":" + bl +
                     ",\"model\":{\"type\":\"BPE\",\"dropout\":null,\"unk_token\":null,\"continuing_subword_prefix\":\"\","
                     "\"end_of_word_suffix\":\"\",";
   t.tokenizer_json = "{\"version\":\"1.0\",\"truncation\":null,\"padding\":null,\"added_tokens\":[" + added +
                      "],\"normalizer\":" + pre_tok +
-                     "\"fuse_unk\":false,\"byte_fallback\":false,\"ignore_merges\":false,\"vocab\":{" + vocab +
+                     "\"fuse_unk\":false,\"byte_fallback\":false,\"ignore_merges\":" +
+                      (inkling ? "true" : "false") + ",\"vocab\":{" + vocab +
                      "},\"merges\":[" + mg + "]}}";
   auto tok_at = [&](const char* key) -> json {
     const int64_t id = f.num(key, -1);
@@ -988,7 +1002,7 @@ Tok make_tokenizer(const File& f, const Hp& h) {
     tc["model_max_length"] = h.ctx;
     tc["pad_token"] = tok_at("tokenizer.ggml.padding_token_id");
     tc["split_special_tokens"] = false;
-    tc["tokenizer_class"] = "Qwen2Tokenizer";
+    tc["tokenizer_class"] = inkling ? "PreTrainedTokenizerFast" : "Qwen2Tokenizer";
     tc["unk_token"] = nullptr;
   }
   tc["chat_template"] = t.template_;
@@ -1142,6 +1156,15 @@ ojson make_config(const Plan& P, const Tok& tok, const File& f) {
 // ---------------------------------------------------------------- conversion
 
 struct OutFile {
+  OutFile() = default;
+  OutFile(const OutFile&) = delete;
+  OutFile& operator=(const OutFile&) = delete;
+  ~OutFile() { if (fd >= 0) ::close(fd); }
+  void close() {
+    const int owned = std::exchange(fd, -1);
+    if (owned >= 0 && ::close(owned) != 0)
+      throw Error("Can't write " + hub::tilde(name) + ": " + strerror(errno) + ".");
+  }
   std::string name;
   int fd = -1;
   uint64_t data0 = 0;  // where the tensor data starts (after the header)
@@ -1209,6 +1232,7 @@ void pwrite_all(int fd, const void* p, size_t n, uint64_t off, const std::string
   const uint8_t* d = static_cast<const uint8_t*>(p);
   while (n) {
     const ssize_t w = pwrite(fd, d, n, off_t(off));
+    if (w < 0 && errno == EINTR) continue;
     if (w <= 0) {
       if (errno == ENOSPC) throw Error("The disk is full while writing " + hub::tilde(path) + ".");
       throw Error("Can't write " + hub::tilde(path) + ": " + strerror(errno) + ".");
@@ -1228,17 +1252,23 @@ void parallel_rows(uint64_t n, int threads, F fn) {
   std::exception_ptr err;
   std::mutex mu;
   const uint64_t per = (n + uint64_t(t) - 1) / uint64_t(t);
-  for (int i = 0; i < t; ++i) {
-    const uint64_t a = uint64_t(i) * per, b = std::min(n, a + per);
-    if (a >= b) break;
-    th.emplace_back([&, a, b] {
-      try {
-        fn(a, b);
-      } catch (...) {
-        std::lock_guard<std::mutex> lk(mu);
-        if (!err) err = std::current_exception();
-      }
-    });
+  try {
+    for (int i = 0; i < t; ++i) {
+      const uint64_t a = uint64_t(i) * per, b = std::min(n, a + per);
+      if (a >= b) break;
+      th.emplace_back([&, a, b] {
+        try {
+          fn(a, b);
+        } catch (...) {
+          std::lock_guard<std::mutex> lk(mu);
+          if (!err) err = std::current_exception();
+        }
+      });
+    }
+  } catch (...) {
+    // A later launch can fail while earlier jobs still use fn, err, mu and the conversion buffers.
+    for (auto& x : th) x.join();
+    throw;
   }
   for (auto& x : th) x.join();
   if (err) std::rethrow_exception(err);
@@ -1259,26 +1289,25 @@ void convert_rows(const Lin& L, const uint8_t* src, uint64_t s0, uint64_t r0, ui
     const uint8_t* s = src + (sr - s0) * srb;
     uint8_t* wo = w + (row - r0) * L.row_w();
     if (direct) {
-      decode4(type, s, codes.data(), s32.data(), o32.data(), K);
+      decode4(type, s, L.cperm_hs > 0 ? c2.data() : codes.data(), s32.data(), o32.data(), K);
       if (L.cperm_hs > 0) {
         const uint64_t hs = uint64_t(L.cperm_hs), heads = K / hs;
         const uint64_t r = heads / nk;
-        std::vector<float> s2(s32), o2(o32);
-        c2 = codes;
         for (uint64_t h = 0; h < heads; ++h) {
           const uint64_t sh = (h % r) * nk + h / r;
           memcpy(codes.data() + h * hs, c2.data() + sh * hs, hs);
           for (uint64_t g = 0; g < hs / 32; ++g) {
-            s32[h * hs / 32 + g] = s2[sh * hs / 32 + g];
-            o32[h * hs / 32 + g] = o2[sh * hs / 32 + g];
+            sc[(row - r0) * nb + h * hs / 32 + g] = to_bf16(s32[sh * hs / 32 + g]);
+            bi[(row - r0) * nb + h * hs / 32 + g] = to_bf16(o32[sh * hs / 32 + g]);
           }
+        }
+      } else {
+        for (uint64_t g = 0; g < K / 32; ++g) {
+          sc[(row - r0) * nb + g] = to_bf16(s32[g]);
+          bi[(row - r0) * nb + g] = to_bf16(o32[g]);
         }
       }
       pack_codes(codes.data(), K, 4, reinterpret_cast<uint32_t*>(wo));
-      for (uint64_t g = 0; g < K / 32; ++g) {
-        sc[(row - r0) * nb + g] = to_bf16(s32[g]);
-        bi[(row - r0) * nb + g] = to_bf16(o32[g]);
-      }
       continue;
     }
     dequantize(type, s, x.data(), K);
@@ -1398,7 +1427,14 @@ void ollama_lookup(Source& s) {
   }
 }
 
-std::string default_name(const Source& s, const File& f) {
+bool same_import(const std::string& dir, const json& sid) {
+  std::ifstream mfs(dir + "/.kapitsa/manifest.json");
+  const json m = json::parse(mfs, nullptr, false);
+  const auto gguf = m.find("gguf");
+  return gguf != m.end() && gguf->is_object() && gguf->value("files", json()) == sid && hub::is_complete(dir);
+}
+
+std::string default_name(const Source& s, const File& f, const std::string& models, const json& sid) {
   if (!s.ollama_name.empty()) return s.ollama_name;
   std::string bn = base_name(s.path);
   static const std::string ext = ".gguf";
@@ -1408,9 +1444,15 @@ std::string default_name(const Source& s, const File& f) {
     if (bn.size() > 15 && bn[bn.size() - 15] == '-' && bn.compare(bn.size() - 9, 4, "-of-") == 0) bn = bn.substr(0, bn.size() - 15);
     return clean_name(bn);
   }
-  std::string n = f.str("general.basename", f.str("general.name", "model"));
-  if (const std::string ft = ftype_name(f.num("general.file_type", -1)); !ft.empty()) n += "-" + ft;
-  return clean_name(n);
+  const std::string n = f.str("general.basename", f.str("general.name", "model"));
+  const std::string ft = ftype_name(f.num("general.file_type", -1));
+  const std::string name = clean_name(ft.empty() ? n : n + "-" + ft);
+  // Earlier imports of an extensionless NVFP4 file used just the model name. Reuse a matching conversion.
+  if (ft == "NVFP4" && !is_dir(models + "/" + name)) {
+    const std::string legacy = clean_name(n);
+    if (!legacy.empty() && is_dir(models + "/" + legacy) && same_import(models + "/" + legacy, sid)) return legacy;
+  }
+  return name;
 }
 
 // the source files, for recognizing an earlier conversion
@@ -1488,6 +1530,156 @@ void remove_tree(const std::string& dir) {
   std::filesystem::remove_all(dir, ec);
 }
 
+// Inkling keeps its GGUF blocks. Only metadata is translated here; its model loader owns the layouts.
+std::string import_inkling(const ImportOptions& opt, const Source& source, const File& f) {
+  if (f.parts().size() != 1) throw Error("Inkling-2 import requires an unsplit GGUF.");
+  if (!opt.mtp.empty()) throw Error("Inkling-2 GGUF import does not attach a separate MTP file.");
+  const std::string prefix = "inkling2_loop.";
+  auto number = [&](const char* suffix) -> json {
+    const std::string key = prefix + suffix;
+    const auto it = f.meta().find(key);
+    if (it == f.meta().end() || !it->is_number() || !std::isfinite(it->get<double>()))
+      throw Error("Inkling-2 GGUF requires numeric metadata " + key + ".");
+    return *it;
+  };
+  auto integer = [&](const char* suffix) -> int64_t {
+    const json v = number(suffix);
+    if (!v.is_number_integer()) throw Error("Inkling-2 GGUF requires integer metadata " + prefix + suffix + ".");
+    return v.get<int64_t>();
+  };
+  const int64_t layers = integer("block_count");
+  auto heads = [&](const char* suffix) -> int64_t {
+    const std::string key = prefix + suffix;
+    const auto it = f.meta().find(key);
+    if (it == f.meta().end()) throw Error("Inkling-2 GGUF has no " + key + ".");
+    if (it->is_number_integer()) return it->get<int64_t>();
+    if (!it->is_array() || it->size() != size_t(layers) || it->empty())
+      throw Error("Inkling-2 GGUF has invalid per-layer metadata " + key + ".");
+    for (const auto& v : *it)
+      if (!v.is_number_integer() || v != (*it)[0])
+        throw Error("Inkling-2 GGUF has heterogeneous head geometry, which Kapitsa does not run.");
+    return (*it)[0].get<int64_t>();
+  };
+  if (layers < 2 || layers > 24) throw Error("Inkling-2 GGUF has an unsupported layer count.");
+  ojson t{{"model_type", "inkling2_loop"}};
+  for (const auto& [out, in] : std::vector<std::pair<const char*, const char*>>{
+           {"hidden_size", "embedding_length"}, {"vocab_size", "vocab_size"},
+           {"unpadded_vocab_size", "vocab_size_unpadded"}, {"head_dim", "attention.key_length"},
+           {"d_rel", "attention.relative_length"}, {"rel_extent", "attention.relative_extent"},
+           {"sliding_window_size", "attention.sliding_window"}, {"n_layers_per_attn_res_block", "attn_res.block_size"},
+           {"n_routed_experts", "expert_count"}, {"num_experts_per_tok", "expert_used_count"},
+           {"intermediate_size", "expert_feed_forward_length"}, {"sconv_kernel_size", "shortconv.l_cache"},
+           {"log_scaling_n_floor", "attention.log_scale_floor"}})
+    t[out] = integer(in);
+  for (const auto& [out, in] : std::vector<std::pair<const char*, const char*>>{
+           {"rms_norm_eps", "attention.layer_norm_rms_epsilon"}, {"qk_l2_clip_threshold", "attention.qk_clip"},
+           {"rel_l2_clip_threshold", "attention.relative_clip"}, {"log_scaling_alpha", "attention.log_scale_alpha"},
+           {"route_scale", "expert_weights_scale"}, {"final_logit_softcapping", "final_logit_softcapping"},
+           {"mlp_gate_softcap", "activation.situ_beta"}, {"mlp_up_softcap", "activation.situ_linear_beta"}})
+    t[out] = number(in);
+  t["num_hidden_layers"] = layers;
+  t["num_attention_heads"] = heads("attention.head_count");
+  t["num_key_value_heads"] = heads("attention.head_count_kv");
+  if (integer("attention.value_length") != integer("attention.key_length"))
+    throw Error("Inkling-2 GGUF has different key and value dimensions.");
+  const json pattern = f.meta().value(prefix + "attention.sliding_window_pattern", json());
+  if (!pattern.is_array() || pattern.size() != size_t(layers))
+    throw Error("Inkling-2 GGUF has no complete sliding-window pattern.");
+  t["local_layer_ids"] = json::array();
+  for (size_t i = 0; i < pattern.size(); ++i) {
+    if (!pattern[i].is_boolean()) throw Error("Inkling-2 GGUF sliding-window pattern must contain booleans.");
+    if (pattern[i].get<bool>()) t["local_layer_ids"].push_back(i);
+  }
+  t["loop_config"] = ojson{{"core_start", integer("loop.start")}, {"core_end", integer("loop.end")},
+                            {"num_passes", integer("loop.count")}, {"gate_rank", integer("loop.gate_rank")},
+                            {"is_varloop", f.flag(prefix + "loop.varying", false)}};
+  Hp h;
+  h.arch = "inkling2_loop";
+  h.vocab = integer("vocab_size_unpadded");
+  h.ctx = integer("context_length");
+  t["max_position_embeddings"] = h.ctx;
+  const Tok tok = make_tokenizer(f, h);
+  ojson config{{"architectures", json::array({"Inkling2LoopForConditionalGeneration"})},
+               {"model_type", "inkling2_loop"}, {"text_config", t}, {"gguf_file", "model.gguf"},
+               {"language_model_only", true}, {"eos_token_id", tok.eos}, {"tie_word_embeddings", false}};
+  const json sid = source_id(f, nullptr);
+  const std::string models = hub::models_dir();
+  const std::string name = opt.name.empty() ? default_name(source, f, models, sid) : clean_name(opt.name);
+  if (name.empty()) throw Error("The imported model needs a nonempty folder name.");
+  const std::string dest = models + "/" + name;
+  uint64_t tensor_bytes = 0;
+  for (const auto& tensor : f.tensors()) tensor_bytes += tensor.bytes;
+  config["gguf_tensor_bytes"] = tensor_bytes;
+  const std::string cfg = config.dump(2) + "\n";
+  const uint64_t metadata_bytes = cfg.size() + tok.tokenizer_json.size() + tok.tokenizer_config.size() + tok.template_.size();
+  const uint64_t disk = f.file_bytes() + metadata_bytes + (1u << 20);  // manifest and filesystem overhead
+  if (!opt.plan_dir.empty()) {
+    std::filesystem::create_directories(opt.plan_dir);
+    write_text(opt.plan_dir + "/config.json", cfg);
+    write_text(opt.plan_dir + "/import.json", json{{"write", disk}, {"disk", disk}}.dump() + "\n");
+    return opt.plan_dir;
+  }
+  if (opt.progress)
+    fprintf(stderr, "Inkling-2: keep GGUF weights unchanged (%s), translate config and tokenizer into %s.\n",
+            gb(f.file_bytes()).c_str(), hub::tilde(dest).c_str());
+  if (opt.dry_run) return dest;
+  if (is_dir(dest) && !opt.force) {
+    if (same_import(dest, sid)) return dest;
+    throw Error(hub::tilde(dest) + " exists already; use --name or --force.");
+  }
+  const std::string tmp = dest + ".importing-" + std::to_string(getpid());
+  std::filesystem::create_directories(models);
+  if (!std::filesystem::create_directory(tmp)) throw Error("Import staging folder exists: " + tmp);
+  StopGuard stop;
+  try {
+    std::filesystem::create_directory(tmp + "/.kapitsa");
+    write_text(tmp + "/config.json", cfg);
+    write_text(tmp + "/tokenizer.json", tok.tokenizer_json);
+    write_text(tmp + "/tokenizer_config.json", tok.tokenizer_config);
+    write_text(tmp + "/chat_template.jinja", tok.template_);
+    const bool force_copy = getenv("KAPITSA_IMPORT_COPY") && atoi(getenv("KAPITSA_IMPORT_COPY")) > 0;
+    if (force_copy || clonefile(f.parts()[0].c_str(), (tmp + "/model.gguf").c_str(), 0) != 0) {
+      if (free_bytes(models) < disk + kKeepFree) throw Error("Not enough free disk to copy the Inkling-2 GGUF.");
+      std::ifstream in(f.parts()[0], std::ios::binary);
+      std::ofstream out(tmp + "/model.gguf", std::ios::binary);
+      std::vector<char> chunk(size_t(kChunkBytes), char(0));
+      uint64_t remaining = f.file_bytes();
+      while (remaining) {
+        if (g_stop) throw Error("Inkling-2 import interrupted.");
+        const size_t n = size_t(std::min<uint64_t>(remaining, chunk.size()));
+        if (!in.read(chunk.data(), std::streamsize(n)) || !out.write(chunk.data(), std::streamsize(n)))
+          throw Error("Could not copy the Inkling-2 GGUF.");
+        remaining -= n;
+      }
+      out.close();
+      if (!out) throw Error("Could not finish writing the Inkling-2 GGUF.");
+    }
+    ojson files = ojson::array();
+    uint64_t bytes = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(tmp)) {
+      if (!entry.is_regular_file()) continue;
+      files.push_back(ojson{{"path", entry.path().filename().string()}, {"size", uint64_t(entry.file_size())}});
+      bytes += uint64_t(entry.file_size());
+    }
+    const ojson manifest{{"name", name}, {"repo", ""}, {"revision", ""}, {"commit", ""},
+                         {"variant", "gguf"}, {"quant", "GGUF blocks as stored"},
+                         {"gguf", {{"files", sid}, {"conversions", ojson::object()}, {"retained", true}}},
+                         {"files", files}, {"companions", ojson::array()}, {"total_bytes", bytes},
+                         {"kapitsa", KAPITSA_VERSION}};
+    write_text(tmp + "/.kapitsa/manifest.json", manifest.dump(2) + "\n");
+    if (g_stop) throw Error("Inkling-2 import interrupted.");
+    if (is_dir(dest)) {
+      if (dest.compare(0, models.size() + 1, models + "/") != 0) throw Error("Refusing to replace " + dest);
+      remove_tree(dest);
+    }
+    if (rename(tmp.c_str(), dest.c_str()) != 0) throw Error("Could not create " + dest + ": " + strerror(errno));
+  } catch (...) {
+    remove_tree(tmp);
+    throw;
+  }
+  return dest;
+}
+
 }  // namespace
 
 bool is_gguf_file(const std::string& arg) {
@@ -1500,7 +1692,31 @@ bool is_gguf_file(const std::string& arg) {
   return f.read(m, 4) && memcmp(m, "GGUF", 4) == 0;
 }
 
+static std::string import_model_files(const ImportOptions& opt);
+
 std::string import_model(const ImportOptions& opt) {
+  const std::string dir = import_model_files(opt);
+  if (opt.dry_run || !opt.plan_dir.empty() || dir.empty()) return dir;
+  if (!opt.drafter) {
+    if (opt.decline_drafter) hub::set_drafter_declined(dir, true);  // `serve --model FILE.gguf` later keeps to it
+    return dir;
+  }
+  if (hub::drafter_declined(dir)) {
+    if (!opt.from_import_command) return dir;
+    hub::set_drafter_declined(dir, false);
+  }
+  try {
+    const std::string got = hub::fetch_drafter(dir, opt.progress);
+    if (!got.empty() && opt.progress) fprintf(stderr, "Added the %s drafter to %s.\n", got.c_str(), hub::tilde(dir).c_str());
+  } catch (const std::exception& e) {
+    if (opt.progress)
+      fprintf(stderr, "kapitsa import: no drafter added (%s). %s runs without one, slower; `kapitsa import` again fetches it.\n", e.what(),
+              base_name(dir).c_str());
+  }
+  return dir;
+}
+
+static std::string import_model_files(const ImportOptions& opt) {
   Source s;
   s.path = opt.file;
   s.mtp = opt.mtp;
@@ -1508,12 +1724,13 @@ std::string import_model(const ImportOptions& opt) {
   File f(s.path);
   const std::string file = base_name(f.parts()[0]);
   const std::string arch = f.str("general.architecture");
+  if (arch == "inkling2_loop") return import_inkling(opt, s, f);
   if (arch == "qwen3next")
     throw Error(file + " is Qwen3-Next, the model before Qwen3.5; Kapitsa runs the Qwen3.5 family (Qwen3.5, Qwen3.6, "
                 "Qwen3.8).");
   if (arch != "qwen35" && arch != "qwen35moe" && arch != "flint")
-    throw Error(file + " is a \"" + arch + "\" model; Kapitsa runs the Qwen3.5 family (GGUF architectures qwen35 and "
-                "qwen35moe) and Recursive's Flint (flint).");
+    throw Error(file + " is a \"" + arch + "\" model; Kapitsa imports the Qwen3.5 family (GGUF architectures qwen35 and "
+                "qwen35moe), Recursive's Flint (flint), and Inkling-2 (inkling2_loop).");
   const bool flint = arch == "flint";
   for (auto& [k, v] : f.meta().items())
     if (k.rfind("prism.hadamard.", 0) == 0)
@@ -1539,15 +1756,14 @@ std::string import_model(const ImportOptions& opt) {
       M = mf.get();
     }
   }
-  const std::string name = opt.name.empty() ? default_name(s, f) : clean_name(opt.name);
-  if (name.empty()) throw Error("--name needs letters or digits.");
-  const std::string models = hub::models_dir(), dest = models + "/" + name;
   const json sid = source_id(f, mf.get());
+  const std::string models = hub::models_dir();
+  const std::string name = opt.name.empty() ? default_name(s, f, models, sid) : clean_name(opt.name);
+  if (name.empty()) throw Error("--name needs letters or digits.");
+  const std::string dest = models + "/" + name;
   // an earlier conversion of the same files
   if (is_dir(dest) && !opt.force) {
-    std::ifstream mfs(dest + "/.kapitsa/manifest.json");
-    const json m = json::parse(mfs, nullptr, false);
-    if (!m.is_discarded() && m.contains("gguf") && m["gguf"].value("files", json()) == sid && hub::is_complete(dest)) {
+    if (same_import(dest, sid)) {
       if (opt.progress && term::fancy())
         term::line("  " + term::accent(term::kOk) + " Using " + term::bold(hub::tilde(dest)) + term::dim(", converted from " + file + " earlier"),
                    stderr);
@@ -1841,12 +2057,12 @@ std::string import_model(const ImportOptions& opt) {
         char real[PATH_MAX];
         const std::string src = f.parts()[size_t(xparts[xi])];
         if (clonefile(realpath(src.c_str(), real) ? real : src.c_str(), o.name.c_str(), 0) == 0) {
-          const int fd = open(o.name.c_str(), O_WRONLY);
-          if (fd < 0) throw Error("Can't write " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
+          o.fd = open(o.name.c_str(), O_WRONLY);
+          if (o.fd < 0) throw Error("Can't write " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
           const uint64_t hl = xheader[xi].size();
-          pwrite_all(fd, &hl, 8, 0, o.name);
-          pwrite_all(fd, xheader[xi].data(), xheader[xi].size(), 8, o.name);
-          if (close(fd) != 0) throw Error("Can't write " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
+          pwrite_all(o.fd, &hl, 8, 0, o.name);
+          pwrite_all(o.fd, xheader[xi].data(), xheader[xi].size(), 8, o.name);
+          o.close();
           continue;  // fd stays -1: convert() leaves its tensors alone
         }
         xclone[xi] = false;
@@ -1870,10 +2086,7 @@ std::string import_model(const ImportOptions& opt) {
     Progress prog(src_total, opt.progress, "Converting " + file);
     for (const Lin& L : P.lins) convert(L, outs, threads, prog);
     prog.end();
-    for (auto& o : outs) {
-      if (o.fd >= 0 && close(o.fd) != 0) throw Error("Can't write " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
-      o.fd = -1;
-    }
+    for (auto& o : outs) o.close();
     if (shards > 0) {
       json idx{{"metadata", {{"total_size", trunk_bytes}}}, {"weight_map", weight_map}};
       write_text(tmp + "/model.safetensors.index.json", idx.dump(2) + "\n");
@@ -1922,16 +2135,19 @@ std::string import_model(const ImportOptions& opt) {
 
 int run_import(int argc, char** argv) {
   ImportOptions o;
+  o.from_import_command = true;
   const char* usage =
-      "kapitsa import FILE.gguf [--name NAME] [--mtp MTP.gguf] [--threads N] [--force] [--dry-run]\n\n"
-      "Converts a GGUF of a Qwen3.5-family model (from LM Studio, Ollama, llama.cpp or a Hugging Face GGUF repo) once\n"
-      "into a model folder in %s, which `kapitsa serve --model NAME` runs (`kapitsa serve --model FILE.gguf`\n"
-      "converts on first use). A split file is given by any of its parts.\n\n"
+      "kapitsa import FILE.gguf [--name NAME] [--mtp MTP.gguf] [--threads N] [--force] [--dry-run] [--no-drafter]\n\n"
+      "Imports a GGUF of a Qwen3.5-family, Flint, or Inkling-2 model once into a model folder in %s,\n"
+      "which `kapitsa serve --model NAME` runs (`kapitsa serve --model FILE.gguf` imports on first use).\n"
+      "Inkling-2 keeps the original GGUF blocks unchanged; its config and tokenizer come from the metadata.\n"
+      "A Qwen3.5 or Flint split file is given by any of its parts. Inkling-2 requires an unsplit file.\n\n"
       "  --name NAME    the folder's name (default: from the file name)\n"
       "  --mtp FILE     the model's MTP head as a separate GGUF (default: the file's own, or an mtp-*.gguf beside it)\n"
       "  --threads N    CPU threads (default: the performance cores, at most 8)\n"
       "  --force        convert again over an existing folder of that name\n"
-      "  --dry-run      show the formats, size and folder of the conversion, and write nothing\n\n"
+      "  --dry-run      show the formats, size and folder of the conversion, and write nothing\n"
+      "  --no-drafter   do not fetch the catalog drafter that matches the model's shape\n\n"
       "Formats: Q4_0/Q4_1/Q4_K keep their codes (4-bit group 32); Q8_0/Q6_K become 8-bit, Q5_x 6-bit, IQ4_x/MXFP4/NVFP4\n"
       "5-bit (group 64), IQ3_x/Q3_K 4-bit group 32, IQ1/IQ2/Q2_K 3-bit group 64, F16/BF16/F32 bf16; in a mostly\n"
       "4-bit-or-better file its 1-3-bit tensors take the file's majority format. MoE experts take 5-bit group 64 from\n"
@@ -1971,6 +2187,7 @@ int run_import(int argc, char** argv) {
       o.threads = int(n);
     }
     else if (a == "--force") o.force = true;
+    else if (a == "--no-drafter") o.drafter = false, o.decline_drafter = true;
     else if (a == "--dry-run") o.dry_run = true;
     else if (!a.empty() && a[0] != '-' && o.file.empty()) o.file = a;
     else {

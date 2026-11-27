@@ -1,0 +1,1339 @@
+{
+  "model": "Qwen3.6-35B-A3B-4bit",
+  "cases": [
+    {
+      "route": "/v1/chat/completions",
+      "control": {
+        "request": {
+          "model": "Qwen3.6-35B-A3B-4bit",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Write the numbers one through ten as English words, separated by commas."
+            }
+          ],
+          "temperature": 0,
+          "max_tokens": 96,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          },
+          "stream": true
+        },
+        "events": [
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "role": "assistant",
+                  "content": ""
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": "one"
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": ","
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": " two"
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": ","
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": " three"
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": ","
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": " four"
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": ","
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": " five"
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": ","
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": " six"
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": ","
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": " seven"
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": ","
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": " eight"
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": ","
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": " nine"
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": ","
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": " ten"
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674116807",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {},
+                "finish_reason": "stop"
+              }
+            ],
+            "usage": {
+              "prompt_tokens": 26,
+              "completion_tokens": 20,
+              "total_tokens": 46,
+              "prompt_tokens_details": {
+                "cached_tokens": 0
+              },
+              "kapitsa": {
+                "prefill_ms": 45.7,
+                "kflash": {
+                  "source": "none",
+                  "cycles": 19
+                }
+              }
+            }
+          }
+        ],
+        "chunks": [
+          "one",
+          ",",
+          " two",
+          ",",
+          " three",
+          ",",
+          " four",
+          ",",
+          " five",
+          ",",
+          " six",
+          ",",
+          " seven",
+          ",",
+          " eight",
+          ",",
+          " nine",
+          ",",
+          " ten"
+        ],
+        "content": "one, two, three, four, five, six, seven, eight, nine, ten"
+      },
+      "chosen_stop": "one,",
+      "streamed": {
+        "request": {
+          "model": "Qwen3.6-35B-A3B-4bit",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Write the numbers one through ten as English words, separated by commas."
+            }
+          ],
+          "temperature": 0,
+          "max_tokens": 96,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          },
+          "stream": true,
+          "stop": [
+            "one,"
+          ]
+        },
+        "events": [
+          {
+            "id": "chatcmpl-179403674175249",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "role": "assistant",
+                  "content": ""
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674175249",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {},
+                "finish_reason": "stop"
+              }
+            ],
+            "usage": {
+              "prompt_tokens": 26,
+              "completion_tokens": 2,
+              "total_tokens": 28,
+              "prompt_tokens_details": {
+                "cached_tokens": 0
+              },
+              "kapitsa": {
+                "prefill_ms": 26.7,
+                "kflash": {
+                  "source": "none",
+                  "cycles": 1
+                }
+              }
+            }
+          }
+        ],
+        "chunks": [],
+        "content": ""
+      },
+      "nonstreamed": {
+        "request": {
+          "model": "Qwen3.6-35B-A3B-4bit",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Write the numbers one through ten as English words, separated by commas."
+            }
+          ],
+          "temperature": 0,
+          "max_tokens": 96,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          },
+          "stream": false,
+          "stop": [
+            "one,"
+          ]
+        },
+        "response": {
+          "id": "chatcmpl-179403674150073",
+          "object": "chat.completion",
+          "created": 1794036741,
+          "model": "Qwen3.6-35B-A3B-4bit",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": ""
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 26,
+            "completion_tokens": 2,
+            "total_tokens": 28,
+            "prompt_tokens_details": {
+              "cached_tokens": 19
+            },
+            "kapitsa": {
+              "prefill_ms": 12.9,
+              "kflash": {
+                "source": "none",
+                "cycles": 1
+              }
+            }
+          }
+        },
+        "content": ""
+      },
+      "unmatched_eos": {
+        "request": {
+          "model": "Qwen3.6-35B-A3B-4bit",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Write the numbers one through ten as English words, separated by commas."
+            }
+          ],
+          "temperature": 0,
+          "max_tokens": 96,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          },
+          "stream": true,
+          "stop": [
+            "one, two, three, four, five, six, seven, eight, nine, ten [stop string absent from reply]"
+          ]
+        },
+        "events": [
+          {
+            "id": "chatcmpl-179403674143658",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "role": "assistant",
+                  "content": ""
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674143658",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": "one, two, three, four, five, six, seven, eight, nine, ten"
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674143658",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {},
+                "finish_reason": "stop"
+              }
+            ],
+            "usage": {
+              "prompt_tokens": 26,
+              "completion_tokens": 20,
+              "total_tokens": 46,
+              "prompt_tokens_details": {
+                "cached_tokens": 19
+              },
+              "kapitsa": {
+                "prefill_ms": 12.7,
+                "kflash": {
+                  "source": "none",
+                  "cycles": 19
+                }
+              }
+            }
+          }
+        ],
+        "chunks": [
+          "one, two, three, four, five, six, seven, eight, nine, ten"
+        ],
+        "content": "one, two, three, four, five, six, seven, eight, nine, ten"
+      },
+      "length_control": {
+        "request": {
+          "model": "Qwen3.6-35B-A3B-4bit",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Write the numbers one through ten as English words, separated by commas."
+            }
+          ],
+          "temperature": 0,
+          "max_tokens": 1,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          },
+          "stream": true
+        },
+        "events": [
+          {
+            "id": "chatcmpl-17940367418930",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "role": "assistant",
+                  "content": ""
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-17940367418930",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": "one"
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-17940367418930",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {},
+                "finish_reason": "length"
+              }
+            ],
+            "usage": {
+              "prompt_tokens": 26,
+              "completion_tokens": 1,
+              "total_tokens": 27,
+              "prompt_tokens_details": {
+                "cached_tokens": 19
+              },
+              "kapitsa": {
+                "prefill_ms": 12.9
+              }
+            }
+          }
+        ],
+        "chunks": [
+          "one"
+        ],
+        "content": "one"
+      },
+      "unmatched_length": {
+        "request": {
+          "model": "Qwen3.6-35B-A3B-4bit",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Write the numbers one through ten as English words, separated by commas."
+            }
+          ],
+          "temperature": 0,
+          "max_tokens": 1,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          },
+          "stream": true,
+          "stop": [
+            "one, two, three, four, five, six, seven, eight, nine, ten [stop string absent from reply]"
+          ]
+        },
+        "events": [
+          {
+            "id": "chatcmpl-179403674111272",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "role": "assistant",
+                  "content": ""
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674111272",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": "one"
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-179403674111272",
+            "object": "chat.completion.chunk",
+            "created": 1794036741,
+            "model": "Qwen3.6-35B-A3B-4bit",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {},
+                "finish_reason": "length"
+              }
+            ],
+            "usage": {
+              "prompt_tokens": 26,
+              "completion_tokens": 1,
+              "total_tokens": 27,
+              "prompt_tokens_details": {
+                "cached_tokens": 19
+              },
+              "kapitsa": {
+                "prefill_ms": 12.8
+              }
+            }
+          }
+        ],
+        "chunks": [
+          "one"
+        ],
+        "content": "one"
+      }
+    },
+    {
+      "route": "/v1/messages",
+      "control": {
+        "request": {
+          "model": "Qwen3.6-35B-A3B-4bit",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Write the numbers one through ten as English words, separated by commas."
+            }
+          ],
+          "temperature": 0,
+          "max_tokens": 96,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          },
+          "stream": true
+        },
+        "events": [
+          {
+            "type": "message_start",
+            "message": {
+              "id": "msg_FV2aUwiYc4aqsQFCrHynHTB8",
+              "type": "message",
+              "role": "assistant",
+              "model": "Qwen3.6-35B-A3B-4bit",
+              "content": [],
+              "stop_reason": null,
+              "stop_sequence": null,
+              "usage": {
+                "input_tokens": 7,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 19,
+                "output_tokens": 0
+              }
+            }
+          },
+          {
+            "type": "ping"
+          },
+          {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "one"
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": ","
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": " two"
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": ","
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": " three"
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": ","
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": " four"
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": ","
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": " five"
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": ","
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": " six"
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": ","
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": " seven"
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": ","
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": " eight"
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": ","
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": " nine"
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": ","
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": " ten"
+            }
+          },
+          {
+            "type": "content_block_stop",
+            "index": 0
+          },
+          {
+            "type": "message_delta",
+            "delta": {
+              "stop_reason": "end_turn",
+              "stop_sequence": null
+            },
+            "usage": {
+              "input_tokens": 7,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 19,
+              "output_tokens": 20
+            }
+          },
+          {
+            "type": "message_stop"
+          }
+        ],
+        "chunks": [
+          "one",
+          ",",
+          " two",
+          ",",
+          " three",
+          ",",
+          " four",
+          ",",
+          " five",
+          ",",
+          " six",
+          ",",
+          " seven",
+          ",",
+          " eight",
+          ",",
+          " nine",
+          ",",
+          " ten"
+        ],
+        "content": "one, two, three, four, five, six, seven, eight, nine, ten"
+      },
+      "chosen_stop": "one,",
+      "streamed": {
+        "request": {
+          "model": "Qwen3.6-35B-A3B-4bit",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Write the numbers one through ten as English words, separated by commas."
+            }
+          ],
+          "temperature": 0,
+          "max_tokens": 96,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          },
+          "stream": true,
+          "stop_sequences": [
+            "one,"
+          ]
+        },
+        "events": [
+          {
+            "type": "message_start",
+            "message": {
+              "id": "msg_7mCjoldHTTaQ4SOgLVqLFFQ0",
+              "type": "message",
+              "role": "assistant",
+              "model": "Qwen3.6-35B-A3B-4bit",
+              "content": [],
+              "stop_reason": null,
+              "stop_sequence": null,
+              "usage": {
+                "input_tokens": 7,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 19,
+                "output_tokens": 0
+              }
+            }
+          },
+          {
+            "type": "ping"
+          },
+          {
+            "type": "message_delta",
+            "delta": {
+              "stop_reason": "stop_sequence",
+              "stop_sequence": "one,"
+            },
+            "usage": {
+              "input_tokens": 7,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 19,
+              "output_tokens": 2
+            }
+          },
+          {
+            "type": "message_stop"
+          }
+        ],
+        "chunks": [],
+        "content": ""
+      },
+      "nonstreamed": {
+        "request": {
+          "model": "Qwen3.6-35B-A3B-4bit",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Write the numbers one through ten as English words, separated by commas."
+            }
+          ],
+          "temperature": 0,
+          "max_tokens": 96,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          },
+          "stream": false,
+          "stop_sequences": [
+            "one,"
+          ]
+        },
+        "response": {
+          "id": "msg_VHewDrlele5sJLxIMdIjzZfO",
+          "type": "message",
+          "role": "assistant",
+          "model": "Qwen3.6-35B-A3B-4bit",
+          "content": [
+            {
+              "type": "text",
+              "text": ""
+            }
+          ],
+          "stop_reason": "stop_sequence",
+          "stop_sequence": "one,",
+          "usage": {
+            "input_tokens": 7,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 19,
+            "output_tokens": 2
+          }
+        },
+        "content": ""
+      },
+      "unmatched_eos": {
+        "request": {
+          "model": "Qwen3.6-35B-A3B-4bit",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Write the numbers one through ten as English words, separated by commas."
+            }
+          ],
+          "temperature": 0,
+          "max_tokens": 96,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          },
+          "stream": true,
+          "stop_sequences": [
+            "one, two, three, four, five, six, seven, eight, nine, ten [stop string absent from reply]"
+          ]
+        },
+        "events": [
+          {
+            "type": "message_start",
+            "message": {
+              "id": "msg_r4xC6oPBRH4prezRfM8vrIv0",
+              "type": "message",
+              "role": "assistant",
+              "model": "Qwen3.6-35B-A3B-4bit",
+              "content": [],
+              "stop_reason": null,
+              "stop_sequence": null,
+              "usage": {
+                "input_tokens": 7,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 19,
+                "output_tokens": 0
+              }
+            }
+          },
+          {
+            "type": "ping"
+          },
+          {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "one, two, three, four, five, six, seven, eight, nine, ten"
+            }
+          },
+          {
+            "type": "content_block_stop",
+            "index": 0
+          },
+          {
+            "type": "message_delta",
+            "delta": {
+              "stop_reason": "end_turn",
+              "stop_sequence": null
+            },
+            "usage": {
+              "input_tokens": 7,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 19,
+              "output_tokens": 20
+            }
+          },
+          {
+            "type": "message_stop"
+          }
+        ],
+        "chunks": [
+          "one, two, three, four, five, six, seven, eight, nine, ten"
+        ],
+        "content": "one, two, three, four, five, six, seven, eight, nine, ten"
+      },
+      "length_control": {
+        "request": {
+          "model": "Qwen3.6-35B-A3B-4bit",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Write the numbers one through ten as English words, separated by commas."
+            }
+          ],
+          "temperature": 0,
+          "max_tokens": 1,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          },
+          "stream": true
+        },
+        "events": [
+          {
+            "type": "message_start",
+            "message": {
+              "id": "msg_pilchxJgOBYM9iBNUFitggzD",
+              "type": "message",
+              "role": "assistant",
+              "model": "Qwen3.6-35B-A3B-4bit",
+              "content": [],
+              "stop_reason": null,
+              "stop_sequence": null,
+              "usage": {
+                "input_tokens": 7,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 19,
+                "output_tokens": 0
+              }
+            }
+          },
+          {
+            "type": "ping"
+          },
+          {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "one"
+            }
+          },
+          {
+            "type": "content_block_stop",
+            "index": 0
+          },
+          {
+            "type": "message_delta",
+            "delta": {
+              "stop_reason": "max_tokens",
+              "stop_sequence": null
+            },
+            "usage": {
+              "input_tokens": 7,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 19,
+              "output_tokens": 1
+            }
+          },
+          {
+            "type": "message_stop"
+          }
+        ],
+        "chunks": [
+          "one"
+        ],
+        "content": "one"
+      },
+      "unmatched_length": {
+        "request": {
+          "model": "Qwen3.6-35B-A3B-4bit",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Write the numbers one through ten as English words, separated by commas."
+            }
+          ],
+          "temperature": 0,
+          "max_tokens": 1,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          },
+          "stream": true,
+          "stop_sequences": [
+            "one, two, three, four, five, six, seven, eight, nine, ten [stop string absent from reply]"
+          ]
+        },
+        "events": [
+          {
+            "type": "message_start",
+            "message": {
+              "id": "msg_NqCpJtRAFn0Nx8HTHH6qWZ1W",
+              "type": "message",
+              "role": "assistant",
+              "model": "Qwen3.6-35B-A3B-4bit",
+              "content": [],
+              "stop_reason": null,
+              "stop_sequence": null,
+              "usage": {
+                "input_tokens": 7,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 19,
+                "output_tokens": 0
+              }
+            }
+          },
+          {
+            "type": "ping"
+          },
+          {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "one"
+            }
+          },
+          {
+            "type": "content_block_stop",
+            "index": 0
+          },
+          {
+            "type": "message_delta",
+            "delta": {
+              "stop_reason": "max_tokens",
+              "stop_sequence": null
+            },
+            "usage": {
+              "input_tokens": 7,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 19,
+              "output_tokens": 1
+            }
+          },
+          {
+            "type": "message_stop"
+          }
+        ],
+        "chunks": [
+          "one"
+        ],
+        "content": "one"
+      }
+    }
+  ],
+  "failures": [],
+  "pass": true
+}

@@ -1,0 +1,40 @@
+detach: paused cpu-heavy k1003-ab
+detach: paused cpu-heavy k365-pr-tests3
+detach: paused cpu-heavy k370-install
+detach: paused cpu-heavy k370-tests
+user active (0s idle): not hiding DSH
+18:32:34 1 32K arm=P rc=0 load 3.01->6.99 void-load+mempressure prompt 32768 tok in 52409 ms (625.2 tok/s); spec decode D=2: 127 tok in 3327 ms (38.2 tok/s), 62 cycles, 2.05 tok/cycle, accepted/drafted 0.
+18:32:34 waiting for load 6.99
+18:32:49 waiting for load 6.51
+18:33:04 waiting for load 5.66
+18:33:19 waiting for load 5.40
+18:33:34 waiting for load 4.64
+18:33:49 waiting for load 4.43
+18:34:04 waiting for load 4.86
+18:34:19 waiting for load 4.43
+18:34:34 waiting for load 5.42
+18:34:49 waiting for load 4.58
+18:35:04 waiting for load 4.13
+18:36:12 2 32K arm=F rc=0 load 3.64->3.15 ok+mempressure prompt 32768 tok in 41368 ms (792.1 tok/s); spec decode D=2: 127 tok in 3870 ms (32.8 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+18:37:06 3 32K arm=G rc=0 load 3.15->3.72 ok+mempressure prompt 32768 tok in 44227 ms (740.9 tok/s); spec decode D=2: 127 tok in 3309 ms (38.4 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+18:38:01 4 32K arm=G rc=0 load 3.72->4.00 ok+mempressure prompt 32768 tok in 44472 ms (736.8 tok/s); spec decode D=2: 127 tok in 3429 ms (37.0 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+18:38:01 waiting for load 4.00
+18:39:08 5 32K arm=F rc=0 load 3.62->3.25 ok+mempressure prompt 32768 tok in 41978 ms (780.6 tok/s); spec decode D=2: 127 tok in 3382 ms (37.5 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+18:40:05 6 32K arm=P rc=0 load 3.25->3.01 ok+mempressure prompt 32768 tok in 45821 ms (715.1 tok/s); spec decode D=2: 127 tok in 3366 ms (37.7 tok/s), 62 cycles, 2.05 tok/cycle, accepted/drafted 0.
+18:40:59 7 32K arm=G rc=0 load 3.01->3.67 ok+mempressure prompt 32768 tok in 44071 ms (743.5 tok/s); spec decode D=2: 127 tok in 3074 ms (41.3 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+18:41:54 8 32K arm=P rc=0 load 3.67->2.87 ok+mempressure prompt 32768 tok in 43980 ms (745.1 tok/s); spec decode D=2: 127 tok in 2905 ms (43.7 tok/s), 62 cycles, 2.05 tok/cycle, accepted/drafted 0.
+18:42:40 9 32K arm=F rc=0 load 2.87->2.10 ok+mempressure prompt 32768 tok in 39349 ms (832.8 tok/s); spec decode D=2: 127 tok in 3301 ms (38.5 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+18:43:39 10 32K arm=F rc=0 load 2.01->2.81 ok+mempressure prompt 32768 tok in 51347 ms (638.2 tok/s); spec decode D=2: 127 tok in 3258 ms (39.0 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+18:44:38 11 32K arm=P rc=0 load 2.81->2.41 ok+mempressure prompt 32768 tok in 48641 ms (673.7 tok/s); spec decode D=2: 127 tok in 3033 ms (41.9 tok/s), 62 cycles, 2.05 tok/cycle, accepted/drafted 0.
+18:45:33 12 32K arm=G rc=0 load 2.41->2.78 ok+mempressure prompt 32768 tok in 44308 ms (739.6 tok/s); spec decode D=2: 127 tok in 3005 ms (42.3 tok/s), 65 cycles, 1.95 tok/cycle, accepted/drafted 0.
+18:47:29 13 64K arm=P rc=0 load 2.78->3.31 ok+mempressure prompt 65000 tok in 106031 ms (613.0 tok/s); spec decode D=2: 127 tok in 2914 ms (43.6 tok/s), 52 cycles, 2.44 tok/cycle, accepted/drafted 0
+18:49:12 14 64K arm=F rc=0 load 3.31->5.93 void-load+mempressure prompt 65000 tok in 94712 ms (686.3 tok/s); spec decode D=2: 127 tok in 3223 ms (39.4 tok/s), 53 cycles, 2.40 tok/cycle, accepted/drafted 0.
+18:49:12 waiting for load 5.93
+18:49:27 waiting for load 5.33
+18:49:42 waiting for load 4.43
+18:49:57 waiting for load 4.12
+detach: resumed cpu-heavy k1003-ab
+detach: resumed cpu-heavy k365-pr-tests3
+detach: resumed cpu-heavy k370-install
+detach: resumed cpu-heavy k370-tests
+/Users/alisheramantay/Documents/nace/k363/fn_ab4.sh: line 23: 68986 Terminated: 15          env $E timeout 1500 $B $M @$K/fn-long-$P.ids 128 0 --spec 2 > $O/$i-$P-$arm.out 2>&1

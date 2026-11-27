@@ -1,0 +1,56 @@
+{
+  "same_full_vocabulary": true,
+  "rows": [
+    {
+      "sequence": 0,
+      "prefix_tokens": 3200,
+      "fast_kl": 0.0006568560756337848,
+      "mlx_kl": 0.0003036200484918425
+    },
+    {
+      "sequence": 1,
+      "prefix_tokens": 2816,
+      "fast_kl": 0.0001735250708484069,
+      "mlx_kl": 0.0005070550233210319
+    },
+    {
+      "sequence": 2,
+      "prefix_tokens": 2432,
+      "fast_kl": 1.9118319769263747e-08,
+      "mlx_kl": 3.195309005887556e-07
+    },
+    {
+      "sequence": 3,
+      "prefix_tokens": 2048,
+      "fast_kl": 7.221565408730588e-07,
+      "mlx_kl": 7.560487511871718e-07
+    },
+    {
+      "sequence": 4,
+      "prefix_tokens": 1664,
+      "fast_kl": 0.00010828157966855101,
+      "mlx_kl": 6.828085238076275e-05
+    },
+    {
+      "sequence": 5,
+      "prefix_tokens": 1280,
+      "fast_kl": 0.0005219944690549321,
+      "mlx_kl": 0.0002833378204683719
+    },
+    {
+      "sequence": 6,
+      "prefix_tokens": 896,
+      "fast_kl": 1.483255798624368e-05,
+      "mlx_kl": 1.3186873731440706e-05
+    },
+    {
+      "sequence": 7,
+      "prefix_tokens": 512,
+      "fast_kl": 3.673007159328732e-07,
+      "mlx_kl": 7.616749297772292e-07
+    }
+  ],
+  "prefix_is_one_token_before_first_step_record": true,
+  "fast_mean": 0.0001845747910960617,
+  "mlx_mean": 0.00014716473412187535
+}

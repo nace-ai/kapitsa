@@ -9,6 +9,23 @@ Kapitsa is a native C++20 inference engine for Apple silicon (Metal kernels, the
 runtime). Speed and exact outputs are the product. A change that is faster but not the same tokens is a different
 change and has to say so.
 
+## Names: KFlash is ours, DFlash2 is upstream (Alish, 6 Nov 2026, #362)
+
+- **KFlash** names everything Kapitsa built on top of DFlash2: the best-first trees, the budget, the history lane, the
+  selector update, and any other draft or verify change. Its knobs are `NI_KFLASH_<NAME>` (for example
+  `NI_KFLASH_HIST`) and its log lines start with `KFlash:`.
+- **DFlash2** names only the upstream method and the drafter checkpoint (`--dflash`, `NI_DFLASH` for the drafter
+  folder, `incoai/...-DFlash2`, the `DFlash2` class that loads it). A new extension never gets a `DFLASH` name.
+- The earlier `NI_DFLASH_<NAME>` knobs still work as aliases (`kenv()` in `src/util/log.h` reads `NI_KFLASH_<NAME>` first,
+  then `NI_DFLASH_<NAME>`); do not remove them without a deprecation note in `docs/usage.md`.
+
+## State on this Mac is not a privacy concern
+
+Kapitsa is a purely local engine: nothing a request teaches it (a learned selector, a history lane, a cache) leaves
+the Mac, and there is no telemetry. State that carries across conversations on the same Mac is therefore not a privacy
+reason to leave a speed-up out. The reasons that count are speed, memory and exact outputs. A feature that keeps state
+across requests still has to say where the state lives and how to reset it.
+
 ## What an agent can and cannot check
 
 - **You can** build, run the CPU tests, run `prek`, read and edit code. Do these before every push.
@@ -18,6 +35,8 @@ change and has to say so.
   "bit for bit" or "the same outputs" for something you did not run.
 - Do not load a model or touch the GPU unless the task says you may. A run takes the machine's GPU for minutes and
   other people's measurements are on it.
+- Before binding an architecture-specific measurement or cap run, trace the runner's loader factory to that architecture.
+  On 2026-11-23, the ni_run/Inkling2 near-miss selected load_qwen, which cannot load Inkling2; the engine selects it separately.
 - `.dsh/skills/verify-kapitsa` drives the CLI and server and keeps evidence; its `vk checks` reads the diff
   against `origin/main` and says whether a PR needs a GPU run and on which models.
 
@@ -31,35 +50,58 @@ cmake --build build -j --target kapitsa                  # the CLI only; drop --
 `all` also builds tools that need a newer macOS SDK than 15.x (`tensor_probe` uses `MTLLanguageVersion4_0`): on an older
 SDK build the named targets, as CI does.
 
-CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test bench_test
-update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test
-exl3_test remote_test cluster_test split_place_test qwen4_config_test json_file_test systemone systemone_test
+CPU tests (no model, no GPU), after building `kapitsa api_test execution_session_test http_stream_test disconnect_test bench_test
+update_test prefix_cache_test kflash_cache_test grammar_test structured_check fn_store_test fn_dflash_test drafter_attach_test hy4_engram_test tokenizer_test iq_layout_test
+exl3_test remote_test cluster_test split_place_test gemm_slices_test kv_grow_test ffn_share_test device_profile_test slot_policy_test sample_topk_test qwen4_config_test nh_quant_q8_test json_file_test serve_options_test events_test control_test engine_view_test think_control_test systemone systemone_test
 systemone_codes_probe_test systemone_codes_driver splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump`:
 
 ```bash
 build/api_test
 build/prefix_cache_test
+build/kflash_cache_test                      # the KFlash budget cache loads only into the build that wrote it (src/model/kflash_budget.cpp)
 build/fn_store_test                          # the streamed-expert cache (src/model/expert_store.h)
+build/hy4_engram_test                        # Hy4-flash's Engram lookup on the CPU: hash, fp8 round trip, masked rows (src/model/hy4_engram.h)
 build/fn_dflash_test                         # DFlash2's stream_mean reduction checks (Flash-Next drafts)
+build/drafter_attach_test                    # kapitsa import's drafter attach: which shape gets which drafter (offline; --net also fetches the 4B one)
 build/tokenizer_test                         # Flint's pre-tokenizer split
 build/iq_layout_test                         # GGUF IQ experts in the GPU layout (src/kernels/wfmt_iq.metal)
 build/exl3_test                              # the EXL3 reference decoder (src/model/moe_exl3.h), Flash-Next's norm check
 build/remote_test                            # a split model's reserve on its other Macs (src/model/remote.h)
 build/cluster_test                           # several Macs (src/cluster/): TXT, JSON, routing, kapitsa cluster's table
 build/split_place_test                       # where a split model's layers go (src/cluster/place.h)
+build/gemm_slices_test                       # a large GEMM's 2048-row slices and their bounds (src/model/gemm_slices.h)
+build/kv_grow_test                           # how far a conversation's KV cache grows in the memory budget, its copy counted (src/model/kv_grow.h)
+build/device_profile_test                    # chip class and the default table from injected facts (src/engine/device_profile.h)
+build/sample_topk_test --cpu                 # which top_k the two-pass sampler takes and which the whole vocabulary (src/model/sampler.h); without --cpu: the GPU draws
+build/slot_policy_test                       # when a short prompt extends all live rows in an idle slot (src/engine/slot_policy.h)
 build/qwen4_config_test                      # what a Qwen 4 config asks that Flash-Next's path does not run (src/model/qwen4_config.h)
+build/nh_quant_q8_test                       # Q8 load quantization: code/half-scale bytes, rounding, fallback and guards (CPU only)
+build/flint_kv_test                          # Flint refuses NI_KV_I8 (src/model/flint_kv.h)
 build/json_file_test                         # config.json parsed once per file (src/util/json_file.h)
 build/affine_pack_test                       # MLX affine pack helpers: bit width from shapes, f16 -> bf16 (src/model/affine_pack.h)
+build/ffn_share_test                         # the kernels the split's GPU part runs a dense FFN layer on, and its share (src/model/ffn_share.h)
 build/systemone_test                         # System One's pointer heads, readout (Drex Max v1) and projected (Drex v2.0) (src/systemone/systemone.cpp)
 build/systemone_codes_probe_test             # controlled option-code regression, built and run explicitly in CI
 build/execution_session_test                 # one-shot sessions: start, cancel, terminal order, join (src/engine/execution_session.h)
+build/think_control_test                     # thinking budget masks: trees, a drafted <think>, fill() vs push() (src/engine/think_control.h)
+build/serve_options_test docs/serve-config.schema.json  # kapitsa serve's one validator: flags and --config JSON (src/server/service_config.cpp)
+python3 tests/test_serve_schema.py build/serve_options_test  # needs: jsonschema; the schema and the validator agree, --config - survives a restart
+build/events_test                            # the server's event bus: replay, resets, slow readers, the log ring (src/server/events.h, activity.h)
+python3 tests/test_events_schema.py build/events_test  # needs: jsonschema; every event the bus publishes matches schema/control/event.schema.json
+build/control_test                           # the control socket over a real Unix socket: lock, endpoints, errors, peer check, event streams (src/server/control.h)
+python3 tests/test_control_socket.py build/control_test build/kapitsa  # needs: jsonschema; every answer matches schema/control/; serve stops while starting
+build/engine_view_test                       # the engine view's /engine routes: stop and switch only with this run's key and a JSON body, Host, Origin, proxy and peer checks, the stream cap (src/server/engine_view.h)
+python3 tests/test_events_schema.py tools/engine_replay.py  # the engine view's stand-in server's events, the same check
+python3 tests/test_engine_view.py            # needs: jsonschema; that stand-in's answers: the run's key, stop and switch, Host/Origin/proxy refusals, resume and resets, 3 streams at most
+node tests/test_engine_page.mjs              # Node 18+: the page's own script (src/server/engine.html) on that stand-in: key, live view, Switch and Stop, disconnect, no key
 build/http_stream_test                       # HTTP streaming: framing, keepalive, disconnect, meters (src/server/http_stream.cpp)
+build/disconnect_test                        # non-streaming disconnects: close, reset with queued bytes, and live pipelined requests (no model)
 build/ws_upgrade_test                        # a WebSocket upgrade on /v1/responses gets 426, the rest passes through (src/server/ws_upgrade.h)
 build/splash_protocol_test                   # Splash protocol v11 frames against Splash 1.4.0's goldens (src/splash/protocol.h)
 build/splash_runtime_test                    # the Splash engine child: start, requests, cancel, death (src/splash/runtime.h)
 build/splash_discover_test                   # finding Splash's engine and model on a throwaway tree (src/splash/discover.h)
 build/splash_plan_test                       # what Kapitsa adds to `splash serve-native`, and when (src/splash/plan.h)
-python3 tests/test_server.py --cli build/kapitsa
+python3 tests/test_server.py --cli build/kapitsa  # its `kapitsa doctor` cases wait on the GPU: with a model run on it they time out (300 s; 9 Nov 2026, #1113)
 python3 tests/test_sidecar.py build/kapitsa
 python3 tests/test_bench.py build            # needs: jsonschema; on a real Mac only (CI's VM runners fail it)
 python3 tests/test_update.py build
@@ -67,10 +109,14 @@ python3 tests/test_community.py build        # needs: jsonschema
 python3 tests/test_reasoning.py
 python3 tests/test_drex_max.py --cli build   # Drex Max v1: head extraction, tokenizer-only request layouts (no model, no GPU)
 python3 tests/test_pr_size.py
+python3 tests/test_profile_gates.py          # no new inline chip, core or RAM check outside the profile module
+python3 tests/test_comment_gates.py          # no comment or doc line in the repo (not third_party/, bench/results/) gives "measured only here" or "nothing was run" as the reason for a narrow default
 python3 tests/test_splash_patches.py --apply   # packaging/splash/: clones Splash and applies the patches; no build
 python3 tests/test_logit_compare.py
+python3 tests/test_sampled_tokens_harness.py # stand-in ni_run executables and temporary locks; no GPU
 python3 tests/test_logit_dump.py build      # its output directory only, before the lock and the model
 python3 tools/qwen4_exp_pack_test.py         # needs: numpy; the Flash-Next converter's n-gram table from a config.json
+python3 tools/hy4_ref_score_test.py          # needs: numpy; hy4_ref.py score's file checks on synthetic logits
 python3 tests/test_structured.py --cli build    # with a model folder's tokenizer when one is downloaded
 ```
 
@@ -105,10 +151,10 @@ substitute only with evidence that its bytes are identical. A Qwen control is op
 matching tokenizer type do not establish identity. This CPU coverage does not waive the model output, GPU, or
 interleaved speed gates below, and does not establish an inference speedup.
 
-Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `tests/vision/check_cpu.py`, `logit_dump`,
+Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `ink2_check MODEL_DIR`, `tests/vision/check_cpu.py`, `logit_dump`,
 `batch_check`, `ni_v8check`, `tests/test_server.py URL`, `tests/test_disk_cache.py`, `tests/test_draft.py`,
-`tests/test_structured.py URL`, `logit_mask_check`, `split_check`, `tests/test_split.py`, `tests/test_pair.py`,
-`tests/test_ane_split_abort.py`, `tests/test_systemone.py`): run it only when allowed, and report it as run.
+`tests/test_structured.py URL`, `tests/test_topk_full_tree.py`, `logit_mask_check`, `split_check`, `tests/test_split.py`, `tests/test_pair.py`,
+`tests/test_ane_split_abort.py`, `tests/test_systemone.py`, `tests/test_sampled_tokens.py`, `tests/test_topk_omitted.py`): run it only when allowed, and report it as run.
 
 Lint: `uv tool install prek && prek install` once, then `prek run --all-files` (the same hooks CI runs).
 
@@ -138,27 +184,64 @@ driver's own check agrees with the real limit, which `tools/ni_kstats --limits` 
 sizes when the changed kernel's static memory is 16,384 B or less, and when it is more say in the PR that the layer's
 doubling makes a run impossible, with the kernel's size; a PR is not "unverified" for saying that.
 
-**New features ship on by default somewhere.** Every opt-in switch is code to maintain and a setting nobody tunes. The
-goal is per-model, per-Mac settings, perhaps several per pair someday (minimal, optimal, max; today Kapitsa pursues max).
-There is no config system for opt-in features yet. So a feature merges only when at least one of these holds:
+**New features ship on by default. No exceptions.** Every opt-in switch is code to maintain and a setting nobody
+tunes. There is no config system for opt-in features, so a feature merges only when it is on by default for the whole
+class of hardware or model it targets, earned with the interleaved A/B and the output check below. The PR names that
+class in its title or first line and in the "Default for" section of the template.
 
-1. **It is a default.** The feature is on by default for at least one model on at least one Mac, earned with the
-   interleaved A/B and the output check below. The PR names the setting it is the default for. Other models may reach it
-   opt-in.
-2. **It is widely established.** A well-known paper or a major engine (llama.cpp, MLX, vLLM, SGLang, TensorRT-LLM) has
-   it, and it makes sense for Kapitsa: Apple silicon, exact outputs, single-stream speed. The PR cites the source and
-   says why it fits.
+**Defaults follow the concept, not the measured cell.** A matrix-unit (tensor) optimization is on for every Mac with
+matrix units, an ANE path for every Mac with a usable ANE, a MoE path for every MoE model, a long-prompt path for every
+prompt above its size. Kapitsa is opinionated on purpose; the recurring config sweep checks that the classes still make
+sense.
+
+- **Evidence: at least 2 different setups.** Interleaved A/B plus the output check on at least two setups that differ in
+  chip class or model family, when two such setups exist for the class (our M5 Pro plus another model, the EC2 M4 Pro,
+  or a contributor's Mac). If only one setup exists for the class, one is enough. The default then applies to the whole
+  class. Say in the PR which setups ran, which class they stand for, and which members of the class did not run.
+- **Narrow gates are the exception.** An exact chip name, core count, RAM size or single model is allowed only when the
+  win is both big (at least 10% faster on the target) and exclusive (measured slower, or broken, on the wider class).
+  The profile table row cites that evidence. "Only measured here" is not a reason for a narrow gate.
+  A per-chip-class default in the device profile table also needs a shown mechanism: a profile or kernel-cost
+  measurement explaining why the change is faster on that class and not others. Measured speed differences alone,
+  including a slower or broken class member, do not justify a chip-class exception. Without that mechanism,
+  require wins on two measured devices and default on for all Macs, or do not merge. These are additional
+  requirements; they do not waive the narrow-gate evidence, setup coverage or output checks.
+- **One place.** Every device- or model-dependent default lives in the device profile table
+  (`src/engine/device_profile.cpp`, printed by `kapitsa doctor --print-profile`). No new inline `apple_family()`,
+  chip-name or core-count checks outside it.
+- **The fast profile counts as a default** (6 Nov 2026, #363). Kapitsa has two profiles
+  ([docs/profiles.md](docs/profiles.md)): `precise`, the exact defaults, and `fast` (`kapitsa serve --profile fast`,
+  `KAPITSA_PROFILE=fast`). It is one setting for every member, not an opt-in switch per feature. A feature that moves
+  the outputs beyond the floor's gate is on by default for its class when the fast profile turns it on there: it
+  reads its switch through `profile_switch()` (`src/engine/profile.h`), its class is a row in the profile table, and
+  its output check shows top-1 flips and mean KL against the precise path no larger than the fastest other engine's
+  on the same rows (the bar in docs/profiles.md). The class and evidence rules above apply unchanged. A feature that
+  passes the floor's gate belongs in `precise`, not only in `fast`.
+- **Off everywhere never merges**, even when the flag-off path is byte-identical to main, the idea is established
+  elsewhere, or the PR says "a later PR flips the default". "Off by default" in a title is a NO GO. (5 Nov 2026: #819
+  and #944 sat open as off-by-default PRs; #944 measured +7% and +6% on the 35B on an M5 Pro and still left both off.)
+- **Not faster anywhere yet:** the PR stays open (a draft is fine) and keeps improving until it wins a default, or it is
+  closed. It does not merge opt-in "for later".
+- **A class member that is slower or broken** is the exception: the profile table row for it says so and cites the
+  measurement.
 
 Here a feature means a kernel path, a decode, drafting or verify strategy, a cache or memory policy, or a new user-facing
 flag or environment variable. Three things are not features, so this rule does not apply to them: a kill switch for an
-existing default (`NI_X=0`), a debug or profiling switch, and a measuring tool. A feature that is promising but not yet
-faster in any setting stays an open PR (a draft is fine) and keeps improving until it wins a default. It does not merge
-opt-in "for later". If the author could not test many models, the PR turns the feature on for what it measured. A later
-PR widens the default as other models and Macs are measured.
+existing default (`NI_X=0`), a debug or profiling switch, and a measuring tool. The output check still gates every
+default change, with one exception: a default that only switches which published pack a catalog name downloads (`27b`
+from the plain 4-bit pack to its Nace Q4 pack). That changes which weights a catalog name loads, not the loader or the
+kernels. A pack whose tensors need a different kernel path (for example 6-bit group-64 dense weights on `NI_QMT6`) goes
+back to the floor gate. The floors in `tools/logit_floors/` cover code paths on one pack, so
+`tools/logit_compare.py` between two packs can only report "moved". It gates on KL to BF16 for both packs on the
+same token set (name the corpus and the tool), a task score (GSM8K or the like) and the interleaved A/B on the setups
+above. The switch passes when the new pack's mean KL to BF16
+on those tokens is at most the old pack's, its task score is not below the old pack's by more than that score's
+run-to-run spread, and the interleaved speed A/B shows it no slower than the old pack beyond noise (3%). Otherwise it
+does not switch (precedent: #1228).
 
 **Changing speed or numerics.** One change per PR. Measure only on an idle GPU (nothing else running), interleave old
 and new builds (A B A B), report every run with the Mac, macOS version and commit. A default changes only after an
-interleaved A/B *and* the output check of CONTRIBUTING.md ("Output check"): `build/logit_dump` of the old and the new
+interleaved A/B *and* the output check of CONTRIBUTING.md ("Output check"; a pack-only switch has its own rule above): `build/logit_dump` of the old and the new
 build, `tools/logit_compare.py` between them, gated at twice the model's noise floor on this Mac
 (`tools/logit_floors/<model>.json`). Put its output in the PR. "The same outputs to the bit" is a claim with evidence
 ("every row bitwise identical") or it is not made; a change that fails the gate on purpose says it moves outputs.
@@ -173,6 +256,14 @@ per-GEMM check in `tools/bench_moe.cpp` (`vs qrm` columns, every output within o
 both paths' error the same against a double-precision reference) plus what the temperature-0 continuations did (cold 4K
 and 16K prompts: the 35B-A3B's came out identical). That flag is a claim about the diff:
 anything that changes *what* is computed stays on the floor's gate.
+
+An A/B of an environment switch through `kapitsa bench` needs its own server: bench starts its server with every `NI_`
+variable removed ("Left out of the server, as the harness does"), so `NI_X=1 kapitsa bench` measures the default in
+both arms (7 Nov 2026, #372: a Lightning `NI_NH_ATTN_Q8` A/B ran A/A). Start `kapitsa serve --model M --port P --ctx
+32768 --slots 1 --disk-cache 0` with the switch set, run `KAPITSA_BENCH_SERVER=P kapitsa bench --model M --quick
+--json` against it, and check the server's load log that the switch took effect. Bench then marks the result
+`INVALID: server: a server kapitsa bench did not start` and exits 1 with the JSON saved: expected for this use, not a
+failed run. A server reading weights from an external drive can take 5 to 10 minutes to answer `/health`.
 
 Historical measurements, known gate exceedances and model coverage are recorded in
 [docs/numerical-history.md](docs/numerical-history.md), with links to the public changes. Those records do not
@@ -201,21 +292,32 @@ hardest: a run script that tees `transcripts/<label>.out` overwrites that label'
 re-run, so commit the new run under a new label, or say in the subject that the transcript is replaced.
 
 **Docs follow numbers.** When a measured number, a default, a flag or a catalog entry changes, grep the repo for the old
-value (README, docs/usage.md, docs/benchmarks.md, `tests/`, the catalog in `src/hub/catalog.cpp`) and update every copy.
+value (README, docs/usage.md, docs/benchmarks.md, `tests/`, the catalog in `src/hub/catalog.cpp`) and update every copy. A catalog change also regenerates
+`docs/models.md` (`python3 tools/models_table.py`); CI fails on a stale one.
+
+**A test fix is proved by running the test's own file, not by a script that copies its logic.** A standalone repro of one
+`check()` plus one `stop()` showed the guard working, but the real `tests/test_engine_page.mjs` with a stand-in that never
+starts still stalls before its summary line (12 Nov 2026, #1214/#1215): the harness has a dozen sections and something in
+a later one does not return. State in the PR exactly which file you ran and what it printed at the end
+(`engine page: N failures`), and when a suite has branches you cannot drive from outside, say which ones you did not run
+rather than generalising from a script that mirrored them.
 
 ## Pull requests
 
 - One change per PR. Branch off the current `origin/main`; `main` takes squash merges only, and the title becomes the
   commit: state the change and its measured effect (the repo's titles carry numbers and "(#NNN)").
-- A new feature says which model and Mac it is the default for, or which paper or engine establishes it ("New features
-  ship on by default somewhere" above). An opt-in feature with neither stays an open PR.
+- A new feature says which class of hardware or model it is the default for, and which 2 setups measured it ("Defaults
+  follow the concept" above). A feature that is off on every model and Mac stays an open PR.
 - The description says what changed, the measured before/after with a `Runs:` line (Mac, macOS, model), and what was
   checked how. A separate "Not verified" section lists what was not run, above all anything needing a GPU.
 - Benchmark submissions carry the `benchmark` label, the results table, `Kapitsa version (commit)`, `Flags:`, and say
   `kapitsa bench` produced them. Results come only as pull requests from a fork, never as issues. A result file and the
-  regenerated `bench/community/RESULTS.md` (`python3 tools/community_table.py`) ride in the same pull request: the
-  `community-table` check reads the merge commit, so a row without its rewrite is red and, once merged, leaves main
-  stale until someone regenerates it. Bringing a bench pull request up to date re-runs the command before the merge.
+  two files generated from it ride in the same pull request: `bench/community/RESULTS.md` and
+  `docs/site/leaderboard-data.js`. One command writes both (`python3 tools/community_table.py` also runs
+  `python3 tools/build_leaderboard_data.py`), then `git add bench/community/RESULTS.md docs/site/leaderboard-data.js`.
+  The `community-table` check reads the merge commit and fails on either one, so a row without its rewrite is red and,
+  once merged, leaves main stale until someone regenerates it. Bringing a bench pull request up to date re-runs the
+  command before the merge.
 
 - PRs of more than ~1000 changed lines (generated data and vendored code excluded) fail the `PR size` check. Split them.
   Only a reviewer overrides it (`size/override` label and a `Size override: <why>` line in the description); an author

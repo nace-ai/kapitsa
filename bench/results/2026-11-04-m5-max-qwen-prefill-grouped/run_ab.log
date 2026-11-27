@@ -1,0 +1,66 @@
+qwen3.6-35b-a3b-4bit round 1 old 'AC Power' load 4.60 reps 674.82 675.00 
+qwen3.6-35b-a3b-4bit round 1 new 'AC Power' load 2.49 reps 659.93 659.71 
+qwen3.6-35b-a3b-4bit round 2 new 'AC Power' load 1.76 reps 657.12 657.03 
+qwen3.6-35b-a3b-4bit round 2 old 'AC Power' load 1.12 reps 671.31 671.43 
+qwen3.6-35b-a3b-4bit round 3 old 'AC Power' load 1.03 reps 671.50 671.80 
+qwen3.6-35b-a3b-4bit round 3 new 'AC Power' load 1.87 reps 658.22 658.09 
+qwen3.6-35b-a3b-4bit round 4 new 'AC Power' load 1.15 reps 657.39 657.34 
+qwen3.6-35b-a3b-4bit round 4 old 'AC Power' load 1.00 reps 671.68 671.63 
+qwen3.6-35b-a3b-4bit round 5 old 'AC Power' load 0.85 reps 671.25 671.31 
+qwen3.6-35b-a3b-4bit round 5 new 'AC Power' load 1.11 reps 658.41 658.34 
+qwen3.6-35b-a3b-4bit round 6 new 'AC Power' load 0.92 reps 657.61 657.61 
+qwen3.6-35b-a3b-4bit round 6 old 'AC Power' load 0.71 reps 672.51 672.57 
+clover-35b-a3b-4bit round 1 old 'AC Power' load 0.86 reps 670.95 670.99 
+clover-35b-a3b-4bit round 1 new 'AC Power' load 0.85 reps 658.71 658.90 
+clover-35b-a3b-4bit round 2 new 'AC Power' load 0.82 reps 657.11 657.17 
+clover-35b-a3b-4bit round 2 old 'AC Power' load 0.63 reps 675.11 674.84 
+qwen3.5-4b-4bit-mtp round 1 old 'AC Power' load 0.86 reps 632.03 632.16 
+qwen3.5-4b-4bit-mtp round 1 new 'AC Power' load 0.68 reps 618.66 618.85 
+qwen3.5-4b-4bit-mtp round 2 new 'AC Power' load 1.10 reps 619.72 619.42 
+qwen3.5-4b-4bit-mtp round 2 old 'AC Power' load 1.23 reps 631.30 632.55 
+qwen3.5-9b-4bit round 1 old 'AC Power' load 1.27 reps 1302.69 1302.67 
+qwen3.5-9b-4bit round 1 new 'AC Power' load 1.29 reps 1296.43 1297.38 
+qwen3.5-9b-4bit round 2 new 'AC Power' load 0.96 reps 1296.06 1296.29 
+qwen3.5-9b-4bit round 2 old 'AC Power' load 0.80 reps 1304.77 1304.69 
+qwen3.8-27b-4bit-mtp round 1 old 'AC Power' load 0.72 reps 3827.50 4078.98 
+qwen3.8-27b-4bit-mtp round 1 new 'AC Power' load 1.46 reps 3816.12 4091.26 
+qwen3.8-27b-4bit-mtp round 2 new 'AC Power' load 0.95 reps 3858.54 4090.65 
+qwen3.8-27b-4bit-mtp round 2 old 'AC Power' load 1.34 reps 3910.42 4096.06 
+qwen3.8-27b-4bit-mtp round 3 old 'AC Power' load 1.43 reps 3864.37 4148.33 
+qwen3.8-27b-4bit-mtp round 3 new 'AC Power' load 1.10 reps 3856.54 4138.80 
+qwen3.8-flash-next-4bit round 1 old 'AC Power' load 1.51 reps 1938.56 1945.17 
+qwen3.8-flash-next-4bit round 1 new 'AC Power' load 2.36 reps 1918.35 1918.39 
+qwen3.8-flash-next-4bit round 2 new 'AC Power' load 9.65 reps 1918.29 1919.49 
+qwen3.8-flash-next-4bit round 2 old 'AC Power' load 3.64 reps 1935.60 1938.31 
+== output check qwen3.6-35b-a3b-4bit
+compare exit 2
+                        [--max-far-flips MAX_FAR_FLIPS]
+                        [--max-nll-change MAX_NLL_CHANGE] [--flips FLIPS]
+                        [--json JSON] [--vocab VOCAB]
+                        reference candidate
+logit_compare.py: error: unrecognized arguments: --floor <branch>/tools/logit_floors/qwen3.6-35b-a3b-4bit.m5.json
+== output check clover-35b-a3b-4bit
+compare exit 2
+                        [--max-far-flips MAX_FAR_FLIPS]
+                        [--max-nll-change MAX_NLL_CHANGE] [--flips FLIPS]
+                        [--json JSON] [--vocab VOCAB]
+                        reference candidate
+logit_compare.py: error: unrecognized arguments: --floor <branch>/tools/logit_floors/clover-35b-a3b-4bit.m5.json
+== output check qwen3.8-27b-4bit-mtp
+compare exit 2
+                        [--max-far-flips MAX_FAR_FLIPS]
+                        [--max-nll-change MAX_NLL_CHANGE] [--flips FLIPS]
+                        [--json JSON] [--vocab VOCAB]
+                        reference candidate
+logit_compare.py: error: unrecognized arguments: --floor <branch>/tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json
+== output check qwen3.5-4b-4bit-mtp
+compare exit 0
+verify: 192 records (qwen3.5-4b-4bit-mtp)
+  reference: 0.2.27 (25fdda62), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}
+  candidate: 0.2.27 (25fdda62-pg), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}
+  every row bitwise identical
+no noise floor for this model and no bounds given: reported only (tools/logit_floor.py measures one)
+== output check qwen3.8-flash-next-4bit
+compare exit 2
+logit_compare: <scratch>/pgr/oc/qwen3.8-flash-next-4bit-ref: a raw file needs --vocab
+done

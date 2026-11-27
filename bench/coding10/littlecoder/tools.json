@@ -1,0 +1,73 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "write_file",
+      "description": "Create a NEW file with the given content. Refused if the file already exists: use edit_file to change an existing file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "File name inside the task directory, e.g. solution.py. Use the EXACT name given in the task."},
+          "content": {"type": "string", "description": "Full file content."}
+        },
+        "required": ["path", "content"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "edit_file",
+      "description": "Replace exact text in an existing file. The default tool for changing any existing file. Each oldText must match exactly (whitespace and indentation matter) and be unique in the file; edits are matched against the original file and must not overlap.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "File name inside the task directory."},
+          "edits": {
+            "type": "array",
+            "description": "One entry per location to change.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "oldText": {"type": "string", "description": "Exact text currently in the file; include 2-3 lines of context if needed to make it unique."},
+                "newText": {"type": "string", "description": "Replacement text; empty string deletes oldText."}
+              },
+              "required": ["oldText", "newText"]
+            }
+          }
+        },
+        "required": ["path", "edits"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "read_file",
+      "description": "Read a file's contents with line numbers (format: N<tab>line).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "File name inside the task directory."},
+          "offset": {"type": "integer", "description": "Start line, 0-indexed. Optional."},
+          "limit": {"type": "integer", "description": "Max lines to return. Optional."}
+        },
+        "required": ["path"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "run_python",
+      "description": "Run Python 3 and return the exit code plus stdout+stderr (10 s timeout). Pass `code` to run a snippet (it can `from solution import ...`; put asserts or prints in it to test your function), or `path` to run a .py file from the task directory such as a test file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "code": {"type": "string", "description": "Python source to run. Use this OR path."},
+          "path": {"type": "string", "description": "A .py file in the task directory to run. Use this OR code."}
+        }
+      }
+    }
+  }
+]

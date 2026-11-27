@@ -1,0 +1,88 @@
+{
+  "format": "Explicitly privacy-filtered derived summary, not raw execution logs.",
+  "source_reference": "39446144b7f181eeecaf4bdf5a4ddb34bb5dd104",
+  "source_candidate": "9493a437a823343a2b257767c45eae9a98e7827c",
+  "setup": {
+    "chip": "M3 Ultra",
+    "gpu_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "model": {
+    "repository": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "file": "Qwen_Qwen3.5-4B-Q4_0.gguf",
+    "bytes": 2776033248,
+    "sha256": "3e977de32dfb9377ff827f210091cce5d3c05c7b0f0b9b0c8005df7c0677a49b"
+  },
+  "arms": {
+    "reference": {
+      "source": "39446144b7f181eeecaf4bdf5a4ddb34bb5dd104",
+      "source_sha256_by_path": {
+        "CMakeLists.txt": "5e26cfa913738fdcd68571fadee07e4eb08a67bb26810bb8e41ebbc7a8d01672",
+        "src/gguf/gguf.cpp": "c634b436b7b2d7aa10f42e1c7f455b4366b233c80f133210da43c20998557be7",
+        "src/gguf/import.cpp": "6ec9edd8dbc1444537a4ad14df62bba015ca715725c43737847240e73ac69c62",
+        "src/gguf/quant.cpp": "af78b58ec4159b8a2e0b9dd7fa134162f95340f622cb536678e706bc3144554a",
+        "tools/logit_compare.py": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+        "tools/logit_dump.cpp": "6225e655e828b426ebab4959bf5e6857bbff537c1b0d733385351afa5530e0c4"
+      },
+      "binaries_sha256": {
+        "kapitsa": "265185c41ba8c89891969b867c2a21c0e0c8a5a7e62aa9201127af9956871425",
+        "logit_dump": "4269b2538f9ab82694b67f2cd6f2d6183f06a386947dfab227371041c8eec658",
+        "ni_run": "3f8c094c5ad8acb4fbfbc01c7f54f38e063a380dafee8a66e5edfbe3c31edaf4",
+        "libnaceinfer.a": "b3fcac045998954c357cba2cbd569569c0423cb69377abeb98b798e344dd5104"
+      },
+      "target_optimization": "-O3",
+      "architecture": "arm64",
+      "NDEBUG": false,
+      "configure_rc": 0,
+      "build_rc": 0,
+      "version_rc": 0
+    },
+    "candidate": {
+      "source": "9493a437a823343a2b257767c45eae9a98e7827c",
+      "source_sha256_by_path": {
+        "CMakeLists.txt": "5e26cfa913738fdcd68571fadee07e4eb08a67bb26810bb8e41ebbc7a8d01672",
+        "src/gguf/gguf.cpp": "c634b436b7b2d7aa10f42e1c7f455b4366b233c80f133210da43c20998557be7",
+        "src/gguf/import.cpp": "5eabc8d48c5e7af277ce392dfb19fe2ac3b97519f2544df3e580d61935f0552f",
+        "src/gguf/quant.cpp": "af78b58ec4159b8a2e0b9dd7fa134162f95340f622cb536678e706bc3144554a",
+        "tools/logit_compare.py": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+        "tools/logit_dump.cpp": "6225e655e828b426ebab4959bf5e6857bbff537c1b0d733385351afa5530e0c4"
+      },
+      "binaries_sha256": {
+        "kapitsa": "4675f83e62bf604242e708e80217265dbe2c8776ac1b764242736244f1f85543",
+        "logit_dump": "82300c1b24b9e19f53eb20627f59827d70f79df9ca078af97459192693e0cf8d",
+        "ni_run": "3f8c094c5ad8acb4fbfbc01c7f54f38e063a380dafee8a66e5edfbe3c31edaf4",
+        "libnaceinfer.a": "cd882328e68bd121b3c08b8c9c3867ec2c7cd0a06aac599c8d93fe4fbf68e0c1"
+      },
+      "target_optimization": "-O3",
+      "architecture": "arm64",
+      "NDEBUG": false,
+      "configure_rc": 0,
+      "build_rc": 0,
+      "version_rc": 0
+    }
+  },
+  "targets": [
+    "kapitsa",
+    "logit_dump",
+    "ni_run"
+  ],
+  "fixed_driver": {
+    "source_sha256": "6b022a4791ac656f74ca84dc7b2090e7bfd34e5ad0e7a1c6bc1197e8adcd8310",
+    "binary_sha256": "c58fe87449f16c7587fbc80d00a2d4228b132b415962a41cfaa94019086b870e",
+    "reference_library_sha256": "b3fcac045998954c357cba2cbd569569c0423cb69377abeb98b798e344dd5104"
+  },
+  "build_method": "Fresh per-source CMake Release configure/build; resumed validation reused these completed binaries without rebuilding.",
+  "execution": {
+    "exclusive_gpu_lock": true,
+    "held_markers": [
+      "NI_LOCK_HELD=1",
+      "NACE_GPU_LOCK_HELD=1"
+    ],
+    "profile": "precise",
+    "six_explicit_servers_stopped": true,
+    "worker_finished": true
+  }
+}

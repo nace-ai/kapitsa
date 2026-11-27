@@ -189,19 +189,19 @@ File::File(const std::string& path) {
     for (size_t i = 0; i < paths_.size(); ++i) parse(int(i), i == 0);
     for (size_t i = 0; i < tensors_.size(); ++i)
       if (!index_.emplace(tensors_[i].name, i).second) throw Error(path + " lists tensor " + tensors_[i].name + " twice.");
+    if (paths_.size() > 1) {
+      const int64_t n = num("split.count", int64_t(paths_.size()));
+      if (n != int64_t(paths_.size())) throw Error(path + ": the split count in its header (" + std::to_string(n) +
+                                                   ") differs from its file name.");
+      const int64_t nt = num("split.tensors.count", int64_t(tensors_.size()));
+      if (nt != int64_t(tensors_.size()))
+        throw Error(path + ": the parts hold " + std::to_string(tensors_.size()) + " tensors, the header announces " +
+                    std::to_string(nt) + ". Is a part incomplete?");
+    }
   } catch (...) {
     for (int f : fds_) close(f);
     fds_.clear();
     throw;
-  }
-  if (paths_.size() > 1) {
-    const int64_t n = num("split.count", int64_t(paths_.size()));
-    if (n != int64_t(paths_.size())) throw Error(path + ": the split count in its header (" + std::to_string(n) +
-                                                 ") differs from its file name.");
-    const int64_t nt = num("split.tensors.count", int64_t(tensors_.size()));
-    if (nt != int64_t(tensors_.size()))
-      throw Error(path + ": the parts hold " + std::to_string(tensors_.size()) + " tensors, the header announces " +
-                  std::to_string(nt) + ". Is a part incomplete?");
   }
 }
 
@@ -269,7 +269,7 @@ void File::parse(int part, bool first) {
       t.bytes = 0;  // unknown type: sized as nothing; refused by whoever reads it
     }
     t.offset = data0 + p.rel;
-    if (t.offset < data0 || t.offset + t.bytes > size)
+    if (t.offset < data0 || t.offset > size || t.bytes > size - t.offset)
       throw Error(path + ": tensor " + t.name + " lies beyond the end of the file. Is the download complete?");
     tensors_.push_back(std::move(t));
   }
@@ -313,11 +313,12 @@ const Tensor* File::find(const std::string& name) const {
 }
 
 void File::read(const Tensor& t, uint64_t off, void* dst, size_t n) const {
-  if (off + n > t.bytes) throw Error("internal: read past the end of tensor " + t.name);
+  if (off > t.bytes || n > t.bytes - off) throw Error("internal: read past the end of tensor " + t.name);
   uint8_t* d = static_cast<uint8_t*>(dst);
   size_t done = 0;
   while (done < n) {
     const ssize_t r = pread(fds_[size_t(t.part)], d + done, n - done, off_t(t.offset + off + done));
+    if (r < 0 && errno == EINTR) continue;
     if (r <= 0) throw Error("Can't read " + paths_[size_t(t.part)] + " (" + (r < 0 ? strerror(errno) : "end of file") + ").");
     done += size_t(r);
   }

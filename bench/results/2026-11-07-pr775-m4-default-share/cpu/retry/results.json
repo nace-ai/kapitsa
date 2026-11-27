@@ -1,0 +1,20 @@
+[
+  {
+    "test": "test_bench",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+      "tests/test_bench.py",
+      "build"
+    ],
+    "returncode": 0
+  },
+  {
+    "test": "test_community",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+      "tests/test_community.py",
+      "build"
+    ],
+    "returncode": 0
+  }
+]

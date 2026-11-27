@@ -1,0 +1,44 @@
+[
+  {
+    "run": "bench-05-base",
+    "flags": [],
+    "invalid": [],
+    "other_gpu_mean_pct": 1.36,
+    "other_gpu_max_pct": 5.33,
+    "gpu_users": [
+      "Google Chrome"
+    ]
+  },
+  {
+    "run": "bench-06-vision",
+    "flags": [
+      "decode_greedy: repetition loop (distinct-4-gram 0.4842)"
+    ],
+    "invalid": [],
+    "other_gpu_mean_pct": 1.0,
+    "other_gpu_max_pct": 3.83,
+    "gpu_users": [
+      "ChatGPT"
+    ]
+  },
+  {
+    "run": "bench-07-base",
+    "flags": [],
+    "invalid": [],
+    "other_gpu_mean_pct": 0.61,
+    "other_gpu_max_pct": 1.32,
+    "gpu_users": [
+      "ChatGPT"
+    ]
+  },
+  {
+    "run": "bench-08-vision",
+    "flags": [],
+    "invalid": [],
+    "other_gpu_mean_pct": 0.65,
+    "other_gpu_max_pct": 3.38,
+    "gpu_users": [
+      "ChatGPT"
+    ]
+  }
+]

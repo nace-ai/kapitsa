@@ -1,0 +1,2 @@
+exit=-6
+n-gram table rejects malformed fixture 0libc++abi: terminating due to uncaught exception of type std::runtime_error: check failed

@@ -1,0 +1,23 @@
+qwen3.8-27b-4bit-mtp round 1 old 'AC Power' units 16/34 units reps 3572.73 3560.62 3595.76 
+qwen3.8-27b-4bit-mtp round 1 new 'AC Power' units 14/34 units reps 3089.61 3112.72 3349.45 
+qwen3.8-27b-4bit-mtp round 2 new 'AC Power' units 14/34 units reps 3091.90 3125.33 3361.38 
+qwen3.8-27b-4bit-mtp round 2 old 'AC Power' units 16/34 units reps 3571.63 3597.01 3785.61 
+qwen3.8-27b-4bit-mtp round 3 old 'AC Power' units 16/34 units reps 3570.88 3587.87 3778.94 
+qwen3.8-27b-4bit-mtp round 3 new 'AC Power' units 14/34 units reps 3091.15 3137.52 3356.56 
+qwen3.8-27b-4bit-mtp round 4 new 'AC Power' units 14/34 units reps 3091.23 3131.98 3345.58 
+qwen3.8-27b-4bit-mtp round 4 old 'AC Power' units 16/34 units reps 3572.02 3573.85 3665.46 
+== output check qwen3.8-27b-4bit-mtp
+compare exit 0
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.0726))
+  KL mean 6.757e-05 median 1.690e-06 p99 6.751e-04 max 3.475e-03; top-2 margin change up to 0.3541
+  next-token NLL change +6.304e-04 nats per record (candidate minus reference)
+  PASS (kapitsa-ane/tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json)
+verify: 192 records (qwen3.8-27b-4bit-mtp)
+  reference: 0.2.28 (fa0bc007), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  candidate: 0.2.28 (b5c43a53), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":1152,"reruns":0}
+  bitwise identical rows 0 of 192; max |logit diff| 2.562
+  top-1 agreement 1.0000 (0 flips, 0 of them near-ties (reference margin under 0.0726))
+  KL mean 6.857e-05 median 1.985e-06 p99 7.122e-04 max 3.479e-03; top-2 margin change up to 0.3498
+  next-token NLL change +6.908e-04 nats per record (candidate minus reference)
+  PASS (kapitsa-ane/tools/logit_floors/qwen3.8-27b-4bit-mtp.m5.json)
+done

@@ -1,0 +1,17 @@
+{
+  "command": [
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/.venv/bin/python",
+    "bench/quality/eval_mlx.py",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/models/qwen3.5-9b-bf16",
+    "--f32",
+    "--topk",
+    "4096",
+    "--dump-ref",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-m4-long-bf16/bf16.ref",
+    "@/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/m4-long-inputs/long-quality/case-0.txt",
+    "@/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/m4-long-inputs/long-quality/case-1.txt",
+    "@/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/m4-long-inputs/long-quality/case-2.txt",
+    "@/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/m4-long-inputs/long-quality/case-3.txt"
+  ],
+  "returncode": 1
+}

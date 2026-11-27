@@ -1,6 +1,6 @@
 # Online drafter adaptation for Kapitsa: survey, fit, gaps, top 3, plan
 
-Status: research, 2 Nov 2026, task #316. Nothing here ran on a GPU, no model was loaded. **Measured** = a number from a
+Status: research, 2 Nov 2026, task #316; the baselines (§6.5) and the live runs of the top two ideas (§6.2, §6.3) ran on the M5 Pro on 4-5 Nov 2026. The rest was not run on a GPU. **Measured** = a number from a
 logged Kapitsa/Splash run or from a replay of such logs (source given). **Paper-reported** = from the cited source.
 **Inference** = my reading; it is marked. Hardware reference: M5 Pro 48 GB.
 
@@ -18,7 +18,7 @@ logged Kapitsa/Splash run or from a replay of such logs (source given). **Paper-
   (measured replay, `DESIGN-draftlen.md` (in the `kapitsa-ksx-tree` worktree)). More acceptance needs new **information**: the user's own text
   (history lane), the user's own vocabulary (draft head rows), or weights trained on it.
 - **Scope (Alish, 4 Nov 2026): the workload is English coding prompts (the headline number), then English non-coding as the second class.** Other languages are an optional extra check, never a gate. The ranking below is judged on English code first. The draft-head idea (§6.1) is a non-English idea: English has 0.0 % of text outside the default head, the ranked head measured 1.00x and the full head 0.945x, so it leaves the top 3 and its work (old phase 2, asks F1 and F1b) is optional.
-- Top 3 for English code (§6): (1) a persistent history lane in the lattice (§6.2; the one recorded English coding-agent session gains +11 to +13 % tokens per cycle, single-request prompts 0 to +1.2 %), (2) idle-time CPU updates of the selector codebooks from verify-pass data (§6.3; +8.6 % on that session when state carries across requests, -1.2 % on English chat, so it needs an English gate), (3) a draft model fine-tuned offline on English code and agent traces: **cannot measure because it needs a training run** (the notes' F72 estimate for offline-trained heads is -6 to +32 %, central +10 to +15 %; nothing on this Mac trains the drafter, and no CPU proxy for the gain exists). A wider verify tree was the other candidate and is now measured: more tokens per cycle on the English agent session, but it loses on cost for the 35B (§6.4). (1) needs no training.
+- Top 3 for English code (§6): (1) a persistent history lane in the lattice (§6.2; the one recorded English coding-agent session gains +11 to +13 % tokens per cycle in replay and **+7 % live on the GPU (two runs)**, single-request prompts 0 to +1.2 %), (2) idle-time CPU updates of the selector codebooks from verify-pass data (§6.3; +8.6 % on that session in replay when state carries across requests and **+6 % live (two runs)**, -1.2 % on English chat in replay, so it needs an English gate), (3) a draft model fine-tuned offline on English code and agent traces: **cannot measure because it needs a training run** (the notes' F72 estimate for offline-trained heads is -6 to +32 %, central +10 to +15 %; nothing on this Mac trains the drafter, and no CPU proxy for the gain exists). A wider verify tree was the other candidate and is now measured: more tokens per cycle on the English agent session, but it loses on cost for the 35B (§6.4). (1) needs no training.
 - Prototypes on this branch: `tools/online_drafter_sim.py` (calibration and break-even replay, 16 recorded sessions).
   A second stacked PR adds `tools/history_lane_replay.py`. Both are CPU, stdlib only, with tests.
 
@@ -412,6 +412,15 @@ model-free speed-ups. Without a drafted-35B measurement I would plan **+2 to +6 
 - GPU, frozen ask F2: record the 35B on `bench/harness/agent-traces/opencode-ledger.json` with `NI_DFLASH_LAT`, then replay a joint
   drafter-plus-history policy on the CPU. **Reject if the cost-charged gain on the ledger is < +2 %.**
 
+**Live run (F4, 5 Nov 2026, M5 Pro, AC power, same 19-request ledger and flags as §6.5, T 0.6).** A GPU lookup kernel (`dfl_hist`, `NI_DFLASH_HIST=3,8,4`: the last 3 to 8 tokens looked up in the prompt and output so far, up to 4 following tokens put into the lattice's children tables before the tree builder, same 7-node budget, no extra verify rows) in an unmerged build. Three legs in turn per run (baseline with the same build, history lane, selector update), a fresh server and the same KFlash calibration file for every leg, two runs.
+
+| Run | Tokens per cycle: baseline → history lane | Mean per-turn write speed ratio, 11 matched turns |
+|---|---|---|
+| 1 | 3.91 → 4.19 (**+7 %**) | 1.22x |
+| 2 | 3.89 → 4.17 (**+7 %**) | 1.11x |
+
+The replay said +13.3 %; the live gain is about half of it, **+7 % tokens per cycle in both runs**, which clears the +2 % bar. The speed ratio moves by 0.1 between runs and is not a stable number here (11 turns that match the recording on both legs, sampled at T 0.6, so different turns match in different legs); read the tokens-per-cycle column. Answers matched the recording on 11 of 19 turns in the baseline and in both knob legs of both runs. Caveats: DSH was visible, and the harness measured other processes' GPU use during each leg (`contention` in the result files). Run 1 was clean by the 5 % bar: mean 3.0 % (baseline, max 4.8 %), 2.6 % (history lane, max 7.4 %), 0.2 % (selector update, max 0.9 %). Run 2 was not: mean 6.8 % (baseline, max 13.7 %), 5.7 % (history lane, max 8.8 %), 5.9 % (selector update, max 9.2 %), WebKit (the DSH window). The tokens-per-cycle gains do not depend on timing and agree between the two runs; the speed ratios do, so run 2's are the weaker of the two; a third run was planned and was stopped when the budget ran out; the knob lives in an unmerged build. The speed figures here are not a merge gate; they say the history lane works on the GPU and is worth about +7 % tokens per cycle on this session. Raw files: `kapitsa-316/f4/out/`.
+
 ### 6.3 Idle-time, row-sparse update of the selector from verify-pass data (feasibility 0.2)
 
 **What.** TTS/EvoSpec/Aurora-style distillation toward the target's own logits, shrunk to fit a Mac: update the selector's
@@ -438,6 +447,15 @@ GPU trains (gap 5).
 - GPU, frozen ask F4: decode tok/s and p95 inter-token latency while a 5 ms training-shaped command buffer runs every 100 ms. **Reject
   if decode loses > 3 % or p95 grows > 5 %.**
 
+**Live run (F4 of the 5 Nov 2026 run in §6.2, same legs).** The update runs on the GPU inside the verify's command buffer, after the acceptance (`dfl_sel_update`, `NI_DFLASH_SELUPD=0.02`): one threadgroup, fp32 master copies of the two codebooks (485 MB), the touched rows written back as bf16 for the next drafting pass; not idle-time CPU work as designed above. State carries across the 19 requests of one server run and is lost at restart.
+
+| Run | Tokens per cycle: baseline → selector update | Mean per-turn write speed ratio, 11 matched turns |
+|---|---|---|
+| 1 | 3.91 → 4.15 (**+6 %**) | 1.13x |
+| 2 | 3.89 → 4.13 (**+6 %**) | 1.16x |
+
+The replay said +8.6 % at learning rate 0.003 (+7.7 % at 0.01); live at 0.02 it is **+6 % tokens per cycle in both runs**. The extra cost of the update (one serial threadgroup per cycle) did not show up as slower decode: the speed ratio is above 1 in both runs, with the same noise as above. The knob did not change which turns match the recording (11 of 19, as in the baseline). Not measured: English chat, where the replay lost 1.2 %; whether the update helps or hurts quality over longer sessions; learning rates other than 0.02. Caveats as in §6.2 (run 1 clean, run 2 above the 5 % foreign-GPU bar, two runs, unmerged build).
+
 ### 6.4 A wider verify tree on English code: replayed, rejected for the 35B-A3B
 
 The 7-node tree is the engine's default on the 35B. Replaying larger node budgets with `tools/tree_sim.py` on the 19 English opencode-ledger lattices (M5 Pro, 1,015 chain cycles, exact at T0) gives, in tokens per cycle: chain 3.696, 7 nodes 3.989 (+7.9 % over the chain), 11 nodes 4.220 (+5.8 % over 7 nodes), 15 nodes 4.410 (+10.6 % over 7 nodes); the lattice oracle is 5.433. With the 35B's measured cycle cost (14.26 ms at one row, about 1.03 ms per extra row, §2.2; the 12 and 16 row costs are extrapolated, not measured) tokens per ms fall to 0.89x (11 nodes) and 0.80x (15 nodes) of the 7-node tree. The extra rows pay only if each one beyond the 8th costs under 0.31 ms (11 nodes) or 0.28 ms (15 nodes): the tokens-per-cycle gain over the 7-node tree (+5.8 %, +10.6 %) times its 21.47 ms cycle, over the 4 or 8 extra rows. That is a quarter to a third of the measured 1.03 ms. The dense 27B, where 16 rows cost 1.07x of 8 (`docs/kflash.md`), is the case where a wider tree can win, and its 16-row block is already the default. Output is in `kapitsa-online-drafter-notes/f3/tree_budget_agent.txt`, outside the repo. Verdict: not a candidate for the 35B on an English coding session.
@@ -462,7 +480,7 @@ Writing speed in tok/s, then the time for the 19 turns (prefill included). **Use
 - The 35 % is against the engine's MTP head, the fallback a Mac gets without the drafter; the no-speculator leg (98.6 tok/s) gives 1.76x. Both are one session of 19 turns and one run per leg after the swapped first run.
 - Short answers (turns of 31 to 66 tokens) are dominated by start-up and say little on their own; 6 of 19 turns were slower with the drafter in run 2.
 
-What it settles: the drafter works on English coding-agent traffic, 4.0 tokens per cycle, and the replay baseline the history lane and the selector update are measured against is the live number. What it does not: the history lane and the selector update are still replays, and the +13.3 % and +8.6 % in §6.2 and §6.3 have not been run on the GPU.
+What it settles: the drafter works on English coding-agent traffic, 4.0 tokens per cycle, and the replay baseline the history lane and the selector update are measured against is the live number. What it did not settle at the time: the history lane and the selector update were still replays. They were run live on 5 Nov 2026 (§6.2 and §6.3): +7 % and +6 % tokens per cycle against the replays' +13.3 % and +8.6 %.
 
 ### Not in the top 3
 

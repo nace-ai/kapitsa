@@ -1,0 +1,448 @@
+{
+  "pid": 78537,
+  "started_at": "2026-11-07T07:30:08.107758+00:00",
+  "status": "complete; inspect all four replacement arms and retain the original series",
+  "reason": "The first two 4B arms overlapped the vocabulary grammar CPU check. Retain them and run a separate clean ABAB after all existing checks.",
+  "runs": [
+    {
+      "label": "4b-repeat-0-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-stop-sequence-20261107/base/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/kapitsa-stop-sequence-20261107/m3-4b-quiet/4b-repeat-0-base.json"
+      ],
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-stop-sequence-20261107/m3-4b-quiet/home-4b-repeat-0-base"
+      },
+      "kapitsa": {
+        "version": "0.2.31",
+        "commit": "7a5d673"
+      },
+      "model": {
+        "name": "qwen3.5-4b-4bit",
+        "title": "qwen3.5-4b-4bit",
+        "variant": null,
+        "precision": "4-bit",
+        "catalog": false,
+        "revision": null,
+        "decoding": "KFlash",
+        "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+        "drafter": "dflash2",
+        "drafter_kind": "DFlash",
+        "drafter_source": "dflash2",
+        "drafter_reason": "found in the model's folder"
+      },
+      "results": {
+        "decode": {
+          "median_tps": 352.56,
+          "runs_tps": [
+            352.56,
+            341.26,
+            356.85
+          ],
+          "median_accepted_draft_tps": 247.21,
+          "median_accepted_draft_share": 0.7012
+        },
+        "decode_greedy": {
+          "median_tps": 349.61,
+          "runs_tps": [
+            374.61,
+            335.58,
+            349.61
+          ],
+          "median_accepted_draft_tps": 245.14,
+          "median_accepted_draft_share": 0.7012
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4131,
+            "ttft_s": 1.9351,
+            "tps": 2134.8,
+            "followup_s": [
+              0.0309,
+              0.0397,
+              0.0356
+            ],
+            "followup_median_s": 0.0356,
+            "followup_suffix_tps": 680.3
+          }
+        ],
+        "tool_calls": "pass",
+        "peak_memory_gb": 4.55
+      },
+      "conditions": {
+        "power_source": "ac",
+        "power_mode": "automatic",
+        "low_power_mode": false,
+        "thermal_state": "nominal",
+        "swapouts": 0,
+        "gpu_quiet_wait_s": 18.2,
+        "gpu_other_mean_pct": 0.1,
+        "gpu_other_max_pct": 0.67,
+        "gpu_ambient_mean_pct": 0.0,
+        "gpu_users": [],
+        "contention": []
+      },
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.4945)"
+      ],
+      "invalid": []
+    },
+    {
+      "label": "4b-repeat-1-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-stop-sequence-20261107/candidate/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/kapitsa-stop-sequence-20261107/m3-4b-quiet/4b-repeat-1-candidate.json"
+      ],
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-stop-sequence-20261107/m3-4b-quiet/home-4b-repeat-1-candidate"
+      },
+      "kapitsa": {
+        "version": "0.2.31",
+        "commit": "cf2f25c"
+      },
+      "model": {
+        "name": "qwen3.5-4b-4bit",
+        "title": "qwen3.5-4b-4bit",
+        "variant": null,
+        "precision": "4-bit",
+        "catalog": false,
+        "revision": null,
+        "decoding": "KFlash",
+        "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+        "drafter": "dflash2",
+        "drafter_kind": "DFlash",
+        "drafter_source": "dflash2",
+        "drafter_reason": "found in the model's folder"
+      },
+      "results": {
+        "decode": {
+          "median_tps": 338.27,
+          "runs_tps": [
+            380.96,
+            338.27,
+            324.77
+          ],
+          "median_accepted_draft_tps": 234.54,
+          "median_accepted_draft_share": 0.6934
+        },
+        "decode_greedy": {
+          "median_tps": 371.7,
+          "runs_tps": [
+            359.59,
+            375.96,
+            371.7
+          ],
+          "median_accepted_draft_tps": 268.61,
+          "median_accepted_draft_share": 0.7227
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4133,
+            "ttft_s": 1.9349,
+            "tps": 2136.0,
+            "followup_s": [
+              0.0252,
+              0.0347,
+              0.0371
+            ],
+            "followup_median_s": 0.0347,
+            "followup_suffix_tps": 778.3
+          }
+        ],
+        "tool_calls": "pass",
+        "peak_memory_gb": 4.55
+      },
+      "conditions": {
+        "power_source": "ac",
+        "power_mode": "automatic",
+        "low_power_mode": false,
+        "thermal_state": "nominal",
+        "swapouts": 0,
+        "gpu_quiet_wait_s": 18.1,
+        "gpu_other_mean_pct": 0.0,
+        "gpu_other_max_pct": 0.0,
+        "gpu_ambient_mean_pct": 0.0,
+        "gpu_users": [],
+        "contention": []
+      },
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.4759)"
+      ],
+      "invalid": []
+    },
+    {
+      "label": "4b-repeat-2-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-stop-sequence-20261107/base/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/kapitsa-stop-sequence-20261107/m3-4b-quiet/4b-repeat-2-base.json"
+      ],
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-stop-sequence-20261107/m3-4b-quiet/home-4b-repeat-2-base"
+      },
+      "kapitsa": {
+        "version": "0.2.31",
+        "commit": "7a5d673"
+      },
+      "model": {
+        "name": "qwen3.5-4b-4bit",
+        "title": "qwen3.5-4b-4bit",
+        "variant": null,
+        "precision": "4-bit",
+        "catalog": false,
+        "revision": null,
+        "decoding": "KFlash",
+        "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+        "drafter": "dflash2",
+        "drafter_kind": "DFlash",
+        "drafter_source": "dflash2",
+        "drafter_reason": "found in the model's folder"
+      },
+      "results": {
+        "decode": {
+          "median_tps": 332.4,
+          "runs_tps": [
+            332.4,
+            330.53,
+            345.28
+          ],
+          "median_accepted_draft_tps": 230.47,
+          "median_accepted_draft_share": 0.6934
+        },
+        "decode_greedy": {
+          "median_tps": 367.4,
+          "runs_tps": [
+            342.39,
+            374.42,
+            367.4
+          ],
+          "median_accepted_draft_tps": 264.07,
+          "median_accepted_draft_share": 0.7188
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4134,
+            "ttft_s": 1.9368,
+            "tps": 2134.5,
+            "followup_s": [
+              0.0318,
+              0.035,
+              0.0308
+            ],
+            "followup_median_s": 0.0318,
+            "followup_suffix_tps": 692.0
+          }
+        ],
+        "tool_calls": "pass",
+        "peak_memory_gb": 4.55
+      },
+      "conditions": {
+        "power_source": "ac",
+        "power_mode": "automatic",
+        "low_power_mode": false,
+        "thermal_state": "nominal",
+        "swapouts": 0,
+        "gpu_quiet_wait_s": 18.2,
+        "gpu_other_mean_pct": 0.0,
+        "gpu_other_max_pct": 0.0,
+        "gpu_ambient_mean_pct": 0.0,
+        "gpu_users": [],
+        "contention": []
+      },
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.4593)"
+      ],
+      "invalid": []
+    },
+    {
+      "label": "4b-repeat-3-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-stop-sequence-20261107/candidate/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/kapitsa-stop-sequence-20261107/m3-4b-quiet/4b-repeat-3-candidate.json"
+      ],
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-stop-sequence-20261107/m3-4b-quiet/home-4b-repeat-3-candidate"
+      },
+      "kapitsa": {
+        "version": "0.2.31",
+        "commit": "cf2f25c"
+      },
+      "model": {
+        "name": "qwen3.5-4b-4bit",
+        "title": "qwen3.5-4b-4bit",
+        "variant": null,
+        "precision": "4-bit",
+        "catalog": false,
+        "revision": null,
+        "decoding": "KFlash",
+        "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+        "drafter": "dflash2",
+        "drafter_kind": "DFlash",
+        "drafter_source": "dflash2",
+        "drafter_reason": "found in the model's folder"
+      },
+      "results": {
+        "decode": {
+          "median_tps": 340.88,
+          "runs_tps": [
+            369.95,
+            339.76,
+            340.88
+          ],
+          "median_accepted_draft_tps": 238.35,
+          "median_accepted_draft_share": 0.7012
+        },
+        "decode_greedy": {
+          "median_tps": 374.61,
+          "runs_tps": [
+            384.43,
+            374.61,
+            332.83
+          ],
+          "median_accepted_draft_tps": 270.71,
+          "median_accepted_draft_share": 0.7227
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4135,
+            "ttft_s": 1.9384,
+            "tps": 2133.2,
+            "followup_s": [
+              0.0306,
+              0.0403,
+              0.0406
+            ],
+            "followup_median_s": 0.0403,
+            "followup_suffix_tps": 670.3
+          }
+        ],
+        "tool_calls": "pass",
+        "peak_memory_gb": 4.55
+      },
+      "conditions": {
+        "power_source": "ac",
+        "power_mode": "automatic",
+        "low_power_mode": false,
+        "thermal_state": "nominal",
+        "swapouts": 0,
+        "gpu_quiet_wait_s": 18.2,
+        "gpu_other_mean_pct": 0.0,
+        "gpu_other_max_pct": 0.0,
+        "gpu_ambient_mean_pct": 0.0,
+        "gpu_users": [],
+        "contention": []
+      },
+      "flags": [],
+      "invalid": []
+    }
+  ],
+  "identities": {
+    "base": {
+      "head": "7a5d673e9544b538a54cf7b4d7c5cbcef2e49d5c",
+      "version": "kapitsa 0.2.31 (7a5d673)",
+      "binaries": {
+        "kapitsa": "fba3ef7cbe699b8fd8a02e13b811f480693940c86cca387d82df3e443adc7e6b",
+        "ni_run": "2b1af4e5726d302525886d3bd8af3846d78eeac62c293868100666e500f3faf4",
+        "logit_dump": "d6bdd9171bb7cdabddd409da815388c7f515eea08f400ad5cc40594d599bf60d"
+      },
+      "sources": {
+        "src/engine/engine.cpp": "69281aa6254b7c30d027bb35a6188d59dca0adb6ce193ea32180f5653d9d823a",
+        "src/engine/engine_splash.cpp": "771be298d697cd2084d6ff7df0b8e55ff922e60e6f111b1e3758c64085f9537e"
+      }
+    },
+    "candidate": {
+      "head": "cf2f25c7f9f38f9babfc51a0def9d55697544b73",
+      "version": "kapitsa 0.2.31 (cf2f25c)",
+      "binaries": {
+        "kapitsa": "e9a35cd2506ea6e9814e8ad4c7f6196f37683d4f9a8b0e6dd57c8fb3589df4d7",
+        "ni_run": "2b1af4e5726d302525886d3bd8af3846d78eeac62c293868100666e500f3faf4",
+        "logit_dump": "120dd20ccf5f4fc1c6b45b3662850d0a3e7d14c045d81bbfeb9970e2905d2207"
+      },
+      "sources": {
+        "src/engine/engine.cpp": "814794b0ddc139855869f6e5f750031e78380ac1b446c0e48d378440ce795027",
+        "src/engine/engine_splash.cpp": "c01b5d20531c3845edf1c1bbade71e061f00b50e9c2f55652e7421ae80518e4d"
+      }
+    }
+  },
+  "quiet_checks": [
+    {
+      "arm": "base",
+      "result": [
+        true,
+        42.439420223236084,
+        []
+      ],
+      "note": "gpu_hogs.diff_rows reports foreign processes above 0.5%; configured maxpct is 0.1%"
+    },
+    {
+      "arm": "candidate",
+      "result": [
+        true,
+        33.95842409133911,
+        []
+      ],
+      "note": "gpu_hogs.diff_rows reports foreign processes above 0.5%; configured maxpct is 0.1%"
+    },
+    {
+      "arm": "base",
+      "result": [
+        true,
+        65.7649416923523,
+        []
+      ],
+      "note": "gpu_hogs.diff_rows reports foreign processes above 0.5%; configured maxpct is 0.1%"
+    },
+    {
+      "arm": "candidate",
+      "result": [
+        true,
+        33.97838592529297,
+        []
+      ],
+      "note": "gpu_hogs.diff_rows reports foreign processes above 0.5%; configured maxpct is 0.1%"
+    }
+  ]
+}

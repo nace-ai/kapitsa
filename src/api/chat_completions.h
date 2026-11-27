@@ -23,19 +23,25 @@ ojson chat_error(const std::string& message, const std::string& type = "invalid_
 std::pair<int, ojson> chat_failure(const ChatResult& res);
 
 // The reply's token limit: max_completion_tokens, else max_tokens, else 16384. A null field counts as absent, as
-// OpenAI's API has it (SDKs send unset fields as null); another non-number throws (a 400).
+// OpenAI's API has it (SDKs send unset fields as null). A supplied limit must be a positive integer that fits int;
+// otherwise throws ApiError (400), naming the selected field.
 int chat_max_tokens(const ojson& body);
+
+// The body's tools into r: those marked "defer_loading" in r.deferred_tools, the rest in r.tools (take_deferred), none
+// for tool_choice "none"
+void chat_tools(const ojson& body, ChatRequest& r);
 
 // Structured output of a request (src/engine/grammar.h): response_format (json_object; json_schema with its strict),
 // tool_choice (required, or a named function), parallel_tool_calls and strict tools ("strict": true in a function),
-// over `tools`, the request's as the prompt declares them (none for tool_choice "none"). Null when nothing constrains
-// the reply. Throws ApiError (400) for a malformed or unsupported one.
+// over `tools`, every tool a call may name (ChatRequest::call_tools: the declared ones and the deferred ones). Null when
+// nothing constrains the reply. Throws ApiError (400) for a malformed or unsupported one.
 std::shared_ptr<const Grammar> chat_grammar(const ojson& body, const ojson& tools);
 
 // The stream: a chat.completion.chunk with the assistant's role at begin(), one per delta's reasoning
 // (reasoning_content), text (content) and tool calls (tool_calls, indexed across the reply), then one with
 // finish_reason and usage, and "data: [DONE]". begin() takes no counts (the stream starts before the request has a
-// slot); a failure after it is chat_failure's error as an event before [DONE].
+// slot); a failure after it is chat_failure's error as an event before [DONE]. With "return_progress": true, chunks
+// with an empty delta and llama.cpp's prompt_progress object while the prompt is read (progress()).
 class ChatCompletionsStream : public StreamWriter {
  public:
   ChatCompletionsStream(std::string id, std::string model, long created)
@@ -43,10 +49,12 @@ class ChatCompletionsStream : public StreamWriter {
   std::string begin(const ChatResult& prompt) override;
   std::string delta(const ChatDelta& d) override;
   std::string keepalive() override;
+  std::string progress(const PromptProgress& p) override;
   std::string end(const ChatResult& res) override;
 
  private:
-  std::string chunk(const ojson& delta, const ojson& finish, const ojson* usage = nullptr) const;
+  std::string chunk(const ojson& delta, const ojson& finish, const ojson* usage = nullptr,
+                    const ojson* progress = nullptr) const;
   std::string id_, model_;
   long created_;
   size_t tools_ = 0;  // tool calls sent: the next one's index

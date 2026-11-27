@@ -1,0 +1,274 @@
+{
+  "pid": 12170,
+  "started_at": "2026-11-07T01:38:29.409888+00:00",
+  "status": "complete: rebased trained logits and greedy ABAB; historical HTTP/native results retain original source identities",
+  "commands": [
+    {
+      "label": "logits-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/base/build/logit_dump",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/logits-base",
+        "--paths",
+        "step,verify"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-affine-rebase-20261107/base",
+      "exit": 0,
+      "elapsed_s": 45.47057104110718
+    },
+    {
+      "label": "logits-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/candidate/build/logit_dump",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/logits-candidate",
+        "--paths",
+        "step,verify",
+        "--from",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/logits-base"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-affine-rebase-20261107/candidate",
+      "exit": 0,
+      "elapsed_s": 41.38785409927368
+    },
+    {
+      "label": "logit-compare",
+      "argv": [
+        "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/candidate/tools/logit_compare.py",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/logits-base",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/logits-candidate"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-affine-rebase-20261107",
+      "exit": 0,
+      "elapsed_s": 1.1709260940551758
+    },
+    {
+      "label": "greedy-0-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/base/build/ni_run",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "@/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/chat-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--dump-all-logits",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/greedy-0-base.f32"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-affine-rebase-20261107",
+      "exit": 0,
+      "elapsed_s": 12.988102197647095
+    },
+    {
+      "label": "greedy-0-base-decode",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/real-rows-1857/probe-candidate",
+        "decode",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/greedy-0-base.ids.json",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/greedy-0-base.text.json"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-affine-rebase-20261107",
+      "exit": 0,
+      "elapsed_s": 0.3315110206604004
+    },
+    {
+      "label": "greedy-1-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/candidate/build/ni_run",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "@/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/chat-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--dump-all-logits",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/greedy-1-candidate.f32"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-affine-rebase-20261107",
+      "exit": 0,
+      "elapsed_s": 12.961611986160278
+    },
+    {
+      "label": "greedy-1-candidate-decode",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/real-rows-1857/probe-candidate",
+        "decode",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/greedy-1-candidate.ids.json",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/greedy-1-candidate.text.json"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-affine-rebase-20261107",
+      "exit": 0,
+      "elapsed_s": 0.27071404457092285
+    },
+    {
+      "label": "greedy-2-base",
+      "argv": [
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/base/build/ni_run",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "@/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/chat-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--dump-all-logits",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/greedy-2-base.f32"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-affine-rebase-20261107",
+      "exit": 0,
+      "elapsed_s": 12.137797832489014
+    },
+    {
+      "label": "greedy-2-base-decode",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/real-rows-1857/probe-candidate",
+        "decode",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/greedy-2-base.ids.json",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/greedy-2-base.text.json"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-affine-rebase-20261107",
+      "exit": 0,
+      "elapsed_s": 0.27045702934265137
+    },
+    {
+      "label": "greedy-3-candidate",
+      "argv": [
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/candidate/build/ni_run",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "@/Users/bytedance/kapitsa-ngram-remote-20261107/evidence/chat-prompt.ids",
+        "256",
+        "0",
+        "--dflash",
+        "none",
+        "--dump-all-logits",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/greedy-3-candidate.f32"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-affine-rebase-20261107",
+      "exit": 0,
+      "elapsed_s": 12.104971170425415
+    },
+    {
+      "label": "greedy-3-candidate-decode",
+      "argv": [
+        "/Users/bytedance/kapitsa-ngram-affine-20261107/real-rows-1857/probe-candidate",
+        "decode",
+        "/Users/bytedance/kapitsa-ngram-remote-20261107/model-sushi",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/greedy-3-candidate.ids.json",
+        "/Users/bytedance/kapitsa-affine-rebase-20261107/trained-rebase/greedy-3-candidate.text.json"
+      ],
+      "cwd": "/Users/bytedance/kapitsa-affine-rebase-20261107",
+      "exit": 0,
+      "elapsed_s": 0.27093076705932617
+    }
+  ],
+  "results": [
+    {
+      "path": "prefill",
+      "bytes": 7946240,
+      "sha256": "444fb1fb136d9df8f3eb41645cda6399d8eb1c290018f33e100573b1254e06f6",
+      "finite": true,
+      "nonzero_values": 1986560,
+      "byte_equal": true,
+      "records": 8
+    },
+    {
+      "path": "step",
+      "bytes": 190709760,
+      "sha256": "c49e22ec61f712b5839f75c3c02bd1c0da1bcfc4993982be4b29c608881a1bf2",
+      "finite": true,
+      "nonzero_values": 47677438,
+      "byte_equal": true,
+      "records": 192
+    },
+    {
+      "path": "verify",
+      "bytes": 190709760,
+      "sha256": "c49e22ec61f712b5839f75c3c02bd1c0da1bcfc4993982be4b29c608881a1bf2",
+      "finite": true,
+      "nonzero_values": 47677438,
+      "byte_equal": true,
+      "records": 192
+    },
+    {
+      "label": "greedy-0-base",
+      "bytes": 254279680,
+      "sha256": "454b852e0b9eb0c899d5f46c9eda99a77e90bbf64cabd337eabccd370b5f22bc",
+      "finite": true,
+      "nonzero_values": 63569919,
+      "tokens": 256,
+      "eos_count": 0,
+      "text_nonempty": true,
+      "all_ids_equal": true,
+      "byte_equal": true
+    },
+    {
+      "label": "greedy-1-candidate",
+      "bytes": 254279680,
+      "sha256": "454b852e0b9eb0c899d5f46c9eda99a77e90bbf64cabd337eabccd370b5f22bc",
+      "finite": true,
+      "nonzero_values": 63569919,
+      "tokens": 256,
+      "eos_count": 0,
+      "text_nonempty": true,
+      "all_ids_equal": true,
+      "byte_equal": true
+    },
+    {
+      "label": "greedy-2-base",
+      "bytes": 254279680,
+      "sha256": "454b852e0b9eb0c899d5f46c9eda99a77e90bbf64cabd337eabccd370b5f22bc",
+      "finite": true,
+      "nonzero_values": 63569919,
+      "tokens": 256,
+      "eos_count": 0,
+      "text_nonempty": true,
+      "all_ids_equal": true,
+      "byte_equal": true
+    },
+    {
+      "label": "greedy-3-candidate",
+      "bytes": 254279680,
+      "sha256": "454b852e0b9eb0c899d5f46c9eda99a77e90bbf64cabd337eabccd370b5f22bc",
+      "finite": true,
+      "nonzero_values": 63569919,
+      "tokens": 256,
+      "eos_count": 0,
+      "text_nonempty": true,
+      "all_ids_equal": true,
+      "byte_equal": true
+    }
+  ],
+  "input_scope": "Shared pinned weights, covered corpus and generated-token fixture only. All outputs below freshly computed with this PR's own full libraries; no other PR outputs count as its reference.",
+  "source": {
+    "base": {
+      "head": "4d1d744538063a17bc85e88a08c08c8061511c95",
+      "library_sha256": "8180a447a42e6a4fccc8294103a2cd6d9747a23e8e5a1924386f836b3d2f11af",
+      "ni_run_sha256": "2db8c795964ccfb9f4107c8de754a66400b50ed0225dc9d470e9078b1e0985ac",
+      "logit_dump_sha256": "499d0e32f6e0313cca7baee3879c69fd6ce8a0c7b95d5edd7b9c20088a792986"
+    },
+    "candidate": {
+      "head": "6bd1dd1c725f72385f717b467860dab43d9ea0cb",
+      "library_sha256": "2812b063b268970faf11c2052cffcc1aaead432ee3e99b3030be0412e1a88896",
+      "ni_run_sha256": "566c1f527ed247ea92d07e29a99324991b69453c2dc32ec8851673f45736266d",
+      "logit_dump_sha256": "09ab8f9c7716d2d2004ab63bbcdf53bed24b1997c1bc303e01d665f583e35312"
+    }
+  },
+  "coverage": {
+    "corpus": {
+      "required_rows": 83302,
+      "missing_rows": 0,
+      "all_row_bytes_rechecked": true,
+      "ordered_row_digest": "2a980066952074fd22cec306c2d741cff4022ba22eedc2ec012dca805dce6229"
+    },
+    "fixed_generation": {
+      "required_rows": 3655,
+      "missing_rows": 0,
+      "all_row_bytes_rechecked": true,
+      "ordered_row_digest": "1c5529f5ac1e7f6ece2517396963c67cab95bfd65da7afd6899af19204e874f5"
+    }
+  },
+  "comparator_exit": 0
+}

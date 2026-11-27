@@ -1,0 +1,1601 @@
+{
+  "evidence_kind": "Explicitly sanitized derived public report; original commands, receipts and logs remain privately verifiable",
+  "source_reference": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+  "source_candidate": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+  "environment": {
+    "chip": "M4 Pro",
+    "GPU_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "model": {
+    "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "filename": "Qwen_Qwen3.5-4B-IQ4_NL.gguf",
+    "bytes": 2775541728,
+    "sha256": "f007c3dbf67df668354d37ae13d87fd5789059704977959187e8342aec03b66f"
+  },
+  "import_method": "Independent --no-drafter imports by each exact source-built CLI. Full byte comparison of every generated file; twenty Q8_0-source modules checked against packed tensor shapes and effective config.",
+  "original_candidate_guard": {
+    "rc": 1,
+    "conversion_executed": false,
+    "retry_label": "candidate_import_retry01",
+    "retry_rc": 0,
+    "retry_actual_complete_executions": 1,
+    "reference_actual_complete_executions": 1
+  },
+  "comparison": {
+    "converted_weight_config_tokenizer_bytes_equal": true,
+    "all_files_raw_bytes_equal": true,
+    "manifest_order_only_differences": [],
+    "files_with_complete_literal_byte_comparison": [
+      ".kapitsa/manifest.json",
+      "chat_template.jinja",
+      "config.json",
+      "generation_config.json",
+      "model.safetensors",
+      "model.safetensors.index.json",
+      "mtp.safetensors",
+      "tokenizer.json",
+      "tokenizer_config.json"
+    ],
+    "inventories": {
+      "reference": [
+        {
+          "path": ".kapitsa/manifest.json",
+          "bytes": 1191,
+          "sha256": "f087bf09ecf9b097a6d4e20e443af76b4296861b0d61bd88b67de7b2e87d80b2"
+        },
+        {
+          "path": "chat_template.jinja",
+          "bytes": 7756,
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+          "path": "config.json",
+          "bytes": 7606,
+          "sha256": "b63bc4b651baec6ad0e6d6b997d42275df7a3b2c17441bda8c74635d99040faf"
+        },
+        {
+          "path": "generation_config.json",
+          "bytes": 51,
+          "sha256": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 3222879600,
+          "sha256": "d8a1b1e0a06e4c97f937d0535f53fae412515c311abfaaf7a41e932f6e217ede"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "bytes": 68845,
+          "sha256": "78c58ba33448de276b4a1248cc9702f3215e0a78a2caf49c834256730490fc1b"
+        },
+        {
+          "path": "mtp.safetensors",
+          "bytes": 128152856,
+          "sha256": "8fa3db39cdec6fbc1f946f29b24468f6b457d1c8fa8278ee164587da07c327a4"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 9089350,
+          "sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 12388,
+          "sha256": "0b99b211f407646a3515f39fa06159ae80431cf46267a9b48778a8e1f0da1381"
+        }
+      ],
+      "candidate": [
+        {
+          "path": ".kapitsa/manifest.json",
+          "bytes": 1191,
+          "sha256": "f087bf09ecf9b097a6d4e20e443af76b4296861b0d61bd88b67de7b2e87d80b2"
+        },
+        {
+          "path": "chat_template.jinja",
+          "bytes": 7756,
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+          "path": "config.json",
+          "bytes": 7606,
+          "sha256": "b63bc4b651baec6ad0e6d6b997d42275df7a3b2c17441bda8c74635d99040faf"
+        },
+        {
+          "path": "generation_config.json",
+          "bytes": 51,
+          "sha256": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23"
+        },
+        {
+          "path": "model.safetensors",
+          "bytes": 3222879600,
+          "sha256": "d8a1b1e0a06e4c97f937d0535f53fae412515c311abfaaf7a41e932f6e217ede"
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "bytes": 68845,
+          "sha256": "78c58ba33448de276b4a1248cc9702f3215e0a78a2caf49c834256730490fc1b"
+        },
+        {
+          "path": "mtp.safetensors",
+          "bytes": 128152856,
+          "sha256": "8fa3db39cdec6fbc1f946f29b24468f6b457d1c8fa8278ee164587da07c327a4"
+        },
+        {
+          "path": "tokenizer.json",
+          "bytes": 9089350,
+          "sha256": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "bytes": 12388,
+          "sha256": "0b99b211f407646a3515f39fa06159ae80431cf46267a9b48778a8e1f0da1381"
+        }
+      ]
+    },
+    "source_backed_format_checks": {
+      "reference": {
+        "global_trunk": {
+          "bits": 5,
+          "group_size": 64,
+          "mode": "affine"
+        },
+        "Q8_0_modules": [
+          {
+            "source_name": "blk.0.ssm_out.weight",
+            "module": "language_model.model.layers.0.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.1.ssm_out.weight",
+            "module": "language_model.model.layers.1.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.2.ssm_out.weight",
+            "module": "language_model.model.layers.2.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.6.ssm_out.weight",
+            "module": "language_model.model.layers.6.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.10.ssm_out.weight",
+            "module": "language_model.model.layers.10.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.14.ssm_out.weight",
+            "module": "language_model.model.layers.14.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.18.ssm_out.weight",
+            "module": "language_model.model.layers.18.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.22.ssm_out.weight",
+            "module": "language_model.model.layers.22.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.26.ssm_out.weight",
+            "module": "language_model.model.layers.26.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.28.ssm_out.weight",
+            "module": "language_model.model.layers.28.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.29.ssm_out.weight",
+            "module": "language_model.model.layers.29.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.30.ssm_out.weight",
+            "module": "language_model.model.layers.30.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.attn_k.weight",
+            "module": "mtp.layers.0.self_attn.k_proj",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  1024,
+                  640
+                ],
+                "payload_bytes": 2621440
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  1024,
+                  40
+                ],
+                "payload_bytes": 81920
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  1024,
+                  40
+                ],
+                "payload_bytes": 81920
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.attn_output.weight",
+            "module": "mtp.layers.0.self_attn.o_proj",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.attn_q.weight",
+            "module": "mtp.layers.0.self_attn.q_proj",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  8192,
+                  640
+                ],
+                "payload_bytes": 20971520
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.attn_v.weight",
+            "module": "mtp.layers.0.self_attn.v_proj",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  1024,
+                  640
+                ],
+                "payload_bytes": 2621440
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  1024,
+                  40
+                ],
+                "payload_bytes": 81920
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  1024,
+                  40
+                ],
+                "payload_bytes": 81920
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.ffn_down.weight",
+            "module": "mtp.layers.0.mlp.down_proj",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  2304
+                ],
+                "payload_bytes": 23592960
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  144
+                ],
+                "payload_bytes": 737280
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  144
+                ],
+                "payload_bytes": 737280
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.ffn_gate.weight",
+            "module": "mtp.layers.0.mlp.gate_proj",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  9216,
+                  640
+                ],
+                "payload_bytes": 23592960
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  9216,
+                  40
+                ],
+                "payload_bytes": 737280
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  9216,
+                  40
+                ],
+                "payload_bytes": 737280
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.ffn_up.weight",
+            "module": "mtp.layers.0.mlp.up_proj",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  9216,
+                  640
+                ],
+                "payload_bytes": 23592960
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  9216,
+                  40
+                ],
+                "payload_bytes": 737280
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  9216,
+                  40
+                ],
+                "payload_bytes": 737280
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.nextn.eh_proj.weight",
+            "module": "mtp.fc",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1280
+                ],
+                "payload_bytes": 13107200
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  80
+                ],
+                "payload_bytes": 409600
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  80
+                ],
+                "payload_bytes": 409600
+              }
+            }
+          }
+        ]
+      },
+      "candidate": {
+        "global_trunk": {
+          "bits": 5,
+          "group_size": 64,
+          "mode": "affine"
+        },
+        "Q8_0_modules": [
+          {
+            "source_name": "blk.0.ssm_out.weight",
+            "module": "language_model.model.layers.0.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.1.ssm_out.weight",
+            "module": "language_model.model.layers.1.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.2.ssm_out.weight",
+            "module": "language_model.model.layers.2.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.6.ssm_out.weight",
+            "module": "language_model.model.layers.6.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.10.ssm_out.weight",
+            "module": "language_model.model.layers.10.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.14.ssm_out.weight",
+            "module": "language_model.model.layers.14.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.18.ssm_out.weight",
+            "module": "language_model.model.layers.18.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.22.ssm_out.weight",
+            "module": "language_model.model.layers.22.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.26.ssm_out.weight",
+            "module": "language_model.model.layers.26.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.28.ssm_out.weight",
+            "module": "language_model.model.layers.28.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.29.ssm_out.weight",
+            "module": "language_model.model.layers.29.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.30.ssm_out.weight",
+            "module": "language_model.model.layers.30.linear_attn.out_proj",
+            "output_file": "model.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.attn_k.weight",
+            "module": "mtp.layers.0.self_attn.k_proj",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  1024,
+                  640
+                ],
+                "payload_bytes": 2621440
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  1024,
+                  40
+                ],
+                "payload_bytes": 81920
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  1024,
+                  40
+                ],
+                "payload_bytes": 81920
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.attn_output.weight",
+            "module": "mtp.layers.0.self_attn.o_proj",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1024
+                ],
+                "payload_bytes": 10485760
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  64
+                ],
+                "payload_bytes": 327680
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.attn_q.weight",
+            "module": "mtp.layers.0.self_attn.q_proj",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  8192,
+                  640
+                ],
+                "payload_bytes": 20971520
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  8192,
+                  40
+                ],
+                "payload_bytes": 655360
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.attn_v.weight",
+            "module": "mtp.layers.0.self_attn.v_proj",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  1024,
+                  640
+                ],
+                "payload_bytes": 2621440
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  1024,
+                  40
+                ],
+                "payload_bytes": 81920
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  1024,
+                  40
+                ],
+                "payload_bytes": 81920
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.ffn_down.weight",
+            "module": "mtp.layers.0.mlp.down_proj",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  2304
+                ],
+                "payload_bytes": 23592960
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  144
+                ],
+                "payload_bytes": 737280
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  144
+                ],
+                "payload_bytes": 737280
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.ffn_gate.weight",
+            "module": "mtp.layers.0.mlp.gate_proj",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  9216,
+                  640
+                ],
+                "payload_bytes": 23592960
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  9216,
+                  40
+                ],
+                "payload_bytes": 737280
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  9216,
+                  40
+                ],
+                "payload_bytes": 737280
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.ffn_up.weight",
+            "module": "mtp.layers.0.mlp.up_proj",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  9216,
+                  640
+                ],
+                "payload_bytes": 23592960
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  9216,
+                  40
+                ],
+                "payload_bytes": 737280
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  9216,
+                  40
+                ],
+                "payload_bytes": 737280
+              }
+            }
+          },
+          {
+            "source_name": "blk.32.nextn.eh_proj.weight",
+            "module": "mtp.fc",
+            "output_file": "mtp.safetensors",
+            "observed_effective_format": {
+              "bits": 8,
+              "group_size": 64,
+              "mode": "affine"
+            },
+            "packed_tensors": {
+              "weight": {
+                "dtype": "U32",
+                "shape": [
+                  2560,
+                  1280
+                ],
+                "payload_bytes": 13107200
+              },
+              "scales": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  80
+                ],
+                "payload_bytes": 409600
+              },
+              "biases": {
+                "dtype": "BF16",
+                "shape": [
+                  2560,
+                  80
+                ],
+                "payload_bytes": 409600
+              }
+            }
+          }
+        ]
+      }
+    },
+    "format_scope": "Observed global trunk format and twenty fresh Q8 modules; twelve trunk overrides and eight embedded MTP packed triples. Not all modules are 5-bit or 8-bit."
+  }
+}

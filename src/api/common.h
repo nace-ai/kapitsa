@@ -44,7 +44,19 @@ bool apply_effort(const std::string& effort, ojson& kwargs);
 // A request's own loop count for looped models (Dory): "loops" in the body (the OpenAI clients' extra_body), 1-4,
 // else 0. Throws ApiError (400) for another value.
 int request_loops_field(const ojson& body);
-// The usage field that reports it ({"loops": n}; null when the model is not looped)
+// Clamps a JSON numeric top_k value into [INT32_MIN, INT32_MAX] without 32-bit wrap-around (e.g. 2^32 + 1 -> 1)
+// or float-to-int overflow undefined behavior.
+int clamp_top_k(const ojson& v);
+// Extracts a 32-bit PRNG seed from a JSON numeric field without float-to-int overflow undefined behavior.
+uint32_t extract_seed_u32(const ojson& v);
+// A request's thinking budget beyond the API's own field (src/engine/think_control.h), on Messages, Chat Completions
+// and Responses (not the Ollama routes): "thinking_control" in the body, {"hard_cap": tokens (0 or more),
+// "close_text": text forced before </think> at the cap, "end_on_tool_call": a tool call inside the reasoning ends the
+// control (default: when the request has tools)}, into r.
+// Throws ApiError (400) for a malformed one.
+void request_think_field(const ojson& body, ChatRequest& r);
+// The usage fields that report them: {"loops": n} for a looped model, {"thinking": {...}} for a request with a thinking
+// budget; null when neither applies
 ojson kapitsa_usage(const ChatResult& res);
 
 // Appends a text piece, with a newline between pieces that have none at the junction
@@ -54,25 +66,41 @@ void join_text(std::string& acc, const std::string& piece);
 // an object is kept as {"arguments": <text>})
 ojson arguments_object(const ojson& args);
 
+// Whether a tool is marked "defer_loading": true, Anthropic's and OpenAI's tool search flag: such a tool goes to
+// ChatRequest::deferred_tools
+bool deferred(const ojson& tool);
+// The same for a Chat Completions tool, passed on as the client wrote it: Chat Completions has no such field, so the
+// flag is read on the tool or in its function, and taken out of both, so a template never renders it
+bool take_deferred(ojson& tool);
+
 // Structured output (src/engine/grammar.h). A JSON Schema format's own fields, {"schema": ..., "strict": ...} (Chat's
 // response_format.json_schema, Responses' text.format), into spec; ApiError (400, param) for a malformed one.
 void schema_format(const ojson& f, OutputSpec& spec, const std::string& param);
-// The grammar of `spec` over the request's tools as the prompt declares them (output_grammar), or null when nothing
-// constrains the reply; ApiError (400) for one that cannot be held, naming the field at fault (format_param: the
-// API's name for the format).
+// The grammar of `spec` over every tool a call may name (ChatRequest::call_tools: those the prompt declares and the
+// deferred ones; output_grammar), or null when nothing constrains the reply; ApiError (400) for one that cannot be
+// held, naming the field at fault (format_param: the API's name for the format).
 std::shared_ptr<const Grammar> request_grammar(const OutputSpec& spec, const ojson& tools,
                                                const std::string& format_param = "response_format");
+
+// How far the engine has read a request's prompt (llama.cpp's prompt_progress): its tokens, of which reused from the
+// cache, read so far (the cached ones included), and the milliseconds since the cached prefix was known
+struct PromptProgress {
+  int total = 0, cache = 0, processed = 0;
+  long long time_ms = 0;
+};
 
 // The events of one streamed reply. The server calls begin() once the engine has counted the prompt and matched it
 // against its cache (prompt_tokens and cached_tokens set), or at once, without them, for a stream that starts before
 // the request runs (Chat Completions), delta() for each engine delta, keepalive() when nothing was sent for a while,
-// and end() with the finished result. Each returns the SSE text to send (possibly empty).
+// progress() while the prompt is read when the request asked for it, and end() with the finished result. Each returns
+// the SSE text to send (possibly empty).
 class StreamWriter {
  public:
   virtual ~StreamWriter() = default;
   virtual std::string begin(const ChatResult& prompt) = 0;
   virtual std::string delta(const ChatDelta& d) = 0;
   virtual std::string keepalive() = 0;
+  virtual std::string progress(const PromptProgress&) { return {}; }  // only Chat Completions has an event for it
   virtual std::string end(const ChatResult& res) = 0;
 };
 

@@ -1,0 +1,14 @@
+[kapitsa] read 15.13 GB of weights in 3535 ms (4.3 GB/s)
+[kapitsa] read 0.24 GB of weights in 56 ms (4.3 GB/s)
+[kapitsa] MTP head loaded in 20 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 3601 ms
+[kapitsa] prewarmed 93 prefill pipelines in 3613 ms
+[kapitsa] loaded /Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit: 64 layers, dense, 15.1 GB mapped in 7388 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 34/34 units (17408 channels; GPU 0) from the default for this chip, chunks >= 512 rows; row scales 2 ms, program cached 1 ms + load 103 ms (13 functions, MIL 133 KB); 629.0 MB Metal; ready in 0.1 s
+[kapitsa] NI_ANE: startup check 0.75% of the ANE's part from the GPU alone (2 functions, 571 ms)
+ane: system wired memory +361 MB at the program load, +1036 MB after the first split chunk (split surfaces 629 MB)
+ane: 0 split chunks, 0 evaluations, ANE 0 ms (0.0 ms each), reruns 0; memory: Metal 18158 MB, process footprint 17849 MB; thermal nominal
+prompt 63 tok in 524 ms (120.3 tok/s); spec decode D=2: 255 tok in 7765 ms (32.8 tok/s), 96 cycles, 2.66 tok/cycle, accepted/drafted 0.83, 80.354 ms GPU/cycle, 80.889 ms wall/cycle, hist 7 19 70
+ids: 248068 198 760 1156 6587 264 11346 20856 383 1204 264 18826 27545 264 2526 15019 3992 1083 5484 1970 13 353 1144 310 3311 25 198 16 13 25962 908 6157 198 17 13 72244 198 18 13 3856 12910 198 19 13 55804 198 20 13 8191 23014 198 21 13 5927 9191 271 40 1144 310 2830 9989 321 10033 1754 6228 303 7739 11 440 506 3140 220 17 15 15 15 4105 13 6558 728 5759 411 430 264 15352 20856 440 264 4162 3010 421 26565 1472 660 17102 13 353 3172 958 264 4145 3992 318 1112 579 1562 424 328 52390 25387 871 321 1420 1204 264 2526 1957 5055 22773 506 1754 6228 13 271 9764 728 3019 279 3010 25 198 12 8483 25 264 4145 1957 1040 1510 1112 830 283 220 18 26 1042 374 283 220 19 26 1042 1110 283 830 478 374 26 1133 12792 1174 63 198 12 2441 6970 2414 9781 777 6150 310 1420 777 17102 25 264 709 440 264 6136 13 271 9764 728 958 25 198 71093 198 1112 830 283 220 16 15 26 198 1112 374 283 220 17 15 26 198 1112 1110 283 830 478 374 26 198 1302 12792 1174 198 71093 271 2939 6970 264 9781 777 6150 799 364 24460 25 198 71093 198 1112 264 283 220 20 26 198 1112 292 283 220 18 26 198 1112 272 283 264 348 292 478 264 348 292

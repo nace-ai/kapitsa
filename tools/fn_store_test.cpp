@@ -23,7 +23,10 @@
 #include "model/ngram.h"
 #include "util/bf16.h"
 #include "model/expert_store_test.h"
+#include "loader/load_stop.h"
 #include "util/log.h"
+#include <nlohmann/json.hpp>
+#include <fstream>
 
 #include <fcntl.h>
 #include <libproc.h>
@@ -38,6 +41,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <cfenv>
 #include <chrono>
 #include <csignal>
 #include <cstdio>
@@ -65,7 +69,7 @@ constexpr char admission_constructed[] = "ADMISSION_CONSTRUCTED\n";
 constexpr char admission_cold[] = "ADMISSION_COLD_WORKERS_2_READS_0\n";
 constexpr char admission_bytes[] = "ADMISSION_ROUTED_BYTES_OK\n";
 std::atomic<bool> admission_observing{false};
-std::atomic<int> fail_stage{0}, fail_read{0};
+std::atomic<int> fail_stage{0}, fail_read{0}, reads_done{0};
 std::atomic<const char*> truncate_before_read{nullptr};
 std::atomic<int> admission_workers{0}, admission_reads{0};
 
@@ -110,6 +114,7 @@ void ExpertCacheTestAccess::observe(const ExpertCache& cache, Point point) {
       admission_mark(admission_read);
     }
   }
+  if (point == Point::ReadDone) ++reads_done;
   ShutdownProbe* p = shutdown_probe.load();
   if (!p) return;
   if (p->returned) fatal("shutdown test: reader callback after destruction returned");
@@ -159,24 +164,65 @@ uint8_t byte_of(uint32_t l, uint32_t plane, uint32_t e, uint32_t i) {
 struct Pack {
   std::vector<std::string> files;
   std::vector<LayerSrc> layers;
-  SlotLayout lay;
+  SlotLayout lay;     // Q2_0's (the six-plane packs)
+  SlotPlanes planes;  // what the cache reads: lay's planes, or nine_planes()
   uint32_t E = 0;
 };
 
-// L layers in two files: in file 0 each plane starts on a page (aligned); in file 1 at an odd offset (widened reads)
-Pack make_pack(const std::string& dir, uint32_t L, uint32_t E) {
+// MLX affine 4-bit experts' nine planes (src/model/moe_a4.h) at D = I = 256: (w, scales, biases) of gate, up and down
+// in that order; the three code planes of 32 KiB first, on pages 0, 2 and 4, then the six scale / bias planes of 2 KiB
+// back to back; a slot of 7 pages
+SlotPlanes nine_planes() {
+  SlotPlanes q;
+  q.n = 9;
+  const uint32_t cb = 256 * 256 / 2, sb = 256 * 256 / 32;
+  for (uint32_t m = 0; m < 3; ++m) {
+    q.at[3 * m] = m * cb, q.len[3 * m] = cb;
+    for (uint32_t j = 1; j < 3; ++j) q.at[3 * m + j] = 3 * cb + (2 * m + j - 1) * sb, q.len[3 * m + j] = sb;
+  }
+  q.bytes = (3 * cb + 6 * sb + 16383) / 16384 * 16384;
+  return q;
+}
+
+// MLX affine experts' nine planes at D = I = 256 in moe_a4's slot layout for gate / up of (bg, gg) and down of (bd, gd):
+// the three code planes each from a page boundary, then the six scale / bias planes back to back. bytes: at least the
+// layout's (a slot sized for the largest layer of a mixed pack)
+SlotPlanes affine_planes(uint32_t bg, uint32_t gg, uint32_t bd, uint32_t gd, uint32_t bytes = 0) {
+  SlotPlanes q;
+  q.n = 9;
+  uint32_t at = 0;
+  for (uint32_t m = 0; m < 3; ++m) {
+    q.at[3 * m] = at, q.len[3 * m] = 256 * 256 / 8 * (m == 2 ? bd : bg);
+    at += (q.len[3 * m] + 16383) / 16384 * 16384;
+  }
+  for (uint32_t m = 0; m < 3; ++m)
+    for (uint32_t j = 1; j < 3; ++j) {
+      q.at[3 * m + j] = at, q.len[3 * m + j] = 256 * 256 / (m == 2 ? gd : gg) * 2;
+      at += q.len[3 * m + j];
+    }
+  q.bytes = std::max(bytes, (at + 16383) / 16384 * 16384);
+  return q;
+}
+
+// L layers in two files: in file 0 each plane starts on a page (aligned); in file 1 at an odd offset (widened reads).
+// The six Q2_0 planes of slot_layout(D, I), or any other planes (names: the two files' base names). per_layer: layer l's
+// own planes per_layer[l % size] (LayerSrc::planes; the same n and bytes as planes)
+Pack make_pack(const std::string& dir, uint32_t L, uint32_t E, const SlotPlanes* planes = nullptr,
+               const char* const* names = nullptr, const std::vector<SlotPlanes>* per_layer = nullptr) {
   Pack p;
   p.E = E;
   p.lay = slot_layout(D, I);
-  const uint32_t cb = p.lay.uc, db = p.lay.ud - p.lay.gd;
-  const uint32_t len[6] = {cb, db, cb, db, cb, db};
-  p.files = {dir + "/a.safetensors", dir + "/b.safetensors"};
+  p.planes = planes ? *planes : SlotPlanes(p.lay);
+  const uint32_t n = p.planes.n;
+  p.files = {dir + "/" + (names ? names[0] : "a.safetensors"), dir + "/" + (names ? names[1] : "b.safetensors")};
   uint64_t end[2] = {16384, 16384 + 777};
   std::vector<std::vector<uint8_t>> img(2);
   for (uint32_t l = 0; l < L; ++l) {
     LayerSrc s;
+    if (per_layer) s.planes = (*per_layer)[l % per_layer->size()];
+    const uint32_t* len = per_layer ? s.planes.len : p.planes.len;
     const int f = int(l % 2);
-    for (uint32_t j = 0; j < 6; ++j) {
+    for (uint32_t j = 0; j < n; ++j) {
       PlaneSrc& pl = s.p[j];
       pl.file = f;
       if (f == 0) end[0] = (end[0] + 16383) / 16384 * 16384;
@@ -205,7 +251,7 @@ struct Arena {
   std::vector<uint8_t*> mem;
   ExpertCache::Memory m;
   std::vector<uint32_t> table;
-  Arena(const SlotLayout& lay, uint32_t nslots, uint32_t L, uint32_t E) {
+  Arena(const SlotPlanes& lay, uint32_t nslots, uint32_t L, uint32_t E) {
     const uint32_t per = (nslots + 1) / 2;
     for (int c = 0; c < 2; ++c) {
       void* p = nullptr;
@@ -229,17 +275,15 @@ const uint8_t* slot_bytes(const Arena& a, const SlotLayout& lay, uint32_t w) {
   return a.m.chunk[c] + size_t(page) * 16384;
 }
 
-bool expert_ok(const Arena& a, const SlotLayout& lay, uint32_t l, uint32_t e, uint32_t E) {
+bool expert_ok(const Arena& a, const SlotPlanes& lay, uint32_t l, uint32_t e, uint32_t E) {
   const uint32_t w = a.m.table[size_t(l) * E + e];
-  const uint8_t* s = slot_bytes(a, lay, w);
-  const uint32_t at[6] = {lay.gc, lay.gd, lay.uc, lay.ud, lay.dc, lay.dd};
-  const uint32_t cb = lay.uc, db = lay.ud - lay.gd;
-  const uint32_t len[6] = {cb, db, cb, db, cb, db};
-  for (uint32_t j = 0; j < 6; ++j)
-    for (uint32_t i = 0; i < len[j]; i += 97)
-      if (s[at[j] + i] != byte_of(l, j, e, i)) return false;
-  for (uint32_t j = 0; j < 6; ++j)  // the last byte of each plane too
-    if (s[at[j] + len[j] - 1] != byte_of(l, j, e, len[j] - 1)) return false;
+  const uint8_t* s = a.m.chunk[w >> 28] + size_t(w & 0x0FFFFFFFu) * 16384;
+  if ((w & 0x0FFFFFFFu) % (lay.bytes / 16384)) return false;  // a slot starts on a slot boundary
+  for (uint32_t j = 0; j < lay.n; ++j)
+    for (uint32_t i = 0; i < lay.len[j]; i += 97)
+      if (s[lay.at[j] + i] != byte_of(l, j, e, i)) return false;
+  for (uint32_t j = 0; j < lay.n; ++j)  // the last byte of each plane too
+    if (s[lay.at[j] + lay.len[j] - 1] != byte_of(l, j, e, lay.len[j] - 1)) return false;
   return true;
 }
 
@@ -261,8 +305,12 @@ struct Step {
 };
 
 // Posts the steps (as an encoder would, a pass at a time), then plays the GPU through them; returns the checks failed
-int run_pass(ExpertCache& c, Event& ev, const Arena& a, const SlotLayout& lay, uint64_t& value,
-             const std::vector<Step>& steps, std::mt19937& rng) {
+int run_pass(ExpertCache& c, Event& ev, const Arena& a, const SlotPlanes& lay_all, uint64_t& value,
+             const std::vector<Step>& steps, std::mt19937& rng, const std::vector<LayerSrc>* src = nullptr) {
+  // layer l's planes: its own (LayerSrc::planes) when it has them
+  const auto lay_of = [&](uint32_t l) -> const SlotPlanes& {
+    return src && (*src)[l].planes.n ? (*src)[l].planes : lay_all;
+  };
   int bad = 0;
   std::vector<ExpertCache::Req> rs(steps.size());
   for (size_t i = 0; i < steps.size(); ++i) {
@@ -284,18 +332,18 @@ int run_pass(ExpertCache& c, Event& ev, const Arena& a, const SlotLayout& lay, u
   for (size_t i = 0; i < steps.size(); ++i) {
     // the experts of the previous handshake are still intact (no read-ahead overwrote them before this ready)
     for (auto [l, e] : in_use)
-      if (!expert_ok(a, lay, uint32_t(l), e, c.experts())) ++bad;
+      if (!expert_ok(a, lay_of(uint32_t(l)), uint32_t(l), e, c.experts())) ++bad;
     in_use.clear();
     ev.v.store(rs[i].ready, std::memory_order_release);
     while (ev.v.load(std::memory_order_acquire) < rs[i].go) std::this_thread::yield();
     for (uint32_t e : steps[i].ids) {
-      if (!expert_ok(a, lay, uint32_t(steps[i].layer), e, c.experts())) ++bad;
+      if (!expert_ok(a, lay_of(uint32_t(steps[i].layer)), uint32_t(steps[i].layer), e, c.experts())) ++bad;
       in_use.push_back({steps[i].layer, e});
     }
     if (rng() % 4 == 0) std::this_thread::sleep_for(std::chrono::microseconds(rng() % 300));  // let read-ahead land
   }
   for (auto [l, e] : in_use)
-    if (!expert_ok(a, lay, uint32_t(l), e, c.experts())) ++bad;
+    if (!expert_ok(a, lay_of(uint32_t(l)), uint32_t(l), e, c.experts())) ++bad;
   return bad;
 }
 
@@ -592,6 +640,137 @@ void case_verify_prefill(const Pack& p) {
          (unsigned long long)s.prefetches, (unsigned long long)s.evictions);
 }
 
+// Nine planes an expert (MLX affine 4-bit, src/model/moe_a4.h's slot layout at D = I = 256): decode passes of top-16
+// with predictions, then prefill chunks (scan, every next-layer expert read ahead), in the minimum arena of 3 E slots;
+// every routed expert's nine planes must be in its slot, at its offsets, and stay there while in use. With layers in
+// their own layouts (a mixed 3- / 4-bit pack: LayerSrc::planes), each at its layer's offsets.
+void case_nine(const Pack& p, const char* what = "nine planes") {
+  const uint32_t L = uint32_t(p.layers.size()), E = p.E, k = 16;
+  const uint32_t nslots = 3 * E;
+  Arena a(p.planes, nslots, L, E);
+  Event ev;
+  ExpertCache::Options o;
+  o.readers = 5;
+  ExpertCache c(p.files, p.layers, E, p.planes, nslots, a.m, ev.sync(), o);
+  CHECK(!c.complete(), "%s: complete", what);
+  std::mt19937 rng(19);
+  uint64_t value = 0;
+  int bad = 0;
+  for (int pass = 0; pass < 30; ++pass) {
+    std::vector<Step> steps(L);
+    std::vector<std::vector<uint32_t>> ids(L);
+    for (uint32_t l = 0; l < L; ++l) ids[l] = topk(rng, E, k);
+    for (uint32_t l = 0; l < L; ++l) {
+      Step& s = steps[l];
+      s.layer = int(l);
+      if (pass % 5 == 4) {  // a prefill chunk of 64 rows
+        for (int r = 0; r < 64; ++r)
+          for (uint32_t e : topk(rng, E, k)) s.ids.push_back(e);
+        s.scan = true;
+        s.pred_all = l + 1 < L;
+        s.pred_layer = l + 1 < L ? int(l + 1) : -1;
+      } else {
+        s.ids = ids[l];
+        if (l + 1 < L) {
+          s.pred_layer = int(l + 1);
+          s.pred = ids[l + 1];
+          for (int j = 0; j < 3; ++j) s.pred[size_t(j)] = uint32_t(rng() % E);
+        }
+      }
+    }
+    bad += run_pass(c, ev, a, p.planes, value, steps, rng, &p.layers);
+  }
+  const StoreStats s = c.stats();
+  CHECK(bad == 0, "%s: %d experts not in their slots", what, bad);
+  CHECK(s.evictions > 0 && s.misses > 0 && s.prefetch_used > 0, "%s: evictions %llu, misses %llu, read ahead "
+        "and routed %llu", what, (unsigned long long)s.evictions, (unsigned long long)s.misses,
+        (unsigned long long)s.prefetch_used);
+  check_sums(s, what);
+  printf("%s (slot of %u pages), %u slots: %llu turns, %llu lookups, %llu misses, %llu read ahead (%llu routed), "
+         "%llu evictions, %.1f MB read\n",
+         what, p.planes.bytes / 16384, nslots, (unsigned long long)s.handshakes, (unsigned long long)s.lookups,
+         (unsigned long long)s.misses, (unsigned long long)s.prefetches, (unsigned long long)s.prefetch_used,
+         (unsigned long long)s.evictions, s.bytes / 1e6);
+}
+
+// Layouts the constructor refuses, each with its own message: planes that overlap in the slot (the store's or a
+// layer's), a plane empty or past the slot, a store of 0 or more than kMaxPlanes planes, a layer whose plane count or
+// slot size differs from the store's, and a layer whose sources do not match its planes. p: a pack of nine planes.
+void case_layout_rejected(const Pack& p) {
+  FatalRecovery recover;
+  const uint32_t L = uint32_t(p.layers.size()), E = p.E;
+  int cases = 0;
+  const auto expect = [&](const char* what, const SlotPlanes& lay, const std::vector<LayerSrc>& layers,
+                          const char* message) {
+    ++cases;
+    Arena a(p.planes, 3 * E, L, E);
+    Event ev;
+    std::string got = "(constructed)";
+    try {
+      ExpertCache c(p.files, layers, E, lay, 3 * E, a.m, ev.sync(), ExpertCache::Options{});
+    } catch (const FatalError& e) {
+      got = e.what();
+    }
+    CHECK(got.find(message) != std::string::npos, "%s: expected \"%s\", got \"%s\"", what, message, got.c_str());
+  };
+  const auto with_layer = [&](uint32_t l, const SlotPlanes& q) {
+    std::vector<LayerSrc> v = p.layers;
+    v[l].planes = q;
+    return v;
+  };
+  SlotPlanes q = p.planes;
+  q.at[8] = q.at[7] + q.len[7] - 1;  // the last plane's first byte is plane 7's last
+  expect("store planes overlapping", q, p.layers, "planes 7 and 8 overlap in the slot");
+  q = p.planes;
+  q.at[1] = q.len[0] - 16384;  // a scale plane inside the gate codes' last page
+  expect("layer planes overlapping", p.planes, with_layer(2, q), "a layer's planes 0 and 1 overlap in the slot");
+  q = p.planes;
+  q.len[4] = 0;
+  expect("empty plane", q, p.layers, "plane 4 is outside the slot");
+  q = p.planes;
+  q.at[8] = q.bytes - q.len[8] + 1;
+  expect("plane past the slot", q, p.layers, "plane 8 is outside the slot");
+  q = p.planes;
+  q.at[0] = q.bytes - q.len[0] + 16384;
+  expect("layer plane past the slot", p.planes, with_layer(1, q), "a layer's plane 0 is outside the slot");
+  q = p.planes;
+  q.n = 0;
+  expect("no planes", q, p.layers, "0 planes an expert");
+  q = p.planes;
+  q.n = uint32_t(kMaxPlanes) + 1;
+  expect("too many planes", q, p.layers, "planes an expert");
+  q = p.planes;
+  q.n = 8;
+  expect("layer of 8 planes", p.planes, with_layer(3, q), "a layer's slot layout differs in planes or size");
+  q = p.planes;
+  q.bytes += 16384;
+  expect("layer of a larger slot", p.planes, with_layer(0, q), "a layer's slot layout differs in planes or size");
+  std::vector<LayerSrc> v = p.layers;
+  v[4].p[5].len -= 1;
+  expect("layer source shorter than its plane", p.planes, v, "a layer's planes do not match the slot layout");
+  v = p.layers;
+  v[1].p[2].file = int(p.files.size());
+  expect("layer source in no file", p.planes, v, "a layer's planes do not match the slot layout");
+  printf("slot layouts refused: %d cases, each with its message\n", cases);
+}
+
+// The six Q2_0 planes through SlotPlanes are the slot layout's offsets, lengths and size as they were
+void case_q20_planes() {
+  for (auto [d, i] : {std::pair<uint32_t, uint32_t>{512, 256}, {2560, 640}, {256, 128}}) {
+    const SlotLayout q = slot_layout(d, i);
+    const SlotPlanes s(q);
+    const uint32_t at[6] = {q.gc, q.gd, q.uc, q.ud, q.dc, q.dd};
+    const uint32_t cb = i * d / 4, db = i * d / 32;
+    bool ok = s.n == 6 && s.bytes == q.bytes && s.max_len() == std::max(cb, db);
+    for (int j = 0; j < 6; ++j) ok &= s.at[j] == at[j] && s.len[j] == (j % 2 ? db : cb);
+    CHECK(ok, "Q2_0 planes of D %u, I %u differ from slot_layout", d, i);
+  }
+  const SlotPlanes n = nine_planes();
+  CHECK(n.bytes == 7 * 16384 && n.at[3] == 32768 && n.at[6] == 65536 && n.at[1] == 98304 && n.at[8] == 98304 + 5 * 2048,
+        "nine planes: layout");
+  printf("slot planes: Q2_0's six as slot_layout's, nine planes laid out\n");
+}
+
 // ARC: decoding's hot set (routed again and again) outlives a prompt's sweep of every expert
 void case_scan(const Pack& p) {
   const uint32_t L = uint32_t(p.layers.size()), E = p.E, k = 8;
@@ -727,7 +906,7 @@ void case_scan_victim(const Pack& p) {
       steps[0].pred_layer = l + 1 < L ? int(l + 1) : -1;
       bad2 += run_pass(d, ev2, a2, p.lay, value2, steps, rng2);
     }
-  quiesce(d, ev2, value2);  // #512: the last chunk's serve() updates the stats after its go; settle before reading
+  quiesce(d, ev2, value2);  // #512: the read-ahead count is published after the go; settle before comparing it
   const StoreStats t = d.stats();
   CHECK(bad2 == 0, "scan victim off: %d experts not in their slots", bad2);
   CHECK(t.prefetches > s.prefetches, "scan victim off: %llu read ahead, the rule's arm %llu: the switch does nothing",
@@ -1347,6 +1526,251 @@ void case_ngram_table(const std::string& dir, std::vector<std::string>& files) {
   printf("n-gram table: GGUF IQ4_NL and Q8_0 rows, affine shards: %s\n", g_fail > f0 ? "FAILED" : "ok");
 }
 
+
+// A split tensor's offset belongs to its containing part, whichever part opened the model.
+void case_ngram_split_gguf(const std::string& dir, std::vector<std::string>& files) {
+  constexpr int dim = 160, rows = 7;
+  const int f0 = g_fail;
+  const std::string name = "per_layer_token_embd.weight";
+  std::mt19937 rng(29);
+  FatalRecovery recover;
+  size_t cases = 0;
+  for (uint32_t type : {gguf::kIQ4_NL, gguf::kQ8_0}) {
+    uint32_t be = 0, bb = 0;
+    gguf::type_block(type, &be, &bb);
+    const size_t rb = dim / be * bb;
+    std::vector<uint8_t> data(rb * rows);
+    for (auto& b : data) b = uint8_t(rng());
+    for (size_t o = 0; o < data.size(); o += bb) {
+      const _Float16 d = _Float16(0.125);
+      memcpy(&data[o], &d, 2);
+    }
+    std::vector<float> oracle(dim);
+    gguf::dequantize(type, data.data(), oracle.data(), dim);
+    CHECK(std::any_of(oracle.begin(), oracle.end(), [](float v) { return v != 0.0f; }),
+          "split GGUF %s: fixture differs from zero-filled other part", gguf::type_name(type).c_str());
+    for (int target_part : {0, 1})
+      for (bool shorter : {false, true}) {
+        std::vector<uint8_t> image[2];
+        std::string paths[2];
+        for (int part = 0; part < 2; ++part) {
+          const bool target = part == target_part;
+          auto& h = image[part];
+          auto put = [&](const void* p, size_t n) {
+            h.insert(h.end(), static_cast<const uint8_t*>(p), static_cast<const uint8_t*>(p) + n);
+          };
+          auto u32 = [&](uint32_t v) { put(&v, 4); };
+          auto u64 = [&](uint64_t v) { put(&v, 8); };
+          auto str = [&](const std::string& v) { u64(v.size()), put(v.data(), v.size()); };
+          put("GGUF", 4), u32(3), u64(target ? 2 : 1), u64(5);
+          str("general.architecture"), u32(8), str("qwen4exp");
+          str("general.alignment"), u32(4), u32(target ? 64 : 32);
+          str("split.count"), u32(4), u32(2);
+          str("split.no"), u32(4), u32(uint32_t(part));
+          str("split.tensors.count"), u32(10), u64(3);
+          str("padding." + std::to_string(part)), u32(1), u64(16), u32(gguf::kF32), u64(0);
+          if (target) str(name), u32(2), u64(dim), u64(rows), u32(type), u64(128);
+          const size_t alignment = target ? 64 : 32;
+          h.resize((h.size() + alignment - 1) / alignment * alignment, 0);
+          h.resize(h.size() + (target ? 128 : 64), 0);
+          if (target) h.insert(h.end(), data.begin(), data.end());
+          char suffix[96];
+          snprintf(suffix, sizeof suffix, "/ple_split_%u_%d_%d-%05d-of-00002.gguf", type, target_part,
+                   int(shorter), part + 1);
+          paths[part] = dir + suffix;
+          files.push_back(paths[part]);
+        }
+        // The long other part contains valid but wrong zero blocks at the target's absolute offset.
+        // The short other part is also valid: it ends after its own unrelated tensor.
+        if (!shorter) image[1 - target_part].resize(image[target_part].size(), 0);
+        for (int part = 0; part < 2; ++part) {
+          std::ofstream f(paths[part], std::ios::binary);
+          f.write(reinterpret_cast<const char*>(image[part].data()), image[part].size());
+        }
+        for (int entry_part : {0, 1}) {
+          ++cases;
+          gguf::File g(paths[entry_part]);
+          const gguf::Tensor* tensor = g.find(name);
+          const gguf::Tensor* padding = g.find("padding." + std::to_string(1 - target_part));
+          CHECK(tensor && padding && tensor->part == target_part && tensor->offset != padding->offset &&
+                    (shorter ? image[1 - target_part].size() < tensor->offset + data.size()
+                             : image[1 - target_part].size() == image[target_part].size()),
+                "split GGUF fixture %zu: distinct offsets and %s other part", cases, shorter ? "short" : "same-size");
+          if (!tensor) continue;
+          std::vector<uint8_t> raw(data.size());
+          g.read(*tensor, 0, raw.data(), raw.size());
+          CHECK(raw == data, "split GGUF fixture %zu: part-aware GGUF reader matches raw blocks", cases);
+          NgramTable t;
+          try {
+            t.open_gguf(paths[entry_part], name, dim);
+          } catch (const FatalError& e) {
+            CHECK(false, "split GGUF %s target part %d opened via %d (%s other): %s", gguf::type_name(type).c_str(),
+                  target_part, entry_part, shorter ? "short" : "same-size", e.what());
+            continue;
+          }
+          CHECK(t.rows() == rows && t.dim() == dim && t.file_bytes() == image[target_part].size(),
+                "split GGUF fixture %zu: shape and containing-part mapping size", cases);
+          std::vector<float> got(dim), want(dim), all(size_t(rows + 2) * dim);
+          int bad = 0;
+          for (int r = 0; r < rows; ++r) {
+            t.row(r, got.data());
+            gguf::dequantize(type, data.data() + size_t(r) * rb, want.data(), dim);
+            bad += memcmp(got.data(), want.data(), dim * sizeof(float)) != 0;
+          }
+          const int64_t ids[rows + 2] = {6, 0, 3, 3, 1, 5, 2, 6, 4};
+          t.gather(ids, rows + 2, 1, all.data());
+          for (int i = 0; i < rows + 2; ++i) {
+            gguf::dequantize(type, data.data() + size_t(ids[i]) * rb, want.data(), dim);
+            bad += memcmp(all.data() + size_t(i) * dim, want.data(), dim * sizeof(float)) != 0;
+          }
+          CHECK(!bad, "split GGUF %s target part %d opened via %d (%s other): %d row/gather mismatches",
+                gguf::type_name(type).c_str(), target_part, entry_part, shorter ? "short" : "same-size", bad);
+        }
+      }
+  }
+  printf("n-gram split GGUF: %zu format/part/entry/size cases: %s\n", cases, g_fail > f0 ? "FAILED" : "ok");
+}
+
+
+// A truncated PLE table must fail admission, before a mapped row is accessed.
+void case_ngram_bounds(const std::string& dir, std::vector<std::string>& files) {
+  using nlohmann::json;
+  const std::string path = dir + "/ngram_table.bin";
+  files.push_back(path);
+  FatalRecovery recover;
+  size_t cases = 0;
+  auto write = [&](const json& h, size_t bytes) {
+    const std::string text = h.dump();
+    const uint64_t len = text.size();
+    std::ofstream f(path, std::ios::binary);
+    f.write(reinterpret_cast<const char*>(&len), 8);
+    f.write(text.data(), text.size());
+    const std::vector<char> body(bytes, 0);
+    f.write(body.data(), body.size());
+  };
+  auto reject = [&](NgramTable::Fmt fmt, int dim = 64) {
+    bool caught = false;
+    try {
+      NgramTable t;
+      t.open({{path, "weight", "scales", "biases"}}, fmt, dim);
+    } catch (const FatalError& e) { caught = std::string(e.what()).find("n-gram table:") != std::string::npos; }
+    CHECK(caught, "n-gram table rejects malformed fixture %zu", cases);
+    ++cases;
+  };
+  const json dense = {{"weight", {{"dtype", "BF16"}, {"shape", {2, 64}}, {"data_offsets", {0, 256}}}}};
+  write(dense, 0); reject(NgramTable::Fmt::BF16);  // first: safe baseline failure, no row access
+  for (const json& offsets : {json::array({0, 254}), json::array({8, 256}), json::array({256, 0}),
+                              json::array({-1, 255}), json::array({0, UINT64_MAX}), json::array({0})}) {
+    json h = dense; h["weight"]["data_offsets"] = offsets; write(h, 256); reject(NgramTable::Fmt::BF16);
+  }
+  for (const json& shape : {json::array({-1, 64}), json::array({2, 32}), json::array({UINT64_MAX, 64}),
+                            json::array({INT64_MAX, 64}), json::array({2}), json::array({2, 64, 1})}) {
+    json h = dense; h["weight"]["shape"] = shape; write(h, 256); reject(NgramTable::Fmt::BF16);
+  }
+  { json h = dense; h["weight"]["dtype"] = "F16"; write(h, 256); reject(NgramTable::Fmt::BF16); }
+  { json h = dense; h["weight"].erase("shape"); h["z"] = dense["weight"]; write(h, 256); reject(NgramTable::Fmt::BF16); }
+  for (uint64_t declared : {uint64_t(1), UINT64_MAX, uint64_t(1024)}) {
+    { std::ofstream f(path, std::ios::binary); f.write(reinterpret_cast<const char*>(&declared), 8); f << "{}"; }
+    reject(NgramTable::Fmt::BF16);
+  }
+  { std::ofstream f(path, std::ios::binary); f << "short"; }
+  reject(NgramTable::Fmt::BF16);
+  { std::ofstream f(path, std::ios::binary); uint64_t n = 2; f.write(reinterpret_cast<const char*>(&n), 8); f << "xx"; }
+  reject(NgramTable::Fmt::BF16);
+  const json affine = {
+      {"weight", {{"dtype", "U32"}, {"shape", {2, 8}}, {"data_offsets", {0, 64}}}},
+      {"scales", {{"dtype", "BF16"}, {"shape", {2, 1}}, {"data_offsets", {64, 68}}}},
+      {"biases", {{"dtype", "BF16"}, {"shape", {2, 1}}, {"data_offsets", {68, 72}}}}};
+  for (const char* name : {"scales", "biases"}) {
+    json h = affine; h[name]["shape"] = {1, 2}; write(h, 72); reject(NgramTable::Fmt::Affine);
+    h = affine; h[name]["dtype"] = "F16"; write(h, 72); reject(NgramTable::Fmt::Affine);
+  }
+  write(affine, 70); reject(NgramTable::Fmt::Affine);
+  write(dense, 256); reject(NgramTable::Fmt::BF16, 0);
+  // Complete valid BF16, FP8 and affine mappings still read exact zeros. Affine row/gather arithmetic is
+  // independently checked with nonzero weights and two uneven shards in case_ngram_table above.
+  for (NgramTable::Fmt fmt : {NgramTable::Fmt::BF16, NgramTable::Fmt::F8E4M3, NgramTable::Fmt::Affine}) {
+    json h = fmt == NgramTable::Fmt::Affine ? affine : dense;
+    size_t bytes = fmt == NgramTable::Fmt::Affine ? 72 : 256;
+    if (fmt == NgramTable::Fmt::F8E4M3) { h["weight"]["dtype"] = "F8_E4M3"; h["weight"]["data_offsets"] = {0, 128}; bytes = 128; }
+    write(h, bytes);
+    NgramTable t; t.open({{path, "weight", "scales", "biases"}}, fmt, 64);
+    std::vector<float> out(66, 123.0f); t.row(1, out.data() + 1);
+    CHECK(t.rows() == 2 && out.front() == 123.0f && out.back() == 123.0f &&
+              std::all_of(out.begin() + 1, out.end() - 1, [](float v) { return v == 0.0f; }),
+          "valid n-gram mapping and guarded row survive header validation");
+  }
+  printf("n-gram bounds: %zu rejected fixtures, 3 valid formats\n", cases);
+}
+
+// Compare the mapped row path against a bit-at-a-time code reader. Cover vector groups,
+// generic widths/group boundaries, all code values, and BF16 exceptional coefficients.
+void case_ngram_affine_rows(const std::string& dir, std::vector<std::string>& files) {
+  const int f0 = g_fail, saved_rounding = std::fegetround();
+  const uint16_t edge[] = {0, 0x8000, 1, 0x8001, 0x007f, 0x0080, 0x3b80, 0x3f80, 0xbf80,
+                           0x7f7f, 0xff7f, 0x7f80, 0xff80, 0x7fc1, 0x7f81, 0xffc1};
+  struct Shape { int dim, gs, bits; };
+  size_t values = 0;
+  for (auto [dim, gs, bits] : {Shape{160, 32, 4}, {192, 64, 4}, {256, 128, 4}, {40, 5, 4},
+                              {96, 3, 4}, {160, 32, 8}, {160, 32, 6}, {192, 32, 3}, {160, 32, 2}}) {
+    constexpr int rows = 256;
+    const int groups = dim / gs, rb = dim * bits / 8, mask = (1 << bits) - 1;
+    std::vector<uint8_t> w(size_t(rows) * rb);
+    std::vector<uint16_t> scales(size_t(rows) * groups), biases(scales.size());
+    for (int r = 0; r < rows; ++r) {
+      for (int i = 0; i < dim; ++i) {
+        const int code = (r + i * 13) & mask;
+        for (int b = 0; b < bits; ++b)
+          w[size_t(r) * rb + (i * bits + b) / 8] |= uint8_t(((code >> b) & 1) << ((i * bits + b) % 8));
+      }
+      for (int g = 0; g < groups; ++g) {
+        scales[size_t(r) * groups + g] = edge[(r / 16 + g) % 16];
+        biases[size_t(r) * groups + g] = edge[(r + g) % 16];
+      }
+    }
+    const size_t ws = w.size(), ss = scales.size() * 2;
+    char hdr[600];
+    snprintf(hdr, sizeof hdr,
+             "{\"w\":{\"dtype\":\"U32\",\"shape\":[%d,%d],\"data_offsets\":[0,%zu]},"
+             "\"s\":{\"dtype\":\"BF16\",\"shape\":[%d,%d],\"data_offsets\":[%zu,%zu]},"
+             "\"b\":{\"dtype\":\"BF16\",\"shape\":[%d,%d],\"data_offsets\":[%zu,%zu]}}",
+             rows, rb / 4, ws, rows, groups, ws, ws + ss, rows, groups, ws + ss, ws + 2 * ss);
+    std::string h = hdr;
+    h.resize((h.size() + 7) / 8 * 8, ' ');
+    const std::string path = dir + "/affine_" + std::to_string(dim) + "_" + std::to_string(gs) + "_" +
+                             std::to_string(bits) + ".safetensors";
+    FILE* f = fopen(path.c_str(), "wb");
+    if (!f) fatal("cannot create n-gram row fixture");
+    const uint64_t n = h.size();
+    fwrite(&n, 8, 1, f); fwrite(h.data(), 1, h.size(), f); fwrite(w.data(), 1, ws, f);
+    fwrite(scales.data(), 1, ss, f); fwrite(biases.data(), 1, ss, f); fclose(f);
+    files.push_back(path);
+    NgramTable table;
+    table.open({{path, "w", "s", "b"}}, NgramTable::Fmt::Affine, dim, bits, gs);
+    std::vector<float> got(size_t(dim) + 2, 123456.25f);
+    for (int rounding : {FE_TONEAREST, FE_UPWARD, FE_DOWNWARD, FE_TOWARDZERO}) {
+      std::fesetround(rounding);
+      int bad = 0;
+      for (int r = 0; r < rows; ++r) {
+        table.row(r, got.data() + 1);
+        bad += got.front() != 123456.25f || got.back() != 123456.25f;
+        for (int i = 0; i < dim; ++i) {
+          unsigned code = 0;
+          for (int b = 0; b < bits; ++b)
+            code |= unsigned((w[size_t(r) * rb + (i * bits + b) / 8] >> ((i * bits + b) % 8)) & 1) << b;
+          const float want = bf16_to_f32(scales[size_t(r) * groups + i / gs]) * float(code) +
+                             bf16_to_f32(biases[size_t(r) * groups + i / gs]);
+          bad += memcmp(&want, &got[size_t(i) + 1], sizeof(float)) != 0;
+          ++values;
+        }
+      }
+      CHECK(!bad, "n-gram affine rows: dim=%d group=%d bits=%d rounding=%d: %d mismatches", dim, gs, bits, rounding, bad);
+    }
+  }
+  std::fesetround(saved_rounding);
+  printf("n-gram affine rows: %zu bitwise values and output guards: %s\n", values, g_fail > f0 ? "FAILED" : "ok");
+}
+
 template <typename F>
 void await_test(F done, const char* why) {
   const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -1842,6 +2266,40 @@ void case_shutdown_waiting(const Pack& p) {
   printf("shutdown waiting/idle: joined without a synthetic go\n");
 }
 
+// A stop asked during the first load (src/loader/load_stop.h) ends the fill from a reader before any expert is read;
+// with none asked the fill reads everything. Each in a child: the action ends the process.
+void case_load_stop(const std::string& dir) {
+  char executable[4096]; uint32_t size = sizeof executable;
+  CHECK(_NSGetExecutablePath(executable, &size) == 0, "resolve executable");
+  for (const char* c : {"ask", "no-ask"}) {
+    const std::string out = dir + "/load-stop.out", sub = dir + "/load-stop-" + c;
+    mkdir(sub.c_str(), 0755);
+    posix_spawn_file_actions_t actions;
+    CHECK(posix_spawn_file_actions_init(&actions) == 0, "spawn actions");
+    CHECK(posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, out.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600) == 0,
+          "redirect stop output");
+    char* args[] = {executable, const_cast<char*>("--load-stop"), const_cast<char*>(sub.c_str()), const_cast<char*>(c),
+                    nullptr};
+    pid_t child = -1;
+    const int spawned = posix_spawn(&child, executable, &actions, nullptr, args, environ);
+    posix_spawn_file_actions_destroy(&actions);
+    CHECK(spawned == 0, "spawn load stop child");
+    if (spawned != 0) continue;
+    int status = 0;
+    CHECK(waitpid(child, &status, 0) == child, "wait load stop child");
+    char buf[8] = {};
+    if (FILE* f = fopen(out.c_str(), "r")) { (void)fread(buf, 1, sizeof(buf) - 1, f); fclose(f); }
+    const bool ask = !strcmp(c, "ask");
+    CHECK(WIFEXITED(status) && WEXITSTATUS(status) == (ask ? 42 : 0) && !strcmp(buf, ask ? "S" : "R"),
+          "load stop, %s: status %d, output '%s' (want %s)", c, status, buf, ask ? "exit 42, 'S': stopped before any read"
+                                                                             : "exit 0, 'R': the fill read everything");
+    unlink(out.c_str());
+    for (const char* f : {"/a.safetensors", "/b.safetensors"}) unlink((sub + f).c_str());
+    rmdir(sub.c_str());
+  }
+  printf("a stop asked during the first load ends the expert fill before any read; none asked reads it all\n");
+}
+
 void case_load_recovery(const std::string& dir) {
   alarm(20);
   auto fds = [] {
@@ -1917,6 +2375,18 @@ int main(int argc, char** argv) {
     ExpertCache c(p.files, p.layers, p.E, p.lay, 3 * p.E, a.m, ev.sync(), {});
     return 93;
   }
+  if (argc == 4 && !strcmp(argv[1], "--load-stop")) {  // case_load_stop's child: a filling cache, a stop asked or not
+    set_load_stop_action([] { (void)!write(STDOUT_FILENO, reads_done ? "X" : "S", 1); _exit(42); });
+    if (!strcmp(argv[3], "ask")) ask_load_stop();
+    Pack p = make_pack(argv[2], 4, 2);
+    Arena a(p.lay, 3 * p.E, 4, p.E);
+    Event ev;
+    ExpertCache::Options o;
+    o.readers = 2;
+    ExpertCache c(p.files, p.layers, p.E, p.lay, 3 * p.E, a.m, ev.sync(), o);
+    (void)!write(STDOUT_FILENO, reads_done ? "R" : "0", 1);
+    _exit(0);
+  }
   if (argc > 1 && !strcmp(argv[1], "--admission-probe")) {
     if (argc != 4) fatal("usage: fn_store_test --admission-probe CASE DIR");
     for (const AdmissionSpec& spec : admission_cases)
@@ -1958,12 +2428,36 @@ int main(int argc, char** argv) {
       mkdir(dir.c_str(), 0755);
     }
     case_load_recovery(dir);
+    case_load_stop(dir);
     Pack p = make_pack(dir, shutdown_only ? 4 : 6, shutdown_only ? 2 : 64);
     case_shutdown_demand(p, false);
     case_shutdown_demand(p, true);
     case_shutdown_prefetch(p);
     case_shutdown_waiting(p);
     if (!shutdown_only) {
+      case_q20_planes();
+      {
+        const SlotPlanes nine = nine_planes();
+        const char* const names[2] = {"c.safetensors", "d.safetensors"};
+        const Pack p9 = make_pack(dir, 5, 64, &nine, names);
+        case_nine(p9);
+        case_layout_rejected(p9);
+        for (const std::string& f : p9.files) unlink(f.c_str());
+        // a mixed pack: 4-bit group 64, 3-bit group 64, 3-bit group 128 with a 4-bit group 32 down, 3-bit group 32
+        // with a 3-bit group 128 down, each layer at its own offsets in slots of the largest layout's size
+        std::vector<SlotPlanes> mix = {affine_planes(4, 64, 4, 64), affine_planes(3, 64, 3, 64),
+                                       affine_planes(3, 128, 4, 32), affine_planes(3, 32, 3, 128)};
+        uint32_t most = 0;
+        for (const SlotPlanes& q : mix) most = std::max(most, q.bytes);
+        for (SlotPlanes& q : mix) q.bytes = most;
+        CHECK(most == 8 * 16384 && affine_planes(4, 64, 4, 64).bytes == nine.bytes && mix[0].at[8] == nine.at[8] && mix[1].len[0] == 24576 &&
+                  mix[2].len[7] == 4096 && mix[2].len[1] == 1024,
+              "mixed planes: layout");
+        const char* const mnames[2] = {"e.safetensors", "f.safetensors"};
+        const Pack pm = make_pack(dir, 5, 64, &mix[0], mnames, &mix);
+        case_nine(pm, "mixed 3-/4-bit planes");
+        for (const std::string& f : pm.files) unlink(f.c_str());
+      }
       case_decode(p, false);
       case_decode(p, true);
       case_verify_prefill(p);
@@ -1978,6 +2472,9 @@ int main(int argc, char** argv) {
       case_group_plan();
       case_group_pin();
       case_ngram_table(dir, p.files);
+      case_ngram_split_gguf(dir, p.files);
+      case_ngram_bounds(dir, p.files);
+      case_ngram_affine_rows(dir, p.files);
     }
     if (keep.empty()) {
       for (const std::string& f : p.files) unlink(f.c_str());

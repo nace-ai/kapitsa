@@ -1,4 +1,7 @@
 #include "model/flint.h"
+#include "model/sampler.h"
+#include "model/flint_kv.h"
+#include "engine/device_profile.h"
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
 #include "model/iq_experts.h"
@@ -12,7 +15,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 #include <mutex>
 #include <unordered_map>
 
@@ -64,16 +66,6 @@ Pipeline pipe(const std::string& n) {
   return it->second;
 }
 
-nlohmann::json read_json(const std::string& path) {
-  std::ifstream f(path);
-  if (!f) return {};
-  try {
-    return nlohmann::json::parse(f);
-  } catch (...) {
-    return {};
-  }
-}
-
 // GPU shader validation's instrumentation doubles a kernel's threadgroup memory: the 16-key attention tiles under it
 // (NI_FLINT_K16=1 selects them too)
 bool small_tiles() {
@@ -107,7 +99,7 @@ uint32_t gpu_cores() {
 // an Apple10 GPU. NI_QMT=0 turns them off.
 bool qmt_available() {
   const char* v = getenv("NI_QMT");
-  if ((v && !strcmp(v, "0")) || Gpu::get().apple_family() < 10) return false;
+  if ((v && !strcmp(v, "0")) || !matrix_units()) return false;
   if (__builtin_available(macOS 26.0, *)) return true;
   return false;
 }
@@ -136,7 +128,7 @@ bool split_merges() {
   if (env_on("NI_FLINT_SPLIT")) return true;
   if (__builtin_available(macOS 15.0, *)) {
     if (getenv("NI_FLINT_SPLIT")) return false;
-    return Gpu::get().name().find("Ultra") != std::string::npos || Gpu::get().apple_family() < 9;
+    return ultra_gpu() || pre_m3_gpu();
   }
   return true;
 }
@@ -237,6 +229,7 @@ FlintConfig Flint::read_config(const std::string& dir) {
 
 // Bytes per (kv head, position) of the attention cache: ni::kv_row_bytes (metal/gpu.h), which follows NI_KV_I8 —
 // 144 int8 or 256 fp16 at head_dim 128 — and matches the kernels' kKvRow.
+// The constructor refuses NI_KV_I8 (flint_kv.h, #1257), so a Flint model's rows are fp16 until the int8 path is fixed.
 
 size_t Flint::kv_per_pos(const FlintConfig& c) {
   const size_t full = size_t(std::count(c.kind.begin(), c.kind.end(), 'F'));
@@ -324,6 +317,7 @@ MemPlan Flint::plan(const std::string& path, int prefill_chunk) {
 
 // ---- load ----
 Flint::Flint(const std::string& path, int prefill_chunk) {
+  if (const char* why = flint_kv_i8_refusal()) fatal("%s", why);
   path_ = path;
   while (path_.size() > 1 && path_.back() == '/') path_.pop_back();
   if (!is_model(path_)) fatal("%s: not a Flint checkpoint folder (config.json)", path.c_str());
@@ -685,26 +679,40 @@ bool Flint::reserve(Seq& s, int need) {
   if (!fits(target)) target = std::min(s.limit, round_up(need, 256));
   if (!fits(target)) return false;
   const int old = s.cap;
+  const size_t nb = row * size_t(target);
+  std::vector<Buffer> olds;
+  std::unique_ptr<Encoder> e;
+  size_t batch = 0;
+  auto flush = [&] {
+    if (e) e->commit_and_wait();
+    e.reset();
+    for (auto& b : olds) g.release(b);
+    olds.clear();
+    batch = 0;
+  };
+  // Wait for each copy batch, then release its old buffers before allocating the next batch.
   for (int l = 0; l < cfg_.layers; ++l) {
     if (cfg_.kind[size_t(l)] != 'F') continue;
     for (Buffer* b : {&s.kc[size_t(l)], &s.vc[size_t(l)]}) {
-      Buffer nbuf = g.alloc(row * size_t(target), "flint_kv");
+      if (batch && batch + nb > (size_t(256) << 20)) flush();
+      Buffer nbuf = g.alloc(nb, "flint_kv");
       memset(nbuf.ptr(), 0, nbuf.size);  // (as the rings: flint_attn_dec reads past the last position)
       if (old > 0 && *b) {
         const uint32_t n16 = uint32_t(kv_row_bytes(cfg_.hd) / 16);
         const uint32_t p[4] = {uint32_t(old) * n16, uint32_t(target) * n16, uint32_t(cfg_.hkv), 0};
-        auto e = g.begin();
+        if (!e) e = g.begin();
         e->use(pipe("kv_regrow"));
         e->buf(0, *b);
         e->buf(1, nbuf);
         e->bytes(2, p, sizeof p);
         e->dispatch((p[0] + 255) / 256, uint32_t(cfg_.hkv), 1, 256);
-        e->commit_and_wait();
       }
-      if (*b) g.release(*b);
+      if (*b) olds.push_back(*b);
       *b = nbuf;
+      batch += nb;
     }
   }
+  flush();
   s.cap = target;
   return ensure_rings(s);
 }
@@ -876,7 +884,7 @@ void Flint::enc_gemm(Encoder& e, const FlintMat& W, const Buffer& xh, const Buff
   } else if (W.bits == 4) {
     if (M <= 8) n = "qmr_k64_w12_m8_n64", bm = 8, bn = 64, th = 64;
     else if (M < 64 || W.N <= 64) n = "qmr_k64_w14_m16_n64", bm = 16, bn = 64;
-    else if (Gpu::get().apple_family() <= 7) n = "qmr_k64_w12_m32_n64", bn = 64, th = 64;
+    else if (legacy_gpu()) n = "qmr_k64_w12_m32_n64", bn = 64, th = 64;
     else n = "qmr_k32_w14_m32_n128";
   } else {  // 8-bit group 64
     if (M < 64 || W.N <= 64) n = "qmr8_k32_w14_m16_n64", bm = 16, bn = 64;
@@ -1496,15 +1504,19 @@ void Flint::enc_head(Encoder& e, const Buffer& x, int R, const Buffer& out, size
 
 void Flint::enc_sample(Encoder& e, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
                        uint32_t step) {
-  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
-  const kp::TopkStage ts{uint32_t(cfg_.vocab), K, 2048};
-  const uint32_t ntg = (uint32_t(cfg_.vocab) + 2047) / 2048;
+  if (full_vocab(sp)) {  // top_k <= 0 or above the two passes' 64 (sampler.h)
+    enc_sample_full(e, lrow, uint32_t(cfg_.vocab), tokens, out_index, sprob_, sp, step);
+    return;
+  }
+  const uint32_t K = topk_k(sp);
+  const kp::TopkStage ts{uint32_t(cfg_.vocab), K, topk_chunk(K)};
+  const uint32_t ntg = topk_lists(uint32_t(cfg_.vocab), K);
   e.use(pipe("topk_stage1"));
   e.buf(0, lrow);
   e.buf(1, cand_v_);
   e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, 1, 1, 256);
+  e.dispatch(ntg, 1, 1, topk_threads(K));
   const kp::Sample p2{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, uint32_t(out_index)};
   e.use(pipe("sample_stage2"));
   e.buf(0, cand_v_);

@@ -1,0 +1,60 @@
+{
+  "pid": 60814,
+  "config": {
+    "output": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/state-cases-image-ram-v4",
+    "test": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/test-snapshot/tests/test_prefill_cancel.py",
+    "test_commit": "d1b3c89154ecceb5e6ff1c792d7d4934bfc94c31",
+    "binaries": {
+      "base": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+      "candidate": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/build/kapitsa"
+    },
+    "heads": {
+      "base": "2c41b56cc6c5f0895d4359d5ff33d1459b22bc39",
+      "candidate": "3ce432031569e364af6731ffb59aec1bc67355ef"
+    },
+    "model": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit"
+  },
+  "started_at": "2026-11-07T14:22:08.917123+00:00",
+  "cases": [
+    {
+      "label": "image-ram-only-base",
+      "initial_cache": 2117,
+      "retry_cache": 0,
+      "text": "The `XcodecSemanticEncoderBlock` class defines a module that applies a series of residual units followed by a convolutional layer to transform the input feature map with",
+      "drafter": {
+        "source": "DFlash2",
+        "cycles": 11
+      },
+      "checks": {
+        "nonempty": true,
+        "candidate_prefix_retained": true,
+        "candidate_cached_image_not_reencoded": true
+      },
+      "image_log": "[kapitsa] KV cache 0 -> 15360 positions (566 MB) in 0.3 ms\n[kapitsa] checkpoints: prompt diverges at 0 of 15289, none usable, prefill from 0\n[kapitsa] prefill chunk of 1912 rows: 15289 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1911 rows: 13377 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1911 rows: 11466 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1911 rows: 9555 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1911 rows: 7644 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1911 rows: 5733 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1911 rows: 3822 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1911 rows: 1911 of 15289 left, chunk 2048 even\n[kapitsa] checkpoints: query boundary at 15282 overwrites an empty one\n[kapitsa] KFlash: 25 cycles, 8.00 rows per cycle; cycles by rows 8:25; tokens per cycle expected 3.217, got 3.720; rate 0.3327 tok/ms; cost ms by rows 8:11.85; calibration (alpha, beta) by depth (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)\n[kapitsa] dflash: 3.72 tokens/cycle over 25 cycles\n[kapitsa] chat: 1 image(s), 64 tokens: 0 encoded in 0 ms, 1 from earlier embeddings, 0 in the cached prefix (+0 ms decode/resize before the request)\n[kapitsa] chat: prompt 15289 (cached 0) in 7625 ms (+3.5 ms template/tokenize; last chunk: encoded by 5525.3 ms, GPU start +1031.5 ms, GPU 1068.1 ms, wake +0.1 ms), 32 tokens in 159 ms (194.8 tok/s), length, 2.82 tok/cycle, KFlash (DFlash2): 11 cycles\n"
+    },
+    {
+      "label": "image-ram-only-candidate",
+      "initial_cache": 2117,
+      "retry_cache": 2117,
+      "text": "The `XcodecSemanticEncoderBlock` class defines a module that applies a series of residual units followed by a convolutional layer to transform the input feature map with",
+      "drafter": {
+        "source": "DFlash2",
+        "cycles": 11
+      },
+      "checks": {
+        "nonempty": true,
+        "candidate_prefix_retained": true,
+        "candidate_cached_image_not_reencoded": true
+      },
+      "image_log": "[kapitsa] prefill chunk of 1882 rows: 13172 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1882 rows: 11290 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1882 rows: 9408 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1882 rows: 7526 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1882 rows: 5644 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1881 rows: 3762 of 15289 left, chunk 2048 even\n[kapitsa] prefill chunk of 1881 rows: 1881 of 15289 left, chunk 2048 even\n[kapitsa] checkpoints: query boundary at 15282 overwrites an empty one\n[kapitsa] KFlash: 25 cycles, 8.00 rows per cycle; cycles by rows 8:25; tokens per cycle expected 3.217, got 3.720; rate 0.3298 tok/ms; cost ms by rows 8:12.08; calibration (alpha, beta) by depth (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)\n[kapitsa] dflash: 3.72 tokens/cycle over 25 cycles\n[kapitsa] chat: 1 image(s), 64 tokens: 0 encoded in 0 ms, 0 from earlier embeddings, 1 in the cached prefix (+0 ms decode/resize before the request)\n[kapitsa] chat: prompt 15289 (cached 2117) in 6722 ms (+2.5 ms template/tokenize; last chunk: encoded by 4640.4 ms, GPU start +1025.3 ms, GPU 1056.5 ms, wake +0.2 ms), 32 tokens in 160 ms (193.5 tok/s), length, 2.82 tok/cycle, KFlash (DFlash2): 11 cycles\n"
+    }
+  ],
+  "status": "complete",
+  "comparisons": [
+    {
+      "case": "image-ram-only",
+      "same_returned_text": true
+    }
+  ],
+  "all_checks_pass": true
+}

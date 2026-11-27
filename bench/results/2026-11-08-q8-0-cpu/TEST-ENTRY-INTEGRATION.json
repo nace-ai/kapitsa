@@ -1,0 +1,49 @@
+{
+  "evidence_kind": "Explicitly sanitized derived test-entry integration receipt; original program logs and commands retained privately",
+  "measured_production_source": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+  "checked_test_entry_source": "21466b2752349fa76747a690c89e766771291f5a",
+  "original_evidence_head": "f2cfa012ac7c2ad358ffbfbb818f4442a8826a89",
+  "complete_runtime_src_tree": "d7c2b9176ca3ededef670ee47ad99f59eb0865c4",
+  "runtime_src_include_CMake_files_identical_to_measured_source": true,
+  "Q8_oracle_header_identical": true,
+  "oracle_header_sha256": "6280fcc3c81defdf2fd2c923ba09f11f5394dcab4e02770cc6613e70df8c9f64",
+  "test_entry_sha256": "c595bc919c5aafec7b66df9501f9a0fe14c2fcd46f7fbcf25bb8f8855df92a90",
+  "change": "Q8 header/include and call placement only, preserving same cases and fenv RAII; before final aggregate-failure gate",
+  "environment": {
+    "chip": "M4 Pro",
+    "GPU_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang17 (clang-1700.0.13.5)"
+  },
+  "checks": {
+    "configure": {
+      "rc": 0,
+      "program_log_sha256": "1f5ff7402381501f29ef03328bac7d3017c4285fc2e63ccf37d311fba357a599"
+    },
+    "build": {
+      "rc": 0,
+      "program_log_sha256": "58f02f7f91391bd086f5f4e6b9a60105fb796030e9e94491343143975dec9d21"
+    },
+    "version": {
+      "rc": 0,
+      "program_log_sha256": "38be2e9eea130d1956734696295e0915f952fac3ba85e81151a229bd1da1326f"
+    },
+    "current_iq_layout": {
+      "rc": 0,
+      "program_log_sha256": "8fb67e29d2acdcae34e12914ec1da64ffce3e92c771432e393af7235634eda2e"
+    }
+  },
+  "executed_current_CPU_scope": "IQ layout plus full Q8 oracle:67108864 blocks/2147483648 lane products;65536 mixed;18720 overlap;96 guarded; same oracle header",
+  "binary_sha256": {
+    "kapitsa": "e7effae20a474bdcaf5fe6e3024144ca830eee5f435319b76d61c606090f81d3",
+    "iq_layout_test": "2b7aac3c267aad35ea75612dfbef25648f5dec8e70fd3303e03d2271ea589fde",
+    "libnaceinfer.a": "e0da56ec025fe92a6232a0e5635f0fcee08d298fc1462153bbcd1d9aa2133173"
+  },
+  "canonical_main": "4008432e16dde8ddb25bf762cf18377e0f5b35d0",
+  "merge_tree": "5a5bfd168d0c51f5babb1f5f3adb17190ef37cdb",
+  "clean_merge_with_both_Q8_IQ4_CPU_checks": true,
+  "merged_main_binary_locally_tested": false,
+  "GPU_model_or_performance_reruns": 0,
+  "original_frozen_evidence_modified": false
+}

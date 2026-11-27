@@ -46,22 +46,39 @@ The SDK model tests additionally exercise ownership on a temporary lock file. Re
 
 ## Tests
 
+`build/dflash_row_test` checks the CPU draft-row decoder against independently packed 2–8-bit rows and BF16 copies,
+including group boundaries, cross-word codes, buffer offsets and output guards. No model or GPU is needed.
+
+`build/dflash_lowrank_cache_test` checks the low-rank drafter cache identity on the CPU: changing Q4 codes
+with unchanged scales and biases changes both the key and the computed factors. No model or GPU is needed.
+`build/dflash_plan_test` checks optional low-rank drafter memory reservations on the CPU.
+`build/dflash_plan_test --gpu MODEL_DIR` compares a real drafter load against its reservation, allowing 8 MiB
+for buffer page rounding and existing small scratch estimates. The latter mode takes the GPU lock.
+
 These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/tokenizer_test`, `build/vit_check`,
 `build/bench_test`) come with the full build.
 
 | Command | What it checks | Needs |
 | --- | --- | --- |
-| `python3 tests/test_server.py --cli build/kapitsa` | The command line, offline: model names and aliases, `pull --dry-run`, `list`, `rm`, refusals, early port errors | nothing |
+| `python3 tests/test_server.py --cli build/kapitsa` | The command line, offline: model names and aliases, `pull --dry-run`, `list`, `rm`, refusals, early port errors. It starts `kapitsa serve` on stand-in models, so it takes the GPU lock itself and waits for it (not when `NI_LOCK_HELD=1` says you hold it) | the GPU lock |
+| `python3 tests/test_server_lock.py` | That lock behavior of `test_server.py --cli`, on a throwaway lock file | nothing |
+| `python3 tests/test_vk_cpu_tests_lock.py` | `vk cpu-tests`' `test_server_cli` entry fails at once when another process holds the GPU lock, and runs when it is free or the caller says it holds it, on a throwaway lock and a stub checkout | `lsof`, `git` |
+| `python3 tests/test_idle_unload.py [--no-gpu] [--model 4b]` | `kapitsa serve --idle-unload`: bad values refused (CPU, `--no-gpu`, also in CI); on a Mac with a small model (takes the GPU lock): released after idle, loaded again by the next request with the same reply, the `auto` pressure gate both ways, `/v1/models` and a second request during a slow load | `--no-gpu`: `build/kapitsa`; the rest: a Mac and a small model |
 | `python3 tests/test_sidecar.py build/kapitsa` | `kapitsa mtp-sidecar` writes the same bytes as `tools/mtp_sidecar.py` | nothing |
+| `python3 tests/test_hub_download.py build/kapitsa` | Interrupted model adoption and download retries against a local HTTP fixture: existing SHA256/Git-blob digests, matching files, corrupt transfers and completed offline reuse. Also runs in `test_server.py --cli`. | nothing; no model load |
 | `python3 tests/test_bench.py build` | `kapitsa bench` against the harness: the same requests as `bench.py` (both run against a scripted server), its rates on the published runs' data, the result file, submitting (dry runs, a stand-in gh), the GPU lock; `build/bench_test self` checks the Mac table and formats | `pip install jsonschema` for the schema check |
 | `python3 tests/test_update.py build` | `kapitsa update` and the automatic update against a release server in the test (`KAPITSA_UPDATE_URL`; nothing from GitHub), on temporary installs made by `install.sh`: real signed releases, the checks that refuse bad ones, the switch, the rollback, Homebrew, app and source installs, the background check (throttle, off switches, time limit, `kapitsa bench`), what the requests carry; `build/update_test` checks version order and kinds of install | nothing (the full build, for `build/update_test`) |
-| `python3 tests/test_community.py build` | The community results: `tools/community_check.py`'s checks and labels, `tools/community_table.py`, the pull request check against a stand-in API | `pip install jsonschema` |
+| `python3 tests/test_community.py build` | The community results: `tools/community_check.py`'s checks and labels, `tools/community_table.py` (and the leaderboard data it writes), the pull request check against a stand-in API | `pip install jsonschema` |
 | `python3 tests/test_logit_compare.py` | `tools/logit_compare.py` on synthetic dumps: its numbers against a direct computation, records matched in any order, the gate's verdicts and refusals, numpy against the standard library; `tools/logit_floor.py`'s gate | nothing |
+| `python3 tests/test_sampled_tokens.py --reference OLD/ni_run --candidate build/ni_run --model MODEL --out NEW_DIR` | Actual sampled token IDs from two Release builds, frozen Qwen prompt, seed 42, T=.7, K20, top-p=.95, 512 tokens; `--spec 1` also requires an active MTP head. Takes the GPU lock; saves logs, IDs and hashes. Numerical check, not a timing run; see the script's docstring | a compatible Qwen tokenizer, the model and GPU |
+| `python3 tests/test_sampled_tokens_harness.py` | Failure controls for the sampled-token comparison, using fake executables and temporary GPU lock files | nothing |
 | `python3 tests/test_logit_dump.py build` | `build/logit_dump`'s output directory: a nested missing path made with its parents, an existing one kept, one under a file refused, each before the corpus, the GPU lock and the model; a `--verify-rows` other than 8, 16 or 32 refused before the directory is made | nothing |
 | `python3 tests/test_reasoning.py` | `bench/reasoning`: the grader's equivalences and near misses, the frozen problem sets, a run against a scripted server (the requests, grading, resuming, the GPU lock on a test file) and the report; with the problems downloaded, `reasoning.py check` and the sets' draw | nothing (`python3 bench/reasoning/reasoning.py fetch` for the last two) |
 | `python3 tests/test_structured.py --cli build [MODEL_DIR]` | Structured output, offline: `build/grammar_test` (JSON Schema and tool-call grammars against accepted, open and rejected texts, the schemas refused; with a tokenizer, every mask along valid replies and random walks against brute force, and the mask's time per token) and how the three APIs read `response_format`, `text.format`, `output_format`, `tool_choice` and strict tools (`build/structured_check`) | nothing (the 4B's tokenizer, when downloaded, for the mask checks) |
 | `build/execution_session_test` | `ExecutionSession` (`src/engine/execution_session.h`) over a fake work function: one start, cancel from another thread, `cancelled` never after `finished`, `finished` held until an in-flight `cancelled` returns, `wait()` from a delta or a cancel callback refused, a session destroyed without starting, and the worker joined once | nothing |
-| `build/http_stream_test` | The HTTP stream (`src/server/http_stream.h`) with a fake execution, through httplib's own chunked writer: success, an empty end, an engine error before and after the first byte, a throwing writer and meter, an abandoned provider, a client disconnect (the session cancelled, `after` skipped), the keepalive frame ahead of the end frame, early-accept mode, telemetry | nothing |
+| `build/think_control_test` | The thinking budget's control (`src/engine/think_control.h`): chains, trees, a drafted `<think>`, closing text, tool calls, a cap of 0, the first block only, `fill()` against `push()` on random chains and trees, and whole replies under each decode loop's gating, through the functions `src/engine/engine.cpp` calls for it | nothing |
+| `build/http_stream_test` | The HTTP stream (`src/server/http_stream.h`) with a fake execution, through httplib's own chunked writer: success, an empty end, an engine error before and after the first byte, a throwing writer and meter, an abandoned provider, a client disconnect (the session cancelled, `after` skipped), the keepalive frame ahead of the end frame, early-accept mode, telemetry, prompt progress events in order between the first event and the first delta | nothing |
+| `build/disconnect_test` | Non-streaming requests over loopback with a fake decode: close and reset cancellation, a reset behind queued request bytes, a live pipelined request left intact, and a wait outside a served request | nothing |
 | `build/prefix_cache_test` | The SSD prefix cache's store: pieces and entries written and read back byte for byte and taken back after a restart, CRCs, torn writes, the quota and its eviction order, the volume filling up, threads writing and reading at once, other models' caches, the namespace's lock | nothing |
 | `build/vision_pixels_test` | Image pixel storage: page alignment, mapped length and padding, copy/move lifetime, overflow, and every Qwen bicubic resize branch | nothing |
 | `build/cluster_test [--live]` | Several Macs (`src/cluster/`): the Bonjour TXT record and `GET /cluster`'s JSON read back, where a Mac that would not hold a model whole sends its requests (`pick_server`), `kapitsa cluster`'s table; `--live`: a stand-in server advertised over Bonjour, then found, read and timed by a browser on this Mac | nothing (`--live`: the local network) |
@@ -69,29 +86,41 @@ These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/t
 | `build/attn_reduce_test --bench` | Interleaved original/shared-statistics reduction timings on the 27B's head layout, after warmup. Includes short shapes where production keeps the original kernel (fewer than 8 splits). Takes the GPU lock; kernel time, not model throughput | the GPU |
 | `build/tree_reduce_test --gpu [P]` | Fused tree-tail attention and reduction against the separate kernels bitwise and against fp64: live row counts, branch slots, KV strides, empty history, nonzero gates and poisoned unused scratch. Without `P`, covers positions through 128K. Takes the GPU lock; run with `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` | the GPU |
 | `build/tree_reduce_test --bench P` | Interleaved separate/fused attention timings at logical position `P` on the 27B's head layout. Includes history, tail and reduction; takes the GPU lock. Kernel time, not model throughput | the GPU |
+| `build/norm_x8_test small`, `check`, `bench` | Fused RMSNorm + X8 preparation against separate kernels bytewise and fp64, including low tables, transposed tables, normalized rows and guard bytes. Takes the GPU lock; run `small` first with both Metal validation layers. `bench` prints 32 interleaved AB/BA pairs per shape, kernel time only. | the GPU |
+| `build/norm_x8_model_check MODEL IDS PREFIX OUT [PASSES=24] [R=1]` | Teacher-forced one/two-row verification and native MTP hidden outputs on fixed prefixes (not covered by `logit_dump`'s eight-row verify). Takes the GPU lock; compare new output directories from `NI_NORM_X8=0` and the default, plus the standard `logit_dump` gate. | a Qwen model with native MTP, the GPU |
 | `build/rope_pair_test --gpu [--small]` | RoPE and M-RoPE against the original kernels bitwise, including untouched cache rows and guard bytes. Run `--small` first with `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1`; the full matrix covers head dimensions through 512 and zero, partial and full rotary widths. Takes the GPU lock | the GPU |
 | `build/rope_pair_test --bench` | Six interleaved original/shared-angle pairs per shape on the 27B head layout. Prints every GPU timing and thermal state; takes the GPU lock. Kernel time, not model throughput | the GPU |
 | `build/fn_store_test` | The streamed-expert cache (`src/model/expert_store.h`) on a synthetic pack in a temporary folder, a thread playing the GPU: every routed expert in its slot at each handshake and still there at the next, read-ahead (right and wrong), verify windows, prefill sweeps, a hot set kept through a sweep (ARC), direct and widened 16 KiB reads; the n-gram table's reader (GGUF IQ4_NL and Q8_0 rows, affine shards) | nothing |
 | `build/fn_dflash_test [--gpu]` | Qwen3.8-Flash-Next's DFlash2 plumbing: the target's streams from `hc_count`, the drafts' `target_hidden_reduction` checks; `--gpu`: the `stream_mean` capture kernel against the CPU (GPU lock) | nothing |
+| `build/drafter_attach_test [--net]` | `kapitsa import`'s drafter attach (`src/hub/`): which model shape gets which catalog drafter, and a folder that already has one, has no config or has an unknown shape is left alone; `--net`: also fetches the Qwen3.5-4B drafter (1.3 GB) into a temp folder, checks the files and the manifest, and that a second call fetches nothing | nothing (`--net`: network, 1.3 GB) |
 | `python3 tools/qwen4_exp_q20_test.py` | The Q2_0 Flash-Next converter on a tiny synthetic GGUF and pack: planes, dequantization, config, index, sparse table, the table from the GGUF (`--table gguf`) | numpy |
 | `python3 tools/qwen4_exp_pack_test.py` | The Flash-Next converter's n-gram table from a `config.json`: Flash-Next's hash constants, the ids against `src/model/ngram.cpp` on another geometry, the table layout checked against a checkpoint's shard shapes | numpy |
 | `build/fn_q2_bench check --small`, `build/fn_q2_bench store` | The Q2_0 expert kernels at small shapes against a CPU reference in double (and through the slot table, bit for bit), and through the expert store mid-pass; run them under `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` and the GPU lock | the GPU |
 | `build/exl3_test` | The EXL3 reference decoder (`src/model/moe_exl3.h`): tile 0 of two of Sushi's MCG fixtures (K2.5 at window 12, K3 at window 16) against the weights exllamav3 decodes, bit for bit; the tensor-core placement, the rates and `shapes_ok`'s refusals; `Qwen4Exp::norm_offset`, which tells a Flash-Next pack's RMSNorm convention | nothing |
-| `build/exl3_check [--fixtures DIR] [--pack DIR]` | The EXL3 routed-expert kernels (`src/kernels/exl3moe.metal`, Sushi's packs) against the CPU reference on random experts at K1 to K4 (n 16, 24, 32, 40, 48, 64) and windows 16 and 15: decode / verify rows (1, 3, 8) and prefill tiles (37 and 300 tokens), each with a corrupted tile that must fail the bar; `--fixtures` (Sushi's `src/exl3/fixtures`): the reference decoder against the weights exllamav3 decodes, bit for bit; `--pack`: layer 0's experts of a Sushi pack. Takes the GPU lock; run under `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` | the GPU (Sushi's repo for `--fixtures`, a pack for `--pack`) |
-| `build/api_test [MODEL_DIR...]` | The Anthropic Messages and OpenAI Responses translations: request mapping, exact event sequences, each coding agent's settings; the Chat Completions stream's bytes, keepalive and errors; with a model folder, tool loops through its chat template, and what a draft read ahead (`POST /v1/draft`) reads at every point of typing a message: a prefix of the request's prompt | a model folder for the template checks (default: the 35B and 27B, if downloaded) |
+| `build/exl3_check [--fixtures DIR] [--pack DIR]` | The prefill's register weight fragments against the CPU decoder, bit for bit, at every even rate 16-64 and every window 8-16, with output guards. The EXL3 routed-expert kernels (`src/kernels/exl3moe.metal`, Sushi's packs) against the CPU reference on random experts at K1 to K4 (n 16, 24, 32, 40, 48, 64) and windows 16 and 15: decode / verify rows (1, 3, 8) and prefill tiles (37 and 300 tokens), each with a corrupted tile that must fail the bar; `--fixtures` (Sushi's `src/exl3/fixtures`): the reference decoder against the weights exllamav3 decodes, bit for bit; `--pack`: layer 0's experts of a Sushi pack. Takes the GPU lock; run under `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` | the GPU (Sushi's repo for `--fixtures`, a pack for `--pack`) |
+| `build/api_test [MODEL_DIR...]` | The Anthropic Messages and OpenAI Responses translations: request mapping, exact event sequences, each coding agent's settings; the Chat Completions stream's bytes, keepalive, prompt progress (`return_progress`) and errors; with a model folder, tool loops through its chat template, and what a draft read ahead (`POST /v1/draft`) reads at every point of typing a message: a prefix of the request's prompt | a model folder for the template checks (default: the 35B and 27B, if downloaded) |
 | `venv/bin/python tests/sdk_check.py build/api_test` | The official `anthropic` and `openai` Python SDKs parse every recorded reply | a venv: `python3 -m venv venv && venv/bin/pip install anthropic openai` |
 | `build/parser_test MODEL_DIR` | The streaming parser (reasoning, content, tool calls) on real token ids; with a Flint folder, its GLM-format tool calls too | a Qwen or Flint model folder |
 | `build/tokenizer_test` | Flint's pre-tokenizer split against the pieces Hugging Face tokenizers 0.23.3 makes of the same texts (a synthetic tokenizer.json, one token per piece) | nothing |
 | `build/split_place_test` | Where a split model's layers go (`src/cluster/place.h`): runs that fit every Mac's memory with the fastest pass (each Mac's layers over its bandwidth), the head's own tensors and its n-gram layers, ties broken towards the most memory left everywhere; when the Macs stream the experts the runs follow their memory instead (each holds the same multiple of its budget, so a small fast Mac takes the smaller share); nothing when the Macs do not hold the model | nothing |
+| `build/gemm_slices_test` | A large prefill GEMM's 2048-row slices (`src/model/gemm_slices.h`): every row covered once, each slice's input and output views inside their buffers, aligned, and refused on overflow; and which model shapes take the slices | nothing |
+| `build/kv_grow_test` | How far a conversation's KV cache grows within the memory budget (`src/model/kv_grow.h`): the copy a grow holds is counted and kept to what the room allows, so a growing conversation is served up to its room (kapitsa#1300's numbers), and a roomy grow is unchanged | nothing |
+| `build/slot_policy_test` | Whether a prompt extends all live rows in a slot, so a short continuation can keep its conversation slot (`src/engine/slot_policy.h`) | nothing |
 | `build/qwen4_config_test` | What a Qwen 4 config.json asks that the Qwen3.8-Flash-Next path does not run (`src/model/qwen4_config.h`): Flash-Next's published config runs, with Sushi's YaRN only named as not applied, and each setting the path does not run is refused alone | nothing |
 | `build/json_file_test` | The parsed-JSON cache the planners read config.json through (`src/util/json_file.h`): a synthetic 8 MB Nemotron-H config read back as nlohmann's own parse, a second read without a parse, 2,000 reads in well under a second, a rewritten file read again, missing / empty / broken files null, eviction past the cache's size, threads reading at once | nothing |
 | `build/affine_pack_test` | The loader's helpers for MLX affine packs (`src/model/affine_pack.h`): a weight's bit width from its shapes (3/4/5/6/8, the MTPLX 6-bit sidecar's real shapes, shapes that fit none), float16 / float32 to bf16 over every float16 bit pattern (finite stays finite, error within bf16 rounding, the count of changed values exact) | nothing |
+| `build/ffn_share_test` | The kernels the Neural Engine split's GPU part runs a dense FFN layer on (`src/model/ffn_share.h`'s `gpu_part`, the one rule `plan()`, `init_ane()` and `enc_mlp_gpu_part_qmt` decide by): a projection's format from its shapes; one format throughout and a GGUF Q4_K_M import's Q4_K gate/up with Q6_K down take the matrix units, while 3-bit gate/up with a 4-bit g64 down keeps the older share. |
 | `build/systemone_test` | System One's pointer heads (`src/systemone/systemone.cpp`): a readout head (Drex Max v1) and a projected one (Drex v2.0) read back from synthetic files, the first N readout outputs, the temperature rules, wrong sizes and options past the head's width refused | nothing |
 | `python3 tests/test_drex_max.py --cli build` | Drex Max v1: `tools/drex_pointer.py` extracting the readout head from a synthetic safetensors / GGUF, and `systemone --encode` laying out Max requests (one ChatML row per question, the decide row, refused images and oversize rows) with no backbone weights | nothing |
 | `build/remote_test` | A split model's reserve on its other Macs (`src/model/remote.h`, `remote_reserve`): a fake stage records each growth asked of it and answers by its own rounding (or fails, or is lost); the reserves the engine makes must ask only past what it holds, take what it holds from its answer, and ask again after a failure | nothing |
+| `build/ane_segment_check [--gpu]` | Dense ANE FFN supported input widths through 8192 and rejection of wider inputs; `--gpu` checks rotation against an fp64 reference and segmented/full activation packing and weight staging, offsets, tails, padding and guards. GPU mode takes the GPU lock; use `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` | nothing (`--gpu`: a Mac with Metal) |
+| `python3 tests/test_ane_profile.py [build/ane_segment_check]` | 224 fresh-process M1/M2/M3/M4/M4 Max/M5/M5 Max, profile, NI_ANE override and NI_ANE_UNITS cases; device-independent disabled shapes reserve no ANE memory | built segment checker; CPU only |
 | `build/iq_layout_test` | GGUF IQ expert blocks (IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS, IQ3_S) repacked into the layout of `src/kernels/wfmt_iq.metal` and decoded as the kernels build their MMA operands, from the Metal source's own grid tables, against `gguf::dequantize`; the type helpers | nothing |
+| `build/ink2_gguf_test` | Inkling-2-Mini GGUF import (`src/model/inkling2_gguf.h`): scalar reads of its GGUF blocks against `gguf::dequantize`, the NVFP4 repack's values, and the Q8 bytes and gate/up rows | nothing |
+| `build/plan_weights_test` | `kapitsa doctor`'s plan of a GGUF or native checkpoint from its headers, offline, in temp folders: which plans have their weights on this Mac and which are only planned | runs `build/kapitsa`; the native-checkpoint case also needs one downloaded catalog model (its `config.json` and `model.safetensors.index.json`) and is skipped without one |
 | `build/bench_moe_iq --validate --fmt GU:DN [--topk K --shared SI --shared-bits 4]` | The IQ MoE kernels (rows, 8-row verify, prefill) at small shapes against a CPU reference in double (`gguf::dequantize` of the GGUF blocks); without `--validate`, the real shapes and their time per call; `--tensors FILE.gguf --layer L` a real layer. Flint's forms: `--topk 6 --shared 1024 --shared-bits 4`. Run `--validate` under `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` and the GPU lock | the GPU |
 | `build/flint_compile` | Compiles Flint's kernels and the base library's pipelines it runs (no GPU work); run Flint's kernels themselves under `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` (`build/logit_dump` on a Flint folder takes the 16-key tiles there) | a Mac with Metal |
+| `build/ink2_check MODEL_DIR [GOLDEN_JSON]` | Inkling-2-Mini tokenizer, layer-checkpoint parity, top-10 logits and 24-token greedy rollouts against `tests/fixtures/ink2_golden.json`; run under `lockf -k /tmp/kapitsa-gpu.lock` and `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` (`ink2_msg_gate` uses `9,600 B` static threadgroup memory). `python3 tools/make_ink2_golden.py [--model-dir DIR] [--out FILE]` regenerates the self-referential PyTorch golden (`Inkling2Ref`) from pinned `thinkingmachines/Inkling-2-Mini` | an Inkling-2-Mini folder and the GPU (`torch`, `numpy`, `safetensors`, `tokenizers` for `make_ink2_golden.py`) |
 | `python3 tests/vision/check_cpu.py build/vit_check MODEL_DIR [--quick]` | The Qwen image processor against Pillow (and Hugging Face's processors when torch and transformers are installed) | a Qwen3.5-4B, Qwen3.6 or Qwen3.8 folder; Pillow and numpy |
 | `python3 tests/vision/check_radio_cpu.py MODEL_DIR build/vit_check IMAGE.png...` | Nemotron 3.5 Bolt's image processor against NVIDIA's own | the Bolt folder; torch |
 
@@ -106,7 +135,31 @@ and should run with `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1`. `check-shapes` 
 outputs and fixed FP64 samples. The default kernel is `qmm8pc_b4_nf1`; an explicit `qmm8snb_b4_nf2` checks the
 original path. Failures exit nonzero; dispatch counts distinguish candidate coverage from fallback. The kernel
 retains the original K partitions, including when a geometry falls back to the original output tile.
+`check-shapes-9b` additionally covers the 9B target/drafter matrix sizes, including the 4096-by-12288 down projection.
 `NI_QMM_COEFF_FIXTURES=MANIFEST` enables `check-cpu-fixtures` (no GPU) and `check-real-coeff` (full GPU outputs and FP64).
+
+`tools/qmm_device_ab.py` checks the 4B packed-QMM device default with interleaved builds. Build
+`qmm_device_conditions` explicitly, then pass `--old OLD/kapitsa --new NEW/kapitsa --model MODEL_DIR
+--probe build/qmm_device_conditions --out NEW_DIRECTORY`. The controller holds the GPU lock and warms both greedy
+and 4K sampled execution with distinct inputs. Measured prompts are evicted between requests and must report zero
+cached tokens. It checks actual AC power, one-minute load, thermal state and paging counters before and after each
+arm and request, plus 250 ms GPU
+samples and CPU usage over rolling one-second windows. One resident native sampler reads IOKit's `AppUsage` counters
+directly, avoiding probe/ps/ioreg process launches at every sample. `proc_pid_rusage` records the tested process tree's CPU time;
+both total usage and estimated background usage (total minus that owned work, as a share of all CPU cores) are retained.
+Defaults require load <= 2, background CPU <= 10%, nominal thermal state, automatic AC power mode, no pageouts or swap,
+and no observed foreign GPU activity (only WindowServer is excluded). Missing samples and failed probes invalidate
+the run. CPU contention is gated on each timed request; CPU peaks in the surrounding bookkeeping remain diagnostic.
+The 10% background budget preserves the preparation rule of at least 90% total CPU idle when the tested process is
+idle; during inference its own CPU work is accounted separately. This is the limit used in the M4 Pro validation
+record, whose accepted requests peaked at 9.47% estimated background usage across all 14 CPU cores.
+All other checks cover the entire arm as well. All requested pairs and identical nonempty outputs are required.
+`--pair-attempts N` optionally retries both arms after an environment failure (default 1: no retry), accepting only the
+first fully valid pair within the declared cap. A valid half of a rejected pair is discarded with its counterpart;
+every attempt remains in the output, and output/shape/cache failures stop the series rather than trigger retries.
+`--start-seconds FIRST LAST` can restrict starts within each minute to avoid a known periodic desktop refresh;
+it never bypasses the environment checks. Use more pairs when reducing repeats per leg, and report the complete protocol.
+`python3 tests/test_qmm_device_ab.py` fault-injects these checks on the CPU without a model or GPU.
 
 End to end, against a running server (this one runs the 4B on the GPU and downloads it, 3.3 GB, the first time):
 
@@ -119,6 +172,13 @@ kill %1
 The SSD prefix cache across restarts (starts its own servers, takes the GPU lock; a temporary `KAPITSA_HOME`, a 2 GiB
 cache, removed at the end): `python3 tests/test_disk_cache.py build/kapitsa ~/.cache/kapitsa/models/qwen3.5-4b-4bit`
 (`--ttft` also times the follow-up cold, from the SSD and from memory).
+
+Cancellation during continuation prefill (starts its own servers, takes the GPU lock):
+`python3 tests/test_prefill_cancel.py --cli build/kapitsa --model MODEL_DIR --output NEW_DIR` checks repeated
+prefill cancellation, retention of a completed prefix, retry text against an uninterrupted request, and cold-cancel
+fallback. It takes the GPU lock, disables the SSD cache and ANE, and retains request/event/server logs in a new folder.
+`--reference OTHER_BINARY` uses another build for the uninterrupted request. This does not replace the logit gate or
+interleaved performance checks.
 
 Reading a user's draft ahead (`POST /v1/draft`; starts its own servers, takes the GPU lock):
 `python3 tests/test_draft.py build/kapitsa ~/.cache/kapitsa/models/qwen3.5-4b-4bit` checks that a follow-up writes the
@@ -162,12 +222,19 @@ without and after a draft.
 - Measure on the GPU only when nothing else runs on it, and interleave the runs of the old and the new build (A B A B
   ...). Report every run, not the best one, with the Mac, the macOS version and the commit.
 - A default changes only after an interleaved A/B and the [output check](#output-check): the logits against the old
-  build's, with differences allowed only within this Mac's noise floor (near-ties).
+  build's, with differences allowed only within this Mac's noise floor (near-ties). A default that only switches which
+  published pack a catalog name downloads has its own rule in AGENTS.md (KL to BF16 for both packs, a task score and the
+  speed A/B), not the floor check.
 - Put the numbers in the pull request, with the change that produced them.
-- A new feature ships on by default for at least one model on at least one Mac. The other way in: a well-known paper or
-  a major engine already has it and it fits Kapitsa. Once it is a default somewhere, other models may reach it opt-in.
-  A feature that is promising but not yet faster anywhere stays an open PR until it is. Kill switches, debug switches
-  and measuring tools are exempt. AGENTS.md ("New features ship on by default somewhere") has the full rule.
+- A new feature ships on by default for the whole class of hardware or model it targets: a matrix-unit optimization for
+  every Mac with matrix units, a MoE path for every MoE model. Show the interleaved A/B and the output check on at least
+  two setups that differ in chip class or model family when two such setups exist for the class (one is enough when
+  only one exists). A narrow gate (an exact chip, core count, RAM size or one model) needs a win of at least 10% on the
+  target that is slower or broken on the wider class, with that evidence cited. A feature that is promising but not yet
+  faster anywhere stays an open PR until it is, even when a paper or another engine has the idea. Kill switches, debug switches and measuring tools are exempt.
+  AGENTS.md ("Defaults follow the concept, not the measured cell") has the full rule.
+- On in the fast profile for a class counts as on by default, for a feature that moves outputs no more than the
+  fastest other engine does there (docs/profiles.md). The same class and evidence rules apply.
 
 ## Output check
 
@@ -191,7 +258,9 @@ python3 tools/logit_compare.py /tmp/ref /tmp/new      # exit status 1 past the g
 - `--paths` defaults to `step,verify,batch`. Flint, Dory and Flash-Next decode one request at a
   time, and `batch` is fatal on them ("... no batch path"): pass `--paths step,verify` to both builds. Dory's `verify`
   needs `--loop-kv per-loop`; with its default last-loop KV pass `--paths step`. `prefill` is written whatever
-  `--paths` says.
+  `--paths` says. `logit_dump MODEL_DIR OUT --list-paths` prints the paths a model has, from its config.json alone (a
+  Qwen under a new `model_type` in `src/model/qwen4_config.cpp`'s table gets its layout's), and `tools/logit_floor.py`
+  takes its paths from it.
 - Each path feeds a window's scored rows in passes of `k` rows (`verify`: 8, or Qwen's `--verify-rows`, or Flint's
   `NI_FLINT_VERIFY_ROWS`, or Flash-Next's MTP depth + 1; `batch`: `--batch-rows`; `step`: 1), rounded up to whole
   passes. A window whose sequence
@@ -291,6 +360,17 @@ python3 tools/logit_compare.py /tmp/ref /tmp/new      # exit status 1 past the g
 
 The [benchmark harness](bench/harness/README.md) runs Kapitsa and other engines through the same client-side benchmark,
 one engine at a time; [docs/benchmarks.md](docs/benchmarks.md) has the published results.
+
+A result from `kapitsa bench --submit` goes in as a pull request from a fork ([bench/community](bench/community/README.md))
+with the two files generated from it: `bench/community/RESULTS.md` and `docs/site/leaderboard-data.js`. One command writes
+both, and the `community-table` check fails when either is stale:
+
+```bash
+python3 tools/community_table.py    # also runs python3 tools/build_leaderboard_data.py
+git add bench/community/RESULTS.md docs/site/leaderboard-data.js
+```
+
+If main moves before the merge (another result landed), rebase and run it again.
 
 ## Releasing
 

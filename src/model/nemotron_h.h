@@ -8,6 +8,7 @@
 #pragma once
 #include "loader/safetensors.h"
 #include "model/model.h"
+#include "model/quant_q8.h"
 #include "model/nemotron_ane.h"
 
 #include <algorithm>
@@ -66,11 +67,15 @@ struct NhMat {
 void nh_row_bytes(NhFmt f, int64_t K, size_t& qb, size_t& sb);
 size_t nh_src_row_bytes(NhFmt f, int64_t K);
 void nh_repack_rows(NhFmt f, int64_t K, const uint8_t* src, int64_t rows, uint8_t* q, uint8_t* s, bool fp4_l2 = false);
-void nh_quant_q8(const float* x, int64_t K, uint8_t* q, uint8_t* s);
 // The format and shape of a checkpoint matrix (scale: its weight_scale entry, NVFP4's block scales or FP8's tensor
 // scale, else null); false if unknown.
 bool nh_describe(const SafetensorsIndex::Entry& w, const SafetensorsIndex::Entry* scale, NhFmt& f, uint32_t& N,
                  uint32_t& K);
+// A drafter weight: NVFP4 as stored, a BF16 matrix as Q8 rows. New buffers are appended to owned.
+NhMat nh_load_mat(const SafetensorsIndex& idx, const std::string& path, const std::string& name,
+                  std::vector<Buffer>& owned, size_t& weight_bytes);
+// A BF16 or F32 checkpoint tensor as fp32. path is the fatal message's prefix.
+std::vector<float> nh_host_f32(const SafetensorsIndex& idx, const std::string& path, const std::string& name);
 
 struct NhLayer {
   char kind = 'M';

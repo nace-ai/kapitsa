@@ -1,0 +1,1 @@
+{"command": ["cmake", "--build", "build", "-j", "6", "--target", "ane_segment_check", "device_profile_test"], "returncode": 0}

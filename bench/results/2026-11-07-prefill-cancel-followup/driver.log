@@ -1,0 +1,4 @@
+built: kapitsa logit_dump ni_run update_test (log: /Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/evidence/cancel-checkpoint-133912/2c41b56c/build.log)
+built: kapitsa logit_dump ni_run (log: /Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/evidence/cancel-checkpoint-133912/3ce43203/build.log)
+no server started by this run
+removed /tmp/verify-kapitsa/state/cancel-checkpoint-133912; evidence kept in /Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/evidence/cancel-checkpoint-133912/3ce43203

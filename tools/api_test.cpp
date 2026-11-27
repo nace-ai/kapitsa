@@ -2,7 +2,7 @@
 //  - request mapping: multi-turn conversations with tools, thinking / reasoning round trips, system merging, images;
 //  - the exact event sequences of streamed replies (text, reasoning + text, reasoning + 2 tool calls, a custom tool
 //    call, a length cutoff, a stop sequence, errors) and the non-streamed responses; the Chat Completions stream's
-//    bytes and its keepalive chunk;
+//    bytes, its keepalive chunk and its prompt progress chunks;
 //  - what `kapitsa claude|codex|opencode|pi` gives each client;
 //  - with a model folder (its chat template and tokenizer): tool loops through the template, the generated turns parsed
 //    as the engine parses them, streamed, read back as each client reads them and sent back: the next request's prompt
@@ -15,19 +15,29 @@
 #include "api/anthropic.h"
 #include "api/chat_completions.h"
 #include "api/clients.h"
+#include "api/ollama.h"
 #include "api/responses.h"
 #include "engine/output_parser.h"
+#include "engine/stop_filter.h"
 #include "engine/disk_wait.h"
 #include "engine/disk_saved.h"
 #include "engine/engine.h"
 #include "engine/history_gate.h"
+#include "engine/think_control.h"
 #include "engine/reasoning_memory.h"
 #include "engine/tool_args.h"
 #include "model/kflash_wrap.h"
+#include "model/hy4_flash.h"
+#include "model/moe_a4.h"
+#include "model/inkling2.h"
+#include "model/token_suppression.h"
 #include "tokenizer/tokenizer.h"
+#include "util/log.h"
 
 #include <minja/chat-template.hpp>
 #include <minja/minja.hpp>
+
+#include <optional>
 
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -37,6 +47,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 using namespace ni;
@@ -120,6 +131,74 @@ std::vector<Event> run(StreamWriter& w, const std::vector<ChatDelta>& ds, const 
   for (auto& d : ds) s += w.delta(d);
   s += w.end(res);
   return parse_sse(s);
+}
+
+void stop_filter_unit() {
+  struct Case {
+    std::vector<std::string> stops, chunks;
+    std::string text, matched;
+  };
+  const std::vector<Case> cases = {
+      {{"one,"}, {"one", ", two"}, "", "one,"},
+      {{"hello"}, {"say h", "el", "lo there"}, "say ", "hello"},
+      {{"hello"}, {"hel", "p me"}, "help me", ""},
+      {{"hello"}, {"hel"}, "hel", ""},  // unmatched prefix survives EOS / max_tokens
+      {{"hello"}, {"hel", "lo"}, "", "hello"},  // a match completed by the parser's final flush
+      {{"world", "hello"}, {"hello world"}, "", "hello"},
+      {{"ab", "a"}, {"ab"}, "", "ab"},  // list order breaks equal-position ties
+      {{"aab"}, {"aa", "a", "b"}, "a", "aab"},
+      {{"abc", "bcdef"}, {"x b", "c", "d", "ef tail"}, "x ", "bcdef"},
+      {{"", "END"}, {"safe", " END", "ignored"}, "safe ", "END"},
+      {{""}, {"unchanged", " text"}, "unchanged text", ""},
+      {{}, {"unchanged", " text"}, "unchanged text", ""},
+      {{"世界"}, {"Hello 世", "界!"}, "Hello ", "世界"},
+      {{"👋!"}, {"Hi 👋", "?"}, "Hi 👋?", ""},
+  };
+  for (size_t i = 0; i < cases.size(); ++i) {
+    const auto& c = cases[i];
+    // The final parser flush can itself contain text or be empty.
+    for (bool tail_has_text : {false, true}) {
+      StopFilter f(c.stops);
+      std::string out;
+      for (size_t j = 0; j < c.chunks.size(); ++j) {
+        std::string d = c.chunks[j];
+        f.filter(d, tail_has_text && j + 1 == c.chunks.size());
+        out += d;
+      }
+      std::string tail;
+      f.filter(tail, true);
+      out += tail;
+      check(out == c.text && f.matched() == c.matched,
+            "stop filter case " + std::to_string(i) + (tail_has_text ? " final text" : " empty final"), out);
+    }
+  }
+  // Every partition of this stream must trim the same prefix, including a stop spanning three deltas.
+  const std::string text = "x ababa!";
+  const std::vector<std::string> stops = {"aba", "ba!"};
+  for (size_t i = 0; i <= text.size(); ++i) {
+    for (size_t j = i; j <= text.size(); ++j) {
+      StopFilter f(stops);
+      std::string out;
+      for (std::string d : {text.substr(0, i), text.substr(i, j - i), text.substr(j)}) {
+        f.filter(d);
+        out += d;
+      }
+      std::string tail;
+      f.filter(tail, true);
+      check(out + tail == "x " && f.matched() == "aba", "stop filter split " + std::to_string(i) + ":" + std::to_string(j));
+    }
+  }
+  const std::vector<std::string> stops_at_end = {"STOP"};
+  StopFilter f(stops_at_end);
+  std::string d = "visible S";
+  f.filter(d);
+  check(d == "visible ", "stop prefix is withheld before it matches");
+  d = "T";
+  f.filter(d);
+  check(d.empty(), "stop prefix stays withheld across another delta");
+  d = "OP";
+  f.filter(d);
+  check(d.empty() && f.matched() == "STOP", "matched prefix never reaches a delta");
 }
 
 // ---------------------------------------------------------------- request mapping
@@ -461,6 +540,27 @@ void responses_events() {
       "tools": [{"type": "function", "name": "exec_command", "parameters": {"type": "object"}},
                 {"type": "custom", "name": "apply_patch"},
                 {"type": "namespace", "name": "ns", "tools": [{"type": "function", "name": "f"}]}]})"), store);
+  {
+    auto body = J(R"({"input":"hi","tools":[{"type":"custom","name":"edit"},
+      {"type":"namespace","name":"docs","description":"Documents","tools":[{"type":"custom","name":"edit"}]}]})");
+    auto req = responses_request(body, store);
+    check(req.chat.tools.size() == 2 && req.chat.tools[1]["function"]["name"] == "docs__edit",
+          "responses: namespaced custom tool has its own prompt name");
+    ResponsesStream writer(req, "resp_nested", "m", 123);
+    auto events = run(writer, {call("call_E", "docs__edit", R"({"input":"two lines\nhere"})")}, result("tool_calls"));
+    const auto& item = events.back().data["response"]["output"][0];
+    check(item.value("type", "") == "custom_tool_call" && item.value("namespace", "") == "docs" &&
+              item.value("name", "") == "edit" && item.value("input", "") == "two lines\nhere" &&
+              events[2].data["item"].value("namespace", "") == "docs",
+          "responses: a custom call carries its namespace from the first event to the completed response");
+    body["input"] = J(R"([{"type":"custom_tool_call","namespace":"docs","name":"edit","call_id":"call_E","input":"hello"},
+                          {"type":"custom_tool_call_output","call_id":"call_E","output":"ok"}])");
+    auto replay = responses_request(body, store);
+    const auto& fn = replay.chat.messages[0]["tool_calls"][0]["function"];
+    check(fn["name"] == "docs__edit" && fn["arguments"]["input"] == "hello" &&
+              replay.chat.messages[1]["tool_call_id"] == "call_E",
+          "responses: replay of a namespaced custom call and result");
+  }
   auto seq_ok = [](const std::vector<Event>& ev) {
     for (size_t i = 0; i < ev.size(); ++i)
       if (ev[i].data.value("sequence_number", -1) != int(i) || ev[i].data.value("type", "") != ev[i].name) return false;
@@ -563,6 +663,13 @@ void responses_events() {
     check(st == 400 && body["error"]["code"] == "context_length_exceeded" && body["error"]["type"] == "invalid_request_error" &&
               body["error"]["param"] == "input",
           "responses: a prompt longer than the context is 400 context_length_exceeded", body.dump());
+    check(body["error"]["message"].get<std::string>().find("context window") != std::string::npos,
+          "responses: the context window's limit says so", body.dump());
+    r.memory_limit = true;
+    const ojson mb = responses_failure(r).second;
+    check(mb["error"]["code"] == "context_length_exceeded" &&
+              mb["error"]["message"].get<std::string>().find("this Mac's memory holds") != std::string::npos,
+          "responses: the memory's limit says it is the memory (kapitsa#1300)", mb.dump());
     ChatResult im = result("error");
     im.error = "video input is not supported";
     im.invalid_request = true;
@@ -638,6 +745,11 @@ void chat_events() {
           "chat stream: the engine's prefill time in usage, for a client's prefill tok/s on the uncached tokens");
     check(ChatCompletionsStream("chatcmpl-1", "m", 123).end(inexact) == chunk("{}", R"("stop")", usage) + done,
           "chat stream: no prefill time in usage when it holds image encoding or turns given to other requests");
+    ChatResult res_think = result("stop");
+    res_think.reasoning_tokens = 15;
+    const std::string usage_think = R"({"prompt_tokens":100,"completion_tokens":20,"total_tokens":120,"prompt_tokens_details":{"cached_tokens":60},"completion_tokens_details":{"reasoning_tokens":15}})";
+    check(ChatCompletionsStream("chatcmpl-1", "m", 123).end(res_think) == chunk("{}", R"("stop")", usage_think) + done,
+          "chat stream: reasoning_tokens in completion_tokens_details");
   }
   {
     // max_tokens: null is absent, so max_completion_tokens (or the default) applies (#546)
@@ -654,6 +766,31 @@ void chat_events() {
       threw = true;
     }
     check(threw, "chat: a max_tokens that is not a number still throws (a 400)");
+    for (const char* key : {"max_tokens", "max_completion_tokens"}) {
+      for (const char* value : {"0", "-1", "-2147483649", "2147483648", "4294967297",
+                                "9223372036854775807", "18446744073709551615", "1.5", "1.0", "1e100",
+                                "true", "false", "\"5\"", "[]", "{}"}) {
+        ojson body = J((std::string("{\"") + key + "\":" + value + "}").c_str());
+        bool rejected = false;
+        try {
+          chat_max_tokens(body);
+        } catch (const ApiError& e) {
+          rejected = e.status == 400 && e.type == "invalid_request_error" && e.param == key;
+        } catch (const std::exception&) {}
+        check(rejected, std::string("chat: rejects ") + key + "=" + value + " with a field-specific 400");
+      }
+      check(chat_max_tokens(ojson{{key, 1}}) == 1 && chat_max_tokens(ojson{{key, 2147483647}}) == 2147483647,
+            std::string("chat: preserves positive int boundaries for ") + key);
+    }
+    check(mt(R"({"max_completion_tokens": 7, "max_tokens": "ignored"})") == 7,
+          "chat: a valid preferred limit still ignores the legacy field");
+    bool preferred_rejected = false;
+    try {
+      mt(R"({"max_completion_tokens": 4294967297, "max_tokens": 7})");
+    } catch (const ApiError& e) {
+      preferred_rejected = e.status == 400 && e.param == "max_completion_tokens";
+    }
+    check(preferred_rejected, "chat: an invalid preferred limit does not fall back to the legacy field");
   }
   {
     ChatResult big = result("error");
@@ -663,6 +800,16 @@ void chat_events() {
     check(st == 400 && body == J(R"({"error": {"message": "This model's maximum context length is 131070 tokens. However, your messages resulted in 140000 tokens. Please reduce the length of the messages.",
                                                 "type": "invalid_request_error", "param": "messages", "code": "context_length_exceeded"}})"),
           "chat: a prompt the context cannot hold is a 400 context_length_exceeded, in OpenAI's words", body.dump());
+    // kapitsa#1300: a prompt the memory cannot hold says it is the memory, with the limit the conversation has now
+    ChatResult mem = result("error");
+    mem.prompt_tokens = 10238, mem.prompt_limit = 10208, mem.memory_limit = true;
+    auto [stm, bodym] = chat_failure(mem);
+    check(stm == 400 && bodym["error"]["code"] == "context_length_exceeded" &&
+              bodym["error"]["message"] == "This model's maximum context length is 10208 tokens for this conversation now, "
+                                           "as much KV cache as this Mac's memory budget holds (the context window itself "
+                                           "is larger). However, your messages resulted in 10238 tokens. Please reduce the "
+                                           "length of the messages.",
+          "chat: a prompt the memory cannot hold is context_length_exceeded that names the memory", bodym.dump());
     ChatResult bad = result("error");
     bad.error = "images: the image at https://x/a.png can't be read";
     bad.invalid_request = true;
@@ -694,6 +841,23 @@ void chat_events() {
     check(chunks == 5 && text == "Hi", "chat stream: keepalives between chunks add no text", s);
     check(w.delta(content("caf\xc3")) == chunk("{\"content\":\"caf\xef\xbf\xbd\"}"),
           "chat stream: invalid UTF-8 at the end of a piece is replaced, not thrown");
+  }
+  {
+    // "return_progress": llama.cpp's prompt_progress object, on a chunk with an empty delta
+    ChatCompletionsStream w("chatcmpl-1", "m", 123);
+    const std::string p = w.progress({27104, 24576, 25600, 3250});
+    check(p == R"(data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":123,"model":"m","choices":[{"index":0,)"
+               R"("delta":{},"finish_reason":null}],)"
+               R"("prompt_progress":{"total":27104,"cache":24576,"processed":25600,"time_ms":3250}})" "\n\n",
+          "chat stream: a progress chunk has an empty delta and prompt_progress {total, cache, processed, time_ms} "
+          "beside the choices", p);
+    std::string s = w.begin(ChatResult{}) + p + w.delta(content("Hi")) + w.end(result("stop"));
+    std::string text;
+    for (const auto& e : parse_sse(s.substr(0, s.size() - done.size()))) {
+      const ojson& c = e.data["choices"][0]["delta"];
+      if (c.contains("content") && c["content"].is_string()) text += c["content"].get<std::string>();
+    }
+    check(text == "Hi", "chat stream: progress chunks add no text", s);
   }
 }
 
@@ -784,6 +948,72 @@ void clients() {
             q.notes.size() == 1 && q.notes[0].find("other downloaded models") != std::string::npos &&
             q.files[0].second.find("KAPITSA_PI_MODELS") != std::string::npos,
         "pi: a server started with --allow-switch: Pi lists every downloaded model, the served one first");
+
+  // hermes: OPENAI_BASE_URL and OPENAI_API_KEY for the openai-api provider, --provider and -m on the CLI
+  AgentLaunch h = agent_launch("hermes", "/bin/hermes", s, {"--yolo"}, {}, -1);
+  check(has(h, "OPENAI_API_KEY", "kapitsa") && has(h, "OPENAI_BASE_URL", "http://127.0.0.1:8000/v1"),
+        "hermes: OPENAI_BASE_URL, OPENAI_API_KEY");
+  check(h.argv == std::vector<std::string>{"/bin/hermes", "--provider", "openai-api", "-m", "qwen3.6-35b-a3b", "--yolo"},
+        "hermes: --provider and -m before user args");
+  AgentLaunch h2 = agent_launch("hermes", "/bin/hermes", {"http://127.0.0.1:9000", "m", 65536, "mykey"}, {}, {}, -1);
+  check(has(h2, "OPENAI_API_KEY", "mykey") && has(h2, "OPENAI_BASE_URL", "http://127.0.0.1:9000/v1"),
+        "hermes: a server with an API key and another context");
+  AgentLaunch h3 = agent_launch("hermes", "/bin/hermes", s, {"--provider", "custom", "-m", "other"}, {}, -1);
+  check(std::count(h3.argv.begin(), h3.argv.end(), "--provider") == 1 &&
+            std::count(h3.argv.begin(), h3.argv.end(), "-m") == 1,
+        "hermes: user's --provider and -m are not duplicated");
+
+  AgentLaunch cp = agent_launch("copilot", "copilot", small, {"-p", "hi"},
+                                {{"COPILOT_PROVIDERS_CONFIG", "other.json"}, {"COPILOT_PROVIDER_BEARER_TOKEN", "other"}}, -1);
+  check(known_agent("copilot") && cp.argv == std::vector<std::string>{"copilot", "-p", "hi"} &&
+            has(cp, "COPILOT_MODEL", "m") && has(cp, "COPILOT_PROVIDER_API_KEY", "k") &&
+            has(cp, "COPILOT_PROVIDER_BASE_URL", small.base_url + "/v1") && has(cp, "COPILOT_OFFLINE", "true") &&
+            has(cp, "COPILOT_PROVIDER_MAX_PROMPT_TOKENS", "36864") && has(cp, "COPILOT_PROVIDER_MAX_OUTPUT_TOKENS", "12288") &&
+            cp.unset == std::vector<std::string>{"COPILOT_PROVIDERS_CONFIG", "COPILOT_PROVIDER_BEARER_TOKEN"},
+        "copilot: local provider, credentials, context and arguments");
+
+  // aider
+  AgentLaunch a = agent_launch("aider", "/bin/aider", s, {"--no-git"}, {}, -1);
+  check(has(a, "OPENAI_API_BASE", "http://127.0.0.1:8000/v1") && has(a, "OPENAI_API_KEY", "kapitsa"),
+        "aider: OPENAI_API_BASE, OPENAI_API_KEY");
+  check(a.argv == std::vector<std::string>{"/bin/aider", "--model", "openai/qwen3.6-35b-a3b", "--no-git"},
+        "aider: --model openai/<name>, user args appended");
+  AgentLaunch a2 = agent_launch("aider", "/bin/aider", s, {"--model", "openai/other"}, {}, -1);
+  check(std::count(a2.argv.begin(), a2.argv.end(), "--model") == 1,
+        "aider: user's --model is not duplicated");
+
+  // goose: bare `kapitsa goose` inserts `session`; a subcommand stays as typed; session flags get session inserted
+  AgentLaunch g = agent_launch("goose", "/bin/goose", s, {}, {}, -1);
+  check(has(g, "OPENAI_API_KEY", "kapitsa") && has(g, "OPENAI_HOST", "http://127.0.0.1:8000") &&
+            has(g, "GOOSE_PROVIDER", "openai") && has(g, "GOOSE_MODEL", "qwen3.6-35b-a3b") &&
+            has(g, "GOOSE_CONTEXT_LIMIT", "131072"),
+        "goose: OPENAI_HOST, OPENAI_API_KEY, GOOSE_PROVIDER, GOOSE_MODEL, context");
+  check(g.argv == std::vector<std::string>{"/bin/goose", "session"},
+        "goose: no args inserts session");
+  // session flags (-n, --resume) get session inserted before them
+  AgentLaunch gn = agent_launch("goose", "/bin/goose", s, {"-n", "test"}, {}, -1);
+  check(gn.argv == std::vector<std::string>{"/bin/goose", "session", "-n", "test"},
+        "goose: -n (session flag) gets session inserted");
+  // subcommands stay as typed
+  AgentLaunch g2 = agent_launch("goose", "/bin/goose", s, {"run", "--text", "hi"}, {}, -1);
+  check(g2.argv == std::vector<std::string>{"/bin/goose", "run", "--text", "hi"},
+        "goose: run stays as typed");
+  AgentLaunch gr = agent_launch("goose", "/bin/goose", s, {"review"}, {}, -1);
+  check(gr.argv == std::vector<std::string>{"/bin/goose", "review"},
+        "goose: review stays as typed");
+  AgentLaunch gl = agent_launch("goose", "/bin/goose", s, {"local-models"}, {}, -1);
+  check(gl.argv == std::vector<std::string>{"/bin/goose", "local-models"},
+        "goose: local-models stays as typed");
+  AgentLaunch gc = agent_launch("goose", "/bin/goose", s, {"completion", "zsh"}, {}, -1);
+  check(gc.argv == std::vector<std::string>{"/bin/goose", "completion", "zsh"},
+        "goose: completion zsh stays as typed");
+  // top-level flags stay as typed (no session inserted)
+  AgentLaunch gh2 = agent_launch("goose", "/bin/goose", s, {"-h"}, {}, -1);
+  check(gh2.argv == std::vector<std::string>{"/bin/goose", "-h"},
+        "goose: -h unchanged (top-level help)");
+  AgentLaunch gv = agent_launch("goose", "/bin/goose", s, {"--version"}, {}, -1);
+  check(gv.argv == std::vector<std::string>{"/bin/goose", "--version"},
+        "goose: --version unchanged");
 }
 
 // ---------------------------------------------------------------- round trips through a chat template
@@ -808,6 +1038,30 @@ std::vector<ChatDelta> generate(const TmplModel& m, const std::string& text, boo
   ChatDelta t = p.finish(true);
   if (!t.reasoning.empty() || !t.content.empty() || !t.tool_calls.empty()) out.push_back(t);
   return out;
+}
+
+// A thinking budget of 0 against thinking off through the model's chat template: the same prompt (Engine::chat sets
+// enable_thinking false for a cap of 0), not one ending inside an opened reasoning block, so the reply carries no empty
+// <think></think>; and the prompt with a cap of 4096 is the thinking-on one (the cap changes no rendering).
+void thinking_cap_zero_render(const TmplModel& m, const std::string& tag) {
+  const char* base = R"({"model": "m", "max_tokens": 100, "messages": [{"role": "user", "content": "What is 2 + 2?"}]})";
+  auto prompt = [&](const char* thinking, const char* control) {
+    ojson b = J(base);
+    if (thinking) b["thinking"] = J(thinking);
+    if (control) b["thinking_control"] = J(control);
+    ChatRequest r = messages_prompt(b, nullptr);
+    if (think_cap_of(r.think_cap, r.thinking_budget) == 0) r.template_kwargs["enable_thinking"] = false;  // as Engine::chat
+    return render_chat(*m.tmpl, r, true);
+  };
+  const std::string off = prompt(R"({"type": "disabled"})", nullptr);
+  const std::string cap0 = prompt(R"({"type": "enabled"})", R"({"hard_cap": 0})");
+  const std::string budget0 = prompt(R"({"type": "enabled", "budget_tokens": 0})", nullptr);
+  const std::string on = prompt(R"({"type": "enabled"})", nullptr);
+  const std::string capped = prompt(R"({"type": "enabled"})", R"({"hard_cap": 4096})");
+  const bool open = cap0.size() >= 8 && cap0.compare(cap0.size() - 8, 8, "<think>\n") == 0;
+  check(cap0 == off && budget0 == off && !open, tag + "thinking budget: a cap of 0 renders as thinking off",
+        "tail: " + cap0.substr(cap0.size() > 60 ? cap0.size() - 60 : 0));
+  check(capped == on && on != off, tag + "thinking budget: a cap above 0 leaves the thinking-on prompt as it is");
 }
 
 ChatResult finished(const std::vector<ChatDelta>& ds, int completion) {
@@ -842,6 +1096,114 @@ ojson anthropic_reply(const std::vector<Event>& ev) {
     }
   }
   return {{"role", "assistant"}, {"content", blocks}};
+}
+
+// A call whose <tool_call> the model never wrote (35b:16gb, #1277) reaches the client as a call: chat reply, chat stream
+// and finish reason; the same text with an undeclared tool, or with prose after it, stays the content.
+void call_without_opener(const TmplModel& m, const std::string& tag) {
+  const ojson tools = J(R"([{"type":"function","function":{"name":"bash","parameters":{
+    "type":"object","properties":{"command":{"type":"string"}}}}}])");
+  const std::string call = "<function=bash>\n<parameter=command>\nfind / -name \"main.py\" | head -20\n</parameter>\n</function>\n</tool_call>";
+  struct C {
+    const char* name;
+    std::string text;
+    bool is_call;
+  };
+  for (const C& c : {C{"bare call", call, true}, C{"after thinking", "Look first.\n</think>\n\n" + call, true},
+                     C{"prose after", call + "\nDone.", false},
+                     C{"undeclared", "<function=rm>\n<parameter=command>\nx\n</parameter>\n</function>\n</tool_call>", false}}) {
+    const std::string label = tag + "call without its opener: " + c.name + " ";
+    std::vector<int> ids;
+    const auto ds = generate(m, c.text, c.text.find("</think>") != std::string::npos, tools, &ids);
+    const auto res = finished(ds, int(ids.size()));
+    const auto calls = chat_tool_calls(res.tool_calls, 0, false);
+    check(c.is_call ? res.content.empty() && calls.size() == 1 && calls[0]["function"]["name"] == "bash" &&
+                          calls[0]["function"]["arguments"] ==
+                              R"({"command":"find / -name \"main.py\" | head -20"})" && res.finish_reason == "tool_calls"
+                    : calls.empty() && res.content == c.text && res.finish_reason == "stop",
+          label + "chat reply", res.content);
+    ChatCompletionsStream cw("chat", "m", 1);
+    std::string wire = cw.begin(res);
+    for (const auto& d : ds) wire += cw.delta(d);
+    wire += cw.end(res);
+    const size_t done = wire.find("data: [DONE]");
+    std::string text, reason;
+    size_t streamed = 0;
+    for (const auto& e : parse_sse(wire.substr(0, done == std::string::npos ? wire.size() : done))) {
+      const auto& choice = e.data["choices"][0];
+      if (choice["delta"].contains("content")) text += choice["delta"]["content"].get<std::string>();
+      if (choice["delta"].contains("tool_calls")) streamed += choice["delta"]["tool_calls"].size();
+      if (choice["finish_reason"].is_string()) reason = choice["finish_reason"];
+    }
+    check(done != std::string::npos && (c.is_call ? text.empty() && streamed == 1 && reason == "tool_calls"
+                                                  : streamed == 0 && text == c.text && reason == "stop"),
+          label + "chat stream", text);
+  }
+}
+
+void nameless_tool_replies(const TmplModel& m, const std::string& tag) {
+  const ojson tools = J(R"([{"type":"function","function":{"name":"read_file","parameters":{
+    "type":"object","properties":{"path":{"type":"string"}}}}}])");
+  const std::string valid = "<tool_call>\n<function=read_file>\n<parameter=path>\na.txt\n</parameter>\n</function>\n</tool_call>";
+  for (const std::string& name : {std::string(""), std::string(" \t\r\n ")}) for (bool following : {false, true}) {
+    const std::string bad = "<tool_call>\n<function=" + name + ">\n<parameter=path>\na.txt\n</parameter>\n</function>\n</tool_call>";
+    const std::string label = tag + "nameless=" + ojson(name).dump() + " following=" + std::to_string(following);
+    std::vector<int> ids;
+    const auto ds = generate(m, bad + (following ? valid : ""), false, tools, &ids);
+    const auto res = finished(ds, int(ids.size()));
+    const size_t count = following ? 1 : 0;
+    const std::string finish = following ? "tool_calls" : "stop";
+    const auto calls = chat_tool_calls(res.tool_calls, 0, false);
+    check(res.content == bad && calls.size() == count &&
+              (!following || (calls[0]["function"]["name"] == "read_file" &&
+                               calls[0]["function"]["arguments"] == R"({"path":"a.txt"})")), label + " chat reply");
+
+    ChatCompletionsStream cw("chat", "m", 1);
+    std::string wire = cw.begin(res);
+    for (const auto& d : ds) wire += cw.delta(d);
+    wire += cw.end(res);
+    const size_t done = wire.find("data: [DONE]");
+    check(done != std::string::npos, label + " chat stream ends");
+    std::string text, reason;
+    ojson streamed = ojson::array();
+    for (const auto& e : parse_sse(wire.substr(0, done))) {
+      const auto& choice = e.data["choices"][0];
+      const auto& delta = choice["delta"];
+      if (delta.contains("content")) text += delta["content"].get<std::string>();
+      if (delta.contains("tool_calls")) for (auto c : delta["tool_calls"]) {
+        c.erase("index");
+        streamed.push_back(std::move(c));
+      }
+      if (choice["finish_reason"].is_string()) reason = choice["finish_reason"];
+    }
+    check(text == bad && streamed == calls && reason == finish, label + " chat stream");
+
+    MessagesStream mw("msg", "m", true);
+    const auto events = run(mw, ds, res);
+    const auto blocks = anthropic_reply(events)["content"];
+    const auto message = messages_response("msg", "m", res, true);
+    const std::string stop = following ? "tool_use" : "end_turn";
+    std::string stream_stop;
+    for (const auto& e : events) if (e.name == "message_delta") stream_stop = e.data["delta"]["stop_reason"];
+    check(blocks == message["content"] && blocks.size() == 1 + count && blocks[0]["type"] == "text" &&
+              blocks[0]["text"] == bad &&
+              (!following || (blocks[1]["type"] == "tool_use" && blocks[1]["name"] == "read_file" &&
+                               blocks[1]["input"] == J(R"({"path":"a.txt"})"))) &&
+              stream_stop == stop && message["stop_reason"] == stop, label + " messages stream and reply");
+
+    ResponsesRequest rq;
+    ResponsesStream rw(rq, "resp", "m", 1);
+    const auto response = responses_response(rq, "resp", "m", 1, res);
+    const auto output = run(rw, ds, res).back().data["response"]["output"];
+    const auto expected = response["output"];
+    auto correct = [&](const ojson& items) {
+      return items.size() == 1 + count && items[0]["type"] == "message" &&
+             items[0]["content"][0]["text"] == bad &&
+             (!following || (items[1]["type"] == "function_call" && items[1]["name"] == "read_file" &&
+                              items[1]["arguments"] == R"({"path":"a.txt"})"));
+    };
+    check(correct(output) && correct(expected), label + " responses stream and reply");
+  }
 }
 
 // Whether `next`'s prompt continues `prev`'s prompt and the generated ids (+ the end of the turn) token for token
@@ -1355,6 +1717,28 @@ void disk_wait_unit() {
   check(!decide(1.5e9, 100, 4e6, 0.5).wait, "disk wait: 1.5 GB for 100 rows (0.2 s of prefill): not written");
 }
 
+void template_content_cache_unit() {
+  ChatRequest r;
+  r.messages = J(R"([{"role":"user","content":[{"type":"text","text":"hello"}]}])");
+  const std::string typed = "{% for m in messages %}{% for p in m.content %}{{p.text}}{% endfor %}{% endfor %}";
+  const std::string plain = "{% for m in messages %}{{m.content}}{% endfor %}";
+  std::optional<minja::chat_template> slot;
+  for (int i = 0; i < 4; ++i) {
+    slot.emplace(i % 2 ? plain : typed, "", "");
+    const std::string text = render_chat(*slot, r, false);
+    check(text == "hello", "template content mode: reconstruct at the same address " + std::to_string(i), text);
+  }
+  for (const char* token : {"bos_token", "eos_token"}) {
+    const std::string source = "{% if " + std::string(token) + " == 'typed' %}" + typed + "{% else %}" + plain + "{% endif %}";
+    for (bool use_typed : {true, false, true}) {
+      const std::string value = use_typed ? "typed" : "plain";
+      slot.emplace(source, std::string(token) == "bos_token" ? value : "", std::string(token) == "eos_token" ? value : "");
+      const std::string text = render_chat(*slot, r, false);
+      check(text == "hello", "template content mode: same source with different " + std::string(token), text);
+    }
+  }
+}
+
 void float_arguments_text() {
   struct Form { const char* name; const char* tail; };  // the end of the real templates' argument line
   const Form forms[] = {{"plain", " else args_value | string %}"},
@@ -1444,6 +1828,66 @@ void preserve_thinking_default_unit() {
   ChatRequest dis = request(R"({"enable_thinking": true})");
   default_preserve_thinking(dis, false);
   check(dis.template_kwargs == J(R"({"enable_thinking": true})"), "preserve_thinking: with the default off the request is untouched", dis.template_kwargs.dump());
+}
+
+void thinking_level_unit() {
+  ChatRequest r;
+  // Non-thinking model
+  check(Engine::thinking_level(r, true, false, false).empty(), "thinking level: non-thinking model returns empty");
+
+  // Thinking off cases
+  r = ChatRequest{};
+  r.effort = "none";
+  check(Engine::thinking_level(r, false) == "none", "thinking level: effort none");
+  r.effort = "minimal";
+  check(Engine::thinking_level(r, false) == "minimal", "thinking level: effort minimal");
+
+  r = ChatRequest{};
+  check(Engine::thinking_level(r, false) == "off", "thinking level: think false returns off");
+  r.thinking_budget = 0;
+  check(Engine::thinking_level(r, false) == "off", "thinking level: budget 0 returns off");
+
+  // Anthropic budget
+  r = ChatRequest{};
+  r.thinking_budget = 4096;
+  check(Engine::thinking_level(r, true) == "budget 4096", "thinking level: Anthropic budget 4096");
+
+  // Template WITH reasoning_effort (e.g. Qwen3.8): low and medium pass through; high, xhigh, max resolve to xhigh
+  r = ChatRequest{};
+  r.effort = "low";
+  check(Engine::thinking_level(r, true, true) == "low", "thinking level: effort template low -> low");
+  r.effort = "medium";
+  check(Engine::thinking_level(r, true, true) == "medium", "thinking level: effort template medium -> medium");
+  for (const char* eff : {"high", "xhigh", "max"}) {
+    r.effort = eff;
+    check(Engine::thinking_level(r, true, true) == "xhigh", std::string("thinking level: effort template ") + eff + " -> xhigh");
+  }
+  // Default on template with reasoning_effort is xhigh
+  r = ChatRequest{};
+  check(Engine::thinking_level(r, true, true) == "xhigh", "thinking level: default reasoning_effort template returns xhigh");
+
+  // template_kwargs reasoning_effort on template with reasoning_effort
+  r = ChatRequest{};
+  r.template_kwargs["reasoning_effort"] = "low";
+  check(Engine::thinking_level(r, true, true) == "low", "thinking level: template_kwargs reasoning_effort low");
+  r.template_kwargs["reasoning_effort"] = "medium";
+  check(Engine::thinking_level(r, true, true) == "medium", "thinking level: template_kwargs reasoning_effort medium");
+  r.template_kwargs["reasoning_effort"] = "max";
+  check(Engine::thinking_level(r, true, true) == "xhigh", "thinking level: template_kwargs reasoning_effort max -> xhigh");
+
+  // Template WITHOUT reasoning_effort (binary thinking, e.g. Qwen3.6): any effort resolves to on
+  for (const char* eff : {"low", "medium", "high", "xhigh", "max"}) {
+    r = ChatRequest{};
+    r.effort = eff;
+    check(Engine::thinking_level(r, true, false) == "on", std::string("thinking level: binary template ") + eff + " -> on");
+  }
+  r = ChatRequest{};
+  check(Engine::thinking_level(r, true, false) == "on", "thinking level: default binary thinking returns on");
+
+  // ChatResult struct
+  ChatResult res;
+  res.thinking_level = "low";
+  check(res.thinking_level == "low", "ChatResult holds thinking_level");
 }
 
 // Tool arguments keep each value's spelling (src/engine/tool_args.h) through the Qwen3.5 / Nemotron templates' `| string`
@@ -1826,6 +2270,99 @@ void draft_conversation_unit() {
   (void)other;
 }
 
+// The slot a new conversation takes (pick_new_conversation_slot, Engine::pick_slot): with a prompt_cache_key, the slot
+// whose conversation that key named, within the rank another slot would be taken from. CPU only. (#956: of four chats,
+// one started again on a changed system prompt took the slot of the chat idle longest, and its old conversation kept
+// its own.)
+void new_conversation_slot_unit() {
+  using V = NewConversationSlot;
+  // A to D: continued conversations, B idle longest, A used last (its third turn)
+  const std::vector<V> four = {{true, 2, "a", false, 9}, {true, 2, "b", false, 3}, {true, 2, "c", false, 5},
+                               {true, 2, "d", false, 7}};
+  check(pick_new_conversation_slot(four, "a") == 0, "new conversation: A's key takes A's slot, not B's (idle longest)");
+  check(pick_new_conversation_slot(four, "") == 1, "new conversation: no key, the least recently used (as before)");
+  check(pick_new_conversation_slot(four, "e") == 1, "new conversation: a key no slot holds, the least recently used");
+  std::vector<V> unkeyed = four;
+  for (V& v : unkeyed) v.key.clear();
+  check(pick_new_conversation_slot(unkeyed, "") == 1, "new conversation: \"\" never matches a slot sent without a key");
+  std::vector<V> busy = four;
+  busy[0].usable = false;
+  check(pick_new_conversation_slot(busy, "a") == 1, "new conversation: the key's slot busy: as before");
+  // no more is evicted than without the key: an empty slot, then a one-off, go first
+  std::vector<V> with_empty = four;
+  with_empty.push_back({true, 0, "", false, 1});
+  check(pick_new_conversation_slot(with_empty, "a") == 4, "new conversation: an empty slot before the key's");
+  std::vector<V> with_one_off = four;
+  with_one_off.push_back({true, 1, "x", false, 8});
+  check(pick_new_conversation_slot(with_one_off, "a") == 4,
+        "new conversation: a one-off before the key's conversation (a title request sent with its chat's key)");
+  with_one_off.push_back({true, 1, "a", false, 10});
+  check(pick_new_conversation_slot(with_one_off, "a") == 5, "new conversation: of two one-offs the key's");
+  // the shared prefix: unchanged without the key, and after it with one
+  std::vector<V> prefix = four;
+  prefix[2].prefix = true;
+  check(pick_new_conversation_slot(prefix, "") == 2, "new conversation: no key, the slot with the shared prefix");
+  check(pick_new_conversation_slot(prefix, "a") == 0, "new conversation: the key's slot before a shared prefix");
+  prefix[0].prefix = true;
+  check(pick_new_conversation_slot(prefix, "a") == 0,
+        "new conversation: compacted (the key's slot with the same system prompt) keeps its checkpoint");
+  check(pick_new_conversation_slot({{false, 0, "", false, 1}}, "a") == -1, "new conversation: every slot busy: none");
+  // by_key: the key chose the slot, so the SSD's entries of that key go first (Engine::disk_replaced)
+  bool by = true;
+  check(pick_new_conversation_slot(four, "a", &by) == 0 && by, "new conversation: A's key chose A's slot (by_key)");
+  by = false;
+  check(pick_new_conversation_slot(four, "b", &by) == 1 && by,
+        "new conversation: the key's slot is also the least recently used: still by_key");
+  check(pick_new_conversation_slot(four, "", &by) == 1 && !by, "new conversation: no key: not by_key");
+  check(pick_new_conversation_slot(four, "e", &by) == 1 && !by, "new conversation: a key no slot holds: not by_key");
+  check(pick_new_conversation_slot(with_empty, "a", &by) == 4 && !by, "new conversation: an empty slot taken: not by_key");
+  check(pick_new_conversation_slot(with_one_off, "a", &by) == 5 && by,
+        "new conversation: the key's one-off over another one-off: by_key");
+  std::vector<V> one_key = four;
+  for (V& v : one_key) v.key = "k";
+  check(pick_new_conversation_slot(one_key, "k", &by) == 1 && !by,
+        "new conversation: every slot holds the key (one key for everything): not by_key, as without it");
+  one_key[2].usable = false, one_key[2].key = "x";
+  check(pick_new_conversation_slot(one_key, "k", &by) == 1 && !by,
+        "new conversation: only a busy slot holds another key: not by_key");
+  std::vector<V> shared = four;
+  shared[2].key = "a";
+  check(pick_new_conversation_slot(shared, "a", &by) == 2 && by,
+        "new conversation: two slots with the key and others without: the key's least recently used, by_key");
+  check(pick_new_conversation_slot({{true, 2, "a", false, 1}}, "a", &by) == 0 && !by,
+        "new conversation: one slot (nothing to tell it from): not by_key");
+}
+
+// The slot a new conversation takes when its prompt does not fit beside the other slots' caches (evicted_prefix_slot,
+// Engine::pick_slot): the slot whose cache the memory rule would drop, if it holds a prefix checkpoint the prompt
+// shares. CPU only. (An agent's compacted conversation read its system prompt again from row 0: the one-off slot took
+// it, and the conversation's cache, with the checkpoint, was dropped to make room.)
+void evicted_prefix_slot_unit() {
+  using K = KvCacheSlot;
+  // slot 0: a one-off (1,024 rows); slot 1: the conversation (56,832 rows), its prefix checkpoint at 13,145
+  const std::vector<K> two = {{true, 1024, 0, 9}, {true, 56832, 13145, 5}};
+  check(evicted_prefix_slot(two, 0, 30000, 34560) == 1, "evicted prefix: the prompt does not fit beside the cache: its slot");
+  check(evicted_prefix_slot(two, 0, 40000, 34560) == -1, "evicted prefix: the prompt fits beside it: the pick (the copy)");
+  check(evicted_prefix_slot(two, 0, 33536, 34560) == -1, "evicted prefix: it fits once the pick's own cache is dropped");
+  check(evicted_prefix_slot(two, 1, 0, 34560) == -1, "evicted prefix: the pick holds the checkpoint itself");
+  check(evicted_prefix_slot(two, 0, 0, 57088) == -1, "evicted prefix: a prompt longer than that cache keeps the pick");
+  std::vector<K> none = two;
+  none[1].prefix = 0;
+  check(evicted_prefix_slot(none, 0, 30000, 34560) == -1, "evicted prefix: no shared checkpoint: the pick");
+  std::vector<K> busy = two;
+  busy[1].idle = false;
+  check(evicted_prefix_slot(busy, 0, 30000, 34560) == -1, "evicted prefix: a busy slot's cache is not dropped: the pick");
+  // three slots: the least recently used idle cache goes first, and when it makes the room the checkpoint's slot stays
+  const std::vector<K> three = {{true, 0, 0, 9}, {true, 56832, 13145, 5}, {true, 20480, 0, 3}};
+  check(evicted_prefix_slot(three, 0, 20000, 34560) == -1, "evicted prefix: an older cache makes the room: the pick");
+  check(evicted_prefix_slot(three, 0, 10000, 34560) == 1, "evicted prefix: the older cache is not enough: the slot");
+  // two slots share a prefix: the deeper checkpoint among those dropped
+  const std::vector<K> deep = {{true, 0, 0, 9}, {true, 40960, 13145, 5}, {true, 40960, 20000, 3}};
+  check(evicted_prefix_slot(deep, 0, 0, 34560) == 2, "evicted prefix: only the first cache is dropped: its checkpoint");
+  check(evicted_prefix_slot(deep, 0, -10000, 34560) == 2, "evicted prefix: both dropped: the deeper checkpoint");
+  check(evicted_prefix_slot(two, -1, 0, 1) == -1 && evicted_prefix_slot(two, 2, 0, 1) == -1, "evicted prefix: no pick");
+}
+
 // --dump DIR: the replies of each scenario as the server sends them, for tests/sdk_check.py (the official Python SDKs
 // parse them from a fake server): <name>.sse (a stream, with keepalives), <name>.json (a response body), <name>.status
 // (an error's)
@@ -1898,6 +2435,13 @@ void dump_cases(const std::string& dir) {
     }
     chat += cw.end(r);
     write("chat-" + c.name + ".sse", chat);
+    if (c.name == "text") {  // with "return_progress": prompt_progress chunks while the prompt is read
+      ChatCompletionsStream pw("chatcmpl-progress", "m", 1760000000);
+      std::string sse = pw.begin(r);
+      for (int read : {60, 80, 100}) sse += pw.progress({100, 60, read, (read - 60) * 25});
+      for (auto& d : c.deltas) sse += pw.delta(d);
+      write("chat-progress.sse", sse + pw.end(r));
+    }
   }
   ChatResult big = result("error");
   big.prompt_tokens = 140000;
@@ -2018,6 +2562,24 @@ void unsupported_model_unit() {
             gemma.find("nemotron_h") != std::string::npos && gemma.find("flint") != std::string::npos &&
             gemma.find("clover_moe") != std::string::npos,
         "unsupported_model: another architecture is named by its model_type, with the ones Kapitsa runs");
+  // a Flint folder is accepted, unless NI_KV_I8 asks for int8 KV rows (#1257): the refusal comes here, before an engine
+  // is built or released, so a model switch leaves the old model up
+  {
+    const std::string flint = folder("flint", R"({"model_type": "flint"})");
+    const char* old = getenv("NI_KV_I8");
+    const std::string saved = old ? old : "";
+    unsetenv("NI_KV_I8");
+    check(refused(flint).empty(), "unsupported_model: a flint config is not refused without NI_KV_I8");
+    setenv("NI_KV_I8", "0", 1);
+    check(refused(flint).empty(), "unsupported_model: a flint config is not refused with NI_KV_I8=0");
+    setenv("NI_KV_I8", "1", 1);
+    check(refused(flint) == "int8 KV cache isn't supported with Flint models yet; unset NI_KV_I8",
+          "unsupported_model: a flint config is refused with NI_KV_I8=1, with the one message");
+    check(refused(folder("qwen35i8", R"({"model_type": "qwen3_5"})")).empty(),
+          "unsupported_model: a qwen3_5 config is not refused with NI_KV_I8=1");
+    if (old) setenv("NI_KV_I8", saved.c_str(), 1);
+    else unsetenv("NI_KV_I8");
+  }
   // the Qwen3.5 family is accepted by its model_type, and by the hybrid's shape when the config names none
   check(refused(folder("qwen35", R"({"model_type": "qwen3_5"})")).empty(),
         "unsupported_model: a qwen3_5 config is not refused");
@@ -2039,6 +2601,8 @@ void unsupported_model_unit() {
         "unsupported_model: an explicit causal=true is not refused");
   check(refused(folder("clover", R"({"model_type": "clover_moe"})")).empty(),
         "unsupported_model: a clover_moe config (DiffuSpace's Clover) is not refused");
+  check(refused(folder("inkling2", R"({"model_type": "inkling2_loop"})")).empty(),
+        "unsupported_model: an inkling2_loop config is not refused");
   // Unsupported quantization is refused from config.json alone, before any weight is read. 5-bit group 128 now
   // normalizes to group 64; keep 6-bit group 128 for the refusal. Header-only folders: no safetensors at all.
   const std::string text = R"("model_type": "qwen3_5_moe", "text_config": {"model_type": "qwen3_5_moe_text"})";
@@ -2117,6 +2681,97 @@ bool exists(const std::string& p) {
   return stat(p.c_str(), &st) == 0;
 }
 
+// The thinking budget's request fields (src/engine/think_control.h): budget_tokens stays the API's budget, the
+// thinking_control extension sets the hard cap, its closing text and the tool-call end on every API; malformed ones are
+// a 400 naming the field; usage reports the cap
+void thinking_budget_mapping() {
+  const char* base = R"({"model": "m", "max_tokens": 100, "messages": [{"role": "user", "content": "hi"}],
+                         "thinking": {"type": "enabled", "budget_tokens": 2048}})";
+  ChatRequest r = messages_prompt(J(base), nullptr);
+  check(r.thinking_budget == 2048 && r.think_cap == -1 && r.think_close_text.empty() && r.think_end_on_tool_call == -1,
+        "thinking budget: budget_tokens alone leaves the extension unset");
+  ojson b = J(base);
+  b["thinking_control"] = J(R"({"hard_cap": 0, "close_text": " Time to answer.", "end_on_tool_call": false})");
+  r = messages_prompt(b, nullptr);
+  check(r.think_cap == 0 && r.think_close_text == " Time to answer." && r.think_end_on_tool_call == 0,
+        "thinking budget: thinking_control on /v1/messages (a cap of 0 is a cap)");
+  ChatRequest c;
+  request_think_field(J(R"({"thinking_control": {"hard_cap": 300, "end_on_tool_call": true}})"), c);
+  check(c.think_cap == 300 && c.think_end_on_tool_call == 1, "thinking budget: thinking_control on the OpenAI APIs");
+  for (const char* bad : {R"({"thinking_control": {"hard_cap": -1}})", R"({"thinking_control": {"hard_cap": 1.5}})",
+                          R"({"thinking_control": {"close_text": 5}})", R"({"thinking_control": {"end_on_tool_call": 1}})",
+                          R"({"thinking_control": 7})"}) {
+    ChatRequest x;
+    std::string param;
+    try {
+      request_think_field(J(bad), x);
+    } catch (const ApiError& e) {
+      param = e.param;
+    }
+    check(param.rfind("thinking_control", 0) == 0, std::string("thinking budget: refused ") + bad, "param " + param);
+  }
+  ChatResult res;
+  check(kapitsa_usage(res).is_null(), "thinking budget: no usage field without a cap or loops");
+  res.think_cap = 1024;
+  res.reasoning_tokens = 1300;  // (a second reasoning block after the first: not capped, counted by the API's field)
+  res.think_tokens = 1024;
+  res.think_forced = true;
+  check(kapitsa_usage(res) == J(R"({"thinking": {"hard_cap": 1024, "reasoning_tokens": 1024, "forced": true}})"),
+        "thinking budget: usage reports the cap and the capped block's tokens", dump(kapitsa_usage(res)));
+  res.loops = 2;
+  check(kapitsa_usage(res)["loops"] == 2 && kapitsa_usage(res).contains("thinking"),
+        "thinking budget: usage keeps a looped model's loop count beside it");
+  // a cap of 0 is thinking off (Engine::chat then renders the prompt as thinking off)
+  ojson z = J(base);
+  z["thinking"]["budget_tokens"] = 0;
+  const ChatRequest r0 = messages_prompt(z, nullptr);
+  ojson zc = J(base);
+  zc["thinking_control"] = J(R"({"hard_cap": 0})");
+  const ChatRequest rc0 = messages_prompt(zc, nullptr);
+  const ChatRequest off = messages_prompt(J(R"({"model": "m", "max_tokens": 100, "messages": [{"role": "user",
+                                                "content": "hi"}], "thinking": {"type": "disabled"}})"), nullptr);
+  check(think_cap_of(r0.think_cap, r0.thinking_budget) == 0 && think_cap_of(rc0.think_cap, rc0.thinking_budget) == 0,
+        "thinking budget: budget_tokens 0 and thinking_control's cap 0 read as a cap of 0");
+  // without a budget nothing changes: thinking disabled or absent is no cap, so chat_template_kwargs still decides
+  ojson kwon = J(R"({"model": "m", "max_tokens": 100, "messages": [{"role": "user", "content": "hi"}],
+                   "chat_template_kwargs": {"enable_thinking": true}})");
+  const ChatRequest none = messages_prompt(kwon, nullptr);
+  check(think_cap_of(off.think_cap, off.thinking_budget) == -1 &&
+            think_cap_of(none.think_cap, none.thinking_budget) == -1 && none.template_kwargs["enable_thinking"] == true,
+        "thinking budget: thinking disabled or absent is no cap");
+  check(think_cap_of(-1, -1) == -1 && think_cap_of(-1, 4096) == 4096 && think_cap_of(300, 4096) == 300,
+        "thinking budget: thinking_control's cap over budget_tokens, none without either");
+  // Unsigned 64-bit JSON integers > INT64_MAX (e.g. 2^63..2^64-1) and 32-bit wrap values (2^32 + 1)
+  {
+    const ChatRequest big_b = messages_prompt(
+        J(R"({"model": "m", "max_tokens": 100, "messages": [{"role": "user", "content": "hi"}],
+              "thinking": {"type": "enabled", "budget_tokens": 18446744073709551615}})"),
+        nullptr);
+    check(big_b.thinking_budget == INT32_MAX,
+          "thinking budget: uint64 budget_tokens > INT64_MAX clamps to INT32_MAX instead of wrapping to 0");
+    ChatRequest big_hc;
+    request_think_field(J(R"({"thinking_control": {"hard_cap": 18446744073709551615}})"), big_hc);
+    check(big_hc.think_cap == INT32_MAX,
+          "thinking budget: uint64 hard_cap > INT64_MAX clamps to INT32_MAX instead of wrapping negative");
+    const MessagesRequest big_m = messages_request(
+        J(R"({"model": "m", "max_tokens": 18446744073709551615, "top_k": 4294967297,
+              "messages": [{"role": "user", "content": "hi"}]})"));
+    check(big_m.chat.max_tokens == INT32_MAX && big_m.chat.top_k == INT32_MAX,
+          "anthropic: uint64 max_tokens > INT64_MAX and top_k = 2^32 + 1 clamp to INT32_MAX (not -1 or greedy 1)");
+    const ResponsesRequest big_r = responses_request(
+        J(R"({"model": "m", "input": "hi", "max_output_tokens": 18446744073709551615, "top_k": 4294967297})"),
+        ResponseStore());
+    check(big_r.chat.max_tokens == INT32_MAX && big_r.chat.top_k == INT32_MAX,
+          "responses: uint64 max_output_tokens > INT64_MAX and top_k = 2^32 + 1 clamp to INT32_MAX");
+    check(clamp_top_k(J("4294967297")) == INT32_MAX && clamp_top_k(J("1e100")) == INT32_MAX &&
+              clamp_top_k(J("-4294967297")) == INT32_MIN && clamp_top_k(J("-1")) == -1,
+          "clamp_top_k: clamps out-of-range integers and floats without 32-bit wrap-around");
+    check(extract_seed_u32(J("42")) == 42u && extract_seed_u32(J("1e100")) <= UINT32_MAX,
+          "extract_seed_u32: handles integer and huge float seeds without UB");
+  }
+}
+
+
 }  // namespace
 
 // Qwen35::zero_centred_norm, which tells Hugging Face's zero-centred RMSNorm weights (applied as 1 + w) from MLX's when
@@ -2154,7 +2809,1207 @@ void norm_layout_unit() {
   check(!Qwen35::zero_centred_norm(hf.data(), DType::U32, hf.size()), "norm layout: a quantized norm is not decided");
 }
 
+static void ollama_unit() {
+  using namespace ni;
+  using namespace ni::api;
+  using json = nlohmann::ordered_json;
+
+  // ollama_chat_request: basic message parsing
+  {
+    json body{{"model", "qwen3:35b"}, {"messages", json::array({{{"role", "user"}, {"content", "Hi"}}})}};
+    ChatRequest defaults;
+    defaults.temperature = 0.6f;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.messages.size() == 1 && r.messages[0]["role"] == "user" && r.messages[0]["content"] == "Hi",
+          "ollama: chat request parses a user message");
+    check(r.temperature == 0.6f, "ollama: chat request preserves defaults");
+  }
+  // ollama_chat_request: options override defaults
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", "x"}}})},
+              {"options", {{"temperature", 0.1}, {"top_k", 5}, {"seed", 42}}}};
+    ChatRequest defaults;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.temperature == 0.1f, "ollama: options.temperature overrides default");
+    check(r.top_k == 5, "ollama: options.top_k overrides default");
+    check(r.seed == 42, "ollama: options.seed overrides default");
+  }
+  // ollama_chat_request: num_predict -1 leaves the server default
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", "x"}}})},
+              {"options", {{"num_predict", -1}}}};
+    ChatRequest defaults;
+    defaults.max_tokens = 8192;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.max_tokens == 8192, "ollama: num_predict -1 leaves the server default (8192)");
+  }
+  // ollama_chat_request: num_predict -2 also leaves the server default
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", "x"}}})},
+              {"options", {{"num_predict", -2}}}};
+    ChatRequest defaults;
+    defaults.max_tokens = 8192;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.max_tokens == 8192, "ollama: num_predict -2 leaves the server default");
+  }
+  // ollama_chat_request: think field
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", "x"}}})}, {"think", true}};
+    ChatRequest defaults;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.template_kwargs.contains("enable_thinking") && r.template_kwargs["enable_thinking"] == true,
+          "ollama: think:true sets enable_thinking");
+  }
+  // ollama_generate_request: prompt + system, and prompt-only
+  {
+    json b1{{"model", "m"}, {"prompt", "Why blue?"}, {"system", "Be brief"}};
+    auto r1 = ollama_generate_request(b1, ChatRequest{});
+    check(r1.messages.size() == 2 && r1.messages[0]["role"] == "system" && r1.messages[1]["content"] == "Why blue?",
+          "ollama: generate builds system + user from prompt and system");
+    json b2{{"model", "m"}, {"prompt", "Hello"}};
+    auto r2 = ollama_generate_request(b2, ChatRequest{});
+    check(r2.messages.size() == 1 && r2.messages[0]["role"] == "user",
+          "ollama: generate without system has one user message");
+  }
+  // OllamaChatStream: NDJSON format (each line is valid JSON + newline, not SSE)
+  {
+    OllamaChatStream w("test-model");
+    ChatResult prompt;
+    std::string begin = w.begin(prompt);
+    check(!begin.empty() && begin.back() == '\n', "ollama: chat stream begin ends with newline");
+    check(begin.find("data: ") == std::string::npos, "ollama: chat stream begin is not SSE");
+    auto parsed = json::parse(begin);
+    check(parsed["model"] == "test-model" && parsed["done"] == false,
+          "ollama: chat stream begin is valid NDJSON with done:false");
+  }
+  // OllamaChatStream: delta
+  {
+    OllamaChatStream w("m");
+    ChatDelta d;
+    d.content = "Hi";
+    std::string out = w.delta(d);
+    auto parsed = json::parse(out);
+    check(parsed["message"]["content"] == "Hi" && parsed["done"] == false,
+          "ollama: chat stream delta carries content in message");
+  }
+  // OllamaChatStream: end has eval stats
+  {
+    OllamaChatStream w("m");
+    ChatResult res;
+    res.finish_reason = "stop";
+    res.prompt_tokens = 10;
+    res.completion_tokens = 20;
+    res.prefill_ms = 5.0;
+    res.decode_ms = 10.0;
+    std::string out = w.end(res);
+    auto parsed = json::parse(out);
+    check(parsed["done"] == true && parsed["done_reason"] == "stop",
+          "ollama: chat stream end has done:true and done_reason");
+    check(parsed.contains("eval_count") && parsed["eval_count"] == 20,
+          "ollama: chat stream end has eval_count");
+    check(parsed.contains("prompt_eval_count") && parsed["prompt_eval_count"] == 10,
+          "ollama: chat stream end has prompt_eval_count");
+  }
+  // OllamaGenerateStream: NDJSON format
+  {
+    OllamaGenerateStream w("gen-model");
+    ChatDelta d;
+    d.content = "The";
+    std::string out = w.delta(d);
+    auto parsed = json::parse(out);
+    check(parsed["response"] == "The" && parsed["done"] == false,
+          "ollama: generate stream delta uses response field");
+  }
+  // ollama_now: ISO timestamp
+  {
+    std::string ts = ollama_now();
+    check(ts.size() > 10 && ts.back() == 'Z' && ts[4] == '-',
+          "ollama: ollama_now returns an ISO timestamp ending in Z");
+  }
+  // num_predict: large double clamped (1e20 would overflow int)
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", "x"}}})},
+              {"options", {{"num_predict", 1e20}}}};
+    ChatRequest defaults;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.max_tokens == int(1e9), "ollama: num_predict 1e20 clamped to 1e9");
+  }
+  // num_predict: normal positive value
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", "x"}}})},
+              {"options", {{"num_predict", 256}}}};
+    ChatRequest defaults;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.max_tokens == 256, "ollama: num_predict 256 passed through");
+  }
+  // Error JSON escaping: a model name with " does not break the JSON
+  {
+    std::string err_json = dump(json{{"error", "model \"evil\\name\" not found"}});
+    auto parsed = json::parse(err_json);
+    check(parsed["error"].get<std::string>() == "model \"evil\\name\" not found",
+          "ollama: error JSON properly escapes quotes and backslashes");
+  }
+  // OllamaGenerateStream: reasoning goes in separate "thinking" field, not in "response"
+  {
+    OllamaGenerateStream w("m");
+    ChatDelta d;
+    d.reasoning = "Let me think...";
+    d.content = "";
+    std::string out = w.delta(d);
+    auto parsed = json::parse(out);
+    check(parsed.contains("thinking") && parsed["thinking"] == "Let me think...",
+          "ollama: generate stream reasoning goes in thinking field");
+    check(parsed["response"] == "",
+          "ollama: generate stream reasoning does not go in response field");
+  }
+  // OllamaChatStream: reasoning in message.thinking
+  {
+    OllamaChatStream w("m");
+    ChatDelta d;
+    d.reasoning = "hmm";
+    d.content = "";
+    std::string out = w.delta(d);
+    auto parsed = json::parse(out);
+    check(parsed["message"].contains("thinking") && parsed["message"]["thinking"] == "hmm",
+          "ollama: chat stream reasoning goes in message.thinking");
+    check(parsed["message"]["content"] == "",
+          "ollama: chat stream reasoning does not go in message.content");
+  }
+  // ollama_generate_request: null and absent prompt treated as empty
+  {
+    auto r1 = ollama_generate_request(json{{"model", "m"}, {"prompt", nullptr}}, ChatRequest{});
+    check(r1.messages.size() == 1 && r1.messages[0]["content"] == "", "ollama: null prompt treated as empty");
+    auto r2 = ollama_generate_request(json{{"model", "m"}}, ChatRequest{});
+    check(r2.messages.size() == 1 && r2.messages[0]["content"] == "", "ollama: absent prompt treated as empty");
+  }
+  // ollama_chat_request: non-object options ignored
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", "x"}}})},
+              {"options", "invalid"}};
+    ChatRequest defaults;
+    defaults.temperature = 0.6f;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.temperature == 0.6f, "ollama: non-object options ignored, defaults preserved");
+  }
+  // ollama_chat_request: message with null content treated as ""
+  {
+    json body{{"model", "m"}, {"messages", json::array({{{"role", "user"}, {"content", nullptr}}})}};
+    ChatRequest defaults;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.messages.size() == 1 && r.messages[0]["content"] == "",
+          "ollama: null message content treated as empty string");
+  }
+  // ollama_chat_request: non-object message in messages array skipped
+  {
+    json body{{"model", "m"}, {"messages", json::array({42, {{"role", "user"}, {"content", "x"}}})}};
+    ChatRequest defaults;
+    auto r = ollama_chat_request(body, defaults);
+    check(r.messages.size() == 1, "ollama: non-object message skipped");
+  }
+  // OllamaChatStream::end with error carries the error field
+  {
+    OllamaChatStream w("m");
+    ChatResult res;
+    res.finish_reason = "error";
+    res.error = "out of memory";
+    std::string out = w.end(res);
+    auto parsed = json::parse(out);
+    check(parsed["done"] == true && parsed["done_reason"] == "error" && parsed["error"] == "out of memory",
+          "ollama: chat stream error end has error field");
+  }
+  // OllamaGenerateStream::end with error
+  {
+    OllamaGenerateStream w("m");
+    ChatResult res;
+    res.finish_reason = "error";
+    res.error = "context full";
+    std::string out = w.end(res);
+    auto parsed = json::parse(out);
+    check(parsed["done"] == true && parsed["error"] == "context full",
+          "ollama: generate stream error end has error field");
+  }
+  // clover is text-only (no vision capability)
+  {
+    auto show = ollama_show_response("clover-35b-a3b", "clover-35b-a3b");
+    bool has_vision = false;
+    for (const auto& c : show["capabilities"]) if (c == "vision") has_vision = true;
+    check(!has_vision, "ollama: clover-35b-a3b has no vision capability");
+    // but it has tools and thinking
+    bool has_tools = false, has_thinking = false;
+    for (const auto& c : show["capabilities"]) {
+      if (c == "tools") has_tools = true;
+      if (c == "thinking") has_thinking = true;
+    }
+    check(has_tools && has_thinking, "ollama: clover-35b-a3b has tools and thinking");
+  }
+  // any Qwen name has tools and thinking
+  for (const char* n : {"qwen4-32b", "qwen3.6-35b-a3b"}) {
+    bool has_tools = false, has_thinking = false;
+    const auto show = ollama_show_response(n, n);
+    for (const auto& c : show["capabilities"]) {
+      if (c == "tools") has_tools = true;
+      if (c == "thinking") has_thinking = true;
+    }
+    check(has_tools && has_thinking, std::string("ollama: ") + n + " has tools and thinking");
+  }
+  // qwen3.6-35b-a3b has vision
+  {
+    auto show = ollama_show_response("qwen3.6-35b-a3b", "qwen3.6-35b-a3b");
+    bool has_vision = false;
+    for (const auto& c : show["capabilities"]) if (c == "vision") has_vision = true;
+    check(has_vision, "ollama: qwen3.6-35b-a3b has vision capability");
+  }
+  // ollama_eval_stats: durations in nanoseconds
+  {
+    ChatResult res;
+    res.prefill_ms = 5.0;
+    res.decode_ms = 10.0;
+    res.prompt_tokens = 100;
+    res.completion_tokens = 50;
+    json j;
+    ollama_eval_stats(j, res);
+    check(j["prompt_eval_duration"] == 5000000 && j["eval_duration"] == 10000000,
+          "ollama: eval stats durations in nanoseconds");
+    check(j["total_duration"] == 15000000,
+          "ollama: eval stats total_duration = prefill + decode");
+    check(j["prompt_eval_count"] == 100 && j["eval_count"] == 50,
+          "ollama: eval stats token counts correct");
+  }
+  // ollama_chat_request: assistant tool_calls arguments stay as object, not string
+  {
+    json body{{"model", "m"}, {"messages", json::array({
+      {{"role", "user"}, {"content", "Weather in Paris?"}},
+      {{"role", "assistant"}, {"tool_calls", json::array({{{"function", {{"name", "get_weather"}, {"arguments", {{"city", "Paris"}}}}}}})}, {"content", ""}},
+      {{"role", "tool"}, {"content", "18C"}}
+    })}};
+    auto r = ollama_chat_request(body, ChatRequest{});
+    check(r.messages.size() == 3, "ollama: tool_calls round-trip has 3 messages");
+    check(r.messages[1].contains("tool_calls") && r.messages[1]["tool_calls"].is_array(),
+          "ollama: assistant message has tool_calls array");
+    auto& args = r.messages[1]["tool_calls"][0]["function"]["arguments"];
+    check(args.is_object(), "ollama: tool_calls arguments is an object, not a string");
+    check(args.value("city", "") == "Paris", "ollama: tool_calls arguments.city == Paris");
+  }
+  // ollama_chat_request: string arguments parsed into object (client sends stringified JSON)
+  {
+    json body{{"model", "m"}, {"messages", json::array({
+      {{"role", "user"}, {"content", "x"}},
+      {{"role", "assistant"}, {"tool_calls", json::array({{{"function", {{"name", "f"}, {"arguments", "{\"n\":42}"}}}}})}, {"content", ""}},
+      {{"role", "tool"}, {"content", "ok"}}
+    })}};
+    auto r = ollama_chat_request(body, ChatRequest{});
+    auto& args = r.messages[1]["tool_calls"][0]["function"]["arguments"];
+    check(args.is_object(), "ollama: string arguments parsed into object");
+    check(args["n"] == 42, "ollama: parsed string arguments have correct value");
+  }
+}
+
+// chat_template_source's rewrite of Python's one-placeholder str.format, which minja does not have (Hy4-flash's
+// template builds its special tokens with it): 'a{}b'.format(x) becomes ('a' ~ x ~ 'b') in a chat_template.jinja and in
+// tokenizer_config.json's chat_template, renders as Python would, and leaves every other form and template unchanged.
+void chat_template_format_unit() {
+  char tmpl[] = "/tmp/api_test_format.XXXXXX";
+  if (!mkdtemp(tmpl)) {
+    check(false, "template format: mkdtemp");
+    return;
+  }
+  const std::string dir = tmpl;
+  const auto write = [&](const std::string& name, const std::string& text) {
+    FILE* f = fopen((dir + "/" + name).c_str(), "w");
+    if (f) fputs(text.c_str(), f), fclose(f);
+  };
+  const auto render = [](const std::string& src, const nlohmann::json& vars) {
+    try {
+      const auto ctx = minja::Context::make(minja::Value(nlohmann::ordered_json::parse(vars.dump())));
+      return minja::Parser::parse(src, {false, false, false})->render(ctx);
+    } catch (const std::exception& e) {
+      return std::string("(error: ") + e.what() + ")";
+    }
+  };
+  const std::string hy = "{{ '<|hy_{}|>'.format(role) }}{% set t = 'x{}y'.format(n) %}[{{ t }}]{{ '{}'.format(role) }}";
+  write("chat_template.jinja", hy);
+  std::string src = chat_template_source(dir);
+  check(src == "{{ ('<|hy_' ~ role ~ '|>') }}{% set t = ('x' ~ n ~ 'y') %}[{{ t }}]{{ ('' ~ role ~ '') }}",
+        "template format: '...{}...'.format(x) rewritten", src);
+  check(render(src, {{"role", "user"}, {"n", 3}}) == "<|hy_user|>[x3y]user", "template format: renders as Python's",
+        render(src, {{"role", "user"}, {"n", 3}}));
+  // forms the rewrite does not take stay as they were: two placeholders, an expression, a named placeholder
+  const std::string other = "{{ '{}{}'.format(a, b) }}{{ 'a{}'.format(x.y) }}{{ '{k}'.format(k=1) }}";
+  write("chat_template.jinja", other);
+  check(chat_template_source(dir) == other, "template format: other forms unchanged", chat_template_source(dir));
+  const std::string plain = "{{ messages[0]['content'] | upper }}{{ 'a{}b' }}";
+  write("chat_template.jinja", plain);
+  check(chat_template_source(dir) == plain, "template format: a template without '.format( unchanged");
+  // no chat_template.jinja: tokenizer_config.json's chat_template, rewritten the same way
+  unlink((dir + "/chat_template.jinja").c_str());
+  write("tokenizer_config.json", nlohmann::json{{"chat_template", hy}}.dump());
+  check(chat_template_source(dir) == src, "template format: tokenizer_config.json's chat_template rewritten",
+        chat_template_source(dir));
+  unlink((dir + "/tokenizer_config.json").c_str());
+  // tojson(ensure_ascii=False), whose keyword minja refuses (Hy4-flash's template renders its tools so): the keyword
+  // dropped, and the JSON keeps non-ASCII text as Python's does with it
+  write("chat_template.jinja", "{{ v | tojson(ensure_ascii=False) }}|{{ (w | tojson(ensure_ascii=False)) }}");
+  src = chat_template_source(dir);
+  check(src == "{{ v | tojson }}|{{ (w | tojson) }}", "template tojson: ensure_ascii=False dropped", src);
+  const std::string tj = render(src, {{"v", "caf\xc3\xa9"}, {"w", {{"k", 1}}}});
+  check(tj.rfind("\"caf\xc3\xa9\"|{", 0) == 0 && tj.find("error") == std::string::npos,
+        "template tojson: renders, non-ASCII kept", tj);
+  unlink((dir + "/chat_template.jinja").c_str());
+  rmdir(dir.c_str());
+}
+
+// GLM and Hy4 output parsing on a byte-level vocabulary: issue 1400's malformed calls, typed values, and Hy4's
+// :opensource tags as added (non-special) tokens. No model folder needed.
+void glm_hy4_parser_unit() {
+  nlohmann::json vocab = nlohmann::json::object(), added = nlohmann::json::array();
+  for (int b = 0, n = 0; b < 256; ++b) {
+    const bool keep = (b >= '!' && b <= '~') || (b >= 0xA1 && b <= 0xAC) || (b >= 0xAE && b <= 0xFF);
+    const uint32_t c = keep ? uint32_t(b) : uint32_t(256 + n++);
+    vocab[c < 0x80 ? std::string(1, char(c)) : std::string{char(0xC0 | (c >> 6)), char(0x80 | (c & 0x3F))}] = b;
+  }
+  int id = 256;
+  for (const char* t : {"<think:opensource>", "</think:opensource>", "<tool_call:opensource>", "</tool_call:opensource>",
+                        "<tool_calls:opensource>", "</tool_calls:opensource>", "<arg_key:opensource>",
+                        "</arg_key:opensource>", "<arg_value:opensource>", "</arg_value:opensource>",
+                        "<think>", "</think>", "<tool_call>", "</tool_call>"})
+    added.push_back({{"id", id++}, {"content", t}, {"special", false}});
+  char path[] = "/tmp/api_test_hy4tok.XXXXXX";
+  const int fd = mkstemp(path);
+  if (fd < 0) {
+    check(false, "hy4 parser: mkstemp");
+    return;
+  }
+  close(fd);
+  if (FILE* f = fopen(path, "w")) {
+    fputs(nlohmann::json{{"added_tokens", added}, {"normalizer", nullptr}, {"pre_tokenizer", nullptr},
+                         {"model", {{"type", "BPE"}, {"vocab", vocab}, {"merges", nlohmann::json::array()}}}}
+              .dump()
+              .c_str(),
+          f);
+    fclose(f);
+  }
+  Tokenizer tok;
+  tok.load(path);
+  unlink(path);
+  const ojson tools = ojson::parse(R"([
+    {"type": "function", "function": {"name": "read_file", "parameters": {"type": "object", "properties": {
+      "path": {"type": "string"}, "start_line": {"type": "integer"}}}}},
+    {"type": "function", "function": {"name": "search", "parameters": {"type": "object", "properties": {
+      "query": {"type": "string"}, "filters": {"type": "object"}}}}}])");
+  struct Out {
+    std::string content, reasoning;
+    std::vector<ToolCall> calls;
+    std::vector<ChatDelta> deltas;
+  };
+  const auto run = [&](const std::string& text, bool parse_tools, bool ended = true,
+                       CallFormat fmt = CallFormat::Hy4) {
+    const std::string sfx = fmt == CallFormat::Hy4 ? ":opensource" : "";
+    OutputParser p(tok, tok.find("<think" + sfx + ">"), tok.find("</think" + sfx + ">"),
+                   tok.find("<tool_call" + sfx + ">"), tok.find("</tool_call" + sfx + ">"), false, parse_tools, tools,
+                   false, false, {}, fmt);
+    Out o;
+    const auto add = [&](const ChatDelta& d) {
+      o.content += d.content;
+      o.reasoning += d.reasoning;
+      for (auto& c : d.tool_calls) o.calls.push_back(c);
+      o.deltas.push_back(d);
+    };
+    for (int i : tok.encode(text)) add(p.push(i));
+    add(p.finish(ended));
+    return o;
+  };
+  for (const auto& [label, text, name, args] :
+       std::vector<std::tuple<std::string, std::string, std::string, ojson>>{
+           {"form A", "<tool_call>write<arg_key><arg_key>content</arg_key><arg_value># Handoff ...\nnext line\n"
+                      "</arg_value><arg_key>path</arg_key><arg_value>.handoff.md</arg_value></tool_call>",
+            "write", {{"content", "# Handoff ...\nnext line\n"}, {"path", ".handoff.md"}}},
+           {"form B", "<tool_call>edit<arg_key>path</arg_key><arg_value>{worktree}/scripts/test_x.py</arg_value>"
+                      "<arg_key>oldString</arg_key><arg_value>...</arg_value><arg_key>newString</arg_key>"
+                      "<arg_value>...</arg_value><arg_key>oldString_is_replace</arg_key><arg_key>path</arg_key>"
+                      "<arg_value>{worktree}/scripts/test_x.py</arg_value></tool_call>",
+            "edit", {{"path", "{worktree}/scripts/test_x.py"}, {"oldString", "..."}, {"newString", "..."}}},
+            {"trailing missing value", "<tool_call>read_file<arg_key>path</arg_key><arg_value>a.txt</arg_value>"
+                                       "<arg_key>start_line</arg_key> \n</tool_call>",
+             "read_file", {{"path", "a.txt"}}},
+            {"only missing value", "<tool_call>read_file<arg_key>path</arg_key></tool_call>",
+             "read_file", ojson::object()},
+            {"missing duplicate value", "<tool_call>read_file<arg_key>path</arg_key><arg_value>a.txt</arg_value>"
+                                        "<arg_key>path</arg_key></tool_call>",
+             "read_file", {{"path", "a.txt"}}}}) {
+    for (CallFormat fmt : {CallFormat::Glm, CallFormat::Hy4}) {
+      std::string input = text;
+      if (fmt == CallFormat::Hy4) {
+        for (size_t pos = 0; (pos = input.find('>', pos)) != std::string::npos; pos += 12)
+          input.insert(pos, ":opensource");
+      }
+      const std::string tag = std::string(fmt == CallFormat::Glm ? "glm" : "hy4") + " parser: issue 1400 " + label;
+      const Out parsed = run(input, true, true, fmt);
+      check(parsed.content.empty() && parsed.reasoning.empty() && parsed.calls.size() == 1 &&
+                parsed.calls[0].name == name && ojson::parse(parsed.calls[0].arguments) == args,
+            tag, parsed.content);
+      const auto res = finished(parsed.deltas, 1);
+      const auto calls = chat_tool_calls(res.tool_calls, 0, false);
+      check(calls.size() == 1 && calls[0]["function"]["name"] == name &&
+                ojson::parse(calls[0]["function"]["arguments"].get<std::string>()) == args,
+            tag + " chat reply");
+      ChatCompletionsStream cw("chat", "m", 1);
+      std::string wire = cw.begin(res);
+      for (const auto& d : parsed.deltas) wire += cw.delta(d);
+      wire += cw.end(res);
+      const size_t done = wire.find("data: [DONE]");
+      std::string content, reason;
+      ojson streamed = ojson::array();
+      for (const auto& e : parse_sse(wire.substr(0, done))) {
+        const auto& choice = e.data["choices"][0];
+        const auto& delta = choice["delta"];
+        if (delta.contains("content")) content += delta["content"].get<std::string>();
+        if (delta.contains("tool_calls")) for (auto c : delta["tool_calls"]) {
+          c.erase("index");
+          streamed.push_back(std::move(c));
+        }
+        if (choice["finish_reason"].is_string()) reason = choice["finish_reason"];
+      }
+      check(done != std::string::npos && content.empty() && streamed == calls && reason == "tool_calls",
+            tag + " chat stream");
+      const Out off = run(input, false, true, fmt);
+      check(off.calls.empty() && off.content == input, tag + " tools off keeps text", off.content);
+    }
+  }
+  const std::string two =
+      "<tool_calls:opensource><tool_call:opensource>read_file<arg_key:opensource>path</arg_key:opensource>"
+      "<arg_value:opensource>src/main.py</arg_value:opensource><arg_key:opensource>start_line</arg_key:opensource>"
+      "<arg_value:opensource>3</arg_value:opensource></tool_call:opensource><tool_call:opensource>search"
+      "<arg_key:opensource>query</arg_key:opensource><arg_value:opensource>a \"b\"</arg_value:opensource>"
+      "<arg_key:opensource>filters</arg_key:opensource><arg_value:opensource>{\"ext\": [\"py\"]}"
+      "</arg_value:opensource></tool_call:opensource></tool_calls:opensource>\n";
+  Out o = run("I'll look.\n" + two, true);
+  check(o.calls.size() == 2 && o.calls[0].name == "read_file" &&
+            ojson::parse(o.calls[0].arguments) == ojson({{"path", "src/main.py"}, {"start_line", 3}}) &&
+            o.calls[1].name == "search" &&
+            ojson::parse(o.calls[1].arguments) == ojson({{"query", "a \"b\""}, {"filters", {{"ext", {"py"}}}}}),
+        "hy4 parser: two calls in one list, typed values", o.calls.size() == 2 ? o.calls[0].arguments + " " + o.calls[1].arguments : "");
+  check(o.content == "I'll look.", "hy4 parser: the text before the list, nothing of the list's tags", o.content);
+  o = run("<think:opensource>plan</think:opensource>" + two, true);
+  check(o.calls.size() == 2 && o.reasoning == "plan" && o.content.empty(), "hy4 parser: calls after reasoning",
+        o.reasoning + "|" + o.content);
+  o = run(two, false);
+  check(o.calls.empty() && o.content == two.substr(0, two.size() - 1),  // the turn's trailing newline dropped
+        "hy4 parser: tools off, the tags stay text", o.content);
+  const std::string bad = "<tool_call:opensource>read file<arg_key:opensource>path</arg_key:opensource>"
+                          "</tool_call:opensource>";
+  o = run("<tool_calls:opensource>" + bad + "</tool_calls:opensource>", true);
+  check(o.calls.empty() && o.content == bad, "hy4 parser: a malformed call returned as its text", o.content);
+  const std::string cut = "<tool_call:opensource>read_file<arg_key:opensource>pa";
+  o = run("<tool_calls:opensource>" + cut, true, false);
+  check(o.calls.empty() && o.content == cut, "hy4 parser: a call cut by max_tokens returned with its own tag",
+        o.content);
+}
+
+// a4::default_arena (Hy4-flash's expert store): every expert only with room left for a conversation in the budget and
+// the working set, the 42% rule otherwise; the 128 GB M5 Max's measured numbers, the review's 108 GB working set, a
+// lowered --mem-budget, and a 48 GB Mac
+void a4_arena_unit() {
+  const double G = 1e9;
+  const size_t all = size_t(83.58 * G), ram128 = size_t(137.44 * G), ram48 = size_t(51.54 * G);
+  bool every = false;
+  size_t b = a4::default_arena(size_t(115.45 * G), size_t(11.01 * G), ram128, all, size_t(110.83 * G), &every);
+  check(every && b == all, "a4 arena: 128 GB M5 Max, every expert", std::to_string(b));
+  b = a4::default_arena(size_t(108 * G), size_t(20 * G), ram128, all, 0, &every);
+  check(!every && b == size_t(0.42 * double(ram128)), "a4 arena: a working set without room for KV, the 42% rule",
+        std::to_string(b));
+  b = a4::default_arena(size_t(115.45 * G), size_t(11.01 * G), ram128, all, size_t(80 * G), &every);
+  check(!every && b == size_t(0.42 * double(ram128)), "a4 arena: --mem-budget 80, the 42% rule", std::to_string(b));
+  b = a4::default_arena(size_t(38.65 * G), size_t(9 * G), ram48, all, 0, &every);
+  check(!every && b == size_t(0.42 * double(ram48)), "a4 arena: 48 GB Mac, the 42% rule", std::to_string(b));
+}
+
+// Hy4Flash::plan from a plan folder (hub::plan_dir: config.json and every *.safetensors cut to its header, no index)
+// equals its plan from the downloaded folder (index and whole files): before download the trunk counted 0 bytes, so a
+// 16 GB Mac took the 134 GB pack as fitting (#1366's review)
+void hy4_plan_unit() {
+  char t1[] = "/tmp/api_test_hy4plan.XXXXXX", t2[] = "/tmp/api_test_hy4full.XXXXXX";
+  if (!mkdtemp(t1) || !mkdtemp(t2)) {
+    check(false, "hy4 plan: mkdtemp");
+    return;
+  }
+  const std::string plan = t1, full = t2;
+  const nlohmann::json cfg = {{"model_type", "hy_v4_flash"}, {"quantization", {{"bits", 4}, {"group_size", 64}}},
+                              {"text_config", {{"layer_types", {"full_attention", "sliding_attention"}}}}};
+  // file -> its tensors (name, bytes); the trunk's 4,096 B, one MoE layer's experts, an Engram table (mapped, not counted)
+  const std::vector<std::pair<std::string, std::vector<std::pair<std::string, size_t>>>> files = {
+      {"model-00001-of-00001.safetensors", {{"model.embed_tokens.weight", 4096}}},
+      {"model-experts-L01.safetensors", {{"model.layers.1.mlp.switch_mlp.gate_proj.weight", 1024},
+                                         {"model.layers.1.mlp.switch_mlp.up_proj.weight", 1024},
+                                         {"model.layers.1.mlp.switch_mlp.down_proj.weight", 1024}}},
+      {"model-engram-L01.safetensors", {{"model.layers.1.engram_layer.multi_head_embedding.embedding.weight", 8192}}}};
+  nlohmann::json index = {{"weight_map", nlohmann::json::object()}};
+  size_t trunk = 0, experts = 0;
+  for (const auto& [f, ts] : files) {
+    nlohmann::json h = nlohmann::json::object();
+    size_t off = 0;
+    for (const auto& [n, b] : ts) {
+      h[n] = {{"dtype", "U8"}, {"shape", {b}}, {"data_offsets", {off, off + b}}};
+      off += b;
+      index["weight_map"][n] = f;
+    }
+    const std::string hs = h.dump();
+    const uint64_t len = hs.size();
+    const size_t total = 8 + hs.size() + off;
+    (f.rfind("model-experts", 0) == 0 ? experts : f.rfind("model-engram", 0) == 0 ? off : trunk) += total;
+    for (const std::string& d : {plan, full}) {
+      FILE* o = fopen((d + "/" + f).c_str(), "wb");
+      if (!o) continue;
+      fwrite(&len, 8, 1, o);
+      fwrite(hs.data(), 1, hs.size(), o);
+      if (d == full) {  // the data, as a download has it; the plan folder stops at the header
+        const std::vector<char> zero(off, 0);
+        fwrite(zero.data(), 1, zero.size(), o);
+      }
+      fclose(o);
+    }
+  }
+  for (const std::string& d : {plan, full})
+    if (FILE* o = fopen((d + "/config.json").c_str(), "w")) fputs(cfg.dump().c_str(), o), fclose(o);
+  if (FILE* o = fopen((full + "/model.safetensors.index.json").c_str(), "w")) fputs(index.dump().c_str(), o), fclose(o);
+  const MemPlan a = Hy4Flash::plan(plan, 1024), b = Hy4Flash::plan(full, 1024);
+  check(a.streamed == experts && b.streamed == experts, "hy4 plan: the experts' files counted as streamed from headers",
+        std::to_string(a.streamed) + " " + std::to_string(b.streamed) + " want " + std::to_string(experts));
+  check(a.weights == b.weights && a.weights >= trunk && a.store_all == b.store_all && a.store_least == b.store_least,
+        "hy4 plan: a plan folder plans as the downloaded one", std::to_string(a.weights) + " vs " + std::to_string(b.weights));
+  for (const std::string& d : {plan, full}) {
+    for (const auto& [f, _] : files) unlink((d + "/" + f).c_str());
+    unlink((d + "/config.json").c_str());
+    unlink((d + "/model.safetensors.index.json").c_str());
+    rmdir(d.c_str());
+  }
+}
+
+void inkling2_plan_unit() {
+  char t1[] = "/tmp/api_test_ink2plan.XXXXXX", t2[] = "/tmp/api_test_ink2full.XXXXXX";
+  if (!mkdtemp(t1) || !mkdtemp(t2)) {
+    check(false, "inkling2 plan: mkdtemp");
+    return;
+  }
+  const std::string plan = t1, full = t2;
+  const nlohmann::json cfg = {
+      {"model_type", "inkling2_loop"},
+      {"text_config",
+       {{"model_type", "inkling2_loop_text"},
+        {"hidden_size", 2048},
+        {"num_hidden_layers", 24},
+        {"vocab_size", 201024},
+        {"unpadded_vocab_size", 200058},
+        {"num_attention_heads", 16},
+        {"num_key_value_heads", 2},
+        {"head_dim", 128},
+        {"d_rel", 16},
+        {"rel_extent", 1024},
+        {"sliding_window_size", 1024},
+        {"n_layers_per_attn_res_block", 6},
+        {"n_routed_experts", 128},
+        {"num_experts_per_tok", 8},
+        {"intermediate_size", 1152},
+        {"local_layer_ids", {0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22}},
+        {"loop_config", {{"core_start", 6}, {"core_end", 18}, {"num_passes", 3}, {"gate_rank", 64}}}}}};
+  // model.llm.* weights count; model.visual.* and companion mtp.* are ignored by Inkling2::plan (text-only)
+  const size_t llm_bytes = 4096;
+  nlohmann::json main_h = nlohmann::json::object();
+  main_h["model.llm.embed_tokens.weight"] = {{"dtype", "BF16"}, {"shape", {2048}}, {"data_offsets", {0, llm_bytes}}};
+  main_h["model.visual.patch_embed.weight"] = {
+      {"dtype", "BF16"}, {"shape", {1024}}, {"data_offsets", {llm_bytes, llm_bytes + 2048}}};
+  nlohmann::json mtp_h = nlohmann::json::object();
+  mtp_h["fuse_weight"] = {{"dtype", "BF16"}, {"shape", {1024}}, {"data_offsets", {0, 2048}}};
+  auto write_sf = [&](const std::string& path, const nlohmann::json& h, size_t data_bytes, bool write_data) {
+    const std::string hs = h.dump();
+    const uint64_t len = hs.size();
+    FILE* o = fopen(path.c_str(), "wb");
+    if (!o) return;
+    fwrite(&len, 8, 1, o);
+    fwrite(hs.data(), 1, hs.size(), o);
+    if (write_data && data_bytes > 0) {
+      const std::vector<char> zero(data_bytes, 0);
+      fwrite(zero.data(), 1, zero.size(), o);
+    }
+    fclose(o);
+  };
+  for (const std::string& d : {plan, full}) {
+    write_sf(d + "/model-00001-of-00001.safetensors", main_h, llm_bytes + 2048, d == full);
+    write_sf(d + "/mtp.safetensors", mtp_h, 2048, d == full);
+    if (FILE* o = fopen((d + "/config.json").c_str(), "w")) fputs(cfg.dump().c_str(), o), fclose(o);
+  }
+  const MemPlan a = Inkling2::plan(plan, 512), b = Inkling2::plan(full, 512);
+  check(a.weights == llm_bytes && a.weights == b.weights && a.kv_per_pos == b.kv_per_pos &&
+            a.slot_state == b.slot_state && a.activations == b.activations,
+        "inkling2 plan: a header-only plan folder plans identically to a downloaded folder",
+        std::to_string(a.weights) + " vs " + std::to_string(b.weights));
+  for (const std::string& d : {plan, full}) {
+    unlink((d + "/model-00001-of-00001.safetensors").c_str());
+    unlink((d + "/mtp.safetensors").c_str());
+    unlink((d + "/config.json").c_str());
+    rmdir(d.c_str());
+  }
+}
+
+void inkling2_unit() {
+  // 1. render_inkling2_chat() exact parity against Jinja2 chat_template.jinja renderings
+  {
+    ChatRequest r;
+    r.messages = ojson::array({{{"role", "user"}, {"content", "Hello!"}}});
+    r.effort = "high";
+    check(render_inkling2_chat(r) ==
+              "<|message_system|><|content_text|>Thinking effort level: 0.9<|end_message|>"
+              "<|message_user|><|content_text|>Hello!<|end_message|>",
+          "inkling2 render: basic high");
+  }
+  {
+    ChatRequest r;
+    r.messages = ojson::array({{{"role", "system"}, {"content", "You are terse."}},
+                               {{"role", "user"}, {"content", "Reply with one word: 2+2="}}});
+    r.template_kwargs = {{"reasoning_effort", "none"}};
+    check(render_inkling2_chat(r) ==
+              "<|message_system|><|content_text|>You are terse.<|end_message|>"
+              "<|message_system|><|content_text|>Thinking effort level: 0<|end_message|>"
+              "<|message_user|><|content_text|>Reply with one word: 2+2=<|end_message|>",
+          "inkling2 render: basic none");
+  }
+  {
+    ChatRequest r;
+    r.tools = J(R"([{
+      "type": "function",
+      "function": {
+        "name": "GetWeather",
+        "description": "Fetch weather",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "City": {"type": "string"},
+            "units": {"type": "string"},
+            "Alt": {"type": "integer"}
+          },
+          "required": ["City"]
+        }
+      }
+    }])");
+    r.messages = J(R"([
+      {"role": "user", "content": "Weather in Taipei?"},
+      {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [{
+          "id": "call_1",
+          "type": "function",
+          "function": {
+            "name": "GetWeather",
+            "arguments": {"units": "c", "City": "Taipei", "Alt": {"z": 1, "A": 2}}
+          }
+        }]
+      },
+      {"role": "tool", "tool_call_id": "call_1", "content": "25C"}
+    ])");
+    // Real chat_template.jinja: line 36 uses tojson(sort_keys=true) (recursive alphabetical sort), while line 116 uses
+    // args | dictsort(case_sensitive=true) (byte-wise top-level sort) and line 117 keeps nested key order unchanged.
+    const std::string want =
+        "<|message_system|>tool_declare<|content_xml|>[{"
+        "\"description\":\"Fetch weather\",\"name\":\"GetWeather\","
+        "\"parameters\":{\"properties\":{\"Alt\":{\"type\":\"integer\"},\"City\":{\"type\":\"string\"},"
+        "\"units\":{\"type\":\"string\"}},\"required\":[\"City\"],\"type\":\"object\"},\"type\":\"function\"}]"
+        "<|end_message|>"
+        "<|message_system|><|content_text|>Thinking effort level: 0.9<|end_message|>"
+        "<|message_user|><|content_text|>Weather in Taipei?<|end_message|>"
+        "<|message_model|>GetWeather<|content_invoke_tool_json|>"
+        "{\"name\":\"GetWeather\",\"args\":{\"Alt\":{\"z\":1,\"A\":2},\"City\":\"Taipei\",\"units\":\"c\"}}"
+        "<|end_message|>"
+        "<|content_model_end_sampling|>"
+        "<|message_tool|>GetWeather<|content_text|>25C<|end_message|>";
+    const std::string got = render_inkling2_chat(r);
+    check(got == want, "inkling2 render: mixed-case tools and args dictsort", got);
+  }
+  {
+    auto check_effort = [&](const char* label, ChatRequest req, const std::string& want_lvl,
+                            const std::string& want_val) {
+      req.messages = ojson::array({{{"role", "user"}, {"content", "Hi"}}});
+      const std::string lvl = inkling2_thinking_level(req);
+      const std::string rendered = render_inkling2_chat(req);
+      const std::string want_sys = "<|message_system|><|content_text|>Thinking effort level: " + want_val + "<|end_message|>";
+      check(lvl == want_lvl && rendered.rfind(want_sys, 0) == 0,
+            std::string("inkling2 effort parity: ") + label, lvl + " / " + rendered);
+    };
+    {
+      ChatRequest r;
+      r.effort = "high";
+      r.template_kwargs = {{"reasoning_effort", "low"}};
+      check_effort("template reasoning_effort overrides r.effort", r, "low", "0.2");
+    }
+    {
+      ChatRequest r;
+      r.effort = "high";
+      r.template_kwargs = {{"reasoning_effort", 0.5}};
+      check_effort("numeric reasoning_effort overrides r.effort", r, "0.5", "0.5");
+    }
+    {
+      ChatRequest r;
+      r.effort = "medium";
+      r.template_kwargs = {{"reasoning_effort", nullptr}};
+      check_effort("null template reasoning_effort falls back to r.effort", r, "medium", "0.7");
+    }
+    {
+      ChatRequest r;
+      r.thinking_budget = 0;
+      check_effort("thinking_budget 0 resolves to none/0", r, "none", "0");
+    }
+    {
+      ChatRequest r;
+      r.think_cap = 0;
+      check_effort("think_cap 0 resolves to none/0", r, "none", "0");
+    }
+    {
+      ChatRequest r;
+      r.think_cap = 0;
+      r.effort = "high";
+      check_effort("think_cap 0 overrides r.effort", r, "none", "0");
+    }
+    {
+      ChatRequest r;
+      r.think_cap = 0;
+      r.template_kwargs = {{"reasoning_effort", "high"}};
+      check_effort("think_cap 0 overrides template reasoning_effort", r, "none", "0");
+    }
+    {
+      ChatRequest r;
+      r.template_kwargs = {{"enable_thinking", false}};
+      check_effort("enable_thinking false resolves to none/0", r, "none", "0");
+    }
+    check_effort("default resolves to high/0.9", ChatRequest{}, "high", "0.9");
+  }
+
+  // 2. Inline minimal O200k byte-level Tokenizer + OutputParser (CallFormat::Inkling2) + LogitMask (CI-runnable)
+  {
+    nlohmann::json vocab = nlohmann::json::object(), added = nlohmann::json::array();
+    for (int b = 0, n = 0; b < 256; ++b) {
+      const bool keep = (b >= '!' && b <= '~') || (b >= 0xA1 && b <= 0xAC) || (b >= 0xAE && b <= 0xFF);
+      const uint32_t c = keep ? uint32_t(b) : uint32_t(256 + n++);
+      vocab[c < 0x80 ? std::string(1, char(c)) : std::string{char(0xC0 | (c >> 6)), char(0x80 | (c & 0x3F))}] = b;
+    }
+    const std::vector<std::pair<int, const char*>> specials = {
+        {199999, "<|endoftext|>"},
+        {200000, "<|message_user|>"},
+        {200001, "<|message_model|>"},
+        {200002, "<|message_system|>"},
+        {200003, "<|message_tool|>"},
+        {200004, "<|content_text|>"},
+        {200005, "<|content_thinking|>"},
+        {200006, "<|end_message|>"},
+        {200007, "<|content_invoke_tool_json|>"},
+        {200008, "<|content_invoke_tool_text|>"},
+        {200009, "<|content_tool_error|>"},
+        {200010, "<|content_model_end_sampling|>"},
+    };
+    for (const auto& [sid, name] : specials)
+      added.push_back({{"id", sid}, {"content", name}, {"special", true}});
+    const std::string o200k_re =
+        "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+"
+        "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+        "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*"
+        "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+        "\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+    const nlohmann::json tj = {
+        {"added_tokens", added},
+        {"normalizer", nullptr},
+        {"pre_tokenizer",
+         {{"type", "Sequence"},
+          {"pretokenizers",
+           nlohmann::json::array({{{"type", "Split"},
+                                   {"pattern", {{"Regex", o200k_re}}},
+                                   {"behavior", "Isolated"},
+                                   {"invert", false}},
+                                  {{"type", "ByteLevel"},
+                                   {"add_prefix_space", false},
+                                   {"trim_offsets", true},
+                                   {"use_regex", false}}})}}},
+        {"model", {{"type", "BPE"}, {"vocab", vocab}, {"merges", nlohmann::json::array()}}},
+    };
+    char tpath[] = "/tmp/api_test_ink2tok.XXXXXX";
+    const int tfd = mkstemp(tpath);
+    if (tfd < 0) {
+      check(false, "inkling2: mkstemp tok");
+      return;
+    }
+    close(tfd);
+    if (FILE* f = fopen(tpath, "w")) fputs(tj.dump().c_str(), f), fclose(f);
+    Tokenizer tok;
+    tok.load(tpath);
+    unlink(tpath);
+
+    const ojson tools = J(R"([{"type":"function","function":{"name":"get_weather","parameters":{"type":"object"}}}])");
+    auto run_parse = [&](const std::string& gen) {
+      OutputParser p(tok, tok.find("<|content_thinking|>"), tok.find("<|end_message|>"),
+                     tok.find("<|content_invoke_tool_json|>"), tok.find("<|end_message|>"), false, true, tools, false,
+                     true, {}, CallFormat::Inkling2);
+      ChatResult out;
+      for (int id : tok.encode(gen)) {
+        const ChatDelta d = p.push(id);
+        out.reasoning += d.reasoning;
+        out.content += d.content;
+        out.tool_calls.insert(out.tool_calls.end(), d.tool_calls.begin(), d.tool_calls.end());
+      }
+      const ChatDelta f = p.finish(true);
+      out.reasoning += f.reasoning;
+      out.content += f.content;
+      out.tool_calls.insert(out.tool_calls.end(), f.tool_calls.begin(), f.tool_calls.end());
+      return out;
+    };
+    const ChatResult r1 = run_parse(
+        "<|message_model|><|content_thinking|>Step 1.<|end_message|><|message_model|><|content_text|> 4<|end_message|>");
+    check(r1.reasoning == "Step 1." && r1.content == " 4" && r1.tool_calls.empty(),
+          "inkling2 OutputParser: reasoning + content keeps leading space");
+    const ChatResult r2 = run_parse(
+        "<|content_thinking|>Need weather.<|end_message|>"
+        "<|message_model|>get_weather<|content_invoke_tool_json|>{\"name\":\"get_weather\",\"args\":{\"city\":\"Taipei\"}}<|end_message|>"
+        "<|message_model|>get_weather<|content_invoke_tool_json|>{\"name\":\"get_weather\",\"args\":{\"city\":\"Tokyo\"}}<|end_message|>");
+    check(r2.reasoning == "Need weather." && r2.content.empty() && r2.tool_calls.size() == 2 &&
+              r2.tool_calls[0].name == "get_weather" && r2.tool_calls[0].arguments == "{\"city\":\"Taipei\"}" &&
+              r2.tool_calls[1].arguments == "{\"city\":\"Tokyo\"}",
+          "inkling2 OutputParser: reasoning + 2 tool calls");
+
+    // Inline LogitMask suppression on Inkling-2 vocab & protected special/EOS IDs
+    char mpath[] = "/tmp/api_test_ink2mask.XXXXXX";
+    const int mfd = mkstemp(mpath);
+    if (mfd >= 0) {
+      close(mfd);
+      if (FILE* f = fopen(mpath, "w")) fputs(R"({"target_token_ids":[1,32,65,255]})", f), fclose(f);
+      std::vector<int> prot{199999, 200006};
+      for (const auto& [sid, _] : specials)
+        if (std::find(prot.begin(), prot.end(), sid) == prot.end()) prot.push_back(sid);
+      const TokenSuppressionMask mask = token_suppression_mask(read_token_suppression_file(mpath), 200058, prot);
+      check(mask.count == 4 && mask.words.size() == (200058 + 31) / 32 &&
+                (mask.words[0] & (1u << 1)) == 0 && (mask.words[1] & (1u << 0)) == 0 &&
+                (mask.words[2] & (1u << 1)) == 0 && (mask.words[7] & (1u << 31)) == 0,
+            "inkling2 inline token suppression mask clears exact bits");
+      bool refused_special = false;
+      try {
+        (void)token_suppression_mask(nlohmann::json{200006}, 200058, prot);
+      } catch (const std::runtime_error&) {
+        refused_special = true;
+      }
+      check(refused_special, "inkling2 inline token suppression refuses protected EOS token");
+      unlink(mpath);
+    }
+
+    // Inkling-2 ThinkControl sequence: <|message_model|> waits in kPre for <|content_thinking|> (or disarms on
+    // <|content_text|>) and keeps OutputParser synchronized when <|end_message|> is forced.
+    {
+      const int m_tok = tok.find("<|message_model|>");
+      const int open_tok = tok.find("<|content_thinking|>");
+      const int close_tok = tok.find("<|end_message|>");
+      const int text_tok = tok.find("<|content_text|>");
+      const int call_tok = tok.find("<|content_invoke_tool_json|>");
+      std::vector<uint8_t> ink2_pre(size_t(tok.vocab_size()), 0);
+      if (m_tok >= 0 && size_t(m_tok) < ink2_pre.size()) ink2_pre[size_t(m_tok)] = 1;
+      ThinkControl tc;
+      tc.start(4, {close_tok}, open_tok, close_tok, call_tok, false, &ink2_pre);
+      OutputParser p(tok, open_tok, close_tok, call_tok, close_tok, false, true, tools, false, true, {},
+                     CallFormat::Inkling2);
+      auto feed_tok = [&](int id, ChatResult& out) {
+        tc.push(id);
+        const ChatDelta d = p.push(id);
+        out.reasoning += d.reasoning;
+        out.content += d.content;
+      };
+      ChatResult out;
+      const size_t mw = (size_t(tok.vocab_size()) + 31) / 32;
+      std::vector<uint32_t> mask(mw, 0xffffffffu);
+      auto is_forced = [&](int row_tok) -> int {
+        tc.fill(mask.data(), mw, &row_tok, 0, 1, nullptr, 1);
+        int cnt = 0, pick = -1;
+        for (int w = 0; w < int(mw); ++w)
+          for (int b = 0; b < 32; ++b)
+            if (mask[size_t(w)] >> b & 1u) {
+              ++cnt;
+              if (cnt > 1) return -1;
+              pick = w * 32 + b;
+            }
+        return cnt == 1 ? pick : -1;
+      };
+      feed_tok(m_tok, out);
+      check(tc.armed() && !tc.in_reasoning() && tc.count() == 0,
+            "inkling2 ThinkControl: <|message_model|> stays in kPre");
+      feed_tok(open_tok, out);
+      check(tc.armed() && tc.in_reasoning() && tc.count() == 0,
+            "inkling2 ThinkControl: <|content_thinking|> enters kThink");
+      for (int id : tok.encode("abc")) {
+        if (is_forced(id) >= 0) break;
+        feed_tok(id, out);
+      }
+      const int forced_tok = is_forced(tok.encode("d")[0]);
+      check(forced_tok == close_tok && tc.count() == 3,
+            "inkling2 ThinkControl: forces <|end_message|> at reasoning pos 3 for cap 4");
+      feed_tok(forced_tok, out);
+      check(!tc.armed() && tc.forced() && tc.count() == 4,
+            "inkling2 ThinkControl: ends at exact cap 4 on forced <|end_message|>");
+      for (int id : {m_tok, text_tok, tok.encode("4")[0], close_tok}) feed_tok(id, out);
+      const ChatDelta tail = p.finish(true);
+      out.reasoning += tail.reasoning;
+      out.content += tail.content;
+      check(out.reasoning == "abc" && out.content == "4",
+            "inkling2 ThinkControl + OutputParser: forced close cleanly splits reasoning and content",
+            out.reasoning + " | " + out.content);
+
+      ThinkControl nt;
+      nt.start(4, {close_tok}, open_tok, close_tok, call_tok, false, &ink2_pre);
+      nt.push(m_tok);
+      nt.push(text_tok);
+      check(!nt.armed() && nt.count() == 0 && !nt.forced(),
+            "inkling2 ThinkControl: <|message_model|><|content_text|> disarms cleanly");
+    }
+  }
+
+  // 3. Inkling2::read_config & plan validation (valid plan uses 3x slot_state; bad shapes refuse with std::runtime_error)
+  {
+    char dir_tmpl[] = "/tmp/api_test_ink2cfg.XXXXXX";
+    if (mkdtemp(dir_tmpl)) {
+      const std::string dir = dir_tmpl;
+      auto make_base_cfg = []() {
+        return nlohmann::json{
+            {"model_type", "inkling2_loop"},
+            {"eos_token_id", 200006},
+            {"text_config",
+             {{"model_type", "inkling2_loop_text"},
+              {"hidden_size", 2304},
+              {"num_hidden_layers", 24},
+              {"vocab_size", 201024},
+              {"unpadded_vocab_size", 200058},
+              {"num_attention_heads", 24},
+              {"num_key_value_heads", 8},
+              {"head_dim", 128},
+              {"d_rel", 16},
+              {"rel_extent", 1024},
+              {"sliding_window_size", 1024},
+              {"n_layers_per_attn_res_block", 6},
+              {"n_routed_experts", 128},
+              {"num_experts_per_tok", 8},
+              {"intermediate_size", 1152},
+              {"sconv_kernel_size", 4},
+              {"n_shared_experts", 0},
+              {"q_bias", false},
+              {"o_bias", false},
+              {"use_value_norm_no_gamma", true},
+              {"attn_res_normalize_values", true},
+              {"use_gate_bias", true},
+              {"mlp_gate_softcap", 4.0},
+              {"mlp_up_softcap", 25.0},
+              {"local_layer_ids", {0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22}},
+              {"loop_config",
+               {{"core_start", 6}, {"core_end", 18}, {"num_passes", 3}, {"gate_rank", 64}, {"is_varloop", false}}}}}};
+      };
+      auto write_cfg = [&](const nlohmann::json& j) {
+        if (FILE* f = fopen((dir + "/config.json").c_str(), "w")) fputs(j.dump().c_str(), f), fclose(f);
+      };
+      write_cfg(make_base_cfg());
+      const Ink2Config okc = Inkling2::read_config(dir);
+      const MemPlan mp = Inkling2::plan(dir, 512);
+      const MemPlan mp2048 = Inkling2::plan(dir, 2048);
+      const size_t T2048 = 2048, H = size_t(okc.hidden), QD = size_t(okc.hq) * okc.head_dim;
+      const size_t KVD = size_t(okc.hkv) * okc.head_dim, V = size_t(okc.vocab);
+      const size_t expect_2048 =
+          T2048 * (29 * H * 4 + 3 * QD * 4 + 2 * KVD * 4 + size_t(okc.hq) * okc.d_rel * 4 + size_t(okc.hq) * 4 +
+                   4 * size_t(okc.hkv) * 4 + size_t(okc.hq) * okc.rel_extent * 4 + size_t(okc.n_experts) * 4 +
+                   2 * size_t(okc.top_k) * 4 + size_t(okc.top_k) * okc.moe_I * 4) +
+          size_t(okc.core_end - okc.core_start) * 4 * H * 4 + size_t(okc.num_layers) * 2 * okc.n_experts * 4 +
+          size_t(okc.hq) * 64 * (2 + size_t(okc.head_dim)) * 4 + V * 4 + 2 * (V / 2048 + 2) * 64 * 4 + 2 * 64 * 4;
+      check(Inkling2::is_model(dir) && okc.schedule.size() == 48 &&
+                mp.slot_state == 3 * (Inkling2::ring_bytes_per_seq(okc, 512) + Inkling2::conv_bytes_per_seq(okc)) &&
+                mp2048.activations >= expect_2048,
+            "inkling2 read_config & plan (3x slot_state and chunk-2048 activations)");
+
+      auto must_refuse = [&](const char* label, auto mutator) {
+        nlohmann::json bad = make_base_cfg();
+        mutator(bad);
+        write_cfg(bad);
+        bool refused_cfg = false, refused_plan = false;
+        try {
+          (void)Inkling2::read_config(dir);
+        } catch (const std::runtime_error& e) {
+          refused_cfg = dynamic_cast<const FatalError*>(&e) == nullptr;
+        }
+        try {
+          (void)Inkling2::plan(dir, 512);
+        } catch (const std::runtime_error& e) {
+          refused_plan = dynamic_cast<const FatalError*>(&e) == nullptr;
+        }
+        check(refused_cfg && refused_plan, std::string("inkling2 refuses invalid config with runtime_error: ") + label);
+      };
+      must_refuse("hidden > 2304", [](nlohmann::json& j) { j["text_config"]["hidden_size"] = 2560; });
+      must_refuse("hidden not mult 128", [](nlohmann::json& j) { j["text_config"]["hidden_size"] = 200; });
+      must_refuse("head_dim != 128", [](nlohmann::json& j) { j["text_config"]["head_dim"] = 64; });
+      must_refuse("n_routed_experts != 128", [](nlohmann::json& j) { j["text_config"]["n_routed_experts"] = 64; });
+      must_refuse("top_k > 8", [](nlohmann::json& j) { j["text_config"]["num_experts_per_tok"] = 16; });
+      must_refuse("gate_rank != 64", [](nlohmann::json& j) { j["text_config"]["loop_config"]["gate_rank"] = 32; });
+      must_refuse("core_start unaligned to block",
+                  [](nlohmann::json& j) { j["text_config"]["loop_config"]["core_start"] = 3; });
+      must_refuse("unpadded_vocab_size > vocab_size",
+                  [](nlohmann::json& j) { j["text_config"]["unpadded_vocab_size"] = 202000; });
+      must_refuse("out-of-range local_layer_ids",
+                  [](nlohmann::json& j) { j["text_config"]["local_layer_ids"].push_back(24); });
+      must_refuse("layer 0 not local",
+                  [](nlohmann::json& j) { j["text_config"]["local_layer_ids"] = nlohmann::json::array({1, 2}); });
+
+      if (FILE* f = fopen((dir + "/config.json").c_str(), "w")) fputs("{not valid json", f), fclose(f);
+      bool refused_corrupt = false;
+      try {
+        (void)Inkling2::plan(dir, 512);
+      } catch (const std::runtime_error& e) {
+        refused_corrupt = dynamic_cast<const FatalError*>(&e) == nullptr;
+      }
+      check(refused_corrupt, "inkling2 refuses corrupt config.json with runtime_error");
+
+      unlink((dir + "/config.json").c_str());
+      bool refused_missing = false;
+      try {
+        (void)Inkling2::plan(dir, 512);
+      } catch (const std::runtime_error& e) {
+        refused_missing = dynamic_cast<const FatalError*>(&e) == nullptr;
+      }
+      check(refused_missing, "inkling2 refuses missing config.json with runtime_error");
+      rmdir(dir.c_str());
+    }
+  }
+
+  // 4. model_context_limit(): max_position_embeddings takes precedence; falls back to model_max_length
+  {
+    char dir_tmpl[] = "/tmp/api_test_ctxlim.XXXXXX";
+    if (mkdtemp(dir_tmpl)) {
+      const std::string dir = dir_tmpl;
+      auto write_cfg = [&](const nlohmann::json& j) {
+        if (FILE* f = fopen((dir + "/config.json").c_str(), "w")) fputs(j.dump().c_str(), f), fclose(f);
+      };
+      write_cfg({{"text_config", {{"model_max_length", 1048576}}}});
+      check(model_context_limit(dir) == 1048576, "model_context_limit reads text_config.model_max_length");
+
+      write_cfg({{"model_max_length", 65536}});
+      check(model_context_limit(dir) == 65536, "model_context_limit reads top-level model_max_length");
+
+      write_cfg({{"llm_config", {{"model_max_length", 262144}}}});
+      check(model_context_limit(dir) == 262144, "model_context_limit reads llm_config.model_max_length");
+
+      write_cfg({{"text_config", {{"max_position_embeddings", 131072}, {"model_max_length", 1048576}}}});
+      check(model_context_limit(dir) == 131072,
+            "model_context_limit prefers max_position_embeddings over model_max_length");
+
+      unlink((dir + "/config.json").c_str());
+      rmdir(dir.c_str());
+    }
+  }
+}
+
+// "defer_loading": true (Anthropic's and OpenAI's tool search): a tool the prompt leaves out, which every API still
+// keeps for parsing and the grammar (ChatRequest::deferred_tools)
+void deferred_tools_mapping() {
+  auto names = [](const ojson& tools) {
+    std::string out;
+    for (const auto& t : tools) out += t["function"]["name"].get<std::string>() + " ";
+    return out;
+  };
+  // chat completions: the flag on the tool or in its function, taken out of both; false is declared
+  {
+    const ojson body = J(R"({"tools": [
+      {"type": "function", "function": {"name": "a", "parameters": {"type": "object"}}},
+      {"type": "function", "defer_loading": true, "function": {"name": "b", "parameters": {"type": "object"}}},
+      {"type": "function", "function": {"name": "c", "defer_loading": true, "parameters": {"type": "object"}}},
+      {"type": "function", "defer_loading": false, "function": {"name": "d", "parameters": {"type": "object"}}}]})");
+    ChatRequest r;
+    chat_tools(body, r);
+    check(names(r.tools) == "a d " && names(r.deferred_tools) == "b c " && names(r.call_tools()) == "a d b c ",
+          "chat: defer_loading tools are deferred, on the tool or in its function", names(r.tools) + "| " + names(r.deferred_tools));
+    check(r.call_tools().dump().find("defer_loading") == std::string::npos, "chat: the flag is taken out of every tool",
+          r.call_tools().dump());
+    ojson none = body;
+    none["tool_choice"] = "none";
+    ChatRequest n;
+    chat_tools(none, n);
+    check(n.tools.empty() && n.deferred_tools.empty(), "chat: tool_choice none = no tools, deferred ones too");
+    ojson named = body;
+    named["tool_choice"] = J(R"({"type": "function", "function": {"name": "c"}})");
+    check(chat_grammar(named, r.call_tools()) != nullptr, "chat: a named tool_choice of a deferred tool has its grammar");
+  }
+  // anthropic: the flag on the tool; tool_addition keeps it, tool_removal takes a deferred tool out
+  {
+    const ojson body = J(R"({"model": "m", "max_tokens": 10, "tool_choice": {"type": "tool", "name": "b"},
+      "tools": [{"name": "a", "input_schema": {"type": "object"}},
+                {"name": "b", "defer_loading": true, "input_schema": {"type": "object"}},
+                {"name": "c", "defer_loading": true, "input_schema": {"type": "object"}}],
+      "messages": [{"role": "user", "content": "hi"},
+        {"role": "system", "content": [{"type": "tool_removal", "tool": {"type": "tool_reference", "name": "c"}},
+          {"type": "tool_addition", "tool": {"type": "tool_definition",
+            "definition": {"name": "d", "defer_loading": true, "input_schema": {"type": "object"}}}},
+          {"type": "tool_addition", "tool": {"type": "tool_definition",
+            "definition": {"name": "a", "defer_loading": true, "input_schema": {"type": "object"}}}}]}]})");
+    const MessagesRequest q = messages_request(body);
+    check(q.chat.tools.empty() && names(q.chat.deferred_tools) == "b d a ",
+          "anthropic: defer_loading tools, tool_addition and tool_removal keep the deferred list",
+          names(q.chat.tools) + "| " + names(q.chat.deferred_tools));
+    check(q.chat.grammar != nullptr, "anthropic: a tool_choice of a deferred tool has its grammar");
+  }
+  // responses: a function, or a namespace's tools, by the namespace's flag or their own
+  {
+    ResponseStore store;
+    const ResponsesRequest q = responses_request(J(R"({"input": "hi", "tools": [
+      {"type": "function", "name": "a", "parameters": {"type": "object"}},
+      {"type": "function", "name": "b", "defer_loading": true, "parameters": {"type": "object"}},
+      {"type": "namespace", "name": "ns", "defer_loading": true, "tools": [{"type": "function", "name": "f"}]},
+      {"type": "namespace", "name": "mx", "tools": [{"type": "function", "name": "g"},
+                                                     {"type": "function", "name": "h", "defer_loading": true}]}]})"),
+                                                 store);
+    check(names(q.chat.tools) == "a mx__g " && names(q.chat.deferred_tools) == "b ns__f mx__h ",
+          "responses: defer_loading on a function, a namespace or a namespace's tool",
+          names(q.chat.tools) + "| " + names(q.chat.deferred_tools));
+  }
+}
+
+// Through the template: deferred tools leave the prompt as it is without them, and a call to one is typed by its schema
+void deferred_tools_round_trip(const TmplModel& m, const std::string& tag) {
+  const ojson declared = J(R"({"type": "function", "function": {"name": "search", "description": "Search",
+    "parameters": {"type": "object", "properties": {"q": {"type": "string"}}}}})");
+  const ojson make = J(R"({"type": "function", "defer_loading": true, "function": {"name": "make", "description": "Make",
+    "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "n": {"type": "integer"},
+      "urgent": {"type": "boolean"}, "blocks": {"type": "array", "items": {"type": "object"}}}}}})");
+  const ojson messages = J(R"([{"role": "system", "content": "S"}, {"role": "user", "content": "Make one."}])");
+  ChatRequest without, with;
+  chat_tools(ojson{{"tools", ojson::array({declared})}}, without);
+  chat_tools(ojson{{"tools", ojson::array({declared, make})}}, with);
+  without.messages = with.messages = messages;
+  check(render_chat(*m.tmpl, without, true) == render_chat(*m.tmpl, with, true),
+        tag + "deferred tools: the prompt is the one without them");
+
+  const std::string body = "<function=make>\n<parameter=name>\nMahina\n</parameter>\n<parameter=n>\n3\n</parameter>\n"
+                           "<parameter=urgent>\ntrue\n</parameter>\n<parameter=blocks>\n[{\"page\": \"paul\"}]\n"
+                           "</parameter>\n</function>\n</tool_call>";
+  for (const bool opener : {true, false}) {
+    const std::string label = tag + "deferred tools: a call " + (opener ? "" : "without its opener ");
+    std::vector<int> ids;
+    const auto res = finished(generate(m, (opener ? "<tool_call>\n" : "") + body, false, with.call_tools(), &ids), int(ids.size()));
+    const auto calls = chat_tool_calls(res.tool_calls, 0, false);
+    const ojson args = calls.size() == 1 ? ojson::parse(calls[0]["function"]["arguments"].get<std::string>(), nullptr, false)
+                                         : ojson();
+    check(calls.size() == 1 && calls[0]["function"]["name"] == "make" && args.is_object() && args["name"] == "Mahina" &&
+              args["n"] == 3 && args["urgent"] == true && args["blocks"].is_array() && args["blocks"][0]["page"] == "paul",
+          label + "is typed by its schema", calls.empty() ? res.content : calls[0].dump());
+  }
+  // (without the schema, as a tool left out of the request: every argument its text)
+  std::vector<int> ids;
+  const auto res = finished(generate(m, "<tool_call>\n" + body, false, with.tools, &ids), int(ids.size()));
+  const auto calls = chat_tool_calls(res.tool_calls, 0, false);
+  const ojson args = calls.size() == 1 ? ojson::parse(calls[0]["function"]["arguments"].get<std::string>(), nullptr, false)
+                                       : ojson();
+  check(args.is_object() && args["n"] == "3" && args["blocks"].is_string(),
+        tag + "deferred tools: an unknown tool's arguments stay text", calls.empty() ? res.content : calls[0].dump());
+}
+
 int main(int argc, char** argv) {
+  hy4_plan_unit();
+  inkling2_plan_unit();
+  a4_arena_unit();
+  glm_hy4_parser_unit();
+  stop_filter_unit();
   anthropic_mapping();
   responses_mapping();
   anthropic_events();
@@ -2162,19 +4017,28 @@ int main(int argc, char** argv) {
   chat_events();
   clients();
   reasoning_memory_unit();
+  template_content_cache_unit();
   float_arguments_text();
   tool_arguments_spelling();
   preserve_thinking_default_unit();
+  thinking_level_unit();
   disk_wait_unit();
   disk_saved_unit();
+  chat_template_format_unit();
   disk_retry_wiring_unit();
   history_gate_unit();
   kflash_lookup_unit();
   unsupported_model_unit();
   clover_unit();
+  inkling2_unit();
   norm_layout_unit();
+  ollama_unit();
   drafter_report_unit();
   draft_conversation_unit();
+  new_conversation_slot_unit();
+  evicted_prefix_slot_unit();
+  thinking_budget_mapping();
+  deferred_tools_mapping();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dump" && i + 1 < argc) dump_cases(argv[++i]);
@@ -2194,6 +4058,8 @@ int main(int argc, char** argv) {
     m.tmpl = std::make_unique<minja::chat_template>(chat_template_source(dir), "", "<|im_end|>");
     const std::string tag = "[" + dir.substr(dir.find_last_of('/') + 1) + "] ";
     anthropic_round_trip(m, tag);
+    nameless_tool_replies(m, tag);
+    call_without_opener(m, tag);
     reasoning_memory(m, tag);
     responses_round_trip(m, tag, false);
     responses_round_trip(m, tag, true);
@@ -2201,6 +4067,8 @@ int main(int argc, char** argv) {
     anthropic_tool_arguments(m, tag);
     template_checks(m, tag);
     draft_checks(m, tag);
+    thinking_cap_zero_render(m, tag);
+    deferred_tools_round_trip(m, tag);
   }
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;

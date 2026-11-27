@@ -1,0 +1,200 @@
+{
+  "format": "Privacy-filtered derived summary, not raw execution logs.",
+  "source": "8be65afbcd4edc0727a8c67d6b72344b1e2b64e4",
+  "configuration": {
+    "chip": "M4 Pro",
+    "GPU_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "binary_sha256": {
+    "kapitsa": "d8955e8558a55c9d50bb9b6a7420f1734727edf8afbc7aa94ec351a03553aa55",
+    "bench_attn": "48ab5fa73083f816c47576b5acd626aafcea9476f2a5b946906104eeb8eaa690",
+    "logit_dump": "d42228b0996622e2e1c3ce5cd2eb4525f9737341d67e3a8568bab30cd666cf06"
+  },
+  "checks": [
+    {
+      "label": "dependency-preflight",
+      "rc": 0,
+      "log_sha256": "ed01b1557bd7a1e70f90d8838f38ae0bb6b8367122b3dca7e5935bafa440a45a"
+    },
+    {
+      "label": "configure",
+      "rc": 0,
+      "log_sha256": "a960e76b49d22c25f0b1a879f1becc13d29b84dfa0fce9db770186471ab48e25"
+    },
+    {
+      "label": "build",
+      "rc": 0,
+      "log_sha256": "6574477b26de896e67428ce5067408d3837cee6b6fcd42b98bfac38610e3b2a8"
+    },
+    {
+      "label": "version",
+      "rc": 0,
+      "log_sha256": "df148410046094e6b254a66ed686388755e50dc794df130224c6dce3c5d560a9"
+    },
+    {
+      "label": "vk-cpu-tests",
+      "rc": 0,
+      "log_sha256": "52014da802f3ba7e032847aea486a52e35601b2c83047a66379f44f883fa1257"
+    },
+    {
+      "label": "supp-execution_session_test",
+      "rc": 0,
+      "log_sha256": "86266c33c5218a1cacb9f5f927d4c8c603c11e5542685f449bf792484279daee"
+    },
+    {
+      "label": "supp-http_stream_test",
+      "rc": 0,
+      "log_sha256": "a88fe805fb01ece1cd8c9fdbe6ea2f520f94f3f136ebc9f3185b100ef182fc83"
+    },
+    {
+      "label": "supp-bench_test",
+      "rc": 0,
+      "log_sha256": "a241c127079ed5592e8541d9785e9e4db2201954072b1df203fa7cd90258bf79"
+    },
+    {
+      "label": "supp-update_test",
+      "rc": 0,
+      "log_sha256": "d74814512c7c33cd89857cc5a9c7b6ae6aad7b36112d40aa27b185fb14a0ba9a"
+    },
+    {
+      "label": "supp-grammar_test",
+      "rc": 0,
+      "log_sha256": "3c67b5c52235f4ae222c2accead662a5e6cb1f49ce2cd96547d79bbabfe4eb9c"
+    },
+    {
+      "label": "supp-structured_check",
+      "rc": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "supp-drafter_attach_test",
+      "rc": 0,
+      "log_sha256": "dcdc8d9113bc2b03604b7e987a36f762018cf80b583ec8099614aac50185196a"
+    },
+    {
+      "label": "supp-exl3_test",
+      "rc": 0,
+      "log_sha256": "8401dcf05b63aaca6738e5d8749611a64877db65f7f7388cce880eb4732b4a29"
+    },
+    {
+      "label": "supp-device_profile_test",
+      "rc": 0,
+      "log_sha256": "2650b0ba4978026e3bdff341ab811fdcb413c33d3180e2709b468c6805e462dd"
+    },
+    {
+      "label": "supp-qwen4_config_test",
+      "rc": 0,
+      "log_sha256": "0ce0916c13d746720e554f8a581c903f8a9206e6e8b5c1abbf5ddfdd86f1959b"
+    },
+    {
+      "label": "supp-json_file_test",
+      "rc": 0,
+      "log_sha256": "e1de34dd7d305f3c0ca909c4ae458e1ff2bf86120d779ae7b83b6fbae5c7e16d"
+    },
+    {
+      "label": "supp-affine_pack_test",
+      "rc": 0,
+      "log_sha256": "c3cdf19ecd57a29c901c97762e249e1575194554e928d96f6d476e5dcfc32884"
+    },
+    {
+      "label": "supp-systemone_test",
+      "rc": 0,
+      "log_sha256": "8f9b93c44c38a7e5fdbb032f38ba3712d5ed6233999b1edfd1881ea664774129"
+    },
+    {
+      "label": "supp-systemone_codes_probe_test",
+      "rc": 0,
+      "log_sha256": "32d68b2954bbd8968a32c7f4b9191664fe14c93fbd0620fd4330de2111d09ab0"
+    },
+    {
+      "label": "supp-splash_protocol_test",
+      "rc": 0,
+      "log_sha256": "3fa40c24c85a09c241a97cfbf56c57c7edb8cc89f9ef3f854bdbdb3430a11c3e"
+    },
+    {
+      "label": "supp-splash_runtime_test",
+      "rc": 0,
+      "log_sha256": "503279ce79d937e6a3da83a253509e8127331238c1b26764e317944dcacae642"
+    },
+    {
+      "label": "supp-splash_discover_test",
+      "rc": 0,
+      "log_sha256": "b4726c938fb73d394066a91e46e1c80a16900803de428f0bcf971b25edd306f8"
+    },
+    {
+      "label": "supp-splash_plan_test",
+      "rc": 0,
+      "log_sha256": "1d878bf581c25ae57bba793a32ebc1e89233d5b148bca4f510494310d837c4e6"
+    },
+    {
+      "label": "test_profile_gates",
+      "rc": 0,
+      "log_sha256": "9fb6034d779ecca08bc6902b14abd0e5aeaccc73dddac1e36363819a40bc79ad"
+    },
+    {
+      "label": "test_comment_gates",
+      "rc": 0,
+      "log_sha256": "1d57bc3fd634152d2901ce98fc55fa5205e360f1ef6dbe0088b0c51b69075d42"
+    },
+    {
+      "label": "test_pr_size",
+      "rc": 0,
+      "log_sha256": "4e7e9424dda1049899d94ffe56c0aee3f868aa651744de83992a5e942b5a1aff"
+    },
+    {
+      "label": "test_drex_max",
+      "rc": 0,
+      "log_sha256": "4baa39ce886b3361dfb8661621f71fa10a01b85758b7510785561905130f3bee"
+    },
+    {
+      "label": "test_logit_dump",
+      "rc": 0,
+      "log_sha256": "fec86b7e63e69c80c04811fe5bd5f7c0a5be2d11327905f2465b1dec7c523645"
+    },
+    {
+      "label": "test_systemone_codes_harness",
+      "rc": 0,
+      "log_sha256": "30fef72c12f29cee7095d78b3723b53daa76e89cd754d0bbe843fbac24d63b61"
+    }
+  ],
+  "recovery": {
+    "initial_lint": "Executable lookup failed before prek started; completed build and CPU checks were not repeated.",
+    "remaining_checks": [
+      {
+        "label": "prek",
+        "rc": 0,
+        "log_sha256": "9a2ba97865628f9f9ff946ac2be11d54b2357f187116aa3d9abc1e4480a405f5"
+      },
+      {
+        "label": "diff-check",
+        "rc": 0,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "required-checks",
+        "rc": 0,
+        "log_sha256": "2566addbcc79fdaaa62de42fe8ad2b8c058973708f6edf95cd1197cadba7019e"
+      },
+      {
+        "label": "cleanup",
+        "rc": 0,
+        "log_sha256": "38a33ebfd9d41828e0927685142ac492ede71ee67dc51d613d003d8982eb1df6"
+      }
+    ]
+  },
+  "GPU_model_dispatches": 0,
+  "limits": "Successful host build and CPU checks do not qualify the Metal kernel numerics or performance.",
+  "CXX_flags": [
+    "-O3",
+    "-std=gnu++20",
+    "-arch",
+    "arm64",
+    "-mmacosx-version-min=14.0"
+  ],
+  "NDEBUG": false,
+  "vk_entry_count": 21,
+  "supplement_native_count": 18
+}

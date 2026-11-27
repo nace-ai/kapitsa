@@ -1,0 +1,14 @@
+{
+  "kind": "Privacy-filtered derived exports. Original records are retained privately; these are not raw logs.",
+  "candidate_source_commit": "315540a26d3d47f198425812acfc24d59e15dc3e",
+  "files": {
+    "README.md": {
+      "sha256": "bf0034fcc16de81d949333b194fd3c4881cbaad43e5b6bbd8a260511750983b3",
+      "bytes": 3437
+    },
+    "summary.json": {
+      "sha256": "6fb1d26264cba902b8ebadf79ba96cb616e83bb8e61f0e763a765e1df75ba8f3",
+      "bytes": 8914
+    }
+  }
+}

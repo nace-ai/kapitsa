@@ -1,0 +1,5 @@
+[  0%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/engine.cpp.o
+[  0%] Linking CXX static library libnaceinfer.a
+[ 83%] Built target naceinfer
+[ 83%] Linking CXX executable kapitsa
+[100%] Built target kapitsa

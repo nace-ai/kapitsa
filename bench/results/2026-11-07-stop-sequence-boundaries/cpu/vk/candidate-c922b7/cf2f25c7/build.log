@@ -1,0 +1,71 @@
+[100%] Building CXX object CMakeFiles/device_profile_test.dir/tests/device_profile_test.cpp.o
+[100%] Building CXX object CMakeFiles/device_profile_test.dir/src/engine/device_profile.cpp.o
+[100%] Linking CXX executable device_profile_test
+[100%] Built target device_profile_test
+[100%] Building CXX object CMakeFiles/execution_session_test.dir/tools/execution_session_test.cpp.o
+[100%] Building CXX object CMakeFiles/execution_session_test.dir/src/engine/execution_session.cpp.o
+[100%] Linking CXX executable execution_session_test
+[100%] Built target execution_session_test
+[  0%] Building CXX object CMakeFiles/http_stream_test.dir/src/engine/execution_session.cpp.o
+[100%] Building CXX object CMakeFiles/http_stream_test.dir/tools/http_stream_test.cpp.o
+[100%] Building CXX object CMakeFiles/http_stream_test.dir/src/server/http_stream.cpp.o
+[100%] Linking CXX executable http_stream_test
+[100%] Built target http_stream_test
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/drafter_attach_test.dir/tools/drafter_attach_test.cpp.o
+[100%] Linking CXX executable drafter_attach_test
+[100%] Built target drafter_attach_test
+[ 96%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/exl3_test.dir/tools/exl3_test.cpp.o
+[100%] Linking CXX executable exl3_test
+[100%] Built target exl3_test
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/qwen4_config_test.dir/tools/qwen4_config_test.cpp.o
+[100%] Linking CXX executable qwen4_config_test
+[100%] Built target qwen4_config_test
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/json_file_test.dir/tools/json_file_test.cpp.o
+[100%] Linking CXX executable json_file_test
+[100%] Built target json_file_test
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/affine_pack_test.dir/tools/affine_pack_test.cpp.o
+[100%] Linking CXX executable affine_pack_test
+[100%] Built target affine_pack_test
+[ 96%] Built target naceinfer
+[ 96%] Building CXX object CMakeFiles/systemone_test.dir/tools/systemone_test.cpp.o
+[100%] Linking CXX executable systemone_test
+[100%] Built target systemone_test
+[  0%] Building CXX object CMakeFiles/systemone_codes_probe_test.dir/tests/systemone_codes_probe_test.cpp.o
+[100%] Building CXX object CMakeFiles/systemone_codes_probe_test.dir/src/systemone/systemone.cpp.o
+[100%] Linking CXX executable systemone_codes_probe_test
+[100%] Built target systemone_codes_probe_test
+[  0%] Building CXX object CMakeFiles/systemone_codes_driver.dir/tests/systemone_codes_driver.cpp.o
+[100%] Building CXX object CMakeFiles/systemone_codes_driver.dir/src/tokenizer/tokenizer.cpp.o
+[100%] Building CXX object CMakeFiles/systemone_codes_driver.dir/src/systemone/systemone.cpp.o
+[100%] Linking CXX executable systemone_codes_driver
+[100%] Built target systemone_codes_driver
+[  0%] Building CXX object CMakeFiles/splash_protocol_test.dir/tools/splash_protocol_test.cpp.o
+[  0%] Building CXX object CMakeFiles/splash_protocol_test.dir/src/splash/protocol.cpp.o
+[100%] Linking CXX executable splash_protocol_test
+[100%] Built target splash_protocol_test
+[  0%] Building CXX object CMakeFiles/splash_runtime_test.dir/tools/splash_runtime_test.cpp.o
+[  0%] Building CXX object CMakeFiles/splash_runtime_test.dir/src/splash/protocol.cpp.o
+[  0%] Building CXX object CMakeFiles/splash_runtime_test.dir/src/splash/runtime.cpp.o
+[100%] Linking CXX executable splash_runtime_test
+[100%] Built target splash_runtime_test
+[  0%] Building CXX object CMakeFiles/splash_discover_test.dir/tools/splash_discover_test.cpp.o
+[100%] Building CXX object CMakeFiles/splash_discover_test.dir/src/splash/discover.cpp.o
+[100%] Linking CXX executable splash_discover_test
+[100%] Built target splash_discover_test
+[  0%] Building CXX object CMakeFiles/splash_plan_test.dir/tools/splash_plan_test.cpp.o
+[  0%] Building CXX object CMakeFiles/splash_plan_test.dir/src/splash/plan.cpp.o
+[100%] Linking CXX executable splash_plan_test
+[100%] Built target splash_plan_test
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/parser_test.dir/tools/parser_test.cpp.o
+[100%] Linking CXX executable parser_test
+[100%] Built target parser_test
+[ 96%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/dflash_accept_test.dir/tools/dflash_accept_test.cpp.o
+[100%] Linking CXX executable dflash_accept_test
+[100%] Built target dflash_accept_test

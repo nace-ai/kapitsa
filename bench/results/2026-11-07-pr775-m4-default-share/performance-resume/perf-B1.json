@@ -1,0 +1,172 @@
+{
+ "schema": 2,
+ "label": "B1",
+ "model": "qwen3.5-9b",
+ "base_url": "http://127.0.0.1:18776/v1",
+ "when": "2026-11-07 03:08:08",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:18776/v1",
+  "model": "qwen3.5-9b",
+  "label": "B1",
+  "pid": 55426,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000",
+  "corpus": null,
+  "ref_prompt_tokens": "",
+  "cached_samples": 0,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "always_reasons": false,
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,tools,agent",
+  "cached_increment": false,
+  "increment_prefixes": "8000",
+  "increment_tokens": 8000,
+  "increment_turns": 2,
+  "increment_repeats": 2,
+  "agentic": false,
+  "sweep_sizes": "1000,2000,4000,8000,16000,max",
+  "sweep_repeats": 2,
+  "sweep_task": "summary",
+  "max_ctx": 32768,
+  "cache_tokens": 8000,
+  "server_slots": 0,
+  "sustain_s": 300,
+  "agent_trace": "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/bench/harness/agent-traces/opencode-ledger.json",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/performance-resume/perf-B1.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "9cca6b0d181d020cad9949eb002ba274baeaaf45",
+  "dirty": false
+ },
+ "phases": {
+  "prefill_4000": [
+   1793992088.068,
+   1793992092.071
+  ]
+ },
+ "memory": {
+  "prefill_4000": {
+   "pids": [
+    {
+     "pid": 55426,
+     "name": "kapitsa",
+     "phys_footprint": 7443289584,
+     "phys_footprint_peak": 7529797104,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 9060352,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 7098.5,
+   "phys_footprint_peak_mb": 7181.0,
+   "mapped_file_clean_mb": 8.6,
+   "swap_used_mb": 1127.69,
+   "memorystatus_level": 74,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "/tmp/kapitsa-gpu.lock",
+  "wait_s": null
+ },
+ "vm_start": {
+  "swap_used_mb": 1127.69,
+  "swapouts": 1724284,
+  "swapins": 691603,
+  "pageouts": 554628,
+  "memorystatus_level": 76
+ },
+ "prefill": [
+  {
+   "target": 4000,
+   "invalid": [],
+   "flags": [],
+   "prompt_tokens": 4135,
+   "expected_prompt_tokens": 4133,
+   "ttft_s": 3.1626541250152513,
+   "prefill_tps": 1307.446162795326,
+   "cold_cached_tokens": 0,
+   "first_event_chars": 3,
+   "timings": null,
+   "finish": "stop",
+   "answer": "The file `modeling_granite_speech.py` defines the `GraniteSpeechModel` architecture, which includes an audio encoder, a projector, and a language model for processing multimodal inputs.",
+   "reasoning_chars": 0,
+   "cached": {
+    "samples": [],
+    "invalid": [],
+    "flags": [],
+    "median_ttft_s": null
+   },
+   "turn2_ttft_s": null,
+   "turn1_finish": "stop"
+  }
+ ],
+ "peak_rss_mb": 6139,
+ "peak_footprint_mb": 7106,
+ "power_info": [],
+ "invalid": [],
+ "flags": [],
+ "peak_memory_mb": 7181.0,
+ "mapped_file_clean_mb": 8.6,
+ "vm_end": {
+  "swap_used_mb": 1127.69,
+  "swapouts": 1724284,
+  "swapins": 691603,
+  "pageouts": 554628,
+  "memorystatus_level": 74
+ },
+ "when_end": "2026-11-07 03:08:12"
+}

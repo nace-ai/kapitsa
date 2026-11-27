@@ -1,0 +1,20 @@
+{
+  "name": "cancel-second",
+  "progress": [
+    {
+      "total": 15217,
+      "cache": 0,
+      "processed": 0,
+      "time_ms": 0
+    },
+    {
+      "total": 15217,
+      "cache": 0,
+      "processed": 1903,
+      "time_ms": 653
+    }
+  ],
+  "text": "",
+  "reasoning": "",
+  "cancelled": true
+}

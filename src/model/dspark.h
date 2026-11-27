@@ -95,7 +95,7 @@ class DSpark : public NhDrafter {
   // probabilities are overconfident, which a larger ratio offsets (calibrating them per slot gained < 0.5% held out)
   float dyn_ratio_ = 0.2f;
   int fixed_depth_ = -1;  // NI_DSPARK_DEPTH=d: verify d drafts every cycle (measurements)
-  // the attention projections on nh_xq8_v8 (default on the M5, where it was measured; NI_DSPARK_XQ8=0/1)
+  // the attention projections on nh_xq8_v8 (default on the M5; NI_DSPARK_XQ8=0/1)
   bool xq8_ = false;
   bool chain_ = true;  // double-buffered decode (NI_DSPARK_CHAIN=0: the drafting half after the host reads each verify)
   std::vector<Buffer> owned_;

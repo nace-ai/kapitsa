@@ -1,0 +1,5 @@
+PASS 42 actual VitWeights::read_bf16 cases, all output bytes / guards / padding checked
+{'fixture': '64MiB BF16', 'variant': 'base', 'round': 0, 'guards': True, 'hash': 210258266236789541, 'k': 4096, 'ld': 4096, 'ms': 8.946584, 'padding_zero': True, 'peak_rss_bytes': 206340096, 'rows': 8192}
+{'fixture': '64MiB BF16', 'variant': 'candidate', 'round': 0, 'guards': True, 'hash': 210258266236789541, 'k': 4096, 'ld': 4096, 'ms': 3.934292, 'padding_zero': True, 'peak_rss_bytes': 139231232, 'rows': 8192}
+{'fixture': '64MiB BF16', 'variant': 'base', 'round': 1, 'guards': True, 'hash': 210258266236789541, 'k': 4096, 'ld': 4096, 'ms': 8.023917, 'padding_zero': True, 'peak_rss_bytes': 206340096, 'rows': 8192}
+{'fixture': '64MiB BF16', 'variant': 'candidate', 'round': 1, 'guards': True, 'hash': 210258266236789541, 'k': 4096, 'ld': 4096, 'ms': 3.953375, 'padding_zero': True, 'peak_rss_bytes': 139231232, 'rows': 8192}

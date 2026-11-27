@@ -1,0 +1,379 @@
+{
+  "export": "Explicitly redacted derived evidence; not an original execution log. Private originals retained. Numeric results and source/binary identities unchanged.",
+  "environment": {
+    "chip": "M3 Ultra",
+    "GPU_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "source_commits": {
+    "reference": "87c105238186beadb375805e47a89791a499319a",
+    "candidate": "5bcbe7e2069f55485473ba45755ab4c65a3c44c5"
+  },
+  "native": {
+    "A1": {
+      "source": "87c105238186beadb375805e47a89791a499319a",
+      "rc": 0,
+      "result_sha256": "d7b65ade2a105ac2194b7ee1e1c00164dfa2b4182d644b64639e745bfc9bf03d",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decoding": {
+        "decoding": "MTP",
+        "decoding_detail": "MTP speculative decoding depth 4, KFlash (MTP)"
+      },
+      "results": {
+        "decode": {
+          "median_tps": 261.54,
+          "runs_tps": [
+            251.28,
+            261.54,
+            270.41
+          ],
+          "median_accepted_draft_tps": 172.15,
+          "median_accepted_draft_share": 0.6582
+        },
+        "decode_greedy": {
+          "median_tps": 267.72,
+          "runs_tps": [
+            269.28,
+            265.86,
+            267.72
+          ],
+          "median_accepted_draft_tps": 178.31,
+          "median_accepted_draft_share": 0.666
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4132,
+            "ttft_s": 2.0992,
+            "tps": 1968.4,
+            "followup_s": [
+              0.0327,
+              0.0473,
+              0.033
+            ],
+            "followup_median_s": 0.033,
+            "followup_suffix_tps": 606.8
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags_derived": [],
+      "invalid": []
+    },
+    "B1": {
+      "source": "5bcbe7e2069f55485473ba45755ab4c65a3c44c5",
+      "rc": 0,
+      "result_sha256": "cb13aed4ae68ed586452967f9c9eea81560ff6fa289a35ddb7980aa66eb6815b",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decoding": {
+        "decoding": "MTP",
+        "decoding_detail": "MTP speculative decoding depth 4, KFlash (MTP)"
+      },
+      "results": {
+        "decode": {
+          "median_tps": 246.35,
+          "runs_tps": [
+            237.78,
+            270.76,
+            246.35
+          ],
+          "median_accepted_draft_tps": 158.78,
+          "median_accepted_draft_share": 0.6445
+        },
+        "decode_greedy": {
+          "median_tps": 271.69,
+          "runs_tps": [
+            270.22,
+            277.37,
+            271.69
+          ],
+          "median_accepted_draft_tps": 181.48,
+          "median_accepted_draft_share": 0.6699
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4135,
+            "ttft_s": 2.1043,
+            "tps": 1965.0,
+            "followup_s": [
+              0.0332,
+              0.0411,
+              0.0339
+            ],
+            "followup_median_s": 0.0339,
+            "followup_suffix_tps": 657.5
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags_derived": [],
+      "invalid": []
+    },
+    "A2": {
+      "source": "87c105238186beadb375805e47a89791a499319a",
+      "rc": 0,
+      "result_sha256": "1cf89f77c2df57e30e3aaf12fcf569f82fe4bbcfb90e9e86dcc8f23c6f9b1b0f",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decoding": {
+        "decoding": "MTP",
+        "decoding_detail": "MTP speculative decoding depth 4, KFlash (MTP)"
+      },
+      "results": {
+        "decode": {
+          "median_tps": 246.38,
+          "runs_tps": [
+            235.16,
+            246.38,
+            256.81
+          ],
+          "median_accepted_draft_tps": 158.32,
+          "median_accepted_draft_share": 0.6426
+        },
+        "decode_greedy": {
+          "median_tps": 289.7,
+          "runs_tps": [
+            286.53,
+            289.7,
+            289.94
+          ],
+          "median_accepted_draft_tps": 200.3,
+          "median_accepted_draft_share": 0.6914
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4133,
+            "ttft_s": 2.1059,
+            "tps": 1962.6,
+            "followup_s": [
+              0.0326,
+              0.0493,
+              0.0344
+            ],
+            "followup_median_s": 0.0344,
+            "followup_suffix_tps": 581.8
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags_derived": [],
+      "invalid": []
+    },
+    "B2": {
+      "source": "5bcbe7e2069f55485473ba45755ab4c65a3c44c5",
+      "rc": 0,
+      "result_sha256": "a55a6e80460837364588bd1efde090e7d1916b0492f151e5f122d987f5d3a1ff",
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "decoding": {
+        "decoding": "MTP",
+        "decoding_detail": "MTP speculative decoding depth 4, KFlash (MTP)"
+      },
+      "results": {
+        "decode": {
+          "median_tps": 256.35,
+          "runs_tps": [
+            235.03,
+            256.35,
+            262.66
+          ],
+          "median_accepted_draft_tps": 169.23,
+          "median_accepted_draft_share": 0.6602
+        },
+        "decode_greedy": {
+          "median_tps": 265.26,
+          "runs_tps": [
+            264.27,
+            265.26,
+            265.41
+          ],
+          "median_accepted_draft_tps": 176.67,
+          "median_accepted_draft_share": 0.666
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4133,
+            "ttft_s": 2.1055,
+            "tps": 1962.9,
+            "followup_s": [
+              0.0344,
+              0.0431,
+              0.0356
+            ],
+            "followup_median_s": 0.0356,
+            "followup_suffix_tps": 625.8
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "flags_derived": [],
+      "invalid": []
+    }
+  },
+  "http": {
+    "reference": {
+      "rc": 1,
+      "pass_count": 54,
+      "fail_count": 1,
+      "executed_checks": [
+        "PASS GET / serves the chat page",
+        "PASS chat page is self-contained (no external requests)",
+        "PASS chat page carries the server's --timing (ttft, prefill or both; the placeholder is filled in)",
+        "PASS /v1/models lists the model",
+        "PASS chat page budgets the reply by the model's context, not the API's 16384 default",
+        "PASS thinking: reasoning streamed separately",
+        "PASS thinking: correct answer",
+        "PASS thinking: finish=stop + usage",
+        "PASS tool call: finish=tool_calls",
+        "PASS tool call: read_file or run_shell on /etc/hosts",
+        "PASS tool call: no markup in content",
+        "PASS tool result: final answer mentions 3",
+        "PASS tool result: prefix reused (cached >= first prompt, less the generation prompt's tail)",
+        "PASS next turn: cached prefix",
+        "PASS next turn: answer",
+        "PASS non-stream tool call + int arg",
+        "PASS int argument is a JSON number",
+        "PASS main slot survives side request",
+        "PASS thinking + tools: a call on /etc/hosts returned as a tool call",
+        "PASS one-offs keep the conversation in progress",
+        "PASS a side request sent beside a first request does not evict it",
+        "PASS anthropic: non-streamed tool call (stop_reason tool_use, tool_use on /etc/hosts, usage)",
+        "PASS anthropic: display omitted: the thinking block has no text and a signature",
+        "PASS anthropic: count_tokens counts the prompt",
+        "PASS anthropic stream: message_start, ping, blocks, message_delta, message_stop",
+        "PASS anthropic stream: message_start reports the tool loop's prompt as cached (the reply's tokens included)",
+        "PASS anthropic stream: final answer mentions 3",
+        "PASS anthropic: the next question's prompt continues the conversation (every turn's thinking kept)",
+        "PASS anthropic: a prompt over the context is 400 \"prompt is too long: N tokens > M maximum\"",
+        "PASS anthropic: streamed too, a plain 400 before any event",
+        "PASS responses stream: created, in_progress, items, completed; sequence numbers in order",
+        "PASS responses stream: a function_call on /etc/hosts",
+        "PASS responses: the tool loop's next request is answered (mentions 3)",
+        "PASS responses: its prompt is cached (input_tokens_details.cached_tokens >= the first prompt)",
+        "PASS responses: previous_response_id continues a stored response",
+        "PASS responses: an unknown previous_response_id is a 400",
+        "PASS responses: a prompt over the context is 400 context_length_exceeded",
+        "PASS responses: a max_output_tokens cut is status incomplete",
+        "PASS /v1/models reports the requests that run at once (slots)",
+        "PASS a request alone gives the same reply every time (greedy)",
+        "PASS in flight together: the greedy reply is answered in full",
+        "PASS in flight together: the sampled T=0.7 seed 11 reply is answered in full",
+        "PASS in flight together: the greedy reply starts as it does alone",
+        "PASS in flight together: a 2K-token request sent during a long reply finishes first",
+        "PASS more requests than slots: every one is answered in full",
+        "PASS a client gone mid-stream: the request beside it is answered, the next one starts at once",
+        "PASS chat: a prompt over the context is a 400 context_length_exceeded",
+        "PASS chat stream: a prompt over the context is a 400 context_length_exceeded",
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0030698776245117188, {'id': 'chatcmpl-179419400691745', 'object': 'chat.completion.chunk', 'created': 1794194006, 'model': 'q4-codes-neon-review', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.133121967315674], first token at 18.618426084518433",
+        "PASS Ollama: GET /api/version",
+        "PASS Ollama: GET /api/tags lists models",
+        "PASS Ollama: /api/tags has at least the running model",
+        "PASS Ollama: POST /api/show for running model",
+        "PASS Ollama: POST /api/show for unknown model is 404",
+        "PASS Ollama: POST /api/embed not supported"
+      ]
+    },
+    "candidate": {
+      "rc": 1,
+      "pass_count": 54,
+      "fail_count": 1,
+      "executed_checks": [
+        "PASS GET / serves the chat page",
+        "PASS chat page is self-contained (no external requests)",
+        "PASS chat page carries the server's --timing (ttft, prefill or both; the placeholder is filled in)",
+        "PASS /v1/models lists the model",
+        "PASS chat page budgets the reply by the model's context, not the API's 16384 default",
+        "PASS thinking: reasoning streamed separately",
+        "PASS thinking: correct answer",
+        "PASS thinking: finish=stop + usage",
+        "PASS tool call: finish=tool_calls",
+        "PASS tool call: read_file or run_shell on /etc/hosts",
+        "PASS tool call: no markup in content",
+        "PASS tool result: final answer mentions 3",
+        "PASS tool result: prefix reused (cached >= first prompt, less the generation prompt's tail)",
+        "PASS next turn: cached prefix",
+        "PASS next turn: answer",
+        "PASS non-stream tool call + int arg",
+        "PASS int argument is a JSON number",
+        "PASS main slot survives side request",
+        "PASS thinking + tools: a call on /etc/hosts returned as a tool call",
+        "PASS one-offs keep the conversation in progress",
+        "PASS a side request sent beside a first request does not evict it",
+        "PASS anthropic: non-streamed tool call (stop_reason tool_use, tool_use on /etc/hosts, usage)",
+        "PASS anthropic: display omitted: the thinking block has no text and a signature",
+        "PASS anthropic: count_tokens counts the prompt",
+        "PASS anthropic stream: message_start, ping, blocks, message_delta, message_stop",
+        "PASS anthropic stream: message_start reports the tool loop's prompt as cached (the reply's tokens included)",
+        "PASS anthropic stream: final answer mentions 3",
+        "PASS anthropic: the next question's prompt continues the conversation (every turn's thinking kept)",
+        "PASS anthropic: a prompt over the context is 400 \"prompt is too long: N tokens > M maximum\"",
+        "PASS anthropic: streamed too, a plain 400 before any event",
+        "PASS responses stream: created, in_progress, items, completed; sequence numbers in order",
+        "PASS responses stream: a function_call on /etc/hosts",
+        "PASS responses: the tool loop's next request is answered (mentions 3)",
+        "PASS responses: its prompt is cached (input_tokens_details.cached_tokens >= the first prompt)",
+        "PASS responses: previous_response_id continues a stored response",
+        "PASS responses: an unknown previous_response_id is a 400",
+        "PASS responses: a prompt over the context is 400 context_length_exceeded",
+        "PASS responses: a max_output_tokens cut is status incomplete",
+        "PASS /v1/models reports the requests that run at once (slots)",
+        "PASS a request alone gives the same reply every time (greedy)",
+        "PASS in flight together: the greedy reply is answered in full",
+        "PASS in flight together: the sampled T=0.7 seed 11 reply is answered in full",
+        "PASS in flight together: the greedy reply starts as it does alone",
+        "PASS in flight together: a 2K-token request sent during a long reply finishes first",
+        "PASS more requests than slots: every one is answered in full",
+        "PASS a client gone mid-stream: the request beside it is answered, the next one starts at once",
+        "PASS chat: a prompt over the context is a 400 context_length_exceeded",
+        "PASS chat stream: a prompt over the context is a 400 context_length_exceeded",
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0027022361755371094, {'id': 'chatcmpl-179419416591745', 'object': 'chat.completion.chunk', 'created': 1794194165, 'model': 'q4-codes-neon-review', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.115432024002075], first token at 23.313252210617065",
+        "PASS Ollama: GET /api/version",
+        "PASS Ollama: GET /api/tags lists models",
+        "PASS Ollama: /api/tags has at least the running model",
+        "PASS Ollama: POST /api/show for running model",
+        "PASS Ollama: POST /api/show for unknown model is 404",
+        "PASS Ollama: POST /api/embed not supported"
+      ]
+    }
+  },
+  "limitations": "Original flags and failed checks retained. Any private machine-state flag is explicitly summarized as failed environment qualification. Native generated histories are not asserted to be matched input/output."
+}

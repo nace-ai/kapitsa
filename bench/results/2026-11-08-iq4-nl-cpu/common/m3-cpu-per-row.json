@@ -1,0 +1,325 @@
+{
+  "record_kind": "explicitly sanitized derived CPU measurement report; not raw execution logs",
+  "configuration": {
+    "chip": "Apple M3 Ultra",
+    "gpu_cores": 60,
+    "memory_capacity_gib": 96,
+    "macos": "26.4.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)"
+  },
+  "model_source": {
+    "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "filename": "Qwen_Qwen3.5-4B-IQ4_NL.gguf"
+  },
+  "real_input": {
+    "tensor": "blk.0.ffn_up.weight",
+    "format": "IQ4_NL",
+    "gguf_shape": [
+      2560,
+      9216
+    ],
+    "rows_requested": 1024,
+    "columns": 2560,
+    "block_elements": 32,
+    "block_bytes": 18,
+    "row_bytes": 1440,
+    "sample_bytes": 1474560,
+    "range_inclusive": [
+      576698336,
+      578172895
+    ],
+    "sample_sha256": "038e557ae654a48a0205501ca656b02a5d86c9da3e32f1dd1e8dd82f8542489b",
+    "limitation": "First 1024 rows of one actual tensor; not a whole-model or whole-import performance measurement."
+  },
+  "source_reference": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f",
+  "source_candidate": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+  "identities": {
+    "reference": {
+      "source_commit": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f",
+      "source_sha256": "d33b66d3f1a4ef2089abbb3f03cb46fbab195afb95a8b73f1eb0e1f98a1e5035",
+      "source_object_sha256": "1d2717a238ea711c6e772a7e6c593071507517d2f852ccc2f8c7fb1b15e10101",
+      "library_sha256": "269f02149f2d819cc5ea148c369ac358993eeffba8387a3ae216d3494f1fe682",
+      "driver_source_sha256": "b1401721a0631600e67ec1fd46fd1407a7902d5829742f611f40b93d2e178a90",
+      "binary_sha256": "07e8e8fb48aaab6b88c213e9ea2094f76d4a79d9b5f3e6d3d5d28e8b9537cecc"
+    },
+    "candidate": {
+      "source_commit": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+      "source_sha256": "bc56773f295da3541b603b01ae9407a07371276e19095740969087327003b3a8",
+      "source_object_sha256": "6e3fe4f76ecf0c662942d9816b317d52fc1c0ff06dfdae917e0b425411d71de4",
+      "library_sha256": "ae5caff18c89062c7fc49caa79fc15c809d69a5e3b696f368759c74a84aa9f74",
+      "driver_source_sha256": "b1401721a0631600e67ec1fd46fd1407a7902d5829742f611f40b93d2e178a90",
+      "binary_sha256": "73ed3328423cd5e2408a71b393a480535cce14bab1ee949425ae0d5294a38437"
+    }
+  },
+  "verified_compile_flags": [
+    "-O3",
+    "-std=gnu++20",
+    "-arch arm64",
+    "-mmacosx-version-min=14.0"
+  ],
+  "NDEBUG_in_actual_target_command": false,
+  "method": {
+    "api": "ni::gguf::dequantize(kIQ4_NL), one official-library call per real row",
+    "rows": 1024,
+    "columns": 2560,
+    "leg_order": [
+      "A1",
+      "B1",
+      "A2",
+      "B2",
+      "A3",
+      "B3",
+      "A4",
+      "B4"
+    ],
+    "untimed_warmups_per_leg": 1,
+    "timed_passes_per_leg": 16,
+    "timed_segment": "row dequantization loop only",
+    "excluded_from_elapsed": "file IO, allocation, reference oracle, warmup, full output/input byte gates, finiteness and SHA256 checks",
+    "command_examples_are_derived_placeholders": true,
+    "derived_leg_example": "$DRIVER --input \"$MODEL_ROWS\" --rows 1024 --cols 2560 --passes 16 --oracle \"$REF_OUTPUT\" --output \"$LEG_OUTPUT\""
+  },
+  "gates": {
+    "full_output_bytes": 10485760,
+    "oracle_output_sha256": "ddeaac47dfa865894edff08c4e4f83d11fa39f0c5a2515e97e5692b792841eb0",
+    "all_128_timed_passes_byte_equal_finite_input_unchanged": true,
+    "input_and_binary_sha256_before_after_all_legs": true
+  },
+  "measurements": {
+    "scope": "warm official CPU per-row dequantization of 1024 real IQ4_NL rows; no loading or inference speed claim",
+    "legs": [
+      {
+        "label": "A1",
+        "arm": "reference",
+        "raw_ns_per_row": [
+          6002.970703125,
+          6087.0361328125,
+          6133.7080078125,
+          6023.599609375,
+          6021.3623046875,
+          6024.12890625,
+          6025.59375,
+          6082.11328125,
+          6050.0078125,
+          6005.4931640625,
+          6009.806640625,
+          6098.34765625,
+          6158.9765625,
+          6127.8076171875,
+          6062.21484375,
+          6043.7421875
+        ],
+        "median_ns_per_row": 6046.875,
+        "mean_ns_per_row": 6059.806823730469
+      },
+      {
+        "label": "B1",
+        "arm": "candidate",
+        "raw_ns_per_row": [
+          1291.259765625,
+          1288.57421875,
+          1290.4052734375,
+          1295.7763671875,
+          1297.892578125,
+          1289.5908203125,
+          1297.0380859375,
+          1312.296875,
+          1289.55078125,
+          1290.689453125,
+          1299.4384765625,
+          1289.9169921875,
+          1289.14453125,
+          1295.5322265625,
+          1296.671875,
+          1290.4873046875
+        ],
+        "median_ns_per_row": 1290.974609375,
+        "mean_ns_per_row": 1294.0166015625
+      },
+      {
+        "label": "A2",
+        "arm": "reference",
+        "raw_ns_per_row": [
+          6110.2294921875,
+          6076.0908203125,
+          6006.4296875,
+          6021.8505859375,
+          6047.36328125,
+          6052.04296875,
+          6027.140625,
+          5999.6748046875,
+          6009.96875,
+          6002.0751953125,
+          6118.5703125,
+          6094.6455078125,
+          6066.935546875,
+          6026.9775390625,
+          6024.0478515625,
+          6134.1552734375
+        ],
+        "median_ns_per_row": 6037.251953125,
+        "mean_ns_per_row": 6051.137390136719
+      },
+      {
+        "label": "B2",
+        "arm": "candidate",
+        "raw_ns_per_row": [
+          1304.484375,
+          1290.9345703125,
+          1286.5390625,
+          1289.1845703125,
+          1292.1962890625,
+          1292.724609375,
+          1292.318359375,
+          1295.451171875,
+          1294.0263671875,
+          1289.9169921875,
+          1294.7998046875,
+          1304.646484375,
+          1302.0419921875,
+          1296.4677734375,
+          1301.025390625,
+          1296.79296875
+        ],
+        "median_ns_per_row": 1294.4130859375,
+        "mean_ns_per_row": 1295.221923828125
+      },
+      {
+        "label": "A3",
+        "arm": "reference",
+        "raw_ns_per_row": [
+          6028.8486328125,
+          6054.484375,
+          6085.44921875,
+          6086.3037109375,
+          6088.0537109375,
+          6049.154296875,
+          6026.4072265625,
+          6142.171875,
+          6042.07421875,
+          6061.6044921875,
+          6016.845703125,
+          6000.5693359375,
+          6092.447265625,
+          6191.162109375,
+          8208.251953125,
+          6097.94140625
+        ],
+        "median_ns_per_row": 6073.52685546875,
+        "mean_ns_per_row": 6204.485595703125
+      },
+      {
+        "label": "B3",
+        "arm": "candidate",
+        "raw_ns_per_row": [
+          1289.5107421875,
+          1288.6962890625,
+          1290.1201171875,
+          1289.3876953125,
+          1315.958984375,
+          1294.7587890625,
+          1290.771484375,
+          1296.2646484375,
+          1296.712890625,
+          1483.1943359375,
+          1387.77734375,
+          1288.57421875,
+          1292.8876953125,
+          1294.83984375,
+          1298.095703125,
+          1290.3642578125
+        ],
+        "median_ns_per_row": 1293.8232421875,
+        "mean_ns_per_row": 1311.7446899414062
+      },
+      {
+        "label": "A4",
+        "arm": "reference",
+        "raw_ns_per_row": [
+          6016.5205078125,
+          6099.853515625,
+          6025.634765625,
+          6063.55859375,
+          6049.88671875,
+          6001.7900390625,
+          6057.455078125,
+          6097.3310546875,
+          6084.1875,
+          6030.517578125,
+          5996.9482421875,
+          6016.9677734375,
+          6052.6123046875,
+          6092.0,
+          6022.705078125,
+          6017.8623046875
+        ],
+        "median_ns_per_row": 6040.2021484375,
+        "mean_ns_per_row": 6045.364440917969
+      },
+      {
+        "label": "B4",
+        "arm": "candidate",
+        "raw_ns_per_row": [
+          1291.0966796875,
+          1290.2421875,
+          1295.61328125,
+          1378.41796875,
+          1297.36328125,
+          1294.8818359375,
+          1302.3681640625,
+          1292.8876953125,
+          1297.201171875,
+          1302.490234375,
+          1290.4462890625,
+          1290.1611328125,
+          1299.7236328125,
+          1293.1318359375,
+          1294.0263671875,
+          1296.0615234375
+        ],
+        "median_ns_per_row": 1295.24755859375,
+        "mean_ns_per_row": 1300.382080078125
+      }
+    ],
+    "pairs": [
+      {
+        "pair": 1,
+        "reference": "A1",
+        "candidate": "B1",
+        "reference_median_ns_per_row": 6046.875,
+        "candidate_median_ns_per_row": 1290.974609375,
+        "candidate_time_change_percent": -78.65054909560723
+      },
+      {
+        "pair": 2,
+        "reference": "A2",
+        "candidate": "B2",
+        "reference_median_ns_per_row": 6037.251953125,
+        "candidate_median_ns_per_row": 1294.4130859375,
+        "candidate_time_change_percent": -78.55956491483703
+      },
+      {
+        "pair": 3,
+        "reference": "A3",
+        "candidate": "B3",
+        "reference_median_ns_per_row": 6073.52685546875,
+        "candidate_median_ns_per_row": 1293.8232421875,
+        "candidate_time_change_percent": -78.69733232475113
+      },
+      {
+        "pair": 4,
+        "reference": "A4",
+        "candidate": "B4",
+        "reference_median_ns_per_row": 6040.2021484375,
+        "candidate_median_ns_per_row": 1295.24755859375,
+        "candidate_time_change_percent": -78.55622168326255
+      }
+    ]
+  },
+  "limitations": [
+    "One real tensor range; warm CPU dequantization only.",
+    "No complete GGUF import, loading, GPU execution or inference speed measured by this report.",
+    "Results are setup-specific; no universal no-regression or overall inference speed claim."
+  ]
+}

@@ -199,19 +199,28 @@ NI_INLINE float2 exl3_col(const device uint* w, uint n, uint tstride, uint ktile
 // ---- Prefill: moe_bucket3's tiles of <= 32 sorted rows of one expert ----
 // tiles[3i] = (expert, begin, end) of sorted rows; xrows[s] the token of sorted row s, yrows[s] its pair (t k + j).
 
-constant constexpr uint kExl3Bm = 32, kExl3Bn = 64, kExl3Xld = 136, kExl3Wld = 72;
+constant constexpr uint kExl3Bm = 32, kExl3Bn = 64, kExl3Xld = 136;
+
+// With W^T as the MMA's A operand, a lane needs adjacent K values of one output column.
+// Assign it that EXL3 lane's eight codewords directly: no shared staging or lane exchange.
+NI_INLINE uint exl3_mma_lane(uint lane) {
+  const uint r = (lane / 4 & 4) + (lane / 2) % 4;
+  const uint c = (lane / 4 & 2) * 2 + (lane % 2) * 2;
+  return 4 * r + c / 2;
+}
 
 // The tile's rows times columns n0 .. n0 + 64 of an expert's projection (wbase: its trellis, ot tile columns, n
 // halfwords a tile), over in = 128 * kblocks inputs: for each 128-block the rows' inputs into Xs (PREP: rows of x by
 // token, f16(H128(f16(x) * suh)); else the prepared rows of x as they are), then for each of its 8 rows of tiles the
-// 4 tiles of the columns decoded into Ws (a simdgroup each) and 8 x 8 simdgroup MMAs: simdgroup sg accumulates all
-// 32 rows of columns n0 + 16 sg .. + 16.
+// 4 tiles of the columns decoded directly into registers (a simdgroup each) and 8 x 8 simdgroup MMAs: sg accumulates all
+// 32 rows of columns n0 + 16 sg .. + 16. Each acc[i][j] holds an 8-column by 8-row transposed
+// output fragment; the K blocks and the order of its MMA updates are unchanged.
 template <bool PREP>
 NI_INLINE void exl3_mm(const device uint* wbase, uint n, uint ot, uint kblocks, const device half* suh,
                        const device half* x, uint x_ld, const device uint* xrows, uint b0, uint nr, uint tn0,
-                       uint mask, threadgroup half* Xs, threadgroup half* Ws, thread simdgroup_float8x8 (&acc)[4][2],
+                       uint mask, threadgroup half* Xs, thread simdgroup_float8x8 (&acc)[4][2],
                        uint sg, uint lane) {
-  const uint hw = n / 2, q = lane & 3, c = lane >> 2;
+  const uint hw = n / 2, wlane = exl3_mma_lane(lane);
   for (int i = 0; i < 4; ++i) acc[i][0] = acc[i][1] = simdgroup_float8x8(0);
   for (uint kb = 0; kb < kblocks; ++kb) {
     for (uint i = sg; i < kExl3Bm; i += 4) {
@@ -228,29 +237,26 @@ NI_INLINE void exl3_mm(const device uint* wbase, uint n, uint ot, uint kblocks, 
       }
       for (int m = 0; m < 4; ++m) Xs[i * kExl3Xld + lane * 4 + m] = half(v[m]);
     }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
     for (uint kt = 0; kt < 8; ++kt) {
       uint cw[8];
-      exl3_lane_cw(wbase + ((kb * 8 + kt) * ot + tn0 + sg) * hw, n, lane, cw);
-      threadgroup half* wt = Ws + sg * 16 + c;
-      const uint rr[4] = {2 * q, 2 * q + 1, 2 * q + 8, 2 * q + 9};
-      for (int m = 0; m < 4; ++m) {
-        wt[rr[m] * kExl3Wld] = half(exl3_mcg(cw[m] & mask));
-        wt[rr[m] * kExl3Wld + 8] = half(exl3_mcg(cw[m + 4] & mask));
-      }
-      threadgroup_barrier(mem_flags::mem_threadgroup);
+      exl3_lane_cw(wbase + ((kb * 8 + kt) * ot + tn0 + sg) * hw, n, wlane, cw);
       for (uint kk = 0; kk < 2; ++kk) {
-        simdgroup_half8x8 b0f, b1f;
-        simdgroup_load(b0f, Ws + kk * 8 * kExl3Wld + sg * 16, kExl3Wld);
-        simdgroup_load(b1f, Ws + kk * 8 * kExl3Wld + sg * 16 + 8, kExl3Wld);
+        simdgroup_half8x8 w0f, w1f;
+        w0f.thread_elements()[0] = half(exl3_mcg(cw[2 * kk] & mask));
+        w0f.thread_elements()[1] = half(exl3_mcg(cw[2 * kk + 1] & mask));
+        w1f.thread_elements()[0] = half(exl3_mcg(cw[2 * kk + 4] & mask));
+        w1f.thread_elements()[1] = half(exl3_mcg(cw[2 * kk + 5] & mask));
         for (int i = 0; i < 4; ++i) {
-          simdgroup_half8x8 af;
-          simdgroup_load(af, Xs + i * 8 * kExl3Xld + kt * 16 + kk * 8, kExl3Xld);
-          simdgroup_multiply_accumulate(acc[i][0], af, b0f, acc[i][0]);
-          simdgroup_multiply_accumulate(acc[i][1], af, b1f, acc[i][1]);
+          simdgroup_half8x8 xf;
+          simdgroup_load(xf, Xs + i * 8 * kExl3Xld + kt * 16 + kk * 8, kExl3Xld, ulong2(0, 0), true);
+          simdgroup_multiply_accumulate(acc[i][0], w0f, xf, acc[i][0]);
+          simdgroup_multiply_accumulate(acc[i][1], w1f, xf, acc[i][1]);
         }
       }
-      threadgroup_barrier(mem_flags::mem_threadgroup);
     }
+    // Every simdgroup has finished reading Xs before it is reused for the next input block (or the output).
+    threadgroup_barrier(mem_flags::mem_threadgroup);
   }
 }
 
@@ -258,7 +264,8 @@ NI_INLINE void exl3_mm(const device uint* wbase, uint n, uint ot, uint kblocks, 
 NI_INLINE void exl3_mm_store(thread simdgroup_float8x8 (&acc)[4][2], threadgroup float* Cs, uint sg, uint tid,
                              uint nr, device float* out, uint ld, uint n0, const device uint* rows, uint b0) {
   for (int i = 0; i < 4; ++i)
-    for (int j = 0; j < 2; ++j) simdgroup_store(acc[i][j], Cs + i * 8 * kExl3Bn + sg * 16 + j * 8, kExl3Bn);
+    for (int j = 0; j < 2; ++j)
+      simdgroup_store(acc[i][j], Cs + i * 8 * kExl3Bn + sg * 16 + j * 8, kExl3Bn, ulong2(0, 0), true);
   threadgroup_barrier(mem_flags::mem_threadgroup);
   for (uint t = tid; t < kExl3Bm * kExl3Bn; t += 128) {
     const uint i = t / kExl3Bn, cc = t % kExl3Bn;
@@ -278,14 +285,13 @@ NI_INLINE void exl3_mm_store(thread simdgroup_float8x8 (&acc)[4][2], threadgroup
                            uint lane [[thread_index_in_simdgroup]]) {
   if (tg.y >= ntiles[0]) return;
   alignas(16) threadgroup half Xs[kExl3Bm * kExl3Xld];  // also the fp32 output staging (exl3_mm_store)
-  threadgroup half Ws[16 * kExl3Wld];
   const uint e = tiles[tg.y * 3], b0 = tiles[tg.y * 3 + 1], nr = tiles[tg.y * 3 + 2] - b0;
   const bool up = tg.z != 0;
   const uint ot = p.I / 16, n = up ? p.nu : p.ng;
   const device uint* wbase = (up ? ut : gt) + ulong(e) * (p.D / 16) * ot * (n / 2);
   simdgroup_float8x8 acc[4][2];
   exl3_mm<true>(wbase, n, ot, p.D / 128, (up ? usuh : gsuh) + ulong(e) * p.D, xh, p.D, xrows, b0, nr, tg.x * 4,
-                p.mask, Xs, Ws, acc, sg, lane);
+                p.mask, Xs, acc, sg, lane);
   exl3_mm_store(acc, (threadgroup float*)Xs, sg, tid, nr, up ? hu : hg, p.I, tg.x * kExl3Bn, nullptr, b0);
 }
 
@@ -299,12 +305,11 @@ NI_INLINE void exl3_mm_store(thread simdgroup_float8x8 (&acc)[4][2], threadgroup
                            uint lane [[thread_index_in_simdgroup]]) {
   if (tg.y >= ntiles[0]) return;
   alignas(16) threadgroup half Xs[kExl3Bm * kExl3Xld];  // also the fp32 output staging (exl3_mm_store)
-  threadgroup half Ws[16 * kExl3Wld];
   const uint e = tiles[tg.y * 3], b0 = tiles[tg.y * 3 + 1], nr = tiles[tg.y * 3 + 2] - b0;
   const uint ot = p.D / 16;
   const device uint* wbase = dt + ulong(e) * (p.I / 16) * ot * (p.nd / 2);
   simdgroup_float8x8 acc[4][2];
-  exl3_mm<false>(wbase, p.nd, ot, p.I / 128, nullptr, md, p.I, nullptr, b0, nr, tg.x * 4, p.mask, Xs, Ws, acc, sg,
+  exl3_mm<false>(wbase, p.nd, ot, p.I / 128, nullptr, md, p.I, nullptr, b0, nr, tg.x * 4, p.mask, Xs, acc, sg,
                  lane);
   exl3_mm_store(acc, (threadgroup float*)Xs, sg, tid, nr, yd, p.D, tg.x * kExl3Bn, yrows, b0);
 }

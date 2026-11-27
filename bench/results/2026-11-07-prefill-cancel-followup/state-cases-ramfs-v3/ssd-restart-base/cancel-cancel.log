@@ -1,0 +1,8 @@
+[kapitsa] SSD cache: slot 0's conversation (2101 tokens) copied for the SSD before it is replaced (275 MB in 52.6 ms)
+[kapitsa] KV cache 3072 -> 15360 positions (566 MB) in 13.2 ms
+[kapitsa] checkpoints: prompt diverges at 2091 of 15223, restored query checkpoint at 2051
+[kapitsa] prefill chunk of 1882 rows: 13172 of 15223 left, chunk 2048 even
+[kapitsa] prefill chunk of 1882 rows: 11290 of 15223 left, chunk 2048 even
+[kapitsa] SSD cache: saved the conversation slot 0 held (2101 tokens, 275 MB written) in 117 ms
+[kapitsa] prefill chunk of 1882 rows: 9408 of 15223 left, chunk 2048 even
+[kapitsa] chat: cancelled during prefill at 7697 of 15223 tokens after 2686 ms

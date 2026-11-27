@@ -1,0 +1,11 @@
+step: 192 records (qwen3.6-35b-a3b-4bit)
+  reference: 0.2.30 (4d9a9ec8), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}
+  candidate: 1.5.0 (cabbad27) + splash-logits.patch, prefill_chunk 2048
+  bitwise identical rows 0 of 192; max |logit diff| 7.46
+  top-1 agreement 0.9792 (4 flips)
+  KL mean 2.078e-03 median 1.260e-04 p99 2.898e-02 max 5.106e-02; top-2 margin change up to 2.903
+  next-token NLL change +3.972e-03 nats per record (candidate minus reference)
+    flip at sequence 0 prefix 3211: top-1 42598 -> 6633, reference margin 0.312
+    flip at sequence 0 prefix 3201: top-1 5254 -> 6469, reference margin 0.09323
+    flip at sequence 3 prefix 2058: top-1 653 -> 687, reference margin 0.04872
+    flip at sequence 1 prefix 2822: top-1 471 -> 220, reference margin 0.004829

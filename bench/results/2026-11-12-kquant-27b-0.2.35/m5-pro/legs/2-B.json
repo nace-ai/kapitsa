@@ -1,0 +1,101 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "quick",
+  "time_utc": "2026-11-12T15:38:57Z",
+  "kapitsa": {
+    "version": "0.2.35",
+    "commit": "30b18f9"
+  },
+  "mac": {
+    "identifier": "Mac17,8",
+    "name": "MacBook Pro (16-inch, M5 Pro or M5 Max)",
+    "year": 2026,
+    "chip": "Apple M5 Pro",
+    "cpu_cores": 18,
+    "gpu_cores": 20,
+    "memory_gb": 48,
+    "macos": "26.5.2",
+    "macos_build": "25F84"
+  },
+  "model": {
+    "name": "qwen3.8-27b-kquant",
+    "title": "qwen3.8-27b-kquant",
+    "variant": null,
+    "precision": "4-bit",
+    "catalog": false,
+    "revision": null,
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "dflash2",
+    "drafter_kind": "DFlash2",
+    "drafter_source": "dflash2",
+    "drafter_reason": "found in the model's folder"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 3,
+    "greedy_runs": 3,
+    "sizes": [
+      4000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 80.71,
+      "runs_tps": [
+        80.71,
+        85.63,
+        79.09
+      ],
+      "median_accepted_draft_tps": 67.78,
+      "median_accepted_draft_share": 0.8398
+    },
+    "decode_greedy": {
+      "median_tps": 92.24,
+      "runs_tps": [
+        79.36,
+        92.95,
+        92.24
+      ],
+      "median_accepted_draft_tps": 79.27,
+      "median_accepted_draft_share": 0.8594
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4133,
+        "ttft_s": 5.6597,
+        "tps": 730.3,
+        "followup_s": [
+          0.2077,
+          0.2194,
+          0.2052
+        ],
+        "followup_median_s": 0.2077,
+        "followup_suffix_tps": 110.7
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 19.42
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "high",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 30.1,
+    "gpu_other_mean_pct": 3.49,
+    "gpu_other_max_pct": 7.23,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [
+      "com.apple.WebKit.GPU"
+    ],
+    "contention": []
+  },
+  "flags": [],
+  "invalid": []
+}

@@ -1,0 +1,29 @@
+{
+  "evidence_type": "Explicitly redacted derived summary; not original execution logs",
+  "setup": {
+    "chip": "M5 Pro",
+    "GPU_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "sources": {
+    "reference": "b1be7d4f644b3e58d56499404b38b46cf2d2a5ef",
+    "candidate": "d5589c4259b35a3bd5d5cc711b20975705118956"
+  },
+  "arms": {
+    "http_reference": {
+      "rc": 0,
+      "pass_count": 55,
+      "fail_count": 0,
+      "failure_lines": []
+    },
+    "http_candidate": {
+      "rc": 0,
+      "pass_count": 55,
+      "fail_count": 0,
+      "failure_lines": []
+    }
+  },
+  "limitations": "This executed HTTP suite passed on this setup. M3 HTTP baseline failure and original native flags remain separately disclosed; no universal API claim."
+}

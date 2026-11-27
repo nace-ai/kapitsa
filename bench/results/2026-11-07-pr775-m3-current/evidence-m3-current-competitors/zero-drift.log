@@ -1,0 +1,40 @@
+prefill: 8 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (9cca6b0d), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.31 (9cca6b0d), prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"fast"}
+  bitwise identical rows 0 of 8; max |logit diff| 0.5385
+  top-1 agreement 1.0000 (0 flips)
+  KL mean 1.846e-04 median 6.156e-05 p99 6.474e-04 max 6.569e-04; top-2 margin change up to 0.2103
+  next-token NLL change +1.855e-03 nats per record (candidate minus reference)
+batch: 192 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (9cca6b0d), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.31 (9cca6b0d), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"fast"}
+  bitwise identical rows 0 of 192; max |logit diff| 2.149
+  top-1 agreement 0.9948 (1 flip)
+  KL mean 2.591e-04 median 1.537e-05 p99 4.017e-03 max 5.829e-03; top-2 margin change up to 0.4422
+  next-token NLL change -8.006e-04 nats per record (candidate minus reference)
+    flip at sequence 0 prefix 3210: top-1 4211 -> 51319, reference margin 0.03107
+  FAIL: top-1 agreement 0.9948 < 1.0000
+  FAIL: mean KL 2.591e-04 > 0.000e+00
+  FAIL (flags)
+step: 192 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (9cca6b0d), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.31 (9cca6b0d), prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"fast"}
+  bitwise identical rows 0 of 192; max |logit diff| 2.196
+  top-1 agreement 0.9948 (1 flip)
+  KL mean 2.579e-04 median 1.548e-05 p99 4.082e-03 max 5.957e-03; top-2 margin change up to 0.4375
+  next-token NLL change -8.253e-04 nats per record (candidate minus reference)
+    flip at sequence 0 prefix 3210: top-1 4211 -> 51319, reference margin 0.04509
+  FAIL: top-1 agreement 0.9948 < 1.0000
+  FAIL: mean KL 2.579e-04 > 0.000e+00
+  FAIL (flags)
+verify: 192 records (qwen3.5-9b-4bit)
+  reference: 0.2.31 (9cca6b0d), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.31 (9cca6b0d), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":10,"evals":576,"reruns":0}, env {"NI_ANE_ASYNC":"0","NI_ANE_KEEP_S":"0","NI_NO_MTP":"1","NI_ANE_UNITS":"16","KAPITSA_PROFILE":"fast"}
+  bitwise identical rows 0 of 192; max |logit diff| 2.194
+  top-1 agreement 0.9948 (1 flip)
+  KL mean 2.666e-04 median 1.739e-05 p99 4.912e-03 max 5.970e-03; top-2 margin change up to 0.4434
+  next-token NLL change -7.590e-04 nats per record (candidate minus reference)
+    flip at sequence 0 prefix 3210: top-1 4211 -> 51319, reference margin 0.05923
+  FAIL: top-1 agreement 0.9948 < 1.0000
+  FAIL: mean KL 2.666e-04 > 0.000e+00
+  FAIL (flags)

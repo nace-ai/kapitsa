@@ -1,0 +1,25 @@
+PASS update_test: versions, release names, kinds of install
+PASS fixture: the 0.2.32 binary is a kapitsa 0.2.32 through and through
+PASS fixture: a kapitsa 0.2.33
+PASS fixture: a kapitsa 0.2.30
+PASS --check, latest 0.2.31: exit 0, nothing downloaded
+PASS --check, latest 0.2.32: exit 100, nothing downloaded
+PASS --check, latest 0.2.30: exit 0, nothing downloaded
+PASS --check, latest 0.2.31-rc.1: exit 0, nothing downloaded
+PASS --check, latest 0.2.32-rc.1: exit 100, nothing downloaded
+PASS --check, latest 0.2.131: exit 100, nothing downloaded
+PASS --check with no release: exit 1
+PASS --check, nothing answering: exit 1
+PASS plain http is refused but to this Mac
+PASS --check changes nothing, not even the state
+PASS kapitsa update installs 0.2.32
+PASS a new file renamed into place; the old binary kept, the same inode, as the rollback copy
+PASS the binary ran throughout: the old version, then the new one, nothing in between
+PASS a process holding the old binary keeps it unchanged
+PASS a kapitsa running the old binary keeps running
+PASS the license files updated where install.sh put them
+PASS the benchmark harness updated beside the notices, where bench compare looks for it
+PASS no temporary folder left beside the binary
+PASS the state: updated, from and to, checked now, nothing left to say
+PASS run again: up to date, nothing downloaded
+WATCH_RESULT {"fails": [], "seen": ["0.2.31", "0.2.32"], "bad": []}

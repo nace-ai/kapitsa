@@ -1,0 +1,569 @@
+[
+  {
+    "label": "generate-model",
+    "argv": [
+      "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/tools/fn_synth.py",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-sharded",
+      "--seed",
+      "1"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984910.9928782,
+    "elapsed_seconds": 0.4966127872467041
+  },
+  {
+    "label": "make-table-variants",
+    "argv": [
+      "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/make_table_variants.py",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-sharded",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984911.4903061,
+    "elapsed_seconds": 0.0842888355255127
+  },
+  {
+    "label": "sharded-prefill-step-01-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/sharded-prefill-step-01-base.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984911.7499242,
+    "elapsed_seconds": 12.649565935134888
+  },
+  {
+    "label": "sharded-prefill-step-02-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/sharded-prefill-step-02-candidate.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984924.411145,
+    "elapsed_seconds": 11.786855220794678
+  },
+  {
+    "label": "sharded-prefill-step-03-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/sharded-prefill-step-03-base.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984936.2097101,
+    "elapsed_seconds": 0.21082496643066406
+  },
+  {
+    "label": "sharded-prefill-step-04-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/sharded-prefill-step-04-candidate.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984936.4316869,
+    "elapsed_seconds": 0.2696220874786377
+  },
+  {
+    "label": "sharded-tbt-01-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/sharded-tbt-01-base.f32",
+      "--tbt"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984936.7171671,
+    "elapsed_seconds": 0.2594938278198242
+  },
+  {
+    "label": "sharded-tbt-02-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/sharded-tbt-02-candidate.f32",
+      "--tbt"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984936.989696,
+    "elapsed_seconds": 0.21151089668273926
+  },
+  {
+    "label": "sharded-tbt-03-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/sharded-tbt-03-base.f32",
+      "--tbt"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984937.2103958,
+    "elapsed_seconds": 0.21111416816711426
+  },
+  {
+    "label": "sharded-tbt-04-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-sharded",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/sharded-tbt-04-candidate.f32",
+      "--tbt"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984937.433449,
+    "elapsed_seconds": 0.20222997665405273
+  },
+  {
+    "label": "logits-sharded-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/logit_dump",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-sharded",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-logits-sharded-base",
+      "--paths",
+      "step,verify",
+      "--from",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-fixed-windows"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107/base",
+    "exit": 0,
+    "start": 1793984937.6458051,
+    "elapsed_seconds": 0.9480047225952148
+  },
+  {
+    "label": "logits-sharded-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/logit_dump",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-sharded",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-logits-sharded-candidate",
+      "--paths",
+      "step,verify",
+      "--from",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-fixed-windows"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate",
+    "exit": 0,
+    "start": 1793984938.594934,
+    "elapsed_seconds": 0.3243241310119629
+  },
+  {
+    "label": "bin-affine-prefill-step-01-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-affine-prefill-step-01-base.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984938.971572,
+    "elapsed_seconds": 0.2732973098754883
+  },
+  {
+    "label": "bin-affine-prefill-step-02-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-affine-prefill-step-02-candidate.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984939.251539,
+    "elapsed_seconds": 0.2047138214111328
+  },
+  {
+    "label": "bin-affine-prefill-step-03-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-affine-prefill-step-03-base.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984939.469431,
+    "elapsed_seconds": 0.20838308334350586
+  },
+  {
+    "label": "bin-affine-prefill-step-04-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-affine-prefill-step-04-candidate.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984939.683519,
+    "elapsed_seconds": 0.21085906028747559
+  },
+  {
+    "label": "bin-affine-tbt-01-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-affine-tbt-01-base.f32",
+      "--tbt"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984939.899748,
+    "elapsed_seconds": 0.2097938060760498
+  },
+  {
+    "label": "bin-affine-tbt-02-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-affine-tbt-02-candidate.f32",
+      "--tbt"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984940.115146,
+    "elapsed_seconds": 0.20758295059204102
+  },
+  {
+    "label": "bin-affine-tbt-03-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-affine-tbt-03-base.f32",
+      "--tbt"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984940.327009,
+    "elapsed_seconds": 0.21062612533569336
+  },
+  {
+    "label": "bin-affine-tbt-04-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-affine",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-affine-tbt-04-candidate.f32",
+      "--tbt"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984940.5540218,
+    "elapsed_seconds": 0.20920801162719727
+  },
+  {
+    "label": "logits-bin-affine-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/logit_dump",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-affine",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-logits-bin-affine-base",
+      "--paths",
+      "step,verify",
+      "--from",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-fixed-windows"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107/base",
+    "exit": 0,
+    "start": 1793984940.7730649,
+    "elapsed_seconds": 0.27001118659973145
+  },
+  {
+    "label": "logits-bin-affine-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/logit_dump",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-affine",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-logits-bin-affine-candidate",
+      "--paths",
+      "step,verify",
+      "--from",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-fixed-windows"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate",
+    "exit": 0,
+    "start": 1793984941.04439,
+    "elapsed_seconds": 0.25789403915405273
+  },
+  {
+    "label": "bin-bf16-prefill-step-01-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-bf16-prefill-step-01-base.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984941.333935,
+    "elapsed_seconds": 0.20830297470092773
+  },
+  {
+    "label": "bin-bf16-prefill-step-02-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-bf16-prefill-step-02-candidate.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984941.5484328,
+    "elapsed_seconds": 0.20720934867858887
+  },
+  {
+    "label": "bin-bf16-prefill-step-03-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-bf16-prefill-step-03-base.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984941.761866,
+    "elapsed_seconds": 0.21082282066345215
+  },
+  {
+    "label": "bin-bf16-prefill-step-04-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-bf16-prefill-step-04-candidate.f32"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984941.977765,
+    "elapsed_seconds": 0.20631003379821777
+  },
+  {
+    "label": "bin-bf16-tbt-01-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-bf16-tbt-01-base.f32",
+      "--tbt"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984942.1902132,
+    "elapsed_seconds": 0.20143890380859375
+  },
+  {
+    "label": "bin-bf16-tbt-02-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-bf16-tbt-02-candidate.f32",
+      "--tbt"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984942.397405,
+    "elapsed_seconds": 0.21066999435424805
+  },
+  {
+    "label": "bin-bf16-tbt-03-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-bf16-tbt-03-base.f32",
+      "--tbt"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984942.613892,
+    "elapsed_seconds": 0.20142173767089844
+  },
+  {
+    "label": "bin-bf16-tbt-04-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/ni_run",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-bf16",
+      "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
+      "64",
+      "0",
+      "--dflash",
+      "none",
+      "--dump-all-logits",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/bin-bf16-tbt-04-candidate.f32",
+      "--tbt"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107",
+    "exit": 0,
+    "start": 1793984942.8211021,
+    "elapsed_seconds": 0.20922183990478516
+  },
+  {
+    "label": "logits-bin-bf16-base",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/base/build/logit_dump",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-bf16",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-logits-bin-bf16-base",
+      "--paths",
+      "step,verify",
+      "--from",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-fixed-windows"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107/base",
+    "exit": 0,
+    "start": 1793984943.041672,
+    "elapsed_seconds": 0.26833200454711914
+  },
+  {
+    "label": "logits-bin-bf16-candidate",
+    "argv": [
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate/build/logit_dump",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-variants/synthetic-bin-bf16",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-logits-bin-bf16-candidate",
+      "--paths",
+      "step,verify",
+      "--from",
+      "/Users/bytedance/kapitsa-ngram-affine-20261107/synthetic-fixed-windows"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-ngram-affine-20261107/candidate",
+    "exit": 0,
+    "start": 1793984943.3112278,
+    "elapsed_seconds": 0.26758813858032227
+  }
+]

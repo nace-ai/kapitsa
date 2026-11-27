@@ -26,12 +26,17 @@ they decode.
    and feed-forward kernels. Models with a vision tower can insert image embeddings into those prompt rows. On the
    Qwen models a pass of at most 128 rows (a cached turn's message, the reply prefilled while idle, a draft read
    ahead) gives each row the same bits whatever the pass's length (`NI_SHORTPF_EXACT`), so splitting a short tail
-   into passes changes no logit; longer passes run the large-prefill kernels, whose sums are ordered otherwise.
+   into passes changes no logit; longer passes run the large-prefill kernels, whose sums are ordered otherwise (on an
+   M5 or later, a dense model's passes from 17 rows, from 64 for MoE models: `NI_SP_QMT`,
+   `NI_QMT_MIN`).
+   Two chunks of work overlap where one engine would idle: the 27B's FFN split hands half a chunk's FFN to the
+   Neural Engine while the GPU runs the other half's token mixer, and on the M5 class the 35B-A3B's chunk (Clover's too)
+   runs as two halves on the GPU alone, one half's DeltaNet scan or attention beside the other half's expert GEMMs (`NI_PF_WAVE`).
 4. **Draft and verify.** Qwen uses its block drafter when available (DFlash2 on the 35B and 27B, DFlash on the 4B
    and 9B), otherwise its MTP head where supported. Nemotron uses a block drafter: LiLiCorr (Bolt, Super-VL) or DSpark
    (Lightning). The target verifies proposed tokens; accepted tokens advance the sequence, and rejected proposals do
    not become committed recurrent history. KFlash (every drafter by default; `NI_KFLASH=0` keeps chains, and
-   `NI_DFLASH_CAP=<n>` opts the Qwen DFlash2 drafters into the F74 capped-depth chains — an opt-in cap that keeps
+   `NI_KFLASH_CAP=<n>` opts the Qwen DFlash2 drafters into the F74 capped-depth chains — an opt-in cap that keeps
    chains (the trees need the full depth) whose two clean depth-2/3 mode-3 anchors read cheaper per token than any
    deeper measured arm, ids-identical, with the shipping-binary sweep to
    decide whether it becomes their default): the
@@ -40,7 +45,8 @@ they decode.
    target is kept, so the reply is plain decoding's. The tree's size follows this Mac's measured cost per verify row
    count and the drafter's probabilities as calibrated against its own acceptances: whole 8-row tiles on the dense Qwen
    models (27B, 4B), where each cycle verifies 8 rows, or 16 or 32 when `NI_KFLASH_ROWS=8,16,32` names them (opt-in, but
-   for the 16-row drafting block below, which sets every cycle to 16 rows on a one-slot engine; the GPU runs the tiles the
+   for the 16-row drafting block below, which sets every cycle to 16 rows on a one-slot engine, and on any engine of a Mac
+   with matrix units; the GPU runs the tiles the
    drafting pass chose, with
    no host round trip), as many as pay in expected tokens per millisecond on this Mac; on MoE targets (the Qwen
    35B-A3B, the Nemotron drafters), whose verify pays per row for its experts, 1 to 8 rows per pass, the GPU routing
@@ -77,7 +83,7 @@ per-member dispatches take their rows when encoded), so the verify is encoded on
 first layer goes to the GPU at once. With LiLiCorr the rows follow a table, as measured (`Engine::batch_rows`): two
 requests verify 3 drafts each, three 1 draft each and four plain rows (`NI_BATCH_KF=0` gives DFlash2 its table too:
 two requests 3 drafts each, three or four 1 draft each, the 27B's three taking turns). The Qwen3.5 4B's DFlash
-drafter, Nemotron 3.5 Lightning and Super-VL take turns until measured
+drafter, Nemotron 3.5 Lightning and Super-VL take turns today
 (`NI_BATCH=1` batches them too). A member that finishes leaves the batch, and the last one goes back to its own loop.
 One request alone runs the single-stream path unchanged. Requests decoded together can get other tokens than alone where
 two candidates are within the batched pass's rounding of each other, and sampled requests draw other random numbers;

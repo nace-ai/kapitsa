@@ -1,0 +1,30 @@
+{
+  "engine": "kapitsa",
+  "build": "0.2.31 (50fadecc)",
+  "model": "qwen3.5-9b-4bit",
+  "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+  "path": "batch",
+  "batch": {
+    "members": 4,
+    "rows": 2
+  },
+  "prefill_chunk": 2048,
+  "ane": {
+    "chunks": 10,
+    "evals": 576,
+    "reruns": 0
+  },
+  "records": 192,
+  "vocab": 248320,
+  "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step",
+  "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+  "macos": "15.7.1",
+  "date": "2026-11-06T22:13:37Z",
+  "env": {
+    "NI_ANE_ASYNC": "0",
+    "NI_ANE_KEEP_S": "0",
+    "NI_NO_MTP": "1",
+    "KAPITSA_PROFILE": "fast"
+  },
+  "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]; prefill: ANE W8A8 segmented input"
+}

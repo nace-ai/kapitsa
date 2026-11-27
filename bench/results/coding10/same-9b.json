@@ -1,0 +1,3161 @@
+{
+ "label": "9b",
+ "argv": [
+  "bench/coding10/coding10.py",
+  "--url",
+  "http://127.0.0.1:8350",
+  "--label",
+  "9b",
+  "--out",
+  "/tmp/k350/runs/same/9b.json",
+  "--reps",
+  "3",
+  "--require-ac",
+  "--arms",
+  "bench/coding10/arms/opt0.json",
+  "bench/coding10/arms/lc.json",
+  "bench/coding10/arms/lc_best.json"
+ ],
+ "bench_commit": "957f067e325a38c76b3fc88bda2b1cd6a9fc13a3",
+ "url": "http://127.0.0.1:8350",
+ "models": {
+  "object": "list",
+  "data": [
+   {
+    "id": "qwen3.5-9b",
+    "object": "model",
+    "type": "model",
+    "display_name": "qwen3.5-9b:4bit",
+    "created": 1794025428,
+    "created_at": "2026-11-07T04:23:48Z",
+    "owned_by": "nace",
+    "context_length": 32768,
+    "context_fit": 32768,
+    "slots": 4,
+    "active": true,
+    "downloaded": true,
+    "quant": "MLX affine 4-bit, group 64"
+   },
+   {
+    "id": "drex-v2.0-q4",
+    "object": "model",
+    "type": "model",
+    "display_name": "drex-v2.0-q4",
+    "created": 1794025428,
+    "created_at": "2026-11-07T04:23:48Z",
+    "owned_by": "nace",
+    "bytes": 24103497226,
+    "active": false,
+    "downloaded": true,
+    "variant": "gguf Q4_K_M"
+   },
+   {
+    "id": "drex-v2.0-q8",
+    "object": "model",
+    "type": "model",
+    "display_name": "drex-v2.0-q8",
+    "created": 1794025428,
+    "created_at": "2026-11-07T04:23:48Z",
+    "owned_by": "nace",
+    "bytes": 36861413976,
+    "active": false,
+    "downloaded": true,
+    "variant": "gguf Q8_0"
+   },
+   {
+    "id": "qwen3.5-4b:4bit",
+    "object": "model",
+    "type": "model",
+    "display_name": "qwen3.5-4b:4bit",
+    "created": 1794025428,
+    "created_at": "2026-11-07T04:23:48Z",
+    "owned_by": "nace",
+    "bytes": 4571200510,
+    "active": false,
+    "downloaded": true,
+    "variant": "4bit"
+   },
+   {
+    "id": "qwen3.8-27b:4bit",
+    "object": "model",
+    "type": "model",
+    "display_name": "Qwen3.8-27B (4bit)",
+    "short_name": "27b",
+    "about": "dense: the strongest coder of the three, slower to write",
+    "created": 1794025428,
+    "created_at": "2026-11-07T04:23:48Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "qwen3.6-35b-a3b:4bit",
+    "object": "model",
+    "type": "model",
+    "display_name": "Qwen3.6-35B-A3B (4bit)",
+    "short_name": "35b",
+    "about": "MoE, 3B active per token: fast replies and fast reading",
+    "created": 1794025428,
+    "created_at": "2026-11-07T04:23:48Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "qwen3.8-flash-next:4bit",
+    "object": "model",
+    "type": "model",
+    "display_name": "Qwen3.8-Flash-Next 180B-A7B (4bit)",
+    "short_name": "flash",
+    "about": "Qwen's 180B MoE, 7B active: hyper-connections, sparse attention, a 32 GB n-gram table read from the SSD",
+    "created": 1794025428,
+    "created_at": "2026-11-07T04:23:48Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "nemotron-labs-dory1.0-4b:nvfp4",
+    "object": "model",
+    "type": "model",
+    "display_name": "Nemotron Dory1.0 4B (nvfp4)",
+    "short_name": "dory",
+    "about": "NVIDIA's looped 4B: a shared block run 1-4 times per token (--loops; 2 by default), small and fast",
+    "created": 1794025428,
+    "created_at": "2026-11-07T04:23:48Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "nemotron-3-nano-4b:fp8",
+    "object": "model",
+    "type": "model",
+    "display_name": "Nemotron 3 Nano 4B (fp8)",
+    "short_name": "nano-4b",
+    "about": "NVIDIA's small hybrid Mamba-2 model, text only: prompt lookup drafts from the conversation",
+    "created": 1794025428,
+    "created_at": "2026-11-07T04:23:48Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "nemotron-nano-9b-v2:nvfp4",
+    "object": "model",
+    "type": "model",
+    "display_name": "Nemotron Nano 9B v2 (nvfp4)",
+    "short_name": "nano-9b",
+    "about": "NVIDIA's hybrid Mamba-2 9B in NVFP4, text only: reasoning switched with /think or enable_thinking",
+    "created": 1794025428,
+    "created_at": "2026-11-07T04:23:48Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "nemotron-3.5-lightning:nvfp4",
+    "object": "model",
+    "type": "model",
+    "display_name": "Nemotron 3.5 Lightning 30B-A3B (nvfp4)",
+    "short_name": "lightning",
+    "about": "NVIDIA's hybrid Mamba-2 MoE, 3B active, NVFP4 experts: fast replies on 32 GB Macs and up",
+    "created": 1794025428,
+    "created_at": "2026-11-07T04:23:48Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "nemotron-3.5-bolt:24gb",
+    "object": "model",
+    "type": "model",
+    "display_name": "Nemotron 3.5 Bolt 74B-A9B (24gb)",
+    "short_name": "bolt",
+    "about": "NVIDIA's hybrid Mamba-2 MoE, 9B active, 2-bit experts: an agentic model in 24 GB",
+    "created": 1794025428,
+    "created_at": "2026-11-07T04:23:48Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "nemotron-3.5-super-vl:nvfp4",
+    "object": "model",
+    "type": "model",
+    "display_name": "Nemotron 3.5 Super-VL 120B-A12B (nvfp4)",
+    "short_name": "super",
+    "about": "NVIDIA's hybrid Mamba-2 MoE, 12B active, NVFP4 experts (96 GB+ Macs, 128 GB for full context)",
+    "created": 1794025428,
+    "created_at": "2026-11-07T04:23:48Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "flint:4bit",
+    "object": "model",
+    "type": "model",
+    "display_name": "Recursive Flint 40B-A2.5B (4bit)",
+    "short_name": "flint",
+    "about": "Recursive's MoE for coding agents, 2.5B active per token: reasoning and tool calls, prompt lookup drafts",
+    "created": 1794025428,
+    "created_at": "2026-11-07T04:23:48Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   },
+   {
+    "id": "clover-35b-a3b:4bit",
+    "object": "model",
+    "type": "model",
+    "display_name": "Clover-35B-A3B-Preview (4bit)",
+    "short_name": "clover",
+    "about": "DiffuSpace's block-diffusion MoE tuned from Qwen3.6-35B-A3B, 3B active: decodes with the 35B's drafter",
+    "created": 1794025428,
+    "created_at": "2026-11-07T04:23:48Z",
+    "owned_by": "nace",
+    "active": false,
+    "downloaded": false
+   }
+  ],
+  "has_more": false,
+  "first_id": "qwen3.5-9b",
+  "last_id": "clover-35b-a3b:4bit"
+ },
+ "server_argv": "/opt/homebrew/bin/kapitsa serve --model 9b --port 8350 --private --context 32k",
+ "kapitsa_version": "kapitsa 0.2.25 (7ea4fff)",
+ "arms": [
+  {
+   "name": "opt0",
+   "system": null,
+   "thinking": false,
+   "temperature": 0.7,
+   "top_p": 0.8,
+   "top_k": 20,
+   "presence_penalty": null,
+   "max_tokens": 4096,
+   "show_examples": true,
+   "suffix": "Reply with only the complete function in one ```python block, no explanation.",
+   "self_test_retries": 1,
+   "tools": null,
+   "max_turns": 6,
+   "extra": {},
+   "task_template": null,
+   "tool_runtime": "builtin",
+   "write_guard": true,
+   "text_tool_fallback": false,
+   "autorun": false,
+   "thinking_budget": null,
+   "retry_style": "plain"
+  },
+  {
+   "name": "lc",
+   "system": "You are little-coder, an AI coding assistant.\nYou help users with software engineering tasks: writing code, debugging, refactoring, explaining, and more.\n\n# Available Tools\n- **read_file**: Read file contents with line numbers\n- **write_file**: Create new files\n- **edit_file**: Replace text in a file (exact string replacement)\n- **run_python**: Run Python code or a .py file. Timeout is 10s.\n\n## Approaching complex tasks\nBefore writing code for a non-trivial problem, think through the structure: what the inputs and outputs look like,\nwhat the edge cases are, which parts of the problem are hardest, and what a clean implementation would look like.\nskipping it is the most common way implementations end up looking plausible but failing on non-obvious cases.\nFor simple single-file fixes or quick changes, skip the analysis and do the change directly. The goal is deliberate\nimplementation, not elaborate deliberation.\n\n## Handling ambiguity\nWhen requirements or approach are ambiguous, resolve them against what you can read from the surrounding context, the\ntests, and the conventions already in the file. Write code once you have conviction; don't write exploratory code\nwhile you're still deciding between approaches.\n\n# Guidelines\n- Be concise and direct. Lead with the answer.\n- Prefer editing existing files over creating new ones.\n- Do not add unnecessary comments, docstrings, or error handling.\n- When reading files before editing, use line numbers to be precise.\n- Always use the EXACT file name given in the task, never a placeholder.\n- If a task is unclear, resolve it from the tests and the stub; do not ask questions. [adapted: v0.0.5 said \"ask for clarification\"; a batch harness has nobody to ask, and output_parser.py's text-tool block says \"do not ask questions\"]\n\n## Tool Usage Guidance\n\n### write_file\nCreate a **new** file with the given content.\nREQUIRED: path, content (full file content)\n**`write_file` is for creating new files only.** If the file already exists, `write_file` will be **refused** by the\ntool and return an error telling you to use `edit_file` instead. Do not retry `write_file` on the same path \u2014 it will\nbe refused again.\nWHEN TO USE `edit_file` INSTEAD:\n- ANY change to an existing file \u2014 bug fixes, refactors, format tweaks, adding a function, renaming a variable,\n  everything. `edit_file` takes `path` + `edits: [{oldText, newText}]` and patches in place.\n- Iterating after a failed test \u2014 never retype the whole file\nEXAMPLE:\n{\"name\": \"write_file\", \"arguments\": {\"path\": \"solution.py\", \"content\": \"def hello():\\n    return 'hi'\\n\"}}\nNOTE: Always use the EXACT file path given in the task, never a placeholder.\n\n### edit_file\nReplace exact text in a file. This is the **default tool for changing any existing file**.\nRULES:\n- Each `oldText` must match EXACTLY (whitespace, indentation, line endings all matter)\n- Each `oldText` must be unique in the file \u2014 include 2-3 lines of surrounding context if needed\n- `edits` is matched against the **original** file, not after earlier edits apply \u2014 do not overlap or nest\n- To delete text: set `newText` to \"\"\n- Use `read_file` first if you do not already have the file's current content\nEXAMPLE:\n{\"name\": \"edit_file\", \"arguments\": {\"path\": \"solution.py\", \"edits\": [{\"oldText\": \"def hello():\\n    return 1\", \"newText\": \"def hello():\\n    return 2\"}]}}\nRECOVERY WHEN `edit_file` FAILS:\n- \"String not found\" \u2192 use `read_file` to get the exact current content (whitespace often differs), then retry\n  `edit_file` with the exact string\n- \"Found multiple times\" \u2192 include more surrounding context so `oldText` is unique, then retry `edit_file`\n- Do NOT fall back to `write_file` just because `edit_file` failed once \u2014 re-read, fix `oldText`, retry.\n\n### read_file\nRead a file's contents with line numbers. Returns format: \"N\\tline_content\".\nOPTIONAL: limit (max lines), offset (start line, 0-indexed)\nEXAMPLE: {\"name\": \"read_file\", \"arguments\": {\"path\": \"solution.py\"}}\n\n### run_python\nRun Python and return the exit code and stdout+stderr. Timeout 10 s.\nEXAMPLE: {\"name\": \"run_python\", \"arguments\": {\"code\": \"from solution import add\\nassert add(2, 3) == 5\\nprint('ok')\"}}\nEXAMPLE: {\"name\": \"run_python\", \"arguments\": {\"path\": \"test_solution.py\"}}\n",
+   "thinking": null,
+   "temperature": 0.3,
+   "top_p": null,
+   "top_k": null,
+   "presence_penalty": null,
+   "max_tokens": 4096,
+   "show_examples": true,
+   "suffix": "",
+   "self_test_retries": 1,
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "write_file",
+      "description": "Create a NEW file with the given content. Refused if the file already exists: use edit_file to change an existing file.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "path": {
+         "type": "string",
+         "description": "File name inside the task directory, e.g. solution.py. Use the EXACT name given in the task."
+        },
+        "content": {
+         "type": "string",
+         "description": "Full file content."
+        }
+       },
+       "required": [
+        "path",
+        "content"
+       ]
+      }
+     }
+    },
+    {
+     "type": "function",
+     "function": {
+      "name": "edit_file",
+      "description": "Replace exact text in an existing file. The default tool for changing any existing file. Each oldText must match exactly (whitespace and indentation matter) and be unique in the file; edits are matched against the original file and must not overlap.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "path": {
+         "type": "string",
+         "description": "File name inside the task directory."
+        },
+        "edits": {
+         "type": "array",
+         "description": "One entry per location to change.",
+         "items": {
+          "type": "object",
+          "properties": {
+           "oldText": {
+            "type": "string",
+            "description": "Exact text currently in the file; include 2-3 lines of context if needed to make it unique."
+           },
+           "newText": {
+            "type": "string",
+            "description": "Replacement text; empty string deletes oldText."
+           }
+          },
+          "required": [
+           "oldText",
+           "newText"
+          ]
+         }
+        }
+       },
+       "required": [
+        "path",
+        "edits"
+       ]
+      }
+     }
+    },
+    {
+     "type": "function",
+     "function": {
+      "name": "read_file",
+      "description": "Read a file's contents with line numbers (format: N<tab>line).",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "path": {
+         "type": "string",
+         "description": "File name inside the task directory."
+        },
+        "offset": {
+         "type": "integer",
+         "description": "Start line, 0-indexed. Optional."
+        },
+        "limit": {
+         "type": "integer",
+         "description": "Max lines to return. Optional."
+        }
+       },
+       "required": [
+        "path"
+       ]
+      }
+     }
+    },
+    {
+     "type": "function",
+     "function": {
+      "name": "run_python",
+      "description": "Run Python 3 and return the exit code plus stdout+stderr (10 s timeout). Pass `code` to run a snippet (it can `from solution import ...`; put asserts or prints in it to test your function), or `path` to run a .py file from the task directory such as a test file.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "code": {
+         "type": "string",
+         "description": "Python source to run. Use this OR path."
+        },
+        "path": {
+         "type": "string",
+         "description": "A .py file in the task directory to run. Use this OR code."
+        }
+       }
+      }
+     }
+    }
+   ],
+   "max_turns": 8,
+   "extra": {},
+   "task_template": "Implement the function `{entry_point}`.\n\nStub file to implement:\n  - solution.py\n\n{problem statement / docstring}\n\nWrite your solution to solution.py, then test it with run_python.\nWhen you believe the code is correct, stop calling tools and reply with the complete final solution in one\n```python block.\n",
+   "tool_runtime": "littlecoder",
+   "write_guard": true,
+   "text_tool_fallback": true,
+   "autorun": false,
+   "thinking_budget": 2048,
+   "retry_style": "lc"
+  },
+  {
+   "name": "lc_best",
+   "system": "You are little-coder, an AI coding assistant.\nYou help users with software engineering tasks: writing code, debugging, refactoring, explaining, and more.\n\n# Available Tools\n- **read_file**: Read file contents with line numbers\n- **write_file**: Create new files\n- **edit_file**: Replace text in a file (exact string replacement)\n- **run_python**: Run Python code or a .py file. Timeout is 10s.\n\n# Guidelines\n- Be concise and direct. Lead with the answer.\n- Prefer editing existing files over creating new ones.\n- Do not add unnecessary comments, docstrings, or error handling.\n- When reading files before editing, use line numbers to be precise.\n- Always use the EXACT file name given in the task, never a placeholder.\n- If a task is unclear, resolve it from the tests and the stub; do not ask questions. [adapted: v0.0.5 said \"ask for clarification\"; a batch harness has nobody to ask, and output_parser.py's text-tool block says \"do not ask questions\"]\n\n## Tools\n- write_file creates solution.py; edit_file patches it with exact oldText/newText; after either, the examples run automatically and the result is returned.\n",
+   "thinking": false,
+   "temperature": 0.7,
+   "top_p": 0.8,
+   "top_k": 20,
+   "presence_penalty": null,
+   "max_tokens": 4096,
+   "show_examples": true,
+   "suffix": "",
+   "self_test_retries": 1,
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "write_file",
+      "description": "Create a NEW file with the given content. Refused if the file already exists: use edit_file to change an existing file.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "path": {
+         "type": "string",
+         "description": "File name inside the task directory, e.g. solution.py. Use the EXACT name given in the task."
+        },
+        "content": {
+         "type": "string",
+         "description": "Full file content."
+        }
+       },
+       "required": [
+        "path",
+        "content"
+       ]
+      }
+     }
+    },
+    {
+     "type": "function",
+     "function": {
+      "name": "edit_file",
+      "description": "Replace exact text in an existing file. The default tool for changing any existing file. Each oldText must match exactly (whitespace and indentation matter) and be unique in the file; edits are matched against the original file and must not overlap.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "path": {
+         "type": "string",
+         "description": "File name inside the task directory."
+        },
+        "edits": {
+         "type": "array",
+         "description": "One entry per location to change.",
+         "items": {
+          "type": "object",
+          "properties": {
+           "oldText": {
+            "type": "string",
+            "description": "Exact text currently in the file; include 2-3 lines of context if needed to make it unique."
+           },
+           "newText": {
+            "type": "string",
+            "description": "Replacement text; empty string deletes oldText."
+           }
+          },
+          "required": [
+           "oldText",
+           "newText"
+          ]
+         }
+        }
+       },
+       "required": [
+        "path",
+        "edits"
+       ]
+      }
+     }
+    },
+    {
+     "type": "function",
+     "function": {
+      "name": "read_file",
+      "description": "Read a file's contents with line numbers (format: N<tab>line).",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "path": {
+         "type": "string",
+         "description": "File name inside the task directory."
+        },
+        "offset": {
+         "type": "integer",
+         "description": "Start line, 0-indexed. Optional."
+        },
+        "limit": {
+         "type": "integer",
+         "description": "Max lines to return. Optional."
+        }
+       },
+       "required": [
+        "path"
+       ]
+      }
+     }
+    },
+    {
+     "type": "function",
+     "function": {
+      "name": "run_python",
+      "description": "Run Python 3 and return the exit code plus stdout+stderr (10 s timeout). Pass `code` to run a snippet (it can `from solution import ...`; put asserts or prints in it to test your function), or `path` to run a .py file from the task directory such as a test file.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "code": {
+         "type": "string",
+         "description": "Python source to run. Use this OR path."
+        },
+        "path": {
+         "type": "string",
+         "description": "A .py file in the task directory to run. Use this OR code."
+        }
+       }
+      }
+     }
+    }
+   ],
+   "max_turns": 8,
+   "extra": {},
+   "task_template": "Implement the function `{entry_point}`.\n\nStub file to implement:\n  - solution.py\n\n{problem statement / docstring}\n\nWrite your solution to solution.py, then test it with run_python.\nWhen your tests pass, stop calling tools and reply with just DONE. Do not repeat the code: solution.py is\nyour answer.\n",
+   "tool_runtime": "littlecoder",
+   "write_guard": true,
+   "text_tool_fallback": true,
+   "autorun": true,
+   "thinking_budget": null,
+   "retry_style": "lc"
+  }
+ ],
+ "summary": {
+  "opt0": {
+   "pass": 29,
+   "n": 30,
+   "wall_s_total": 28.6,
+   "wall_s_median": 0.7,
+   "completion_tokens": 3354
+  },
+  "lc": {
+   "pass": 28,
+   "n": 30,
+   "wall_s_total": 344.2,
+   "wall_s_median": 7.9,
+   "completion_tokens": 58665
+  },
+  "lc_best": {
+   "pass": 29,
+   "n": 30,
+   "wall_s_total": 113.2,
+   "wall_s_median": 2.2,
+   "completion_tokens": 14407
+  }
+ },
+ "rows": [
+  {
+   "id": "p01_fizzbuzz",
+   "pass": true,
+   "wall_s": 0.51,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 95,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def fizzbuzz(n):\n    result = []\n    for i in range(1, n + 1):\n        s = \"\"\n        if i % 3 == 0:\n            s += \"Fizz\"\n        if i % 5 == 0:\n            s += \"Buzz\"\n        if s == \"\":\n            s = str(i)\n        result.append(s)\n    return result\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.83"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.83"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p01_fizzbuzz",
+   "pass": true,
+   "wall_s": 12.88,
+   "turns": 6,
+   "retries": 0,
+   "tool_calls": 5,
+   "budget_cut": false,
+   "completion_tokens": 2053,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def fizzbuzz(n):\n    result = []\n    for i in range(1, n + 1):\n        if i % 15 == 0:\n            result.append(\"FizzBuzz\")\n        elif i % 3 == 0:\n            result.append(\"Fizz\")\n        elif i % 5 == 0:\n            result.append(\"Buzz\")\n        else:\n            result.append(str(i))\n    return result\n",
+   "arm": "lc",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.63"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.83"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p01_fizzbuzz",
+   "pass": true,
+   "wall_s": 2.13,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 177,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def fizzbuzz(n):\n    \"\"\"Return a list of strings for numbers 1..n following FizzBuzz rules.\"\"\"\n    result = []\n    for i in range(1, n + 1):\n        if i % 3 == 0 and i % 5 == 0:\n            result.append(\"FizzBuzz\")\n        elif i % 3 == 0:\n            result.append(\"Fizz\")\n        elif i % 5 == 0:\n            result.append(\"Buzz\")\n        else:\n            result.append(str(i))\n    return result\n",
+   "arm": "lc_best",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.58"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.63"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p02_palindrome",
+   "pass": true,
+   "wall_s": 1.75,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 190,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_palindrome(s):\n    \"\"\"\n    Check if a string is a palindrome ignoring case and non-alphanumeric characters.\n    \n    Args:\n        s: Input string to check\n        \n    Returns:\n        True if the string is a palindrome (when ignoring case and non-alphanumeric chars), False otherwise\n    \"\"\"\n    # Filter to keep only alphanumeric characters and convert to lowercase\n    filtered = ''.join(c.lower() for c in s if c.isalnum())\n    \n    # Check if the filtered string reads the same forwards and backwards\n    return filtered == filtered[::-1]\n",
+   "arm": "lc_best",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.58"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.58"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p02_palindrome",
+   "pass": true,
+   "wall_s": 13.2,
+   "turns": 5,
+   "retries": 0,
+   "tool_calls": 4,
+   "budget_cut": false,
+   "completion_tokens": 1958,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_palindrome(s):\n    # Filter to keep only alphanumeric characters and convert to lowercase\n    filtered = ''.join(c.lower() for c in s if c.isalnum())\n    # Check if it reads the same forwards and backwards\n    return filtered == filtered[::-1]\n",
+   "arm": "lc",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.36"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.58"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p02_palindrome",
+   "pass": true,
+   "wall_s": 0.37,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 52,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_palindrome(s: str) -> bool:\n    cleaned = []\n    for char in s:\n        if char.isalnum():\n            cleaned.append(char.lower())\n    return cleaned == cleaned[::-1]\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.36"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.36"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p03_word_count",
+   "pass": true,
+   "wall_s": 0.44,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 75,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "import re\n\ndef word_count(text):\n    words = re.findall(r\"[A-Za-z0-9']+\", text)\n    count = {}\n    for word in words:\n        lower_word = word.lower()\n        count[lower_word] = count.get(lower_word, 0) + 1\n    return count\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.36"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.36"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p03_word_count",
+   "pass": true,
+   "wall_s": 7.82,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 1177,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "import re\n\n\ndef word_count(text):\n    \"\"\"\n    Count occurrences of each word in the text.\n    \n    Words are maximal runs of letters, digits, or apostrophes.\n    Words are compared lowercased.\n    \n    Args:\n        text: Input string to count words from\n        \n    Returns:\n        dict: Mapping each word to its occurrence count\n    \"\"\"\n    # Match words: maximal runs of letters, digits, or apostrophes\n    words = re.findall(r\"[a-zA-Z0-9']+\", text)\n    \n    # Convert to lowercase and count\n    count = {}\n    for word in words:\n        lower_word = word.lower()\n        count[lower_word] = count.get(lower_word, 0) + 1\n    \n    return count\n",
+   "arm": "lc",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.30"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.36"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p03_word_count",
+   "pass": true,
+   "wall_s": 1.96,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 243,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "import re\n\n\ndef word_count(text):\n    \"\"\"\n    Count the occurrences of each word in the text.\n    \n    Words are maximal runs of letters, digits or apostrophes.\n    Words are compared lowercased.\n    \n    Args:\n        text: Input text string\n        \n    Returns:\n        dict: Mapping from word (lowercased) to count\n    \"\"\"\n    # Match words: sequences of letters, digits, or apostrophes\n    # This pattern matches words like \"don't\", \"rock'n'roll\", etc.\n    words = re.findall(r\"[a-zA-Z0-9']+\", text)\n    \n    # Count occurrences, converting to lowercase\n    word_counts = {}\n    for word in words:\n        word_lower = word.lower()\n        word_counts[word_lower] = word_counts.get(word_lower, 0) + 1\n    \n    return word_counts\n",
+   "arm": "lc_best",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.30"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.30"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p04_flatten",
+   "pass": true,
+   "wall_s": 1.4,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 130,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def flatten(items):\n    \"\"\"\n    Flatten a nested list to any depth, returning a flat list of non-list elements.\n    \"\"\"\n    result = []\n    for item in items:\n        if isinstance(item, list):\n            result.extend(flatten(item))\n        else:\n            result.append(item)\n    return result\n",
+   "arm": "lc_best",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.30"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.30"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p04_flatten",
+   "pass": true,
+   "wall_s": 5.19,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 740,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def flatten(items):\n    result = []\n    for item in items:\n        if isinstance(item, list):\n            result.extend(flatten(item))\n        else:\n            result.append(item)\n    return result\n",
+   "arm": "lc",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.28"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.30"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p04_flatten",
+   "pass": true,
+   "wall_s": 0.32,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 52,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def flatten(items):\n    result = []\n    for item in items:\n        if isinstance(item, list):\n            result.extend(flatten(item))\n        else:\n            result.append(item)\n    return result\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.28"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.28"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p05_roman",
+   "pass": false,
+   "wall_s": 1.68,
+   "turns": 2,
+   "retries": 1,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 350,
+   "finish": "stop",
+   "error": null,
+   "check_out": "Traceback (most recent call last):\n  File \"/var/folders/jd/2fjjlx_d7_7br81pqcqcx8jh0000gn/T/tmpm688rxf4/main.py\", line 27, in <module>\n    assert roman_to_int('XIV') == 14\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError",
+   "code": "def roman_to_int(s: str) -> int:\n    values = {\n        'I': 1,\n        'V': 5,\n        'X': 10,\n        'L': 50,\n        'C': 100,\n        'D': 500,\n        'M': 1000\n    }\n    \n    total = 0\n    n = len(s)\n    \n    for i in range(n):\n        current_val = values[s[i]]\n        next_val = values[s[i + 1]] if i + 1 < n else 0\n        \n        if current_val < next_val:\n            total += current_val\n        else:\n            total += current_val - next_val\n            \n    return total\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.33"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.28"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p05_roman",
+   "pass": true,
+   "wall_s": 18.13,
+   "turns": 5,
+   "retries": 0,
+   "tool_calls": 4,
+   "budget_cut": false,
+   "completion_tokens": 3391,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def roman_to_int(s):\n    roman_values = {\n        'I': 1,\n        'V': 5,\n        'X': 10,\n        'L': 50,\n        'C': 100,\n        'D': 500,\n        'M': 1000\n    }\n    \n    total = 0\n    for i in range(len(s)):\n        value = roman_values[s[i]]\n        # If this numeral is less than the next one, subtract it\n        if i + 1 < len(s) and value < roman_values[s[i + 1]]:\n            total -= value\n        else:\n            total += value\n    return total\n",
+   "arm": "lc",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.64"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.33"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p05_roman",
+   "pass": true,
+   "wall_s": 10.99,
+   "turns": 5,
+   "retries": 0,
+   "tool_calls": 4,
+   "budget_cut": false,
+   "completion_tokens": 1514,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def roman_to_int(s: str) -> int:\n    \"\"\"Convert a Roman numeral string to an integer.\"\"\"\n    roman_values = {\n        'I': 1,\n        'V': 5,\n        'X': 10,\n        'L': 50,\n        'C': 100,\n        'D': 500,\n        'M': 1000,\n    }\n    \n    total = 0\n    prev_val = 0\n    # Iterate from right to left\n    for char in reversed(s):\n        current_val = roman_values[char]\n        # If current value is less than or equal to previous, add it\n        # Otherwise (if current > prev), it's part of a subtractive pair\n        if current_val < prev_val:\n            total -= current_val\n        else:\n            total += current_val\n        prev_val = current_val\n    \n    return total\n",
+   "arm": "lc_best",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.85"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.64"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p06_merge_intervals",
+   "pass": false,
+   "wall_s": 26.01,
+   "turns": 8,
+   "retries": 0,
+   "tool_calls": 7,
+   "budget_cut": false,
+   "completion_tokens": 3832,
+   "finish": "tool_calls",
+   "error": null,
+   "check_out": "Traceback (most recent call last):\n  File \"/var/folders/jd/2fjjlx_d7_7br81pqcqcx8jh0000gn/T/tmpr00osmyp/main.py\", line 26, in <module>\n    assert merge_intervals([[1, 10], [2, 3], [4, 5]]) == [[1, 10]]\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError",
+   "code": "def merge_intervals(intervals):\n    if not intervals:\n        return []\n    \n    # Sort intervals by start time\n    intervals.sort(key=lambda x: x[0])\n    \n    merged = [intervals[0]]\n    \n    for start, end in intervals[1:]:\n        last_start, last_end = merged[-1]\n        \n        # Merge if intervals overlap or touch\n        if end >= last_end and start <= last_end:\n            merged[-1] = [last_start, max(last_end, end)]\n        else:\n            merged.append([start, end])\n    \n    return merged\n",
+   "arm": "lc_best",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.72"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.85"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p06_merge_intervals",
+   "pass": true,
+   "wall_s": 6.12,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 1115,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def merge_intervals(intervals):\n    if not intervals:\n        return []\n    \n    # Sort by start time\n    intervals.sort(key=lambda x: x[0])\n    \n    merged = [intervals[0]]\n    \n    for start, end in intervals[1:]:\n        last_start, last_end = merged[-1]\n        # Merge if overlapping or touching (start <= last_end)\n        if start <= last_end:\n            merged[-1] = [last_start, max(last_end, end)]\n        else:\n            merged.append([start, end])\n    \n    return merged\n",
+   "arm": "lc",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.59"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.72"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p06_merge_intervals",
+   "pass": true,
+   "wall_s": 0.76,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 152,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def merge_intervals(intervals):\n    if not intervals:\n        return []\n    \n    # Sort intervals by start time\n    intervals.sort(key=lambda x: x[0])\n    \n    merged = [intervals[0]]\n    \n    for current_start, current_end in intervals[1:]:\n        last_start, last_end = merged[-1]\n        \n        # Check if intervals overlap or touch\n        if current_start <= last_end:\n            # Merge them\n            merged[-1] = [last_start, max(last_end, current_end)]\n        else:\n            # No overlap, add new interval\n            merged.append([current_start, current_end])\n    \n    return merged\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.59"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.59"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p07_two_sum",
+   "pass": true,
+   "wall_s": 1.07,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 103,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def two_sum(nums, target):\n    n = len(nums)\n    seen = {}  # maps value -> index\n    for j in range(n):\n        current = nums[j]\n        complement = target - current\n        if complement in seen:\n            i = seen[complement]\n            if i < j:\n                return (i, j)\n        if current not in seen:\n            seen[current] = j\n    return None\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.59"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.59"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p07_two_sum",
+   "pass": false,
+   "wall_s": 27.43,
+   "turns": 9,
+   "retries": 1,
+   "tool_calls": 7,
+   "budget_cut": false,
+   "completion_tokens": 3689,
+   "finish": "tool_calls",
+   "error": null,
+   "check_out": "Traceback (most recent call last):\n  File \"/var/folders/jd/2fjjlx_d7_7br81pqcqcx8jh0000gn/T/tmpivq5a8tc/main.py\", line 16, in <module>\n    assert two_sum([2, 7, 11, 15], 9) == (0, 1)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError",
+   "code": "def two_sum(nums, target):\n    \"\"\"\n    Find two indices (i, j) with i < j such that nums[i] + nums[j] == target.\n    Choose the pair with the smallest j (and then the smallest i).\n    Return None if no such pair exists.\n    \"\"\"\n    seen = {}  # value -> index (first occurrence)\n    for j, num in enumerate(nums):\n        complement = target - num\n        if complement in seen:\n            i = seen[complement]\n            return (i, j)\n    return None\n",
+   "arm": "lc",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.54"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.59"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p07_two_sum",
+   "pass": true,
+   "wall_s": 2.87,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 336,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def two_sum(nums, target):\n    \"\"\"\n    Find two indices i < j such that nums[i] + nums[j] == target.\n    Choose the pair with the smallest j (and then the smallest i).\n    Return None if no such pair exists.\n    \"\"\"\n    # Dictionary to store value -> index mapping\n    # Key: number value, Value: list of indices where this value appears\n    num_to_indices = {}\n    \n    for i, num in enumerate(nums):\n        if num not in num_to_indices:\n            num_to_indices[num] = []\n        num_to_indices[num].append(i)\n    \n    # Iterate through each number to find its complement\n    for j, num in enumerate(nums):\n        complement = target - num\n        \n        if complement in num_to_indices:\n            # Get all indices where complement appears\n            indices = num_to_indices[complement]\n            \n            # Find the smallest index i < j\n            for i in indices:\n                if i < j:\n                    return (i, j)\n    \n    return None\n",
+   "arm": "lc_best",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.54"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.54"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p08_caesar",
+   "pass": true,
+   "wall_s": 2.23,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 283,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def caesar(text, shift):\n    \"\"\"\n    Shifts every ASCII letter by `shift` positions in the alphabet,\n    wrapping around and keeping its case; other characters stay unchanged.\n    \"\"\"\n    result = []\n    # Normalize shift to be within 0-25 range\n    shift = shift % 26\n    \n    for char in text:\n        if 'a' <= char <= 'z':\n            # Lowercase letters\n            base = ord('a')\n            shifted = chr(base + (ord(char) - base + shift) % 26)\n            result.append(shifted)\n        elif 'A' <= char <= 'Z':\n            # Uppercase letters\n            base = ord('A')\n            shifted = chr(base + (ord(char) - base + shift) % 26)\n            result.append(shifted)\n        else:\n            # Non-letter characters stay unchanged\n            result.append(char)\n    \n    return ''.join(result)\n",
+   "arm": "lc_best",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.66"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.54"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p08_caesar",
+   "pass": true,
+   "wall_s": 9.3,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 1618,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def caesar(text, shift):\n    result = []\n    for char in text:\n        if 'A' <= char <= 'Z':\n            # Uppercase letter\n            new_char = chr((ord(char) - ord('A') + shift) % 26 + ord('A'))\n            result.append(new_char)\n        elif 'a' <= char <= 'z':\n            # Lowercase letter\n            new_char = chr((ord(char) - ord('a') + shift) % 26 + ord('a'))\n            result.append(new_char)\n        else:\n            # Non-letter character, keep unchanged\n            result.append(char)\n    return ''.join(result)\n",
+   "arm": "lc",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.71"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.66"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p08_caesar",
+   "pass": true,
+   "wall_s": 0.65,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 134,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def caesar(text: str, shift: int) -> str:\n    result = []\n    shift = shift % 26\n    for char in text:\n        if 'a' <= char <= 'z':\n            result.append(chr((ord(char) - ord('a') + shift) % 26 + ord('a')))\n        elif 'A' <= char <= 'Z':\n            result.append(chr((ord(char) - ord('A') + shift) % 26 + ord('A')))\n        else:\n            result.append(char)\n    return ''.join(result)\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.71"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.71"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p09_balanced",
+   "pass": true,
+   "wall_s": 1.18,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 103,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_balanced(s: str) -> bool:\n    stack = []\n    mapping = {')': '(', ']': '[', '}': '{'}\n    \n    for char in s:\n        if char in '([{':\n            stack.append(char)\n        elif char in ')]}':\n            if not stack or stack[-1] != mapping[char]:\n                return False\n            stack.pop()\n    \n    return len(stack) == 0\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.71"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.71"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p09_balanced",
+   "pass": true,
+   "wall_s": 4.53,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 805,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_balanced(s):\n    stack = []\n    bracket_map = {')': '(', ']': '[', '}': '{'}\n    \n    for char in s:\n        if char in '([{':\n            stack.append(char)\n        elif char in ')]}':\n            if not stack:\n                return False\n            top = stack.pop()\n            if bracket_map[char] != top:\n                return False\n    \n    return len(stack) == 0\n",
+   "arm": "lc",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.82"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.71"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p09_balanced",
+   "pass": true,
+   "wall_s": 4.8,
+   "turns": 4,
+   "retries": 0,
+   "tool_calls": 3,
+   "budget_cut": false,
+   "completion_tokens": 556,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_balanced(s):\n    \"\"\"\n    Check if brackets ((), [], {}) are balanced in the string.\n    Returns True if every bracket is closed by the matching bracket in the right order.\n    Other characters are ignored.\n    \"\"\"\n    stack = []\n    bracket_map = {')': '(', ']': '[', '}': '{'}\n    opening_brackets = {'(', '[', '{'}\n    \n    for char in s:\n        if char in opening_brackets:\n            stack.append(char)\n        elif char in bracket_map:\n            if not stack:\n                return False\n            top = stack.pop()\n            if bracket_map[char] != top:\n                return False\n    \n    return len(stack) == 0\n",
+   "arm": "lc_best",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.83"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.82"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p10_rle",
+   "pass": true,
+   "wall_s": 2.26,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 280,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def rle_encode(s):\n    \"\"\"\n    Run-length encode a string.\n    Each maximal run of the same character becomes the character followed by the run length.\n    \n    Args:\n        s: Input string to encode\n        \n    Returns:\n        Run-length encoded string\n    \"\"\"\n    if not s:\n        return ''\n    \n    result = []\n    current_char = s[0]\n    count = 1\n    \n    for char in s[1:]:\n        if char == current_char:\n            count += 1\n        else:\n            result.append(current_char + str(count))\n            current_char = char\n            count = 1\n    \n    # Append the last run\n    result.append(current_char + str(count))\n    \n    return ''.join(result)\n",
+   "arm": "lc_best",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.83"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.83"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p10_rle",
+   "pass": true,
+   "wall_s": 5.35,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 960,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def rle_encode(s):\n    if not s:\n        return ''\n    \n    result = []\n    current_char = s[0]\n    count = 1\n    \n    for char in s[1:]:\n        if char == current_char:\n            count += 1\n        else:\n            result.append(f\"{current_char}{count}\")\n            current_char = char\n            count = 1\n    \n    # Don't forget the last run\n    result.append(f\"{current_char}{count}\")\n    \n    return ''.join(result)\n",
+   "arm": "lc",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.70"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.83"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p10_rle",
+   "pass": true,
+   "wall_s": 0.56,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 117,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def rle_encode(s: str) -> str:\n    if not s:\n        return ''\n    \n    result = []\n    current_char = s[0]\n    count = 1\n    \n    for char in s[1:]:\n        if char == current_char:\n            count += 1\n        else:\n            result.append(f\"{current_char}{count}\")\n            current_char = char\n            count = 1\n    \n    result.append(f\"{current_char}{count}\")\n    return ''.join(result)\n",
+   "arm": "opt0",
+   "rep": 0,
+   "sys": {
+    "load1": [
+     "1.70"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.70"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p01_fizzbuzz",
+   "pass": true,
+   "wall_s": 1.71,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 168,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def fizzbuzz(n):\n    result = []\n    for i in range(1, n + 1):\n        if i % 3 == 0 and i % 5 == 0:\n            result.append(\"FizzBuzz\")\n        elif i % 3 == 0:\n            result.append(\"Fizz\")\n        elif i % 5 == 0:\n            result.append(\"Buzz\")\n        else:\n            result.append(str(i))\n    return result\n",
+   "arm": "lc_best",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.70"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.70"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p01_fizzbuzz",
+   "pass": true,
+   "wall_s": 19.43,
+   "turns": 7,
+   "retries": 0,
+   "tool_calls": 6,
+   "budget_cut": false,
+   "completion_tokens": 3636,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def fizzbuzz(n):\n    result = []\n    for i in range(1, n + 1):\n        if i % 15 == 0:\n            result.append(\"FizzBuzz\")\n        elif i % 3 == 0:\n            result.append(\"Fizz\")\n        elif i % 5 == 0:\n            result.append(\"Buzz\")\n        else:\n            result.append(str(i))\n    return result\n",
+   "arm": "lc",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.73"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.70"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p01_fizzbuzz",
+   "pass": true,
+   "wall_s": 0.54,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 108,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def fizzbuzz(n):\n    result = []\n    for i in range(1, n + 1):\n        if i % 3 == 0 and i % 5 == 0:\n            result.append(\"FizzBuzz\")\n        elif i % 3 == 0:\n            result.append(\"Fizz\")\n        elif i % 5 == 0:\n            result.append(\"Buzz\")\n        else:\n            result.append(str(i))\n    return result\n",
+   "arm": "opt0",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.73"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.73"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p02_palindrome",
+   "pass": true,
+   "wall_s": 1.67,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 52,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_palindrome(s: str) -> bool:\n    cleaned = []\n    for char in s:\n        if char.isalnum():\n            cleaned.append(char.lower())\n    return cleaned == cleaned[::-1]\n",
+   "arm": "opt0",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.73"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.73"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p02_palindrome",
+   "pass": false,
+   "wall_s": 22.42,
+   "turns": 8,
+   "retries": 0,
+   "tool_calls": 7,
+   "budget_cut": false,
+   "completion_tokens": 3448,
+   "finish": "stop",
+   "error": null,
+   "check_out": "Traceback (most recent call last):\n  File \"/var/folders/jd/2fjjlx_d7_7br81pqcqcx8jh0000gn/T/tmpah23dbqj/main.py\", line 9, in <module>\n    assert is_palindrome('') is True\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError",
+   "code": "def is_palindrome(s):\n    # Filter to keep only alphanumeric characters and convert to lowercase\n    filtered = ''.join(c.lower() for c in s if c.isalnum())\n    # Check if the filtered string is a palindrome\n    return len(filtered) > 0 and filtered == filtered[::-1]\n",
+   "arm": "lc",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.53"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.73"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p02_palindrome",
+   "pass": true,
+   "wall_s": 1.14,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 128,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_palindrome(s):\n    # Filter to keep only alphanumeric characters and convert to lowercase\n    filtered = ''.join(c.lower() for c in s if c.isalnum())\n    # Check if the filtered string reads the same forwards and backwards\n    return filtered == filtered[::-1]\n",
+   "arm": "lc_best",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.53"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.53"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p03_word_count",
+   "pass": true,
+   "wall_s": 3.31,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 230,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "import re\n\n\ndef word_count(text):\n    \"\"\"\n    Count the occurrences of each word in the text.\n    \n    Words are defined as maximal runs of letters, digits, or apostrophes.\n    Words are compared lowercased.\n    \n    Args:\n        text: Input text string\n        \n    Returns:\n        dict: Mapping of each word (lowercased) to its count\n    \"\"\"\n    # Match runs of letters, digits, or apostrophes\n    words = re.findall(r\"[A-Za-z0-9']+\", text)\n    \n    # Count each word (lowercased)\n    word_counts = {}\n    for word in words:\n        word_lower = word.lower()\n        word_counts[word_lower] = word_counts.get(word_lower, 0) + 1\n    \n    return word_counts\n",
+   "arm": "lc_best",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.41"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.53"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p03_word_count",
+   "pass": true,
+   "wall_s": 7.12,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 1257,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "import re\n\n\ndef word_count(text):\n    \"\"\"\n    Count occurrences of each word in text.\n    \n    Words are maximal runs of letters, digits, or apostrophes.\n    Words are compared lowercased.\n    \n    Args:\n        text: Input string to count words from\n        \n    Returns:\n        dict: Mapping each word (lowercased) to its count\n    \"\"\"\n    # Find all words (maximal runs of letters, digits, or apostrophes)\n    words = re.findall(r\"[a-zA-Z0-9']+\", text)\n    # Convert to lowercase and count\n    word_counts = {}\n    for word in words:\n        word_lower = word.lower()\n        word_counts[word_lower] = word_counts.get(word_lower, 0) + 1\n    return word_counts\n",
+   "arm": "lc",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.46"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.41"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p03_word_count",
+   "pass": true,
+   "wall_s": 0.43,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 75,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "import re\n\ndef word_count(text):\n    words = re.findall(r\"[A-Za-z0-9']+\", text)\n    count = {}\n    for word in words:\n        lower_word = word.lower()\n        count[lower_word] = count.get(lower_word, 0) + 1\n    return count\n",
+   "arm": "opt0",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.46"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.46"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p04_flatten",
+   "pass": true,
+   "wall_s": 0.98,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 52,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def flatten(items):\n    result = []\n    for item in items:\n        if isinstance(item, list):\n            result.extend(flatten(item))\n        else:\n            result.append(item)\n    return result\n",
+   "arm": "opt0",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.42"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.46"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p04_flatten",
+   "pass": true,
+   "wall_s": 3.55,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 578,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def flatten(items):\n    result = []\n    for item in items:\n        if isinstance(item, list):\n            result.extend(flatten(item))\n        else:\n            result.append(item)\n    return result\n",
+   "arm": "lc",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.42"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.42"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p04_flatten",
+   "pass": true,
+   "wall_s": 1.1,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 139,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def flatten(items):\n    \"\"\"\n    Takes a list that may contain nested lists to any depth and returns\n    a flat list of all non-list elements in order.\n    \"\"\"\n    result = []\n    for item in items:\n        if isinstance(item, list):\n            result.extend(flatten(item))\n        else:\n            result.append(item)\n    return result\n",
+   "arm": "lc_best",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.42"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.42"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p05_roman",
+   "pass": true,
+   "wall_s": 2.37,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 338,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def roman_to_int(s):\n    \"\"\"Convert a Roman numeral string to an integer.\"\"\"\n    roman_values = {\n        'I': 1,\n        'V': 5,\n        'X': 10,\n        'L': 50,\n        'C': 100,\n        'D': 500,\n        'M': 1000,\n    }\n    \n    total = 0\n    i = 0\n    n = len(s)\n    \n    while i < n:\n        # Check for subtractive form (e.g., IV, IX, XL, XC, CD, CM)\n        if i + 1 < n and roman_values[s[i]] < roman_values[s[i + 1]]:\n            total += roman_values[s[i + 1]] - roman_values[s[i]]\n            i += 2\n        else:\n            total += roman_values[s[i]]\n            i += 1\n    \n    return total\n",
+   "arm": "lc_best",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.31"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.42"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p05_roman",
+   "pass": true,
+   "wall_s": 23.27,
+   "turns": 7,
+   "retries": 0,
+   "tool_calls": 6,
+   "budget_cut": false,
+   "completion_tokens": 4302,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def roman_to_int(s):\n    roman_values = {\n        'I': 1,\n        'V': 5,\n        'X': 10,\n        'L': 50,\n        'C': 100,\n        'D': 500,\n        'M': 1000\n    }\n    \n    total = 0\n    i = 0\n    while i < len(s):\n        # Check if we have a subtractive pair (smaller value before larger value)\n        if i + 1 < len(s) and roman_values[s[i]] < roman_values[s[i + 1]]:\n            total += roman_values[s[i + 1]] - roman_values[s[i]]\n            i += 2\n        else:\n            total += roman_values[s[i]]\n            i += 1\n    \n    return total\n",
+   "arm": "lc",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.43"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.31"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p05_roman",
+   "pass": true,
+   "wall_s": 0.64,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 132,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def roman_to_int(s: str) -> int:\n    values = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000}\n    total = 0\n    prev_value = 0\n    \n    for char in reversed(s):\n        value = values[char]\n        if value < prev_value:\n            total -= value\n        else:\n            total += value\n        prev_value = value\n    \n    return total\n",
+   "arm": "opt0",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.43"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.43"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p06_merge_intervals",
+   "pass": true,
+   "wall_s": 2.75,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 163,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def merge_intervals(intervals):\n    if not intervals:\n        return []\n    \n    # Sort intervals by start time\n    intervals.sort(key=lambda x: x[0])\n    \n    merged = [intervals[0]]\n    \n    for current_start, current_end in intervals[1:]:\n        last_start, last_end = merged[-1]\n        \n        # Merge if overlapping or touching\n        if current_start <= last_end:\n            # Update the end of the last interval to the maximum of both ends\n            merged[-1] = [last_start, max(last_end, current_end)]\n        else:\n            # No overlap, add the new interval\n            merged.append([current_start, current_end])\n    \n    return merged\n",
+   "arm": "opt0",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.43"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.43"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p06_merge_intervals",
+   "pass": true,
+   "wall_s": 7.89,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 1508,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def merge_intervals(intervals):\n    if not intervals:\n        return []\n    \n    # Sort intervals by start time\n    intervals.sort(key=lambda x: x[0])\n    \n    merged = [intervals[0]]\n    \n    for start, end in intervals[1:]:\n        current_start, current_end = merged[-1]\n        \n        # If intervals overlap or touch, merge them\n        if start <= current_end:\n            # Merge by extending the end if needed\n            merged[-1] = [current_start, max(current_end, end)]\n        else:\n            # No overlap, add a new interval\n            merged.append([start, end])\n    \n    return merged\n",
+   "arm": "lc",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.68"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.43"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p06_merge_intervals",
+   "pass": true,
+   "wall_s": 17.11,
+   "turns": 8,
+   "retries": 0,
+   "tool_calls": 7,
+   "budget_cut": false,
+   "completion_tokens": 2496,
+   "finish": "tool_calls",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def merge_intervals(intervals):\n    \"\"\"\n    Merge overlapping or touching intervals.\n    \n    Args:\n        intervals: List of [start, end] pairs in any order\n        \n    Returns:\n        List of merged, non-overlapping [start, end] pairs sorted by start\n    \"\"\"\n    if not intervals:\n        return []\n    \n    # Sort intervals by start time\n    intervals.sort(key=lambda x: x[0])\n    \n    merged = []\n    current_start, current_end = intervals[0]\n    \n    for start, end in intervals[1:]:\n        # Check if current interval overlaps with or touches the next interval\n        # Touching intervals (current_end == start) should also be merged\n        if current_end >= start:\n            # Extend the current interval if needed\n            current_end = max(current_end, end)\n        else:\n            # No overlap, add current interval and start a new one\n            merged.append([current_start, current_end])\n            current_start, current_end = start, end\n    \n    # Add the last interval\n    merged.append([current_start, current_end])\n    \n    return merged\n",
+   "arm": "lc_best",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.53"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.68"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p07_two_sum",
+   "pass": true,
+   "wall_s": 2.14,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 282,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def two_sum(nums, target):\n    \"\"\"\n    Find two indices i, j such that nums[i] + nums[j] == target with i < j.\n    Returns the pair with the smallest j (and then smallest i).\n    Returns None if no such pair exists.\n    \"\"\"\n    seen = {}  # value -> index\n    for j, num in enumerate(nums):\n        complement = target - num\n        if complement in seen:\n            i = seen[complement]\n            return (i, j)\n        seen[num] = j\n    return None\n",
+   "arm": "lc_best",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "1.57"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.53"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p07_two_sum",
+   "pass": true,
+   "wall_s": 32.86,
+   "turns": 7,
+   "retries": 0,
+   "tool_calls": 6,
+   "budget_cut": false,
+   "completion_tokens": 6078,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def two_sum(nums, target):\n    \"\"\"\n    Find two indices i < j such that nums[i] + nums[j] == target.\n    Choose the pair with the smallest j (then smallest i).\n    Return None if no such pair exists.\n    \"\"\"\n    seen = {}  # number -> index (first occurrence)\n    \n    for j, num in enumerate(nums):\n        complement = target - num\n        if complement in seen:\n            i = seen[complement]\n            if i < j:\n                return (i, j)\n        seen[num] = j\n    \n    return None\n",
+   "arm": "lc",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "2.29"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.57"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p07_two_sum",
+   "pass": true,
+   "wall_s": 0.41,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 70,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def two_sum(nums, target):\n    seen = {}\n    for j, num in enumerate(nums):\n        complement = target - num\n        if complement in seen:\n            i = seen[complement]\n            return (i, j)\n        seen[num] = j\n    return None\n",
+   "arm": "opt0",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "2.29"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.29"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p08_caesar",
+   "pass": true,
+   "wall_s": 4.21,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 127,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def caesar(text, shift):\n    result = []\n    shift = shift % 26\n    for char in text:\n        if 'A' <= char <= 'Z':\n            result.append(chr((ord(char) - ord('A') + shift) % 26 + ord('A')))\n        elif 'a' <= char <= 'z':\n            result.append(chr((ord(char) - ord('a') + shift) % 26 + ord('a')))\n        else:\n            result.append(char)\n    return ''.join(result)\n",
+   "arm": "opt0",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "2.35"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.29"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p08_caesar",
+   "pass": true,
+   "wall_s": 6.75,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 1314,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def caesar(text, shift):\n    result = []\n    shift = shift % 26  # Handle shifts larger than 26\n    \n    for char in text:\n        if 'A' <= char <= 'Z':\n            # Uppercase letter\n            base = ord('A')\n            shifted = chr((ord(char) - base + shift) % 26 + base)\n            result.append(shifted)\n        elif 'a' <= char <= 'z':\n            # Lowercase letter\n            base = ord('a')\n            shifted = chr((ord(char) - base + shift) % 26 + base)\n            result.append(shifted)\n        else:\n            # Non-letter character, keep unchanged\n            result.append(char)\n    \n    return ''.join(result)\n",
+   "arm": "lc",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "2.29"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.35"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p08_caesar",
+   "pass": true,
+   "wall_s": 1.7,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 276,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def caesar(text, shift):\n    \"\"\"\n    Shifts every ASCII letter by `shift` positions in the alphabet,\n    wrapping around and keeping its case; other characters stay unchanged.\n    \"\"\"\n    # Normalize shift to be within 0-25 range\n    shift = shift % 26\n    \n    result = []\n    \n    for char in text:\n        if 'a' <= char <= 'z':\n            # Lowercase letters\n            new_char = chr((ord(char) - ord('a') + shift) % 26 + ord('a'))\n            result.append(new_char)\n        elif 'A' <= char <= 'Z':\n            # Uppercase letters\n            new_char = chr((ord(char) - ord('A') + shift) % 26 + ord('A'))\n            result.append(new_char)\n        else:\n            # Non-alphabetic characters stay unchanged\n            result.append(char)\n    \n    return ''.join(result)\n",
+   "arm": "lc_best",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "2.29"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.29"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p09_balanced",
+   "pass": true,
+   "wall_s": 2.45,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 273,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_balanced(s):\n    \"\"\"\n    Check if every bracket in the string is closed by the matching bracket in the right order.\n    Returns True if balanced, False otherwise.\n    Other characters are ignored.\n    \"\"\"\n    # Mapping of opening brackets to their corresponding closing brackets\n    bracket_map = {\n        '(': ')',\n        '[': ']',\n        '{': '}'\n    }\n    \n    # Stack to keep track of opening brackets\n    stack = []\n    \n    for char in s:\n        if char in bracket_map:\n            # Opening bracket - push to stack\n            stack.append(char)\n        elif char in bracket_map.values():\n            # Closing bracket - check if it matches the top of the stack\n            if not stack:\n                return False\n            top = stack.pop()\n            if bracket_map[top] != char:\n                return False\n    \n    # Stack should be empty if all brackets are balanced\n    return len(stack) == 0\n",
+   "arm": "lc_best",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "2.29"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.29"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p09_balanced",
+   "pass": true,
+   "wall_s": 7.94,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 1313,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_balanced(s):\n    stack = []\n    bracket_map = {')': '(', ']': '[', '}': '{'}\n    opening = set(['(', '[', '{'])\n    \n    for char in s:\n        if char in opening:\n            stack.append(char)\n        elif char in bracket_map:\n            if not stack or stack[-1] != bracket_map[char]:\n                return False\n            stack.pop()\n    \n    return len(stack) == 0\n",
+   "arm": "lc",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "2.39"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.29"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p09_balanced",
+   "pass": true,
+   "wall_s": 0.56,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 109,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_balanced(s: str) -> bool:\n    stack = []\n    mapping = {')': '(', ']': '[', '}': '{'}\n    \n    for char in s:\n        if char in '([{':\n            stack.append(char)\n        elif char in ')]}':\n            if not stack:\n                return False\n            top = stack.pop()\n            if mapping[char] != top:\n                return False\n    \n    return len(stack) == 0\n",
+   "arm": "opt0",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "2.39"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.39"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p10_rle",
+   "pass": true,
+   "wall_s": 1.13,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 112,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def rle_encode(s):\n    if not s:\n        return ''\n    \n    result = []\n    current_char = s[0]\n    count = 1\n    \n    for char in s[1:]:\n        if char == current_char:\n            count += 1\n        else:\n            result.append(f\"{current_char}{count}\")\n            current_char = char\n            count = 1\n    \n    result.append(f\"{current_char}{count}\")\n    return ''.join(result)\n",
+   "arm": "opt0",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "2.39"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.39"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p10_rle",
+   "pass": true,
+   "wall_s": 6.26,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 1153,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def rle_encode(s):\n    if not s:\n        return ''\n    \n    result = []\n    current_char = s[0]\n    count = 1\n    \n    for i in range(1, len(s)):\n        if s[i] == current_char:\n            count += 1\n        else:\n            result.append(current_char + str(count))\n            current_char = s[i]\n            count = 1\n    \n    # Don't forget the last run\n    result.append(current_char + str(count))\n    \n    return ''.join(result)\n",
+   "arm": "lc",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "2.18"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.39"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p10_rle",
+   "pass": true,
+   "wall_s": 1.55,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 246,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def rle_encode(s):\n    \"\"\"\n    Run-length encode a string.\n    Each maximal run of the same character becomes the character followed by the run length.\n    \n    Args:\n        s: Input string to encode\n    \n    Returns:\n        Run-length encoded string\n    \n    Example:\n        rle_encode('aaabcc') == 'a3b1c2'\n    \"\"\"\n    if not s:\n        return ''\n    \n    result = []\n    current_char = s[0]\n    count = 1\n    \n    for char in s[1:]:\n        if char == current_char:\n            count += 1\n        else:\n            result.append(current_char + str(count))\n            current_char = char\n            count = 1\n    \n    # Append the last run\n    result.append(current_char + str(count))\n    \n    return ''.join(result)\n",
+   "arm": "lc_best",
+   "rep": 1,
+   "sys": {
+    "load1": [
+     "2.18"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.18"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p01_fizzbuzz",
+   "pass": true,
+   "wall_s": 0.51,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 101,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def fizzbuzz(n):\n    result = []\n    for i in range(1, n + 1):\n        if i % 15 == 0:\n            result.append(\"FizzBuzz\")\n        elif i % 3 == 0:\n            result.append(\"Fizz\")\n        elif i % 5 == 0:\n            result.append(\"Buzz\")\n        else:\n            result.append(str(i))\n    return result\n",
+   "arm": "opt0",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.18"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.18"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p01_fizzbuzz",
+   "pass": true,
+   "wall_s": 12.64,
+   "turns": 6,
+   "retries": 0,
+   "tool_calls": 5,
+   "budget_cut": false,
+   "completion_tokens": 2106,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def fizzbuzz(n):\n    result = []\n    for i in range(1, n + 1):\n        if i % 15 == 0:\n            result.append(\"FizzBuzz\")\n        elif i % 3 == 0:\n            result.append(\"Fizz\")\n        elif i % 5 == 0:\n            result.append(\"Buzz\")\n        else:\n            result.append(str(i))\n    return result\n",
+   "arm": "lc",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.38"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.18"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p01_fizzbuzz",
+   "pass": true,
+   "wall_s": 1.36,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 161,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def fizzbuzz(n):\n    result = []\n    for i in range(1, n + 1):\n        if i % 15 == 0:\n            result.append(\"FizzBuzz\")\n        elif i % 3 == 0:\n            result.append(\"Fizz\")\n        elif i % 5 == 0:\n            result.append(\"Buzz\")\n        else:\n            result.append(str(i))\n    return result\n",
+   "arm": "lc_best",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.38"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.38"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p02_palindrome",
+   "pass": true,
+   "wall_s": 1.09,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 128,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_palindrome(s):\n    # Filter to keep only alphanumeric characters and convert to lowercase\n    cleaned = ''.join(c.lower() for c in s if c.isalnum())\n    # Check if the cleaned string reads the same forwards and backwards\n    return cleaned == cleaned[::-1]\n",
+   "arm": "lc_best",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.38"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.38"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p02_palindrome",
+   "pass": true,
+   "wall_s": 8.84,
+   "turns": 5,
+   "retries": 0,
+   "tool_calls": 4,
+   "budget_cut": false,
+   "completion_tokens": 1147,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_palindrome(s):\n    # Filter to keep only alphanumeric characters and convert to lowercase\n    cleaned = ''.join(c.lower() for c in s if c.isalnum())\n    # Check if the cleaned string is a palindrome\n    return cleaned == cleaned[::-1]\n",
+   "arm": "lc",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.32"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.38"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p02_palindrome",
+   "pass": true,
+   "wall_s": 0.35,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 53,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_palindrome(s: str) -> bool:\n    cleaned = []\n    for char in s:\n        if char.isalnum():\n            cleaned.append(char.lower())\n    \n    return cleaned == cleaned[::-1]\n",
+   "arm": "opt0",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.32"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.32"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p03_word_count",
+   "pass": true,
+   "wall_s": 0.43,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 75,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "import re\n\ndef word_count(text):\n    words = re.findall(r\"[A-Za-z0-9']+\", text)\n    result = {}\n    for word in words:\n        lower_word = word.lower()\n        result[lower_word] = result.get(lower_word, 0) + 1\n    return result\n",
+   "arm": "opt0",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.32"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.32"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p03_word_count",
+   "pass": true,
+   "wall_s": 7.65,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 1283,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "import re\n\n\ndef word_count(text):\n    \"\"\"\n    Count occurrences of each word in the text.\n    \n    Words are maximal runs of letters, digits, or apostrophes.\n    Words are compared lowercased.\n    \n    Args:\n        text: Input string to count words from\n        \n    Returns:\n        dict: Mapping each word to its occurrence count\n    \"\"\"\n    # Match maximal runs of letters, digits, or apostrophes\n    words = re.findall(r\"[a-zA-Z0-9']+\", text)\n    # Convert to lowercase and count\n    count = {}\n    for word in words:\n        word_lower = word.lower()\n        count[word_lower] = count.get(word_lower, 0) + 1\n    return count\n",
+   "arm": "lc",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.37"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.32"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p03_word_count",
+   "pass": true,
+   "wall_s": 2.65,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 254,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "import re\n\n\ndef word_count(text):\n    \"\"\"\n    Count occurrences of each word in the text.\n    \n    Words are defined as maximal runs of letters, digits, or apostrophes.\n    Words are compared in lowercase.\n    \n    Args:\n        text: Input text string\n        \n    Returns:\n        dict: Mapping from lowercase word to its count\n    \"\"\"\n    # Pattern matches maximal runs of letters, digits, or apostrophes\n    # Using re.findall to extract all such sequences\n    words = re.findall(r\"[a-zA-Z0-9']+\", text)\n    \n    # Convert to lowercase and count\n    word_counts = {}\n    for word in words:\n        word_lower = word.lower()\n        word_counts[word_lower] = word_counts.get(word_lower, 0) + 1\n    \n    return word_counts\n",
+   "arm": "lc_best",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.37"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.37"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p04_flatten",
+   "pass": true,
+   "wall_s": 1.86,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 141,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def flatten(items):\n    \"\"\"\n    Flattens a list that may contain nested lists to any depth.\n    Returns a flat list of all non-list elements in order.\n    \"\"\"\n    result = []\n    for item in items:\n        if isinstance(item, list):\n            result.extend(flatten(item))\n        else:\n            result.append(item)\n    return result\n",
+   "arm": "lc_best",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.18"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.37"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p04_flatten",
+   "pass": true,
+   "wall_s": 3.63,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 589,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def flatten(items):\n    result = []\n    for item in items:\n        if isinstance(item, list):\n            result.extend(flatten(item))\n        else:\n            result.append(item)\n    return result\n",
+   "arm": "lc",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.18"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.18"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p04_flatten",
+   "pass": true,
+   "wall_s": 0.32,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 52,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def flatten(items):\n    result = []\n    for item in items:\n        if isinstance(item, list):\n            result.extend(flatten(item))\n        else:\n            result.append(item)\n    return result\n",
+   "arm": "opt0",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.18"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.18"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p05_roman",
+   "pass": true,
+   "wall_s": 0.83,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 179,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def roman_to_int(s: str) -> int:\n    values = {\n        'I': 1,\n        'V': 5,\n        'X': 10,\n        'L': 50,\n        'C': 100,\n        'D': 500,\n        'M': 1000\n    }\n    \n    total = 0\n    i = 0\n    while i < len(s):\n        if i + 1 < len(s) and values[s[i]] < values[s[i + 1]]:\n            total += values[s[i + 1]] - values[s[i]]\n            i += 2\n        else:\n            total += values[s[i]]\n            i += 1\n    return total\n",
+   "arm": "opt0",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.00"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.18"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p05_roman",
+   "pass": true,
+   "wall_s": 13.25,
+   "turns": 5,
+   "retries": 0,
+   "tool_calls": 4,
+   "budget_cut": false,
+   "completion_tokens": 2512,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def roman_to_int(s):\n    roman_values = {\n        'I': 1,\n        'V': 5,\n        'X': 10,\n        'L': 50,\n        'C': 100,\n        'D': 500,\n        'M': 1000\n    }\n    \n    total = 0\n    i = 0\n    n = len(s)\n    \n    while i < n:\n        # Check for subtractive cases (e.g., IV, IX, XL, XC, CD, CM)\n        if i + 1 < n and roman_values[s[i]] < roman_values[s[i + 1]]:\n            total += roman_values[s[i + 1]] - roman_values[s[i]]\n            i += 2\n        else:\n            total += roman_values[s[i]]\n            i += 1\n    \n    return total\n",
+   "arm": "lc",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "1.84"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.00"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p05_roman",
+   "pass": true,
+   "wall_s": 2.64,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 279,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def roman_to_int(s):\n    \"\"\"Convert a Roman numeral string to an integer.\"\"\"\n    roman_values = {\n        'I': 1,\n        'V': 5,\n        'X': 10,\n        'L': 50,\n        'C': 100,\n        'D': 500,\n        'M': 1000\n    }\n    \n    total = 0\n    i = 0\n    n = len(s)\n    \n    while i < n:\n        # Check for subtractive notation (e.g., IV = 4, IX = 9, CM = 900)\n        if i + 1 < n and roman_values[s[i]] < roman_values[s[i + 1]]:\n            total += roman_values[s[i + 1]] - roman_values[s[i]]\n            i += 2\n        else:\n            total += roman_values[s[i]]\n            i += 1\n    \n    return total\n",
+   "arm": "lc_best",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "1.85"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.84"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p06_merge_intervals",
+   "pass": true,
+   "wall_s": 3.45,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 314,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def merge_intervals(intervals):\n    \"\"\"\n    Merge overlapping or touching intervals.\n    Intervals that touch (end == next start) are merged.\n    Returns sorted list of merged non-overlapping intervals.\n    \"\"\"\n    if not intervals:\n        return []\n    \n    # Sort intervals by start time\n    intervals.sort(key=lambda x: x[0])\n    \n    merged = []\n    current_start, current_end = intervals[0]\n    \n    for start, end in intervals[1:]:\n        # If intervals touch or overlap (current_end >= start), merge them\n        if current_end >= start:\n            current_end = max(current_end, end)\n        else:\n            # No overlap, add current interval and start a new one\n            merged.append([current_start, current_end])\n            current_start, current_end = start, end\n    \n    # Don't forget the last interval\n    merged.append([current_start, current_end])\n    \n    return merged\n",
+   "arm": "lc_best",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "1.85"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.85"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p06_merge_intervals",
+   "pass": true,
+   "wall_s": 6.76,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 1200,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def merge_intervals(intervals):\n    if not intervals:\n        return []\n    \n    # Sort by start time\n    intervals.sort(key=lambda x: x[0])\n    \n    result = [intervals[0]]\n    \n    for current_start, current_end in intervals[1:]:\n        last_start, last_end = result[-1]\n        \n        # If current interval overlaps with or touches the last interval\n        if current_start <= last_end:\n            # Merge them\n            result[-1] = [last_start, max(last_end, current_end)]\n        else:\n            # No overlap, add as new interval\n            result.append([current_start, current_end])\n    \n    return result\n",
+   "arm": "lc",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.05"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.85"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p06_merge_intervals",
+   "pass": true,
+   "wall_s": 0.81,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 159,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def merge_intervals(intervals):\n    if not intervals:\n        return []\n    \n    # Sort intervals by start time\n    intervals.sort(key=lambda x: x[0])\n    \n    merged = [intervals[0]]\n    \n    for current_start, current_end in intervals[1:]:\n        last_start, last_end = merged[-1]\n        \n        # Check if intervals overlap or touch (end == next start)\n        if current_start <= last_end:\n            # Merge them\n            merged[-1] = [last_start, max(last_end, current_end)]\n        else:\n            # No overlap, add the new interval\n            merged.append([current_start, current_end])\n    \n    return merged\n",
+   "arm": "opt0",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.05"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.05"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p07_two_sum",
+   "pass": true,
+   "wall_s": 1.02,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 85,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def two_sum(nums, target):\n    seen = {}\n    for j, num in enumerate(nums):\n        complement = target - num\n        if complement in seen:\n            i = seen[complement]\n            if i < j:\n                return (i, j)\n        if num not in seen:\n            seen[num] = j\n    return None\n",
+   "arm": "opt0",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.05"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.05"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p07_two_sum",
+   "pass": true,
+   "wall_s": 16.9,
+   "turns": 5,
+   "retries": 0,
+   "tool_calls": 4,
+   "budget_cut": false,
+   "completion_tokens": 2843,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def two_sum(nums, target):\n    \"\"\"\n    Find two indices i < j such that nums[i] + nums[j] == target.\n    Choose the pair with the smallest j (and then smallest i).\n    Return None if no such pair exists.\n    \"\"\"\n    seen = {}  # value -> index\n    for j, num in enumerate(nums):\n        complement = target - num\n        if complement in seen:\n            i = seen[complement]\n            return (i, j)\n        seen[num] = j\n    return None\n",
+   "arm": "lc",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "1.92"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.05"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p07_two_sum",
+   "pass": true,
+   "wall_s": 3.36,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 326,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def two_sum(nums, target):\n    \"\"\"\n    Find a pair of indices (i, j) with i < j such that nums[i] + nums[j] == target.\n    Choose the pair with the smallest j (and then the smallest i).\n    Return None if no such pair exists.\n    \"\"\"\n    # Store value -> list of indices where it appears\n    index_map = {}\n    \n    for j, num in enumerate(nums):\n        complement = target - num\n        \n        # Check if complement exists in our map\n        if complement in index_map:\n            # Get all indices where complement appears\n            for i in index_map[complement]:\n                if i < j:\n                    return (i, j)\n        \n        # Add current index to map (append to avoid overwriting)\n        if num not in index_map:\n            index_map[num] = []\n        index_map[num].append(j)\n    \n    return None\n",
+   "arm": "lc_best",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "1.92"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.92"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p08_caesar",
+   "pass": true,
+   "wall_s": 2.76,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 263,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def caesar(text, shift):\n    \"\"\"\n    Shift every ASCII letter by `shift` positions, wrapping around and keeping case.\n    Non-letter characters remain unchanged.\n    \"\"\"\n    result = []\n    # Normalize shift to be within 0-25 range\n    shift = shift % 26\n    \n    for char in text:\n        if 'a' <= char <= 'z':\n            # Lowercase letters\n            new_char = chr(ord('a') + (ord(char) - ord('a') + shift) % 26)\n            result.append(new_char)\n        elif 'A' <= char <= 'Z':\n            # Uppercase letters\n            new_char = chr(ord('A') + (ord(char) - ord('A') + shift) % 26)\n            result.append(new_char)\n        else:\n            # Non-letter characters remain unchanged\n            result.append(char)\n    \n    return ''.join(result)",
+   "arm": "lc_best",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "1.92"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.92"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p08_caesar",
+   "pass": true,
+   "wall_s": 16.3,
+   "turns": 5,
+   "retries": 0,
+   "tool_calls": 4,
+   "budget_cut": false,
+   "completion_tokens": 3065,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def caesar(text, shift):\n    result = []\n    for char in text:\n        if 'A' <= char <= 'Z':\n            # Uppercase letter\n            shifted = (ord(char) - ord('A') + shift) % 26\n            result.append(chr(ord('A') + shifted))\n        elif 'a' <= char <= 'z':\n            # Lowercase letter\n            shifted = (ord(char) - ord('a') + shift) % 26\n            result.append(chr(ord('a') + shifted))\n        else:\n            # Non-letter character\n            result.append(char)\n    return ''.join(result)\n",
+   "arm": "lc",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "1.72"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.92"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p08_caesar",
+   "pass": true,
+   "wall_s": 0.87,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 186,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def caesar(text: str, shift: int) -> str:\n    result = []\n    # Normalize shift to be within 0-25\n    shift = shift % 26\n    \n    for char in text:\n        if 'A' <= char <= 'Z':\n            # Shift uppercase letters\n            new_char = chr((ord(char) - ord('A') + shift) % 26 + ord('A'))\n            result.append(new_char)\n        elif 'a' <= char <= 'z':\n            # Shift lowercase letters\n            new_char = chr((ord(char) - ord('a') + shift) % 26 + ord('a'))\n            result.append(new_char)\n        else:\n            # Non-alphabetic characters remain unchanged\n            result.append(char)\n    \n    return ''.join(result)\n",
+   "arm": "opt0",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "1.72"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.72"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p09_balanced",
+   "pass": true,
+   "wall_s": 2.06,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 114,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_balanced(s: str) -> bool:\n    stack = []\n    mapping = {')': '(', ']': '[', '}': '{'}\n    opening = set(mapping.values())\n    \n    for char in s:\n        if char in opening:\n            stack.append(char)\n        elif char in mapping:\n            if not stack:\n                return False\n            top = stack.pop()\n            if mapping[char] != top:\n                return False\n    \n    return len(stack) == 0\n",
+   "arm": "opt0",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "1.66"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.72"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p09_balanced",
+   "pass": true,
+   "wall_s": 5.11,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 874,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_balanced(s):\n    \"\"\"Check if all brackets in the string are balanced.\"\"\"\n    stack = []\n    bracket_map = {')': '(', ']': '[', '}': '{'}\n    \n    for char in s:\n        if char in '([{':\n            stack.append(char)\n        elif char in ')]}':\n            if not stack:\n                return False\n            if stack[-1] != bracket_map[char]:\n                return False\n            stack.pop()\n    \n    return len(stack) == 0\n",
+   "arm": "lc",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.09"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "1.66"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p09_balanced",
+   "pass": true,
+   "wall_s": 1.61,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 232,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def is_balanced(s):\n    \"\"\"\n    Check if every bracket in the string is closed by the matching bracket in the right order.\n    Other characters are ignored.\n    \n    Args:\n        s: Input string containing brackets and other characters\n    \n    Returns:\n        True if brackets are balanced, False otherwise\n    \"\"\"\n    stack = []\n    bracket_map = {')': '(', ']': '[', '}': '{'}\n    opening_brackets = set(['(', '[', '{'])\n    \n    for char in s:\n        if char in opening_brackets:\n            stack.append(char)\n        elif char in bracket_map:\n            if not stack or stack[-1] != bracket_map[char]:\n                return False\n            stack.pop()\n    \n    return len(stack) == 0\n",
+   "arm": "lc_best",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.09"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.09"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p10_rle",
+   "pass": true,
+   "wall_s": 1.39,
+   "turns": 2,
+   "retries": 0,
+   "tool_calls": 1,
+   "budget_cut": false,
+   "completion_tokens": 192,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def rle_encode(s):\n    \"\"\"Run-length encode a string: each maximal run of the same character becomes the character followed by the run length.\"\"\"\n    if not s:\n        return ''\n    \n    result = []\n    current_char = s[0]\n    count = 1\n    \n    for char in s[1:]:\n        if char == current_char:\n            count += 1\n        else:\n            result.append(current_char + str(count))\n            current_char = char\n            count = 1\n    \n    # Append the last run\n    result.append(current_char + str(count))\n    \n    return ''.join(result)\n",
+   "arm": "lc_best",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.09"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.09"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p10_rle",
+   "pass": true,
+   "wall_s": 5.73,
+   "turns": 3,
+   "retries": 0,
+   "tool_calls": 2,
+   "budget_cut": false,
+   "completion_tokens": 953,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def rle_encode(s):\n    if not s:\n        return ''\n    \n    result = []\n    current_char = s[0]\n    count = 1\n    \n    for i in range(1, len(s)):\n        if s[i] == current_char:\n            count += 1\n        else:\n            result.append(f\"{current_char}{count}\")\n            current_char = s[i]\n            count = 1\n    \n    # Don't forget the last run\n    result.append(f\"{current_char}{count}\")\n    \n    return ''.join(result)\n",
+   "arm": "lc",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.23"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.09"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  },
+  {
+   "id": "p10_rle",
+   "pass": true,
+   "wall_s": 0.56,
+   "turns": 1,
+   "retries": 0,
+   "tool_calls": 0,
+   "budget_cut": false,
+   "completion_tokens": 117,
+   "finish": "stop",
+   "error": null,
+   "check_out": "ALL_OK",
+   "code": "def rle_encode(s: str) -> str:\n    if not s:\n        return \"\"\n    \n    result = []\n    current_char = s[0]\n    count = 1\n    \n    for char in s[1:]:\n        if char == current_char:\n            count += 1\n        else:\n            result.append(f\"{current_char}{count}\")\n            current_char = char\n            count = 1\n    \n    result.append(f\"{current_char}{count}\")\n    return \"\".join(result)\n",
+   "arm": "opt0",
+   "rep": 2,
+   "sys": {
+    "load1": [
+     "2.23"
+    ],
+    "ac": true
+   },
+   "sys_before": {
+    "load1": [
+     "2.23"
+    ],
+    "ac": true
+   },
+   "on_battery": false
+  }
+ ],
+ "started": "2026-11-07T09:35:56+0500"
+}

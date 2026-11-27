@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <fstream>
+#include <queue>
 
 namespace ni {
 
@@ -138,7 +139,7 @@ inline bool is_Lmo(uint32_t c) { return c >= 0x80 && in_table(kModOther, c); }  
 // |\p{N}| ?[^\s\p{L}\p{N}]+[\r\n/]*|\s*[\r\n]+|\s+(?!\S)|\s+
 // Each alternative is matched as the regex engine does (first alternative that matches, greedy with
 // backtracking): A* B+ backtracks A* until a B follows.
-void pretokenize_tekken(const std::string& s, std::vector<std::string>& out) {
+void pretokenize_word_split(const std::string& s, std::vector<std::string>& out, bool o200k) {
   std::vector<CP> cps = to_cps(s);
   const size_t n = cps.size();
   auto at = [&](size_t i) { return cps[i].c; };
@@ -146,10 +147,18 @@ void pretokenize_tekken(const std::string& s, std::vector<std::string>& out) {
   auto A = [&](size_t i) { return i < n && (is_Lut(at(i)) || is_Lmo(at(i)) || is_M(at(i))); };
   auto B = [&](size_t i) { return i < n && (is_Ll(at(i)) || is_Lmo(at(i)) || is_M(at(i))); };
   auto Q = [&](size_t i) { return i < n && !is_space(at(i)) && !is_L(at(i)) && !is_N(at(i)); };
+  // (?i:'s|'t|'re|'ve|'m|'ll|'d) at k: its end, else k (U+017F, the long s, folds to s)
+  auto contraction = [&](size_t k) {
+    if (!o200k || k + 1 >= n || at(k) != '\'') return k;
+    const uint32_t a = at(k + 1) == 0x17F ? 's' : at(k + 1) | 32, b = k + 2 < n ? at(k + 2) | 32 : 0;
+    if (a == 's' || a == 't' || a == 'm' || a == 'd') return k + 2;
+    if (((a == 'r' || a == 'v') && b == 'e') || (a == 'l' && b == 'l')) return k + 3;
+    return k;
+  };
   size_t i = 0;
   while (i < n) {
     size_t j = i;
-    // 1. P? A* B+
+    // 1. P? A* B+ (contraction)?
     for (int pre = P(i) ? 1 : 0; pre >= 0 && j == i; --pre) {
       const size_t j0 = i + size_t(pre);
       size_t a_end = j0;
@@ -158,21 +167,26 @@ void pretokenize_tekken(const std::string& s, std::vector<std::string>& out) {
         if (!B(k)) continue;
         size_t e = k;
         while (B(e)) ++e;
-        j = e;
+        j = contraction(e);
         break;
       }
     }
-    // 2. P? A+ B*
+    // 2. P? A+ B* (contraction)?
     for (int pre = P(i) ? 1 : 0; pre >= 0 && j == i; --pre) {
       const size_t j0 = i + size_t(pre);
       size_t a_end = j0;
       while (A(a_end)) ++a_end;
       if (a_end == j0) continue;
       while (B(a_end)) ++a_end;
-      j = a_end;
+      j = contraction(a_end);
     }
-    // 3. \p{N}
-    if (j == i && is_N(at(i))) j = i + 1;
+    // 3. \p{N} (Tekken) or \p{N}{1,3} (O200k)
+    if (j == i && is_N(at(i))) {
+      size_t k = i + 1;
+      if (o200k)
+        while (k < n && k - i < 3 && is_N(at(k))) ++k;
+      j = k;
+    }
     // 4.  ?[^\s\p{L}\p{N}]+[\r\n/]*
     if (j == i) {
       size_t k = at(i) == ' ' && Q(i + 1) ? i + 1 : i;
@@ -198,6 +212,14 @@ void pretokenize_tekken(const std::string& s, std::vector<std::string>& out) {
     out.emplace_back(s.substr(b0, b1 - b0));
     i = j;
   }
+}
+
+void pretokenize_tekken(const std::string& s, std::vector<std::string>& out) {
+  pretokenize_word_split(s, out, false);
+}
+
+void pretokenize_o200k(const std::string& s, std::vector<std::string>& out) {
+  pretokenize_word_split(s, out, true);
 }
 
 // \p{P} and \p{S}: the code points whose category starts with P or S (Unicode 15.0.0, Python 3.12's unicodedata, the
@@ -438,9 +460,16 @@ void Tokenizer::load(const std::string& path) {
       "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+|"
       "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*|"
       "\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+  static const char* kO200k =
+      "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+"
+      "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+      "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*"
+      "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+      "\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
   auto isolated = [](const nlohmann::json& p, const char* re) {  // Split on the regex `re`, Isolated, not inverted
     return p.is_object() && p.value("type", "") == "Split" && p.contains("pattern") && p["pattern"].is_object() &&
-           p["pattern"].value("Regex", "") == re && p.value("behavior", "") == "Isolated" && !p.value("invert", false);
+           p["pattern"].contains("Regex") && p["pattern"]["Regex"].is_string() && p["pattern"]["Regex"] == re &&
+           p.value("behavior", "") == "Isolated" && !p.value("invert", false);
   };
   const auto& pt = j["pre_tokenizer"];
   if (pt.is_object() && pt.value("type", "") == "Sequence" && pt.contains("pretokenizers") &&
@@ -452,9 +481,13 @@ void Tokenizer::load(const std::string& path) {
       split_ = Split::Flint;
     else
       for (auto& p : seq)
-        if (p.value("type", "") == "Split" && p.contains("pattern") && p["pattern"].contains("Regex") &&
-            p["pattern"]["Regex"] == kTekken)
-          split_ = Split::Tekken;
+        if (p.is_object() && p.value("type", "") == "Split" && p.contains("pattern") && p["pattern"].is_object() &&
+            p["pattern"].contains("Regex") && p["pattern"]["Regex"].is_string() &&
+            p.value("behavior", "") == "Isolated" && !p.value("invert", false)) {
+          const std::string& re = p["pattern"]["Regex"].get_ref<const std::string&>();
+          if (re == kTekken) split_ = Split::Tekken;
+          else if (re == kO200k) split_ = Split::O200k;
+        }
   }
   if (split_ != Split::Qwen) {
     nfc_ = !j["normalizer"].is_null();
@@ -462,24 +495,26 @@ void Tokenizer::load(const std::string& path) {
   }
   uint32_t b2u[256];
   byte_unicode(b2u);
-  std::unordered_map<uint32_t, uint8_t> u2b;
-  for (int b = 0; b < 256; ++b) u2b[b2u[b]] = uint8_t(b);
+  int16_t u2b[324];
+  std::fill(std::begin(u2b), std::end(u2b), int16_t(-1));
+  for (int b = 0; b < 256; ++b) u2b[b2u[b]] = int16_t(b);
 
   int max_id = 0;
-  for (auto& [tok, id] : model["vocab"].items()) max_id = std::max(max_id, id.get<int>());
+  const auto& vobj = model["vocab"];
+  for (auto& [tok, id] : vobj.items()) max_id = std::max(max_id, id.get<int>());
   for (auto& a : j["added_tokens"]) max_id = std::max(max_id, a["id"].get<int>());
+  vocab_.reserve(vobj.size());
   id_to_bytes_.assign(max_id + 1, "");
   special_.assign(max_id + 1, false);
   added_id_.assign(max_id + 1, false);
-  for (auto& [tok, idj] : model["vocab"].items()) {
+  for (auto& [tok, idj] : vobj.items()) {
     int id = idj.get<int>();
     vocab_[tok] = id;
     std::string raw;
-    for (auto& c : to_cps(tok)) {
-      auto it = u2b.find(c.c);
-      raw += it != u2b.end() ? char(it->second) : '?';
-    }
-    id_to_bytes_[id] = raw;
+    raw.reserve(tok.size());
+    for (auto& c : to_cps(tok))
+      raw.push_back((c.c < 324 && u2b[c.c] >= 0) ? char(u2b[c.c]) : '?');
+    id_to_bytes_[id] = std::move(raw);
   }
   for (int b = 0; b < 256; ++b) {
     std::string u;
@@ -487,34 +522,101 @@ void Tokenizer::load(const std::string& path) {
     auto it = vocab_.find(u);
     byte_id_[b] = it == vocab_.end() ? -1 : it->second;
   }
+  const auto& marr = model["merges"];
+  merges_.reserve(marr.size());
   int rank = 0;
-  for (auto& m : model["merges"]) {
-    std::string a, b;
+  std::string a_tmp, b_tmp, ab;
+  for (auto& m : marr) {
+    const std::string* ap = nullptr;
+    const std::string* bp = nullptr;
     if (m.is_array()) {
-      a = m[0];
-      b = m[1];
+      ap = &m[0].get_ref<const std::string&>();
+      bp = &m[1].get_ref<const std::string&>();
     } else {
-      std::string s = m;
+      const std::string& s = m.get_ref<const std::string&>();
       size_t sp = s.find(' ');
-      a = s.substr(0, sp);
-      b = s.substr(sp + 1);
+      a_tmp.assign(s, 0, sp);
+      b_tmp.assign(s, sp + 1, std::string::npos);
+      ap = &a_tmp;
+      bp = &b_tmp;
     }
-    auto ia = vocab_.find(a), ib = vocab_.find(b), im = vocab_.find(a + b);
-    if (ia != vocab_.end() && ib != vocab_.end() && im != vocab_.end())
-      merges_[(uint64_t(uint32_t(ia->second)) << 32) | uint32_t(ib->second)] = {rank, im->second};
+    auto ia = vocab_.find(*ap), ib = vocab_.find(*bp);
+    if (ia != vocab_.end() && ib != vocab_.end()) {
+      ab.assign(*ap).append(*bp);
+      auto im = vocab_.find(ab);
+      if (im != vocab_.end())
+        merges_[(uint64_t(uint32_t(ia->second)) << 32) | uint32_t(ib->second)] = {rank, im->second};
+    }
     ++rank;
   }
+  added_.clear();
+  std::fill(std::begin(added_first_), std::end(added_first_), false);
   for (auto& a : j["added_tokens"]) {
     int id = a["id"];
     std::string content = a["content"];
-    added_.push_back({content, id});
+    if (!content.empty()) {
+      added_first_[uint8_t(content[0])] = true;
+      added_.push_back({content, id});
+    }
     id_to_bytes_[id] = content;
     special_[id] = a.value("special", false);
     added_id_[id] = true;
   }
   std::sort(added_.begin(), added_.end(), [](auto& x, auto& y) { return x.first.size() > y.first.size(); });
-  logi("tokenizer: %zu tokens, %zu merges, %zu added (%.0f ms)", vocab_.size(), merges_.size(), added_.size(),
-       now_ms() - t0);
+  const char* split_name = split_ == Split::O200k ? "o200k"
+                         : split_ == Split::Tekken ? "tekken"
+                         : split_ == Split::Flint ? "flint"
+                         : "qwen";
+  logi("tokenizer: %zu tokens, %zu merges, %zu added, split=%s (%.0f ms)", vocab_.size(), merges_.size(), added_.size(),
+       split_name, now_ms() - t0);
+}
+
+// Keep positions stable while only the two edges around a merge change. A rank's
+// new edges are queued after its whole batch, preserving left-to-right pair merging
+// even when a tokenizer's merge ranks are not in dependency order.
+// Keep the heap stack frame out of short-piece and cache-hit calls.
+__attribute__((noinline)) static void merge_long_piece(std::vector<int>& sym,
+                             const std::unordered_map<uint64_t, std::pair<int, int>>& merges) {
+  struct Node { int token, prev, next; };
+  std::vector<Node> nodes;
+  nodes.reserve(sym.size());
+  for (int i = 0; i < int(sym.size()); ++i)
+    nodes.push_back({sym[i], i - 1, i + 1 < int(sym.size()) ? i + 1 : -1});
+  using Edge = std::pair<int, int>;  // rank, left position; ties merge from the left
+  std::priority_queue<Edge, std::vector<Edge>, std::greater<Edge>> edges;
+  auto lookup = [&](int left) {
+    const auto& a = nodes[left];
+    if (a.next < 0) return merges.end();  // -1 is the end, -2 a removed node
+    return merges.find((uint64_t(uint32_t(a.token)) << 32) | uint32_t(nodes[a.next].token));
+  };
+  auto queue = [&](int left) {
+    if (left < 0) return;
+    auto it = lookup(left);
+    if (it != merges.end()) edges.push({it->second.first, left});
+  };
+  for (int i = 0; i < int(nodes.size()); ++i) queue(i);
+  std::vector<int> changed;
+  while (!edges.empty()) {
+    const int rank = edges.top().first;
+    changed.clear();
+    do {
+      const int left = edges.top().second;
+      edges.pop();
+      auto it = lookup(left);
+      if (it == merges.end() || it->second.first != rank) continue;  // stale edge
+      auto& a = nodes[left];
+      auto& b = nodes[a.next];
+      a.token = it->second.second;
+      a.next = b.next;
+      if (a.next >= 0) nodes[a.next].prev = left;
+      b.next = -2;
+      changed.push_back(a.prev);
+      changed.push_back(left);
+    } while (!edges.empty() && edges.top().first == rank);
+    for (int left : changed) queue(left);
+  }
+  sym.clear();
+  for (int i = 0; i >= 0; i = nodes[i].next) sym.push_back(nodes[i].token);
 }
 
 void Tokenizer::bpe(const std::string& word, std::vector<int>& out) const {
@@ -547,7 +649,14 @@ void Tokenizer::bpe(const std::string& word, std::vector<int>& out) const {
   std::vector<int> sym;
   sym.reserve(word.size());
   for (unsigned char b : word) sym.push_back(byte_id_[b]);
+  int rounds = 0;
   while (sym.size() > 1) {
+    // Short pieces and repetitive runs usually finish in a few cheap linear passes.
+    // Bound those scans before switching a still-long piece to local edge updates.
+    if (sym.size() > 64 && rounds++ == 8) {
+      merge_long_piece(sym, merges_);
+      break;
+    }
     int best_rank = INT32_MAX, best_i = -1, best_id = -1;
     for (size_t i = 0; i + 1 < sym.size(); ++i) {
       auto it = merges_.find((uint64_t(uint32_t(sym[i])) << 32) | uint32_t(sym[i + 1]));
@@ -585,6 +694,7 @@ void Tokenizer::encode_plain(const std::string& text, std::vector<int>& out) con
   std::vector<std::string> words;
   if (split_ == Split::Flint) pretokenize_flint(nfc_ ? nfc(text) : text, words);
   else if (split_ == Split::Tekken) pretokenize_tekken(nfc_ ? nfc(text) : text, words);
+  else if (split_ == Split::O200k) pretokenize_o200k(nfc_ ? nfc(text) : text, words);
   else pretokenize(nfc_ ? nfc(text) : text, words);
   for (auto& w : words) bpe(w, out);
 }
@@ -594,7 +704,7 @@ std::vector<int> Tokenizer::encode(const std::string& text, size_t split_at, int
   size_t start = 0, i = 0;
   while (i < text.size()) {
     bool hit = false;
-    if (text[i] == '<' || text[i] == '[') {
+    if (added_first_[uint8_t(text[i])]) {
       for (auto& [content, id] : added_) {
         if (text.compare(i, content.size(), content) == 0) {
           encode_plain(text.substr(start, i - start), out);

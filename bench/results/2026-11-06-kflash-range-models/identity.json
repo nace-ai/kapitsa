@@ -1,0 +1,12 @@
+{
+  "base": {
+    "head": "d65a0afa35a176e1ecd1107f176a1b4028753f1d",
+    "version": "kapitsa 0.2.31 (d65a0afa)",
+    "logit_dump_sha256": "078fc7f2dff0c2cda480d46cde41fe369d3dd9b16d535bc062ba6a8bef02b203"
+  },
+  "range": {
+    "head": "09b7f4f8ca420ed16713a5066b007eefcc716e7a",
+    "version": "kapitsa 0.2.31 (279ce236)",
+    "logit_dump_sha256": "847b8ebfd1c691174df8e727ca9a1b4e855e7ad36c4532ffb976963b6b35f721"
+  }
+}

@@ -1,0 +1,82 @@
+[
+  {
+    "tag": "base",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-research/build/kapitsa",
+      "serve",
+      "--model",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "62659",
+      "--private",
+      "--slots",
+      "2",
+      "--context",
+      "32768",
+      "--disk-cache",
+      "0"
+    ],
+    "head": "d65a0afa35a176e1ecd1107f176a1b4028753f1d",
+    "standard": {
+      "command": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/replenish-1222/venv/bin/python",
+        "-u",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-research/tests/test_server.py",
+        "http://127.0.0.1:62659"
+      ],
+      "exit": 1,
+      "passes": 48,
+      "failures": [
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0009038448333740234, {'id': 'chatcmpl-179396998725228', 'object': 'chat.completion.chunk', 'created': 1793969987, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.109543800354004], first token at 22.922019958496094"
+      ]
+    },
+    "images": {
+      "command": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/replenish-1222/venv/bin/python",
+        "-u",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-research/tests/vision/check_server.py",
+        "http://127.0.0.1:62659",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/http-images-base"
+      ],
+      "exit": 1,
+      "passes": 0,
+      "failures": []
+    }
+  },
+  {
+    "tag": "range",
+    "command": [
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-range-neon/build/kapitsa",
+      "serve",
+      "--model",
+      "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "63167",
+      "--private",
+      "--slots",
+      "2",
+      "--context",
+      "32768",
+      "--disk-cache",
+      "0"
+    ],
+    "head": "09b7f4f8ca420ed16713a5066b007eefcc716e7a",
+    "standard": {
+      "command": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/replenish-1222/venv/bin/python",
+        "-u",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/kflash-range-neon/tests/test_server.py",
+        "http://127.0.0.1:63167"
+      ],
+      "exit": 1,
+      "passes": 48,
+      "failures": [
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0008831024169921875, {'id': 'chatcmpl-179397006594091', 'object': 'chat.completion.chunk', 'created': 1793970065, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.125279188156128], first token at 22.896669149398804"
+      ]
+    }
+  }
+]

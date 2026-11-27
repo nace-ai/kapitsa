@@ -1,0 +1,18 @@
+{
+  "export": "Explicitly redacted derived evidence; no private original archive included.",
+  "source": "7d1b0bbcdcfb36a495036eb0d6d00405fd5955ca",
+  "reference": "4b9ce88708282f754b76cbd7214e188786680c89",
+  "files": {
+    "M3-API-NATIVE.json": "7a295ef65d0c0333b20440c1f17e65602f97c43b211701c2eb965053fa5a8e11",
+    "M3-FIXED.json": "1c744582390ef0570537c775d170ed81f625d201e3386e4e232d9be66cdee971",
+    "M3-IDENTITY.json": "8989b10d8a0363d5345d4935979291b629edc72d801c67704d65bbce966cd3f9",
+    "M3-IMPORT.json": "8e15b74520d67e91b0678498d89d00d6a957f1ee7a7dc6a2a791c30d87eb23a6",
+    "M3-NUMERICAL.json": "3ba69be3df06e06f144f85e374d07cabbcbcf549d568999d91e0c554f4d67e5c",
+    "M4-API-NATIVE.json": "527e9b2d6e4300843e246be5118b3cda9f2a25400f3430a6f491bc41a62012f8",
+    "M4-FIXED.json": "3c712b81fe41e903b8707e4c7ffbcab87d1ebfb6e184e56f2500ec6769e0f5cf",
+    "M4-IDENTITY.json": "8b822aeac2e77cdcec39d5a7b91ee90d7b0433cec55f8688fc602de43d80e881",
+    "M4-IMPORT.json": "83d419291b2a8166ad8a5e9b2bc6cd53d39830c4a230dc4fbf804fb14d89a4bd",
+    "M4-NUMERICAL.json": "9450d99f191d5e0ce338c1ff12ed53e5d46bc477e9c643117b5113c867e0a5c8",
+    "README.md": "5a5240e910712291a0e8534ef1270e2e173a25a5f9ec01facf6181e693e65eae"
+  }
+}

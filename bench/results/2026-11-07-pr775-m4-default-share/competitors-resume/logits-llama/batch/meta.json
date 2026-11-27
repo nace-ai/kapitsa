@@ -1,0 +1,19 @@
+{
+  "engine": "llama",
+  "build": "llama.cpp b12110 cd959bae9",
+  "model": "qwen3.5-9b-4bit",
+  "model_dir": "unsloth/Qwen3.5-9B-GGUF@3885219b6810b007914f3a7950a8d1b469d598a5",
+  "path": "batch",
+  "prefill_chunk": 2048,
+  "ane": {
+    "evals": 0
+  },
+  "records": 192,
+  "vocab": 248320,
+  "source": "bench/corpus.txt",
+  "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+  "macos": "15.7.1",
+  "date": "2026-11-06T18:56:45Z",
+  "env": {},
+  "native_path": "single-token teacher forcing; same rows reused for Kapitsa path comparisons"
+}

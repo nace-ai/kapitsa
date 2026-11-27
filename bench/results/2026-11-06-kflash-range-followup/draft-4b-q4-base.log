@@ -1,0 +1,19 @@
+[kapitsa] read 2.37 GB of weights in 679 ms (3.5 GB/s)
+[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)
+[kapitsa] read 0.24 GB of weights in 76 ms (3.2 GB/s)
+[kapitsa] MTP head loaded in 211 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)
+[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 249 static target projections, 2150.9 MiB in 542 ms; compressed 1948221/2053120 blocks
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 10 ms
+[kapitsa] prewarmed 94 prefill pipelines in 16 ms
+[kapitsa] loaded /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 1574 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 18/18 units (9216 channels; GPU 0) from the default for this chip, chunks >= 512 rows; row scales 31 ms, program compiled 13319 ms + load 69 ms (13 functions, MIL 89 KB); 187.6 MB Metal; ready in 13.4 s
+[kapitsa] NI_ANE: startup check 2.11% of the ANE's part from the GPU alone (2 functions, 185 ms)
+[kapitsa] read 1.27 GB of weights in 466 ms (2.7 GB/s)
+[kapitsa] KFlash: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB
+[kapitsa] NI_V8_PACKED_COEFF_NF1: packed 39 static draft projections, 466.6 MiB in 124 ms; compressed 447538/448000 blocks
+[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)
+[kapitsa] DFlash drafter (v1) /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)
+[kapitsa] DFlash2 drafter /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 1.03 GB resident (process footprint +0.85 GB), loaded in 714 ms
+Saved 270 files / 35198376 bytes to /Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/draft-4b-q4-base

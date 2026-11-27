@@ -69,16 +69,19 @@ def post(base, body, timeout=30, path="/v1/chat/completions"):
         return e.code, json.loads(e.read() or b"{}")
 
 class Server:
-    def __init__(self, *fake_args, context=None, extra_serve=(), model=None, cwd=None):
+    def __init__(self, *fake_args, context=None, extra_serve=(), model=None, cwd=None, hold_replacement=False):
         self.tmp = tempfile.TemporaryDirectory()
         self.log = self.tmp.name + "/prompts.jsonl"
         self.pid_file = self.tmp.name + "/engine.pid"  # the engine child's pid (fake_splash.py --pid-file)
+        self.replacement_ready_file = self.tmp.name + "/replacement-ready"
         self.port = free_port()
         self.base = "http://127.0.0.1:%d" % self.port
         cmd = [CLI, "serve", "--engine", "splash", "--splash-binary", FAKE, "--splash-model", model or MODEL, "--private",
                "--port", str(self.port), *extra_serve, "--splash-arg", "--prompt-log", "--splash-arg", self.log,
                "--splash-arg", "--pid-file", "--splash-arg", self.pid_file]
         for a in fake_args: cmd += ["--splash-arg", a]
+        if hold_replacement:
+            cmd += ["--splash-arg", "--replacement-ready-file", "--splash-arg", self.replacement_ready_file]
         env = dict(os.environ, HOME=self.tmp.name, KAPITSA_HOME=self.tmp.name + "/kapitsa")  # (splash.json goes under it, not into the developer's)
         self.proc = subprocess.Popen(cmd, env=env, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         for _ in range(100):
@@ -96,6 +99,9 @@ class Server:
         self.tmp.cleanup()
 
 MSG = [{"role": "user", "content": "hello"}]
+ROUTES = [("/v1/chat/completions", {"messages": MSG, "max_tokens": 3}),
+          ("/v1/messages", {"messages": MSG, "max_tokens": 3}),
+          ("/v1/responses", {"input": "hello", "max_output_tokens": 3})]
 s = Server("--reply", ",".join(map(str, REPLY)))
 try:
     st, r = post(s.base, {"messages": MSG, "max_tokens": 50, "temperature": 0})
@@ -187,15 +193,29 @@ try:
     check(st == 200, "served before the engine dies: %s %s" % (st, r))
     os.kill(int(open(s.pid_file).read()), 9)
     time.sleep(0.5)
-    for path, body in [("/v1/chat/completions", {"messages": MSG, "max_tokens": 3}), ("/v1/messages", {"messages": MSG, "max_tokens": 3}),
-                       ("/v1/responses", {"input": "hello", "max_output_tokens": 3})]:
-        for attempt in range(2):  # the same answer every time: nothing relaunches the engine
-            st, r = post(s.base, body, path=path)
+    for path, body in ROUTES:
+        for stream in (False, True):
+            st, r = post(s.base, dict(body, stream=stream), path=path)
             text = json.dumps(r)
             check(st == 503 and "the engine has exited" in text and "restart kapitsa serve" in text and "not running: the" not in text,
                   "%s dead engine: 503 naming it, got %s %s" % (path, st, r))
             check(not last_headers.get("Retry-After"), "%s dead engine: no Retry-After, got %r" % (path, dict(last_headers)))
     check(s.proc.poll() is None, "server still answering after the engine died")
+finally:
+    s.close()
+
+# a fatal child error cannot claim runtime recovery by copying its code or retryable bit
+s = Server("--fatal-code", "cancel_timeout")
+try:
+    old_pid = int(open(s.pid_file).read())
+    for path, body in ROUTES:
+        for stream in (False, True):
+            st, response = post(s.base, dict(body, stream=stream), path=path)
+            text = json.dumps(response)
+            check(st == 503 and "cancel_timeout" in text and "restart kapitsa serve" in text and "restarting" not in text,
+                  "%s foreign fatal code stays permanent: %s %s" % (path, st, response))
+            check(not last_headers.get("Retry-After"), "%s foreign fatal code: no Retry-After, got %r" % (path, dict(last_headers)))
+    check(int(open(s.pid_file).read()) == old_pid, "foreign fatal code did not start another child")
 finally:
     s.close()
 
@@ -251,6 +271,47 @@ try:
     time.sleep(0.5)
     st, r = post(s.base, {"messages": MSG, "max_tokens": 3, "temperature": 0}, timeout=30)
     check(st == 200, "served after four abandoned streams: %s %s" % (st, r))
+finally:
+    s.close()
+
+# an ignored cancellation replaces the child without replaying the abandoned request
+s = Server("--reply", ",".join(map(str, REPLY[:-1] + [tid("Ġthere")] * 2000)), "--slow", "20", "--ignore-first-cancel", "1", hold_replacement=True)
+try:
+    old_pid = int(open(s.pid_file).read())
+    req = urllib.request.Request(s.base + "/v1/chat/completions", json.dumps({"messages": MSG, "max_tokens": 2000, "stream": True}).encode(),
+                                 {"Content-Type": "application/json"})
+    stream = urllib.request.urlopen(req, timeout=30)
+    stream.read(200); stream.close()
+    deadline = time.monotonic() + 40  # the production cancellation deadline is 30 seconds
+    replacement = old_pid
+    while time.monotonic() < deadline:
+        try: replacement = int(open(s.pid_file).read())
+        except (OSError, ValueError): pass
+        if replacement != old_pid: break
+        time.sleep(0.1)
+    check(replacement != old_pid, "ignored cancel starts a new child within the default deadline")
+    for path, body in ROUTES:
+        for stream in (False, True):
+            st, response = post(s.base, dict(body, stream=stream), path=path)
+            check(st == 503 and "restarting" in json.dumps(response), "%s recovering engine: 503, got %s %s" % (path, st, response))
+            check(last_headers.get("Retry-After") == "1", "%s recovering engine: Retry-After 1, got %r" % (path, dict(last_headers)))
+    check(len(s.prompts()) == 1, "requests during recovery do not reach either child")
+    open(s.replacement_ready_file, "w").close()
+    for path, body in ROUTES:
+        ready_deadline = time.monotonic() + 5
+        while True:
+            st, response = post(s.base, body, timeout=30, path=path)
+            if st != 503 or "restarting" not in json.dumps(response) or time.monotonic() >= ready_deadline: break
+            time.sleep(0.05)
+        check(st == 200, "%s recovers in the same server: %s %s" % (path, st, response))
+        usage = response.get("usage", {})
+        check(usage.get("completion_tokens", usage.get("output_tokens", 0)) > 0, "%s completed new work: %s" % (path, response))
+    prompts = s.prompts()
+    old_requests = [p for p in prompts if p["pid"] == old_pid]
+    new_requests = [p for p in prompts if p["pid"] == replacement]
+    check(len(old_requests) == 1 and len(new_requests) == 3, "only new work reaches replacement: %r" % [(p["pid"], p["request_id"]) for p in prompts])
+    check(len({p["request_id"] for p in prompts}) == len(prompts), "old request ids are not reused or replayed")
+    check(s.proc.poll() is None, "the same server survived cancellation recovery")
 finally:
     s.close()
 

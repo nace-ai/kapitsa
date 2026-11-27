@@ -1,0 +1,9 @@
+{
+  "id": "7f3a9c2e5b1d4e60.905",
+  "type": "request_started",
+  "data": {
+    "request_id": "req-41",
+    "api": "openai",
+    "client": "Kapitan/0.9"
+  }
+}

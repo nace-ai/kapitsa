@@ -7,16 +7,20 @@
 // touched expert once for all its rows; the shared expert is one more 8-row tile.
 // Taken by encode_verify for R >= 5 (NI_V8=1: R >= 2); MTP verifies with R <= 4 keep their kernels.
 #include "kernels/kflash.h"
+#include "model/sampler.h"
 #include "model/kparams.h"
 #include "model/affine_coeff_fixed.h"
 #include "model/qwen35.h"
+#include "engine/device_profile.h"
 #include "util/log.h"
+
+#include <sys/sysctl.h>
 
 #include <algorithm>
 #include <set>
 #include <cmath>
+#include <array>
 #include <unordered_map>
-#include <sys/sysctl.h>
 
 namespace ni {
 
@@ -26,7 +30,7 @@ extern const char* const kTensorKernelSource;
 // but qmm8t's operand layout, probed on the M5, gives it wrong logits: an M4 cannot stand in for an M5 in its tests.)
 static bool tw_supported() {
   static const bool ok = [] {
-    if (Gpu::get().apple_family() < 10) return false;
+    if (!matrix_units()) return false;
     if (__builtin_available(macOS 26.0, *)) return true;
     return false;
   }();
@@ -40,46 +44,122 @@ static Pipeline pipe8(const std::string& n) {
   return it->second;
 }
 
-static int env_int(const char* n, int def) {
-  const char* v = getenv(n);
-  return v && *v ? atoi(v) : def;
+// The packed-coefficient GEMMs' tiling on the 10-core M4 (set when a model packs its projections): 40-group rows (K 2560:
+// GDN in_proj, q|k|v, gate|up, the LM head; the drafter's) as 2 k-slices x 2 column blocks instead of 4 x 2 (interleaved
+// records, interleave_packed_slices: the 4B's verify cycle -0.2 ms, ni_run on the server's prompt, 3 interleaved runs)
+static bool g_pc_plan = false;
+
+// tuning: NI_V8_KSG="groups:ks:cs,..." sets the k-slices and column blocks of the 4-bit GEMMs with that many 64-groups
+// per row (and the packed images' record interleave)
+static bool v8_ksg_override(uint32_t groups, int* ks, int* cs) {
+  static const std::vector<std::array<int, 3>> ov = [] {
+    std::vector<std::array<int, 3>> v;
+    if (const char* e = getenv("NI_V8_KSG")) {
+      std::string s = e;
+      size_t a = 0;
+      while (a < s.size()) {
+        size_t b = s.find(',', a);
+        if (b == std::string::npos) b = s.size();
+        int g = 0, k = 0, c = 0;
+        if (sscanf(s.substr(a, b - a).c_str(), "%d:%d:%d", &g, &k, &c) == 3) v.push_back({g, k, c});
+        a = b + 1;
+      }
+    }
+    return v;
+  }();
+  for (const auto& o : ov)
+    if (uint32_t(o[0]) == groups) {
+      *ks = o[1];
+      *cs = o[2];
+      return true;
+    }
+  if (g_pc_plan && groups == 40) {
+    *ks = 2;
+    *cs = 2;
+    return true;
+  }
+  return false;
+}
+
+uint32_t Qwen35::v8_packed_ks(uint32_t K) {
+  // v8_plan's k-slices for the packed GEMMs (kplan 2, every packed GEMM's N >= 2560): 8 from 64 groups, 4 from 16
+  static const bool ilv = env_int("NI_V8_PC_ILV", 1) != 0;  // 0: records in pair order
+  const uint32_t g = K / 64;
+  if (ilv) {
+    int ks = 0, cs = 0;
+    if (v8_ksg_override(g, &ks, &cs)) return uint32_t(ks);
+  }
+  return !ilv || g >= 256 ? 0u : g >= 64 ? 8u : g >= 16 ? 4u : 0u;
+}
+
+uint32_t Qwen35::v8_packed_rg(uint32_t N) {
+  // NI_V8_PC_RG: the block rows whose records interleave (8: the k-slices of 8 consecutive 16-row blocks read adjacent
+  // records each step; a power of two dividing N / 16)
+  static const uint32_t want = uint32_t(std::max(1, env_int("NI_V8_PC_RG", 8)));
+  uint32_t rg = want;
+  while (rg > 1 && ((N + 15) / 16) % rg) rg /= 2;
+  return rg;
+}
+
+void Qwen35::flush_backlog(Encoder& e, Seq& s) {
+  if (s.n_back <= 0) return;
+  static const bool tree_pin = env_int("NI_V8_TREE_PIN", 1) != 0;
+  const uint32_t pp[4] = {uint32_t(cfg_.lin_hv), uint32_t(s.n_back), tree_pin ? 1u : 0u, 0u};
+  for (int i = 0; i < cfg_.layers; ++i) {
+    if (!cfg_.is_linear[i] || !s.rec[i]) continue;
+    e.use(pipe8("gdn_fold_backlog"));
+    e.buf(0, s.rec[i]); e.buf(1, s.back_k[i]); e.buf(2, s.back_g[i]); e.buf(3, s.back_d[i]);
+    e.bytes(4, pp, sizeof(pp));
+    e.dispatch(uint32_t(cfg_.lin_hv), 4, 1, 256);
+  }
+  s.n_back = 0;
 }
 
 bool Qwen35::v8_packed_coeff_on(const Qwen35Config& c) {
   const char* flag = getenv("NI_V8_PACKED_COEFF_NF1");
   if (flag && *flag && !atoi(flag)) return false;
-  if (c.moe || c.hidden != 2560 || c.dense_I != 9216 || c.layers != 32 || c.group_size != 64) return false;
-  if (Gpu::get().name() != "Apple M4" || Gpu::get().core_count() != 10) return false;
+  if (c.moe || c.layers != 32 || c.group_size != 64) return false;
+  const bool four_b = c.hidden == 2560 && c.dense_I == 9216;
+  const bool nine_b = c.hidden == 4096 && c.dense_I == 12288;
+  if (!four_b && !nine_b) return false;
   if (flag && *flag) return true;
+  // Folded from m4_10/m4_pro_20 to simd_gpu (M3/M4) with a 24 GiB RAM floor (#393).
+  // The 4B packs add ~2.44 GiB; 8/16 GB Macs should not pay that by default.
   uint64_t ram = 0;
   size_t len = sizeof(ram);
-  return sysctlbyname("hw.memsize", &ram, &len, nullptr, 0) == 0 && ram == (uint64_t(24) << 30);
+  if (sysctlbyname("hw.memsize", &ram, &len, nullptr, 0) != 0 || ram < (uint64_t(24) << 30)) return false;
+  return simd_gpu();
 }
 
 void Qwen35::load_v8_packed_coeff() {
   if (!v8_packed_coeff_on(cfg_)) return;
+  g_pc_plan = env_int("NI_V8_PC_PLAN", 1) != 0;  // before any image's record order is chosen (v8_packed_ks)
   const double start = now_ms();
   size_t bytes = 0, compressed = 0, blocks = 0;
   auto pack = [&](const QLinear& q) {
     if (!q || !q.q4() || q.exl3 || q.q20 || !q.N || !q.K || q.K % 64) return;
-    const auto image = pack_affine_packed_coeff(q.w->buf.as<uint32_t>(), q.s->buf.as<uint16_t>(),
-                                               q.b->buf.as<uint16_t>(), q.N, q.K / 64);
+    auto image = pack_affine_packed_coeff(q.w->buf.as<uint32_t>(), q.s->buf.as<uint16_t>(),
+                                          q.b->buf.as<uint16_t>(), q.N, q.K / 64);
+    const uint32_t ks = v8_packed_ks(q.K), rg = v8_packed_rg(q.N);
+    if (ks) interleave_packed_slices(image, q.N, q.K / 64, ks, rg);
     Buffer payload = Gpu::get().alloc(image.words.size() * 4, "qmm8_packed_coeff_payload", false);
     owned_bufs_.push_back(payload);
     memcpy(payload.ptr(), image.words.data(), image.words.size() * 4);
     Buffer headers = Gpu::get().alloc(image.headers.size() * 4, "qmm8_packed_coeff_headers", false);
     owned_bufs_.push_back(headers);
     memcpy(headers.ptr(), image.headers.data(), image.headers.size() * 4);
-    v8_packed_coeff_.emplace(&q, PackedCoeffBuffers{payload, headers});
+    v8_packed_coeff_.emplace(&q, PackedCoeffBuffers{payload, headers, ks, ks ? rg : 1u});
     bytes += payload.size + headers.size;
     compressed += image.compressed_blocks; blocks += image.blocks;
   };
   for (const Layer& l : layers_) {
+    // The 9B only packs the long-K down projection to bound the extra resident memory.
+    if (cfg_.hidden == 4096) { pack(l.md); continue; }
     for (const QLinear* q : {&l.mg, &l.mu, &l.md}) pack(*q);
     if (l.linear) for (const QLinear* q : {&l.qkv, &l.z, &l.a, &l.b, &l.out}) pack(*q);
     else for (const QLinear* q : {&l.q, &l.k, &l.v, &l.o}) pack(*q);
   }
-  pack(lm_head_);
+  if (cfg_.hidden != 4096) pack(lm_head_);
   logi("NI_V8_PACKED_COEFF_NF1: packed %zu static target projections, %.1f MiB in %.0f ms; compressed %zu/%zu blocks",
        v8_packed_coeff_.size(), double(bytes) / (1024 * 1024), now_ms() - start, compressed, blocks);
 }
@@ -112,9 +192,12 @@ V8Knobs& v8_knobs() {
     V8Knobs d;
     d.cm = env_int("NI_V8_CM", d.cm);
     d.pair = env_int("NI_V8_PAIR", d.pair);
-    d.kplan = env_int("NI_V8_KPLAN", Gpu::get().apple_family() <= 7 ? 3 : d.kplan);
+    d.kplan = env_int("NI_V8_KPLAN", legacy_gpu() ? 3 : d.kplan);
     d.gusplit = env_int("NI_V8_GUSPLIT", d.gusplit);
-    d.gdnsplit = env_int("NI_V8_GDNSPLIT", d.gdnsplit);
+    // kSimd (#393; measured on the 10-core M4): GDN step blocks of 128 threads (with the fused tree-zone tail below:
+    // verify -0.13 ms per cycle, 6 of 6 interleaved runs of 800 tokens, ids bitwise); other classes keep 256
+    const bool simd = simd_gpu();
+    d.gdnsplit = env_int("NI_V8_GDNSPLIT", simd ? 128 : d.gdnsplit);
     d.prepu = env_int("NI_V8_PREPU", d.prepu);
     d.tw = env_int("NI_V8_TW", tw_supported() ? d.tw : 0);
     d.twm = env_int("NI_V8_TWM", d.twm);
@@ -244,7 +327,7 @@ bool Qwen35::verify_wide_ok() const { return v8_wide_ok_c(cfg_); }
 int Qwen35::vpf_pass_rows(const Qwen35Config& c) {
   // NI_VPF_ROWS names the widest chain pass a cached suffix may run (8, 16 or 32 rows: the widths the verify buffers
   // hold - set_tree_rows rounds to whole 8-row tiles, and a 24 there would reserve three tiles for four); the default is
-  // the measured case: a dense target at or above the weight floor of the NI_VPF default (engine.cpp), where a pass'
+  // a dense target at or above the weight floor of the NI_VPF default (engine.cpp), where a pass'
   // weights are worth a whole turn's prefill, so the suffix's rows stream them once instead of once per 8-row tile. The
   // width is reserved at load (plan, the model's buffers, every sequence's tape), so a run that turns the path off
   // (NI_VPF=0) keeps the 16-row block's capacity rather than holding memory for a pass it can never take.
@@ -267,24 +350,25 @@ uint32_t Qwen35::kf_dense_rows(const Qwen35Config& c) {
   // one 8-row tile: the default, and all a MoE target or a target without the wide kernels can run
   const uint32_t one = 1u << (kMaxVerify - 1);
   const char* kf = getenv("NI_KFLASH");
-  const char* v = getenv("NI_DFLASH_TREE");
+  const char* v = kenv("TREE");
   // the same default as kf_tree_default() in dflash2.cpp: trees, unless a knob keeps the chains --
-  // NI_KFLASH=0, NI_DFLASH_TREE=0 -- or a genuine F74 depth cap NI_DFLASH_CAP=<n> does. The cap is read
+  // NI_KFLASH=0, NI_KFLASH_TREE=0 -- or a genuine F74 depth cap NI_KFLASH_CAP=<n> does. The cap is read
   // against the block that actually runs, not a fixed 15: a cap below 15 takes the 16-row block away
   // (rows16_auto_ok reads kf_tree_default(15)), so the walk that runs is the 8-row block's, full depth
   // kMaxVerify - 1 = 7, and a cap of 7..14 is a no-op for it -- exactly as DFlash2's constructor reads it
-  // against block_ - 1 (Cursor review 4368445248). An explicit NI_DFLASH_VERIFY overrides the cap as it
+  // against block_ - 1 (Cursor review 4368445248). An explicit NI_KFLASH_VERIFY overrides the cap as it
   // overrides the depth there. DFlash2::set_tree's full-depth guard stays the authority for which cycles
   // actually tree. The wide tiles only run in tree cycles, so asking
   // them (NI_KFLASH_ROWS) without trees keeps one tile.
-  const char* cv = getenv("NI_DFLASH_CAP");
+  const char* cv = kenv("CAP");
   const int cap = cv && *cv ? atoi(cv) : 0;
-  const char* vv = getenv("NI_DFLASH_VERIFY");
+  const char* vv = kenv("VERIFY");
   const bool capped = !(vv && *vv) && cap >= 1 && cap < kMaxVerify - 1;  // genuine against the block that runs
   const bool tree = !capped && (v && *v ? atoi(v) != 0 : (kf && *kf ? atoi(kf) != 0 : true));
   const char* r = getenv("NI_KFLASH_ROWS");
   // wider rows are asked for (NI_KFLASH_ROWS names 16 or 32) on a target that runs them: the default stays one tile
-  // until a Mac's A/B says a wider count pays there (docs/kflash.md, docs/usage.md)
+  // (wider rows are opt-in). On the 27B the tok/s gain from wider rows is within noise (+3% at +12% tokens per cycle, n=3);
+  // the 4B with bf16 weights ran 11-16% faster with them forced (docs/kflash.md, docs/usage.md)
   if (!tree || !v8_wide_ok_c(c) || !r || !*r) return one;
   uint32_t allowed = one | (1u << 15) | (1u << 31);
   uint32_t want = 0;
@@ -507,6 +591,13 @@ static V8Plan v8_plan(uint32_t N, uint32_t K, int nf_def) {
     }
   }
   p.cs = std::max(1, std::min(p.cs, (p.ks > 8 ? 16 : 8) / p.ks));
+  {
+    int ks = 0, cs = 0;
+    if (nf_def == 2 && v8_ksg_override(gpr, &ks, &cs)) {
+      p.ks = ks;
+      p.cs = cs;
+    }
+  }
   return p;
 }
 
@@ -631,12 +722,15 @@ void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Bu
   const bool pair = kn.pair && (K / 64) % 2 == 0;  // scale / bias pairs need an even group count per row
   if (!x2 && bits == 4 && var == "pf" && (kn.cm == 1 || pair))
     pre = std::string("qmm8") + (kn.cm == 1 ? "sn" : "") + (pair ? "b" : (kn.cm == 1 ? "" : "pf"));
+  bool given = !segs.empty();  // every segment brings its own packed image (the drafter's): 8 simdgroups at most
+  for (const Seg8& sg : segs) given = given && bool(sg.packed) && sg.packed.ks == 8;
   if (pl.cs * pl.ks > 8) {  // only the CM 1 + pair loop has a 16-simdgroup instantiation
-    if (pre == "qmm8snb" && (pl.nf == 1 || pl.nf == 2)) pre += "16";
+    if (pre == "qmm8snb" && given && !v8w_R_ && pl.nf == 2) pl.ks = 8, pl.cs = 1;
+    else if (pre == "qmm8snb" && (pl.nf == 1 || pl.nf == 2)) pre += "16";
     else pl.ks = 8, pl.cs = 1;
   }
   const uint32_t groups = K / 64, per_slice = (groups + pl.ks - 1) / pl.ks;
-  PackedCoeffBuffers images[4];
+  PackedCoeffBuffers images[4] = {};
   bool packed = !x2 && !v8w_R_ && R > 0 && R <= 8 && pre == "qmm8snb" && bits == 4 && pl.nf == 2 &&
                 pl.cs * pl.ks <= 8 && !(groups & 1u) && !(per_slice & 1u);
   if (packed) for (size_t i = 0; i < segs.size(); ++i) {
@@ -645,7 +739,7 @@ void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Bu
       const auto it = v8_packed_coeff_.find(segs[i].L);
       if (it != v8_packed_coeff_.end()) images[i] = it->second;
     }
-    packed = packed && bool(images[i]);
+    packed = packed && bool(images[i]) && (images[i].ks == 0 || images[i].ks == uint32_t(pl.ks));
   }
   if (packed) {
     pre = "qmm8pc";
@@ -675,6 +769,14 @@ void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Bu
     e.buf(int(i * 4 + 2), sg.L->b->buf);
     e.buf(int(i * 4 + 3), sg.y);
     if (packed) e.buf(21 + int(i), image.headers);
+  }
+  if (packed) {  // the record order: all segments share K, so one image's tells (interleave_packed_slices)
+    uint32_t ilv[4];
+    for (size_t i = 0; i < 4; ++i) {
+      const PackedCoeffBuffers& im = images[std::min(i, segs.size() - 1)];
+      ilv[i] = im.ks > 1 ? im.rg : 0u;  // 0: pair order, else the block rows interleaved together
+    }
+    e.bytes(25, ilv, sizeof(ilv));
   }
   p.tg_begin[segs.size()] = tg;
   e.buf(16, table);
@@ -735,17 +837,19 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   // The 27B (6 query heads per KV head) on the M5's matrix units takes the first at 8 rows too: its wide verify's
   // kernel, attn8t_partial_tree_g6, with one row tile, so an 8-row verify rounds as the 16-row default does, where the
   // zone runs attn8m_partial_zone on the shader ALUs. ni_run at 131K tokens, the 8-row drafting block (more than one
-  // slot, or NI_DFLASH_BLOCK=8), on the M5 Max: a verify 80.6 -> 61.9 ms, decode 48.6 -> 62.2 tok/s (the 16-row block
-  // there: 49.3). NI_V8_TREE_G6: by default on the M5 Max, where it was measured; 1 on any M5-class Mac, 0 the zone
+  // slot, or NI_KFLASH_BLOCK=8), on the M5 Max: a verify 80.6 -> 61.9 ms, decode 48.6 -> 62.2 tok/s (the 16-row block
+  // there: 49.3). NI_V8_TREE_G6: by default on the wide class (the 40-core M5 Max); 1 on any M5-class Mac, 0 the zone
   static const bool tree_g6 = [] {
     const int v = env_int("NI_V8_TREE_G6", -1);
     if (env_int("NI_V8_ATTN_T", 1) == 0 || v == 0) return false;
-    return v > 0 || Gpu::get().name().find("M5 Max") != std::string::npos;
+    return v > 0 || default_on(Knob::kTreeG6, ModelFacts{});
   }();
   const bool g6t = tree_g6 && G == 6 && tw_supported() && !kv_i8();
   const bool zone = tree && tree_attn >= 2 && !v8w_R_ && !g6t;
   const bool block = tree && tree_attn == 1 && !v8w_R_ && !g6t;
-  static const bool tree_fuse = env_int("NI_V8_TREE_FUSE", 0) != 0;
+  // NI_V8_TREE_FUSE: the tree zone and the rows' reduction in one kernel (attn8_tree_zone_reduce, bitwise); default on
+  // kSimd (#393; measured on the 10-core M4 with GDN blocks of 128 threads: verify -0.13 ms per cycle)
+  static const bool tree_fuse = env_int("NI_V8_TREE_FUSE", simd_gpu() ? 1 : 0) != 0;
   const bool fused = zone && tree_fuse;
   const uint32_t Lmax = uint32_t(pos + R), gran = mma ? 32 : 16, extra = (block || zone) ? 1u : 0u;
   const uint32_t want = std::max<uint32_t>(1, (uint32_t(tg_target) + cfg_.hkv - 1) / cfg_.hkv);
@@ -879,7 +983,7 @@ void Qwen35::enc_mlp8(Encoder& e, const Layer& L, int R) {
 // The moe8e passes (MMA-exact small experts) rely on the MMA adding its products one at a time in k order with an fp32
 // rounding after each; mma_chain_check tests that on this GPU once (a fresh command buffer, before the first verify's
 // is committed). NI_V8_MOE_EMU: 0 = never use them (sampled verifies run every routed expert as an MMA tile),
-// 1 (default on the M5) = sampled verifies, 2 = greedy verifies too (instead of moe8s2's fp32 passes).
+// 1 = sampled verifies alone, 2 (default on the M5) = greedy verifies too (instead of moe8s2's fp32 passes).
 static int moe_emu_mode() {
   static const bool ok = [] {
     Gpu& g = Gpu::get();
@@ -895,8 +999,9 @@ static int moe_emu_mode() {
     if (n) logi("moe8e: this GPU's MMA rounds differently (%u of 4096 check values); sampled verifies keep MMA tiles", n);
     return n == 0;
   }();
-  // default on the M5 (Apple10), where it was measured; other Macs keep the MMA tiles unless NI_V8_MOE_EMU is set
-  static const int env = std::clamp(env_int("NI_V8_MOE_EMU", Gpu::get().apple10() ? 1 : 0), 0, 2);
+  // default on the M5 (Apple10): 2 (sampled and greedy verifies on moe8e MMA-exact passes)
+  // other Macs keep the MMA tiles unless NI_V8_MOE_EMU is set
+  static const int env = std::clamp(env_int("NI_V8_MOE_EMU", matrix_units() ? 2 : 0), 0, 2);
   const int m = v8_knobs().emu >= 0 ? std::min(v8_knobs().emu, 2) : env;
   return m && ok ? m : 0;
 }
@@ -931,7 +1036,7 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
   // 8-row MMA tile (35B p700: 24.0 vs 24.9 ms per verify)
   static const int small_env = std::clamp(env_int("NI_V8_MOE_SMALL", 2), 0, 2);
   // MMA-exact passes (moe8e: bitwise what the MMA tiles give the rows) for 2-row tiles: list A (experts used by
-  // <= small rows) takes them on sampled verifies (row-independent numerics; NI_V8_MOE_EMU=2: greedy ones too), else
+  // <= small rows) takes them on sampled verifies and on greedy verifies when emu is active (NI_V8_MOE_EMU=2, default on Apple10), else
   // moe8s2's fp32 passes; experts with small < rows <= split become ceil(rows / 2) such tiles (in list A, or list B when
   // A runs moe8s2), and with shs (split 8) the shared expert too: no MMA tile pass left. 35B, 64 tokens teacher-forced,
   // sampled-verify numerics (tools/bench_verify8, interleaved): every expert on MMA tiles 11.78 ms per verify; 1-2-row
@@ -946,9 +1051,8 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
   static const int split_env = std::clamp(env_int("NI_V8_MOE_SPLIT", 8), 0, 8);
   static const int shs_env = env_int("NI_V8_MOE_SHS", 1);
   // NI_V8_MOE_SEP=1: greedy verifies (list A on moe8s2) split too, into list B (same numerics: moe8e = MMA tiles), but
-  // slower: 11.28 vs 10.97 ms per verify (moe8s2 + MMA tiles); NI_V8_MOE_EMU=2 (everything on moe8e) 10.21 ms, but
-  // greedy logits then move from moe8s2's fp32 numerics to the MMA tiles' (ni_v8check: mean |diff| vs plain decode
-  // 0.031 instead of 0.020)
+  // slower: 11.28 vs 10.97 ms per verify (moe8s2 + MMA tiles); NI_V8_MOE_EMU=2 (default on Apple10: everything on moe8e)
+  // shaves ~0.6 ms per verify (7.5 ms vs 8.1 ms on 35B), passing the floor gate (ni_v8check: 64/64 argmax agreement)
   static const bool sep_env = env_int("NI_V8_MOE_SEP", 0) != 0;
   const bool sep_on = emode && !emu && sep_env;
   const int split = emu || sep_on ? std::max(v8_knobs().split >= 0 ? std::clamp(v8_knobs().split, 0, 8) : split_env, small)
@@ -1196,6 +1300,31 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   static const bool tree_pin = env_int("NI_V8_TREE_PIN", 1) != 0;
   kp::GdnVerify gv{uint32_t(R), uint32_t(s.n_pend), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C, cfg_.eps,
                    tree ? 1u : 0u, ptree ? 1u : 0u, (tree || ptree) && tree_pin ? 1u : 0u};
+  // Lazy GDN fold (NI_GDN_LAZY, default on kSimd, #393): a pinned 8-row tree verify
+  // defers storing the folded state to the next one (the pending rows join a backlog that verify folds first), so the
+  // state is written every other cycle; a verify that stores folds the backlog itself, any other pass folds it first
+  // (flush_backlog)
+  static const bool lazy_env = env_int("NI_GDN_LAZY", simd_gpu() ? 1 : 0) != 0;
+  const bool lazy_path = lazy_env && (tree || ptree) && tree_pin && !wide && R <= 8 && cfg_.lin_dv == 128 &&
+                         cfg_.lin_dk == 128;
+  if (!lazy_path && s.n_back > 0) flush_backlog(e, s);
+  const bool lazy = lazy_path && s.n_back == 0 && s.n_pend > 0;
+  if (lazy_path) {
+    gv.nback = uint32_t(s.n_back);
+    gv.lazy = lazy ? 1u : 0u;
+    if (lazy && s.back_k.size() != size_t(cfg_.layers)) {
+      Gpu& g = Gpu::get();
+      s.back_k.assign(size_t(cfg_.layers), Buffer{});
+      s.back_g.assign(size_t(cfg_.layers), Buffer{});
+      s.back_d.assign(size_t(cfg_.layers), Buffer{});
+      for (int i = 0; i < cfg_.layers; ++i) {
+        if (!cfg_.is_linear[i] || !s.rec[i]) continue;
+        s.back_k[i] = g.alloc(size_t(8) * cfg_.lin_hv * cfg_.lin_dk * 4, "gdn_back_k");
+        s.back_g[i] = g.alloc(size_t(8) * cfg_.lin_hv * 4, "gdn_back_g");
+        s.back_d[i] = g.alloc(size_t(8) * cfg_.lin_hv * cfg_.lin_dv * 4, "gdn_back_d");
+      }
+    }
+  }
   bool table_ready = false;  // the previous layer's MoE combine wrote this layer's input-norm table
   for (int i = 0; i < cfg_.layers; ++i) {
     const Layer& L = layers_[i];
@@ -1232,7 +1361,8 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
       if ((tree || ptree) && !split) fatal("tree verify: the GDN step must run split (V8Knobs::gdnsplit)");
       if (!(skip & 1) && split) {
         // value-row blocks of split_thr / 32 simdgroups x 4 rows, then the gated norm into the table
-        e.use(pipe8(tree || ptree ? "gdn_step_verify8s_tree" : "gdn_step_verify8s"));
+        const bool lz = lazy_path && (lazy || s.n_back > 0);  // the lazy kernel: deferring, or folding a backlog
+        e.use(pipe8(lz ? "gdn_step_verify8s_tree_lazy" : tree || ptree ? "gdn_step_verify8s_tree" : "gdn_step_verify8s"));
         e.buf(0, gq_); e.buf(1, gk_); e.buf(2, gv_); e.buf(3, gg_); e.buf(4, gbeta_);
         e.buf(5, s.rec[i]); e.buf(6, gout_);
         e.buf(9, s.pend_k[i]); e.buf(10, s.pend_g[i]); e.buf(11, s.pend_d[i]);
@@ -1241,6 +1371,9 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
         if (tree || ptree) {
           e.buf(14, tree_buf);
           e.buf(15, s.pend_path);
+        }
+        if (lz) {
+          e.buf(16, s.back_k[i]); e.buf(17, s.back_g[i]); e.buf(18, s.back_d[i]);
         }
         e.dispatch(cfg_.lin_hv, 128 / (split_thr / 8), 1, uint32_t(split_thr));
         // gdn_gnorm_x8t: also the T table of qmm8t
@@ -1270,6 +1403,7 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
     else enc_mlp8(e, L, R);
     if (cap_) enc_capture(e, i, pos, R);  // block-drafter capture (DFlash2), off unless armed (reads x_ only)
   }
+  if (lazy_path) s.n_back = lazy ? s.n_pend : 0;  // the deferred rows (stored by the next tree verify or flush_backlog)
   s.n_pend = 0;  // folded by this verify; commit_rows() sets the new count
   s.pend_tree = false;
   const bool tl = table_ready ? v8_tw() : enc_x8(e, x_, R, D, final_norm_, false, 0, nullptr, true);
@@ -1278,8 +1412,7 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
     return;
   }
   enc_qmm8(e, {{&lm_head_, logits_}}, R, v8t_, v8s_, false, tl ? &v8tt_ : nullptr);
-  const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
-  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
+  const uint32_t V = uint32_t(cfg_.vocab), K = topk_k(sp), chunk = topk_chunk(K), ntg = topk_lists(V, K);
   // structured output: each row's mask (a tree's row r: node r's, after its path), nothing without masks
   enc_logit_mask(e, s, logits_, R, int(V), int(V));
   kp::TopkStage ts{V, K, chunk};
@@ -1288,8 +1421,8 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);
   e.val(3, ts);
   if (tree) e.buf(4, *v8_tree_);
-  if (wide) v8_disp(e, ntg, 1, 1, kV8wYrows, 256);
-  else e.dispatch(ntg, R, 1, 256);
+  if (wide) v8_disp(e, ntg, 1, 1, kV8wYrows, topk_threads(K));
+  else e.dispatch(ntg, R, 1, topk_threads(K));
   kp::SampleRows sr{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, 0, 0, 0};
   // a tree's row r draws with the uniform of its token's position, step + depth(r)
   e.use(pipe8(tree ? "sample_stage2_rows_tree" : "sample_stage2_rows"));
@@ -1366,6 +1499,7 @@ void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& gro
   for (const VerifyGroup& gr : groups) {
     if (!gr.s || gr.R < 1) fatal("encode_verify_multi: an empty group");
     if (gr.pos + gr.R + 1 >= gr.s->cap) fatal("context full (%d)", gr.s->cap);
+    flush_backlog(e, *gr.s);  // (the batched pass folds pending rows only)
     R += gr.R;
   }
   if (groups.empty() || R > 8) fatal("encode_verify_multi: %d rows", R);
@@ -1561,8 +1695,8 @@ void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& gro
   // per group with its parameters
   uint32_t Kmax = 1;
   for (const VerifyGroup& gr : groups)
-    if (gr.sp.temperature > 0) Kmax = std::max(Kmax, uint32_t(std::clamp(gr.sp.top_k <= 0 ? 32 : gr.sp.top_k, 1, 32)));
-  const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
+    Kmax = std::max(Kmax, topk_k(gr.sp));
+  const uint32_t V = uint32_t(cfg_.vocab), chunk = topk_chunk(Kmax), ntg = topk_lists(V, Kmax);
   // structured output: the masked members' rows, after one GPU wait for the host's masks (it signals every member's at
   // once: the latest value covers them all); nothing without masks
   {
@@ -1573,7 +1707,7 @@ void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& gro
     if (ev) e.wait_event(ev, val);
     for (size_t g = 0; g < groups.size(); ++g) {
       Seq& sq = *groups[g].s;
-      if (sq.mask_rows <= 0) continue;
+      if (sq.mask_rows <= 0 && !sq.suppression) continue;
       void* const keep = sq.mask_event;
       sq.mask_event = nullptr;  // (waited for above)
       enc_logit_mask(e, sq, rows(logits_, g, V), groups[g].R, int(V), int(V));
@@ -1584,11 +1718,11 @@ void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& gro
   e.use(pipe8("topk_stage1_rows"));
   e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, R, 1, 256);
+  e.dispatch(ntg, R, 1, topk_threads(Kmax));
   e.group_begin();
   for (size_t g = 0; g < groups.size(); ++g) {
     const SamplingParams& sp = groups[g].sp;
-    const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
+    const uint32_t K = topk_k(sp);
     const bool own = groups[g].tok_out;
     const kp::SampleRows sr{ntg * Kmax, K, sp.temperature, sp.top_p, sp.seed, uint32_t(groups[g].pos),
                             own ? uint32_t(groups[g].pos + 1) : uint32_t(r0[g]), 0, 0};

@@ -80,10 +80,15 @@ class Qwen4Exp : public Qwen35 {
   // Qwen's zero-centred weights (a mean of at most 0.25), 0 where a converter added the 1 (at least 0.75), -1 between
   static float norm_offset(double indexer_norm_mean);
   // Whether the prefill sparse attention runs on the matrix units (qattn_t_sparse_g12d2), the decision enc_attn_sparse
-  // makes: NI_QSA_TATTN=1 (opt-in since #585), 12 query heads per KV head, head dim 256, an Apple10 GPU and macOS 26.
+  // makes: NI_QSA_TATTN=1 or the fast profile (off in precise since #585), 12 query heads per KV head, head dim 256,
+  // an Apple10 GPU and macOS 26.
   // The model_dir form reads config.json (false for a folder that is not Flash-Next).
   static bool tattn(const Qwen35Config& c);
   static bool tattn(const std::string& model_dir);
+  // TATTN's 4096-row prefill chunks for the Q2_0 pack: only when NI_QSA_TATTN is set on, not under the fast
+  // profile's TATTN. On the M5 Pro 48 GB they put 7 of 8 fast legs under memory pressure, decode about 8% slower per
+  // draft cycle (docs/profiles.md).
+  static bool tattn_chunks(const std::string& model_dir);
   // the process's split's share of the model (split()), or `split`'s
   static MemPlan plan(const std::string& model_dir, int prefill_chunk = 2048, const Split* split = nullptr);
   // For placing a split (src/cluster/place.h), from the headers: each trunk layer's weight bytes as stored (its routed
@@ -137,6 +142,11 @@ class Qwen4Exp : public Qwen35 {
     return q20::group_chunks(prefill_group_, remote_ || lo_ != 0, dbg_layers_ >= 0, !store_ || store_->complete());
   }
   void encode_prefill_group(Encoder& e, Seq& s, int pos0, const int* Ts, int nc) override;
+  // NI_PF_GROUPED with the routed experts resident (stacked 4-bit planes): not on Q2_0 packs, the expert store or a
+  // split model, which a grouped prefill does not cover today
+  bool grouped_prefill() const override {
+    return Qwen35::grouped_prefill() && !q20_pack_ && !store_ && !remote_ && lo_ == 0;
+  }
   void encode_logits_rows(Encoder& e, int T, const Buffer& out) override;
   // speculative decoding (qwen4_exp_spec.cpp)
   int default_spec_depth() const override { return 2; }
@@ -166,7 +176,8 @@ class Qwen4Exp : public Qwen35 {
   q20::ExpertStore* expert_store() { return store_.get(); }
 
  protected:
-  void grow_kv(Seq& s, int cap) override;
+  void grow_kv(Seq& s, int cap, size_t batch_max = size_t(256) << 20) override;
+  size_t kv_unit_bytes_per_pos() const override;
 
  private:
   void load(const std::string& dir);

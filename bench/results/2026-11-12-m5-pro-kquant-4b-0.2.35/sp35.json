@@ -1,0 +1,62 @@
+{
+ "kapitsa": "0.2.35",
+ "commit": "30b18f9",
+ "mac": "MacBook Pro M5 Pro, 48 GB, macOS 26.5.2, on AC power",
+ "date": "12 November 2026",
+ "source": "legs/: the four valid legs of the 4B session (job k495-sp35d) and its legs.log",
+ "packs": {
+  "nace-ai/Qwen3.5-4B-MLX-KQuant": {
+   "size": "4b",
+   "pack": "Q4",
+   "baseline": "lmstudio-community 4-bit",
+   "baseline_url": "https://huggingface.co/lmstudio-community/Qwen3.5-4B-MLX-4bit",
+   "baseline_rev": "c43ee1d6",
+   "drafter": "both packs ran with the SAME drafter + MTP head: the ones shipped in the KQuant 4B pack's Kapitsa home (byte-identical files on both arms)",
+   "drafter_rev": "KQ 4B pack's own dflash2 + mtp.safetensors (as shipped in the KQuant home)",
+   "verdict": "tie",
+   "pct": 2.7,
+   "noise_pct": 3.0,
+   "rows": [
+    {
+     "mode": "Writes, temperature 0.6",
+     "base": 207.205,
+     "ours": 221.51
+    },
+    {
+     "mode": "Writes, greedy",
+     "base": 227.945,
+     "ours": 225.35
+    }
+   ],
+   "legs": {
+    "base": [
+     [
+      208.67,
+      232.64
+     ],
+     [
+      205.74,
+      223.25
+     ]
+    ],
+    "ours": [
+     [
+      220.39,
+      226.28
+     ],
+     [
+      222.63,
+      224.42
+     ]
+    ]
+   },
+   "how": {
+    "Writes": "a 512-token answer per run (kapitsa bench --quick), the median of its runs per leg at temperature 0.6 and greedy; the row is the mean over legs",
+    "Runs per arm": "2 valid legs per pack (a leg is void if the Mac leaves AC power or load reaches 4.5)",
+    "Order": "A B B A in one session (baseline, KQuant, KQuant, baseline), one GPU lock hold, both packs with the same drafter and MTP head",
+    "Prompt": "kapitsa bench --quick's fixed prompt set",
+    "Tie band": "within ±3% counts as about the same"
+   }
+  }
+ }
+}

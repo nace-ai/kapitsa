@@ -1,0 +1,6 @@
+{
+  "head": "50fadecc932863bff4d3f81a7a20d3913be3e15b",
+  "binary_version": "0.2.31 (9cca6b0d)",
+  "reason": "vk build reused existing CMakeCache and did not reconfigure the embedded Git version; source was rebuilt but metadata is stale",
+  "action": "Preserve this run. Reconfigure and rerun under a new label before performance."
+}

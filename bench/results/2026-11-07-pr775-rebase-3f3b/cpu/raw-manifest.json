@@ -1,0 +1,155 @@
+{
+  "source": "work/pr775/m4-local/rebase-3f3b/cpu-resume",
+  "files": [
+    {
+      "path": "cpu-exit.json",
+      "bytes": 103,
+      "sha256": "51031b5e981efb734919f397b57d774bfd0ca0e2ed192c15e52f2b989621f26c",
+      "included": true
+    },
+    {
+      "path": "cpu.log",
+      "bytes": 590,
+      "sha256": "c2d0c353e6fdcb619a25eff260e79374655032c2e403cf02dda68edba7f8ab9c",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/build.log",
+      "bytes": 1602,
+      "sha256": "d5a362cdb7e4d7fc9621d3b441f245e6a65a7837f8b5830f218f2bef5df72e3e",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/api_test.log",
+      "bytes": 26149,
+      "sha256": "c7d75f45195ece8bb4b994e607eed3afca184f8958eceb035dbcd122e9709655",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/cluster_test.log",
+      "bytes": 3287,
+      "sha256": "9c921f75ffb85105b8ad5ad4cb495477f2b25b475546855ad37f2f2fb933f884",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/fn_dflash_test.log",
+      "bytes": 3601,
+      "sha256": "fcbcdca0de6d099ea73ac3bbd03e155bedb9068aedda3485e1b71dd4414bd68b",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/fn_store_test.log",
+      "bytes": 4023,
+      "sha256": "ff6a13a3e00c9d9a3a51ab7138dc6099f04c11982477c50ad8717631648ce98b",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/gemm_slices_test.log",
+      "bytes": 36,
+      "sha256": "cf917b18e305a7de38cd231a6f7f963a783895449b1cb76501b70009174d8fac",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/iq_layout_test.log",
+      "bytes": 443,
+      "sha256": "ccee5e98f74ce78afb48cdf3c200580e86a087641129a822db68b61fca3e6d71",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/prefix_cache_test.log",
+      "bytes": 5250,
+      "sha256": "71be160fd7460448bca71264a060731881964c6d3ef10ed0ed081a3b7d7a64e2",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/remote_test.log",
+      "bytes": 16,
+      "sha256": "0ce0916c13d746720e554f8a581c903f8a9206e6e8b5c1abbf5ddfdd86f1959b",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/split_place_test.log",
+      "bytes": 16,
+      "sha256": "0ce0916c13d746720e554f8a581c903f8a9206e6e8b5c1abbf5ddfdd86f1959b",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/test_bench.log",
+      "bytes": 10034,
+      "sha256": "128d6ae272586efb0f3eae9299737a7186f77f782f4485a0e59ec02b65b36227",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/test_community.log",
+      "bytes": 4131,
+      "sha256": "f547496119c8eb033b2504d0ae7275a65463a4f8698979d3c4120005b8c0aeaa",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/test_logit_compare.log",
+      "bytes": 4262,
+      "sha256": "2bc9a93fe5e104f200e6a22e59708e32122b3c50aa3ebca522efe0ef70f1e731",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/test_pr_size.log",
+      "bytes": 346,
+      "sha256": "4e7e9424dda1049899d94ffe56c0aee3f868aa651744de83992a5e942b5a1aff",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/test_reasoning.log",
+      "bytes": 1728,
+      "sha256": "5337c77599baeb36271ee20a439bb0d96551d6444080701d8bb08ecb820f8f83",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/test_sampled_tokens_harness.log",
+      "bytes": 117,
+      "sha256": "27498f0175fb383f2d0906d1f251c02d1fd3d740c19b2c10119f2c43c821a281",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/test_server_cli.log",
+      "bytes": 14347,
+      "sha256": "a2c855540d727723cdf9b260f53b1f26271e8547120d47aaaaa0c129a4ab0e16",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/test_sidecar.log",
+      "bytes": 202,
+      "sha256": "3eaee1bdb6b93ba4b67bce5e069cb2842588cbd074183e8e6fc343126f40425a",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/test_structured_cli.log",
+      "bytes": 2904,
+      "sha256": "b03a81b3deaeec66c9dc3e58439aa4f097880afd627c0002d7927f618dc32efc",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/test_update.log",
+      "bytes": 6717,
+      "sha256": "b140ce8d2aafa7feeb5e503b0f1cc359ef0006d0371a55018782c33cefe7f4be",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/tokenizer_test.log",
+      "bytes": 1188,
+      "sha256": "5b4fafc5f109f9a108d8b23cde6e78ee84d64517b3d7588292f5b7a410554b80",
+      "included": true
+    },
+    {
+      "path": "evidence/ane-pr775-6327c2/50fadecc/cpu-tests/ws_upgrade_test.log",
+      "bytes": 320,
+      "sha256": "4606e0b5d13fbd020be1fb19f9af8b6e0bde7df58b82de81129e38eba1b86fe0",
+      "included": true
+    },
+    {
+      "path": "status.json",
+      "bytes": 49,
+      "sha256": "de36318a3f60f94a6b6398fbbeb60e1feb4a52873907e88c0ad6518f1d425650",
+      "included": true
+    }
+  ]
+}

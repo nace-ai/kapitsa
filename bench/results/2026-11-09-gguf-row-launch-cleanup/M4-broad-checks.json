@@ -1,0 +1,350 @@
+{
+  "provenance": "Redacted structured derivation; commands are portable examples, not raw execution logs. Original records retained privately.",
+  "source": "49e5b3213d3f0a441f9358dd91d3aa325ad963c9",
+  "reference": "47dbe3cbd1516af07be108385236d6f40e492b61",
+  "binary_version": "kapitsa 0.2.32 (49e5b321)",
+  "build_flags": [
+    "-O3",
+    "-std=gnu++20",
+    "-arch arm64",
+    "-mmacosx-version-min=14.0"
+  ],
+  "NDEBUG": false,
+  "configuration": {
+    "chip": "Apple M4 Pro",
+    "macOS": "15.7.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)"
+  },
+  "binary_sha256": {
+    "kapitsa": "0f477992b167bc6029aba695bd17a9e60605e5ef15d1e92470c94cba80ff03ce",
+    "load_error_test": "45ef4dd8cca8d0d01a944c4246585d4c56b3260c05f97cda63b193182e8279ad"
+  },
+  "vk": {
+    "rc": 1,
+    "passed": [
+      "api_test",
+      "prefix_cache_test",
+      "fn_store_test",
+      "fn_dflash_test",
+      "tokenizer_test",
+      "iq_layout_test",
+      "nh_quant_q8_test",
+      "remote_test",
+      "cluster_test",
+      "split_place_test",
+      "gemm_slices_test",
+      "ws_upgrade_test",
+      "test_sidecar",
+      "test_bench",
+      "test_update",
+      "test_community",
+      "test_reasoning",
+      "test_pr_size",
+      "test_logit_compare",
+      "test_sampled_tokens_harness",
+      "test_structured_cli"
+    ],
+    "failed": [
+      "test_server_cli"
+    ]
+  },
+  "stages": [
+    {
+      "label": "dependency-preflight",
+      "rc": 0,
+      "started_at": "2026-11-09T04:21:58.181916+00:00",
+      "ended_at": "2026-11-09T04:21:58.969185+00:00",
+      "private_log_sha256": "ed01b1557bd7a1e70f90d8838f38ae0bb6b8367122b3dca7e5935bafa440a45a"
+    },
+    {
+      "label": "configure",
+      "rc": 0,
+      "started_at": "2026-11-09T04:21:58.970655+00:00",
+      "ended_at": "2026-11-09T04:22:00.808357+00:00",
+      "private_log_sha256": "bfe3c0c66385a9011872beb3d81002dcd1942cfa880c13c9a68ada2351aa9d7e"
+    },
+    {
+      "label": "build",
+      "rc": 0,
+      "started_at": "2026-11-09T04:22:00.809387+00:00",
+      "ended_at": "2026-11-09T04:23:50.978456+00:00",
+      "private_log_sha256": "fb5a726623bc82761065091c6d5ed8e7bc2afd9414cb0104f0775b01c6739ba9"
+    },
+    {
+      "label": "version",
+      "rc": 0,
+      "started_at": "2026-11-09T04:23:50.979556+00:00",
+      "ended_at": "2026-11-09T04:23:51.785442+00:00",
+      "private_log_sha256": "3a56c9dd0eec3b0e03fedaca2d458faf669b59d7cf21447b69ebc012cd2440b2"
+    },
+    {
+      "label": "vk-cpu-tests",
+      "rc": 1,
+      "started_at": "2026-11-09T04:23:51.787791+00:00",
+      "ended_at": "2026-11-09T04:39:16.565158+00:00",
+      "private_log_sha256": "4253a545a8a04463753acaa6cd22957426a85663b209d54129f6aede3243434d"
+    },
+    {
+      "label": "supp-load_error_test",
+      "rc": 1,
+      "started_at": "2026-11-09T04:39:16.566984+00:00",
+      "ended_at": "2026-11-09T04:39:17.283021+00:00",
+      "private_log_sha256": "3ee862cb4f71f511be54c213d8812a12f14247a29d8667525c04dbf188461836"
+    },
+    {
+      "label": "supp-execution_session_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:39:17.284912+00:00",
+      "ended_at": "2026-11-09T04:39:17.552890+00:00",
+      "private_log_sha256": "86266c33c5218a1cacb9f5f927d4c8c603c11e5542685f449bf792484279daee"
+    },
+    {
+      "label": "supp-http_stream_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:39:17.554405+00:00",
+      "ended_at": "2026-11-09T04:39:18.984819+00:00",
+      "private_log_sha256": "a88fe805fb01ece1cd8c9fdbe6ea2f520f94f3f136ebc9f3185b100ef182fc83"
+    },
+    {
+      "label": "supp-bench_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:39:18.987438+00:00",
+      "ended_at": "2026-11-09T04:39:19.006045+00:00",
+      "private_log_sha256": "a241c127079ed5592e8541d9785e9e4db2201954072b1df203fa7cd90258bf79"
+    },
+    {
+      "label": "supp-update_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:39:19.008047+00:00",
+      "ended_at": "2026-11-09T04:39:19.069950+00:00",
+      "private_log_sha256": "7a55351684895666ed1e5003a09d0597bcc6158716816344d438ccc656aeff78"
+    },
+    {
+      "label": "supp-grammar_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:39:19.070733+00:00",
+      "ended_at": "2026-11-09T04:43:03.291883+00:00",
+      "private_log_sha256": "819cdcd84bff30d6a888e2c0bad2b7a6d9f0bf7d7463265ccb4f504e75298420"
+    },
+    {
+      "label": "supp-structured_check",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:03.293644+00:00",
+      "ended_at": "2026-11-09T04:43:03.299918+00:00",
+      "private_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "supp-drafter_attach_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:03.301530+00:00",
+      "ended_at": "2026-11-09T04:43:03.682271+00:00",
+      "private_log_sha256": "dcdc8d9113bc2b03604b7e987a36f762018cf80b583ec8099614aac50185196a"
+    },
+    {
+      "label": "supp-exl3_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:03.683813+00:00",
+      "ended_at": "2026-11-09T04:43:03.973935+00:00",
+      "private_log_sha256": "8401dcf05b63aaca6738e5d8749611a64877db65f7f7388cce880eb4732b4a29"
+    },
+    {
+      "label": "supp-device_profile_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:03.975997+00:00",
+      "ended_at": "2026-11-09T04:43:04.223438+00:00",
+      "private_log_sha256": "2650b0ba4978026e3bdff341ab811fdcb413c33d3180e2709b468c6805e462dd"
+    },
+    {
+      "label": "supp-qwen4_config_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:04.226194+00:00",
+      "ended_at": "2026-11-09T04:43:04.486357+00:00",
+      "private_log_sha256": "0ce0916c13d746720e554f8a581c903f8a9206e6e8b5c1abbf5ddfdd86f1959b"
+    },
+    {
+      "label": "supp-json_file_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:04.489444+00:00",
+      "ended_at": "2026-11-09T04:43:05.631636+00:00",
+      "private_log_sha256": "58346ebf0becdc1d47cb190e954a07c64756e4d8613c216df5da0267b5171025"
+    },
+    {
+      "label": "supp-affine_pack_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:05.633540+00:00",
+      "ended_at": "2026-11-09T04:43:06.413022+00:00",
+      "private_log_sha256": "c3cdf19ecd57a29c901c97762e249e1575194554e928d96f6d476e5dcfc32884"
+    },
+    {
+      "label": "supp-systemone_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:06.415612+00:00",
+      "ended_at": "2026-11-09T04:43:06.735935+00:00",
+      "private_log_sha256": "8f9b93c44c38a7e5fdbb032f38ba3712d5ed6233999b1edfd1881ea664774129"
+    },
+    {
+      "label": "supp-systemone_codes_probe_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:06.739564+00:00",
+      "ended_at": "2026-11-09T04:43:07.198521+00:00",
+      "private_log_sha256": "32d68b2954bbd8968a32c7f4b9191664fe14c93fbd0620fd4330de2111d09ab0"
+    },
+    {
+      "label": "supp-splash_protocol_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:07.200929+00:00",
+      "ended_at": "2026-11-09T04:43:07.454015+00:00",
+      "private_log_sha256": "3fa40c24c85a09c241a97cfbf56c57c7edb8cc89f9ef3f854bdbdb3430a11c3e"
+    },
+    {
+      "label": "supp-splash_runtime_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:07.455665+00:00",
+      "ended_at": "2026-11-09T04:43:20.198287+00:00",
+      "private_log_sha256": "503279ce79d937e6a3da83a253509e8127331238c1b26764e317944dcacae642"
+    },
+    {
+      "label": "supp-splash_discover_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:20.201047+00:00",
+      "ended_at": "2026-11-09T04:43:20.594666+00:00",
+      "private_log_sha256": "b4726c938fb73d394066a91e46e1c80a16900803de428f0bcf971b25edd306f8"
+    },
+    {
+      "label": "supp-splash_plan_test",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:20.595720+00:00",
+      "ended_at": "2026-11-09T04:43:20.856161+00:00",
+      "private_log_sha256": "1d878bf581c25ae57bba793a32ebc1e89233d5b148bca4f510494310d837c4e6"
+    },
+    {
+      "label": "test_profile_gates",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:20.858629+00:00",
+      "ended_at": "2026-11-09T04:43:22.250194+00:00",
+      "private_log_sha256": "9fb6034d779ecca08bc6902b14abd0e5aeaccc73dddac1e36363819a40bc79ad"
+    },
+    {
+      "label": "test_comment_gates",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:22.253015+00:00",
+      "ended_at": "2026-11-09T04:43:23.738470+00:00",
+      "private_log_sha256": "1d57bc3fd634152d2901ce98fc55fa5205e360f1ef6dbe0088b0c51b69075d42"
+    },
+    {
+      "label": "test_pr_size",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:23.740895+00:00",
+      "ended_at": "2026-11-09T04:43:30.688827+00:00",
+      "private_log_sha256": "4e7e9424dda1049899d94ffe56c0aee3f868aa651744de83992a5e942b5a1aff"
+    },
+    {
+      "label": "test_drex_max",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:30.690802+00:00",
+      "ended_at": "2026-11-09T04:43:31.767098+00:00",
+      "private_log_sha256": "1596b5bf74b5d60ad618d44f440206e6ce7f6ff0f1f8bec77d1e4a98469b8dcc"
+    },
+    {
+      "label": "test_logit_dump",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:31.768418+00:00",
+      "ended_at": "2026-11-09T04:43:32.139594+00:00",
+      "private_log_sha256": "fec86b7e63e69c80c04811fe5bd5f7c0a5be2d11327905f2465b1dec7c523645"
+    },
+    {
+      "label": "test_systemone_codes_harness",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:32.140918+00:00",
+      "ended_at": "2026-11-09T04:43:32.541992+00:00",
+      "private_log_sha256": "2e7be51b2871c6fc394f6fe2420172eb4392647074cda0514c600f8934ba6327"
+    },
+    {
+      "label": "qwen4-pack",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:32.546880+00:00",
+      "ended_at": "2026-11-09T04:43:33.462765+00:00",
+      "private_log_sha256": "8afea1f9e0966dff1ddeead47abb966f27242c4e1f050176bde5a9435aa04dad"
+    },
+    {
+      "label": "tests/test_splash_patches.py",
+      "rc": 0,
+      "started_at": "2026-11-09T04:43:33.465529+00:00",
+      "ended_at": "2026-11-09T04:44:00.284898+00:00",
+      "private_log_sha256": "4ddb938f134dd93e800ecd594b02e4ca0d7ef2b57b65241b77da35ed21dcdc2c"
+    },
+    {
+      "label": "prek",
+      "rc": 0,
+      "started_at": "2026-11-09T04:44:00.285477+00:00",
+      "ended_at": "2026-11-09T04:44:00.720187+00:00",
+      "private_log_sha256": "9a2ba97865628f9f9ff946ac2be11d54b2357f187116aa3d9abc1e4480a405f5"
+    },
+    {
+      "label": "diff-check",
+      "rc": 0,
+      "started_at": "2026-11-09T04:44:00.721110+00:00",
+      "ended_at": "2026-11-09T04:44:00.742691+00:00",
+      "private_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "required-checks",
+      "rc": 0,
+      "started_at": "2026-11-09T04:44:00.743369+00:00",
+      "ended_at": "2026-11-09T04:44:00.926797+00:00",
+      "private_log_sha256": "bb7b93567f621cb6c581b9dca4932400f8653bd2a85f91a80b01f800cbd1a258"
+    },
+    {
+      "label": "cleanup",
+      "rc": 0,
+      "started_at": "2026-11-09T04:44:00.928017+00:00",
+      "ended_at": "2026-11-09T04:44:00.962688+00:00",
+      "private_log_sha256": "853649ce399173e4aa385293884de49d38d46efb7739dc5898ea103fe6e99f18"
+    }
+  ],
+  "limitations": [
+    {
+      "test": "test_server_cli",
+      "outcome": "Original full suite failed the last-copy clone-removal reporting assertion; one extracted-fixture reference run and one candidate run each passed both assertions. Original failure remains unexplained, not replaced.",
+      "controls": [
+        {
+          "arm": "reference",
+          "binary_sha256": "5ccaa2f90871c5664a6c281a4059e2a3ab3fd4e61cfe81417fd10d7d44a40324",
+          "checks": [
+            {
+              "name": "cli: rm of a clone frees nothing, and says so",
+              "passed": true
+            },
+            {
+              "name": "cli: rm of the last copy frees its size",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "arm": "candidate",
+          "binary_sha256": "0f477992b167bc6029aba695bd17a9e60605e5ef15d1e92470c94cba80ff03ce",
+          "checks": [
+            {
+              "name": "cli: rm of a clone frees nothing, and says so",
+              "passed": true
+            },
+            {
+              "name": "cli: rm of the last copy frees its size",
+              "passed": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "test": "load_error_test",
+      "outcome": "Existing uncached_reads threshold failed. Newly built candidate and retained reference executables compare equal over complete bytes. Prior reference execution failed the same assertion; no new reference loader execution was performed.",
+      "assertion": "after <= before + pages / 10",
+      "same_executable_sha256": "45ef4dd8cca8d0d01a944c4246585d4c56b3260c05f97cda63b193182e8279ad",
+      "whole_file_compare_rc": 0,
+      "new_reference_loader_executions": 0
+    }
+  ],
+  "GPU_model_runs": []
+}

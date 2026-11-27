@@ -69,7 +69,7 @@ def gpu_lock():
         return None
     path = os.environ.get("BENCH_GPU_LOCK") or os.path.expanduser("/tmp/kapitsa-gpu.lock")
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    f = open(path, "a")
+    f = os.fdopen(os.open(path, os.O_RDONLY | os.O_CREAT, 0o644), "rb")
     print(f"waiting for the GPU lock {path} ...", flush=True)
     fcntl.flock(f, fcntl.LOCK_EX)
     return f
@@ -328,6 +328,7 @@ def functional(tmp, log):
         # (a long system block, a short user turn: the prefix checkpoint sits at the end of the system block)
         c7 = [{"role": "system", "content": "You are a coding agent. Repository notes:\n" + CORPUS_TEXT[:TOKENS * 4]},
               {"role": "user", "content": "Summarize the notes in one sentence."}]
+        c7_other = [c7[0], {"role": "user", "content": "Name one data structure mentioned in the notes, in one sentence."}]
         f7 = {"role": "user", "content": "Name one thing in them that could fail, in one sentence."}
         a7, _, _, _ = chat(c7)
         chat([{"role": "user", "content": "Say hello in five words."}], max_tokens=8)  # (a second conversation)
@@ -337,7 +338,18 @@ def functional(tmp, log):
         s = Server(os.path.join(tmp, "home-dflash"), log)
         _, w7, _, _ = chat(turn2(c7, a7, f7))
         check(cached(w7) > TOKENS // 2, "with a drafter: the follow-up is cached after a restart", w7)
+        a7_other_ssd, w7_other, _, _ = chat(c7_other)
         s.stop()
+        s = Server(os.path.join(tmp, "home-dflash-ram"), log, cache="0")
+        chat(c7)
+        a7_other_ram, u7_other_ram, _, _ = chat(c7_other)
+        s.stop()
+        check(cached(w7_other) == cached(u7_other_ram) and cached(w7_other) > TOKENS // 2,
+              "with a drafter: a new conversation sharing the system prompt is cached from the SSD prefix checkpoint",
+              f"SSD {cached(w7_other)}, RAM {cached(u7_other_ram)}")
+        check(a7_other_ssd == a7_other_ram,
+              "... and writes the RAM prefix checkpoint's text, token for token",
+              f"\n RAM:  {a7_other_ram!r}\n SSD:  {a7_other_ssd!r}")
 
 
 def dir_mb(path):

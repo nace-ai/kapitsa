@@ -1,0 +1,14 @@
+ok   27B shape (5120, 64 layers): the 27B DFlash2 drafter
+ok   35B-A3B shape (2048, 40): the 35B DFlash2 drafter
+ok   4B shape (2560, 32): the 4B DFlash drafter
+ok   9B shape (4096, 32): the 9B DFlash drafter
+ok   an unknown shape gets none
+ok   an unknown shape: nothing fetched
+ok   a folder with dflash2/ and weights: left alone
+ok   dflash2/ with config.json alone: not an installed drafter (resumes)
+ok   dflash2/ with its weights: installed
+ok   a fresh manifest: the drafter is not declined
+ok   --no-drafter is remembered
+ok   a plain import clears it
+ok   a folder with no config.json: nothing
+all ok

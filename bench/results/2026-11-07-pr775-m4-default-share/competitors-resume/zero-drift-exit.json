@@ -1,0 +1,16 @@
+{
+  "returncode": 1,
+  "expected": "fail; fast changes outputs",
+  "command": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/tools/logit_compare.py",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-fast",
+    "--min-top1",
+    "1",
+    "--max-mean-kl",
+    "0",
+    "--json",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/competitors-resume/zero-drift.json"
+  ]
+}

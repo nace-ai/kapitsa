@@ -1,5 +1,7 @@
+#include "engine/device_profile.h"
 #include "model/dspark.h"
 #include "util/bf16.h"
+#include "util/json_file.h"
 #include "util/log.h"
 
 #include <nlohmann/json.hpp>
@@ -9,7 +11,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 
 namespace ni {
 
@@ -49,16 +50,6 @@ struct CycP {
 // byte offsets of nh_dsp_cycle's blocks in cyc_
 constexpr size_t kCycEmbed = 0, kCycAttn = 256, kCycWalk = 512, kCycRing = 768;
 
-nlohmann::json read_json(const std::string& path) {
-  std::ifstream f(path);
-  if (!f) return {};
-  try {
-    return nlohmann::json::parse(f);
-  } catch (...) {
-    return {};
-  }
-}
-
 // as loaded: NVFP4 as stored, BF16 matrices quantized to Q8 (34 bytes per 32), BF16 vectors as fp32, the Markov
 // embedding as stored; of the embedding table only the mask token's row
 size_t loaded_bytes(const SafetensorsIndex& idx, int hidden) {
@@ -76,7 +67,7 @@ size_t loaded_bytes(const SafetensorsIndex& idx, int hidden) {
 }  // namespace
 
 bool DSpark::is_dspark(const std::string& dir, int hidden) {
-  const nlohmann::json c = read_json(dir + "/config.json");
+  const nlohmann::json c = *json_file(dir + "/config.json");
   if (!c.is_object() || !c.contains("dflash_config") || !c["dflash_config"].is_object()) return false;
   const bool markov = c.value("dspark_fixup_head_type", std::string()) == "markov" || c.value("markov_rank", 0) > 0;
   struct stat st;
@@ -84,7 +75,7 @@ bool DSpark::is_dspark(const std::string& dir, int hidden) {
 }
 
 size_t DSpark::plan_bytes(const std::string& dir, size_t* per_slot) {
-  const nlohmann::json c = read_json(dir + "/config.json");
+  const nlohmann::json c = *json_file(dir + "/config.json");
   const SafetensorsIndex idx(dir);
   const nlohmann::json& d = c.contains("dflash_config") ? c["dflash_config"] : c;
   const int64_t H = c.value("hidden_size", 2688), NL = c.value("num_hidden_layers", 6);
@@ -109,45 +100,7 @@ size_t DSpark::plan_bytes(const std::string& dir, size_t* per_slot) {
 
 // ---- loading ----
 // NVFP4 (ModelOpt) as the target's kernels run it; BF16 matrices quantized to Q8 rows (drafts only propose)
-NhMat DSpark::mat(const std::string& name) {
-  const SafetensorsIndex& idx = *st_;
-  const SafetensorsIndex::Entry& t = idx.get(name);
-  const std::string base = name.size() > 7 && name.compare(name.size() - 7, 7, ".weight") == 0 ? name.substr(0, name.size() - 7) : name;
-  const SafetensorsIndex::Entry* sc = idx.find(base + ".weight_scale");
-  Gpu& g = Gpu::get();
-  NhMat m;
-  uint32_t N = 0, K = 0;
-  if (!nh_describe(t, sc, m.fmt, N, K) || (m.fmt != NhFmt::FP4 && m.fmt != NhFmt::BF16))
-    fatal("%s: tensor %s has a format the drafter does not run", path_.c_str(), name.c_str());
-  m.N = N;
-  m.K = K;
-  std::vector<uint8_t> raw(t.len);
-  idx.read(t, 0, raw.data(), t.len);
-  if (m.fmt == NhFmt::FP4) {
-    nh_row_bytes(m.fmt, m.K, m.q_row, m.s_row);
-    m.q = g.alloc(m.q_row * N, name.c_str(), false);
-    m.s = g.alloc(m.s_row * N, "scales", false);
-    nh_repack_rows(m.fmt, m.K, raw.data(), N, m.q.as<uint8_t>(), nullptr);
-    idx.read(*sc, 0, m.s.ptr(), m.s_row * N);
-    if (const SafetensorsIndex::Entry* s2 = idx.find(base + ".weight_scale_2")) idx.read(*s2, 0, &m.gs, 4);
-  } else {
-    if (m.K % 32) fatal("%s: %s cannot be quantized (K = %u)", path_.c_str(), name.c_str(), m.K);
-    m.fmt = NhFmt::Q8;
-    nh_row_bytes(m.fmt, m.K, m.q_row, m.s_row);
-    m.q = g.alloc(m.q_row * N, name.c_str(), false);
-    m.s = g.alloc(m.s_row * N, "scales", false);
-    std::vector<float> row(m.K);
-    const uint16_t* src = reinterpret_cast<const uint16_t*>(raw.data());
-    for (uint32_t r = 0; r < N; ++r) {
-      for (uint32_t i = 0; i < m.K; ++i) row[i] = bf16_to_f32(src[size_t(r) * m.K + i]);
-      nh_quant_q8(row.data(), m.K, m.q.as<uint8_t>() + size_t(r) * m.q_row, m.s.as<uint8_t>() + size_t(r) * m.s_row);
-    }
-  }
-  owned_.push_back(m.q);
-  owned_.push_back(m.s);
-  weight_bytes_ += m.q.size + m.s.size;
-  return m;
-}
+NhMat DSpark::mat(const std::string& name) { return nh_load_mat(*st_, path_, name, owned_, weight_bytes_); }
 
 NhMat DSpark::mat_cat(const std::vector<std::string>& names, std::vector<float>& gs, bool shared) {
   std::vector<NhMat> parts;
@@ -207,23 +160,7 @@ NhMat DSpark::rows(const NhMat& m, uint32_t r0, uint32_t n) {
   return v;
 }
 
-std::vector<float> DSpark::host(const std::string& name) {
-  const SafetensorsIndex::Entry& t = st_->get(name);
-  if (t.dtype != DType::BF16 && t.dtype != DType::F32) fatal("%s: %s is neither BF16 nor F32", path_.c_str(), name.c_str());
-  std::vector<uint8_t> raw(t.len);
-  st_->read(t, 0, raw.data(), t.len);
-  std::vector<float> v(size_t(t.numel()));
-  for (size_t i = 0; i < v.size(); ++i) {
-    if (t.dtype == DType::F32) {
-      memcpy(&v[i], raw.data() + 4 * i, 4);
-    } else {
-      uint16_t h;
-      memcpy(&h, raw.data() + 2 * i, 2);
-      v[i] = bf16_to_f32(h);
-    }
-  }
-  return v;
-}
+std::vector<float> DSpark::host(const std::string& name) { return nh_host_f32(*st_, path_, name); }
 
 Buffer DSpark::upload(const void* p, size_t bytes, const char* label) {
   Buffer b = Gpu::get().alloc(std::max<size_t>(bytes, 16), label, false);
@@ -242,7 +179,7 @@ DSpark::DSpark(NemotronH& target, const std::string& dir) : tg_(target), path_(d
   while (path_.size() > 1 && path_.back() == '/') path_.pop_back();
   const NhConfig& tc = tg_.config();
   if (!is_dspark(path_, tc.hidden)) fatal("%s is not a DSpark drafter for this model", dir.c_str());
-  const nlohmann::json j = read_json(path_ + "/config.json");
+  const nlohmann::json j = *json_file(path_ + "/config.json");
   const nlohmann::json& d = j["dflash_config"];
   H_ = j.value("hidden_size", 0);
   NL_ = j.value("num_hidden_layers", 0);
@@ -273,10 +210,10 @@ DSpark::DSpark(NemotronH& target, const std::string& dir) : tg_(target), path_(d
   if (const char* v = getenv("NI_DSPARK_K")) K_ = std::clamp(atoi(v), 1, kMaxCand);
   head_rows_ = tg_.vocab();
   if (const char* v = getenv("NI_DSPARK_HEAD"); v && atoi(v) > 0) head_rows_ = std::min(tg_.vocab(), atoi(v));
-  if (Gpu::get().apple10()) dyn_ratio_ = 0.3f;
+  if (matrix_units()) dyn_ratio_ = 0.3f;
   if (const char* v = getenv("NI_DSPARK_DYN")) dyn_ratio_ = float(atof(v));
   if (const char* v = getenv("NI_DSPARK_CHAIN")) chain_ = atoi(v) != 0;
-  xq8_ = Gpu::get().apple10();
+  xq8_ = matrix_units();
   if (const char* v = getenv("NI_DSPARK_XQ8")) xq8_ = atoi(v) != 0;
   if (H_ % 128) xq8_ = false;  // (nh_xq8_v8: K % 128 == 0; o's K, heads x 128, always is)
   if (const char* v = getenv("NI_DSPARK_DEPTH")) fixed_depth_ = std::clamp(atoi(v), 0, kB - 1);

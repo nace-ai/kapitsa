@@ -1,0 +1,181 @@
+=== q38-27b-kapitsa run 1 23:32:01 powermode            2 Now drawing from 'AC Power'
+
+===== q38-27b-kapitsa  [kapitsa] Kapitsa (DFlash2 drafter)  version 446165e
+[23:32:01] q38-27b-kapitsa: GPU lock held externally (by the caller, NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1); holders now: 33491 lockf -k -t 3000 /tmp/kapitsa-gpu.lock env NACE_GPU_LOCK_HELD=1 KAPITSA_BIN=<scratch>
+[23:32:01] q38-27b-kapitsa: starting <repo>/build/kapitsa serve --model ~/models/qwen3.8-27b-4bit-mtp --model-id qwen3.8-27b --dflash ~/models/drafters/Qwen3.8-27B-DFlash2 --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:32:10] q38-27b-kapitsa: ready after 8s (pid 33522, listener 33522)
+[23:32:14] q38-27b-kapitsa: cold start: ready 8.0s, first TTFT 1.1627515000000006s, repeat median 1.1405790830000004s
+[23:32:18] q38-27b-kapitsa:  warm-up prefill~2.9k+decode64: ok (3.99s)
+[23:32:19] q38-27b-kapitsa:  warm-up tools: ok (0.81s)
+[23:33:19] q38-27b-kapitsa: GPU not quiet after 60s (['Claude Helper[95214] 11%']); benchmarking anyway, contention will be flagged
+== q38-27b-kapitsa
+  decode T=0.6: 140.18 tok/s (e2e 136.71; 512 tok, finish=length, d4=0.9804)
+  decode T=0.6: 129.48 tok/s (e2e 127.77; 512 tok, finish=length, d4=0.9785)
+  decode T=0.6: 138.89 tok/s (e2e 138.04; 512 tok, finish=length, d4=0.8364)
+  decode T=0.6: 153.69 tok/s (e2e 151.28; 512 tok, finish=length, d4=0.8779)
+  decode T=0.6: 136.15 tok/s (e2e 133.96; 512 tok, finish=length, d4=0.6478)
+  decode median 138.89 (min 129.48, max 153.69) over 5/5 valid
+  decode T=0: median 144.21 (min 139.48, max 146.25) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 4.56s -> 907 tok/s, cold cached=0 | cached TTFT median 0.13s over 3 turns (cached [4197, 4254, 4297])
+  prefill 16000: 16286 tok (ref 16286), TTFT 17.16s -> 949 tok/s, cold cached=0 | cached TTFT median 0.13s over 3 turns (cached [16336, 16371, 16412])
+  sweep 1000: 1100.0 tok, TTFT 1.55s, 715 tok/s prefill, decode 80.80 tok/s
+  sweep 2000: 2129.0 tok, TTFT 2.32s, 916 tok/s prefill, decode 81.65 tok/s
+  sweep 4000: 4157.0 tok, TTFT 4.17s, 997 tok/s prefill, decode 78.31 tok/s
+  sweep 8000: 8305.5 tok, TTFT 8.30s, 1001 tok/s prefill, decode 83.06 tok/s
+  sweep 16000: 16311.0 tok, TTFT 16.59s, 983 tok/s prefill, decode 84.32 tok/s
+  sweep 30902: 31549.0 tok, TTFT 35.22s, 896 tok/s prefill, decode 69.86 tok/s
+  memory: phys_footprint_peak 21.40 GB, resident mapped files 0.01 GB, swap used 2780.25 MB
+  -> <scratch>/cells/runs/results/q38-27b-kapitsa-20261104-233201.json
+[23:37:23] q38-27b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:37:24] q38-27b-kapitsa: -> <scratch>/cells/runs/results/q38-27b-kapitsa-20261104-233201.json  flags: 1
+=== q38-27b-kapitsa run 2 23:37:24 powermode            2 Now drawing from 'AC Power'
+
+===== q38-27b-kapitsa  [kapitsa] Kapitsa (DFlash2 drafter)  version 446165e
+[23:37:24] q38-27b-kapitsa: GPU lock held externally (by the caller, NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1); holders now: 34994 lockf -k -t 3000 /tmp/kapitsa-gpu.lock env NACE_GPU_LOCK_HELD=1 KAPITSA_BIN=<scratch>
+[23:37:24] q38-27b-kapitsa: starting <repo>/build/kapitsa serve --model ~/models/qwen3.8-27b-4bit-mtp --model-id qwen3.8-27b --dflash ~/models/drafters/Qwen3.8-27B-DFlash2 --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:37:26] q38-27b-kapitsa: ready after 2s (pid 35025, listener 35025)
+[23:37:31] q38-27b-kapitsa: cold start: ready 2.0s, first TTFT 1.4186864590000003s, repeat median 1.1544380829999996s
+[23:37:35] q38-27b-kapitsa:  warm-up prefill~2.9k+decode64: ok (3.67s)
+[23:37:36] q38-27b-kapitsa:  warm-up tools: ok (0.88s)
+[23:38:36] q38-27b-kapitsa: GPU not quiet after 60s (['Claude Helper[95214] 11%']); benchmarking anyway, contention will be flagged
+== q38-27b-kapitsa
+  decode T=0.6: 144.29 tok/s (e2e 142.95; 512 tok, finish=length, d4=0.9081)
+  decode T=0.6: 141.68 tok/s (e2e 142.20; 512 tok, finish=length, d4=0.9075)
+  decode T=0.6: 154.10 tok/s (e2e 151.62; 512 tok, finish=length, d4=0.9257)
+  decode T=0.6: 130.37 tok/s (e2e 128.99; 512 tok, finish=length, d4=0.8519)
+  decode T=0.6: 156.50 tok/s (e2e 153.75; 512 tok, finish=length, d4=0.8372)
+  decode median 144.29 (min 130.37, max 156.5) over 5/5 valid
+  decode T=0: median 152.54 (min 150.78, max 154.3) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 3.74s -> 1106 tok/s, cold cached=0 | cached TTFT median 0.13s over 3 turns (cached [4203, 4248, 4291])
+  prefill 16000: 16284 tok (ref 16286), TTFT 15.79s -> 1032 tok/s, cold cached=0 | cached TTFT median 0.14s over 3 turns (cached [16334, 16367, 16410])
+  sweep 1000: 1104.0 tok, TTFT 1.49s, 747 tok/s prefill, decode 90.59 tok/s
+  sweep 2000: 2129.5 tok, TTFT 2.33s, 912 tok/s prefill, decode 90.19 tok/s
+  sweep 4000: 4158.5 tok, TTFT 4.20s, 990 tok/s prefill, decode 86.12 tok/s
+  sweep 8000: 8306.0 tok, TTFT 8.10s, 1025 tok/s prefill, decode 86.13 tok/s
+  sweep 16000: 16311.0 tok, TTFT 15.84s, 1029 tok/s prefill, decode 75.48 tok/s
+  sweep 30902: 31550.5 tok, TTFT 34.05s, 927 tok/s prefill, decode 69.82 tok/s
+  memory: phys_footprint_peak 21.42 GB, resident mapped files 0.01 GB, swap used 2780.25 MB
+  -> <scratch>/cells/runs/results/q38-27b-kapitsa-20261104-233724.json
+[23:42:30] q38-27b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[23:42:30] q38-27b-kapitsa: -> <scratch>/cells/runs/results/q38-27b-kapitsa-20261104-233724.json  flags: 1
+=== q38-27b-kapitsa run 3 23:42:30 powermode            2 Now drawing from 'AC Power'
+
+===== q38-27b-kapitsa  [kapitsa] Kapitsa (DFlash2 drafter)  version 446165e
+[23:42:30] q38-27b-kapitsa: GPU lock held externally (by the caller, NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1); holders now: 36505 lockf -k -t 3000 /tmp/kapitsa-gpu.lock env NACE_GPU_LOCK_HELD=1 KAPITSA_BIN=<scratch>
+[23:42:30] q38-27b-kapitsa: starting <repo>/build/kapitsa serve --model ~/models/qwen3.8-27b-4bit-mtp --model-id qwen3.8-27b --dflash ~/models/drafters/Qwen3.8-27B-DFlash2 --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:42:33] q38-27b-kapitsa: ready after 2s (pid 36536, listener 36536)
+[23:42:38] q38-27b-kapitsa: cold start: ready 2.0s, first TTFT 1.4018195420000001s, repeat median 1.1375270830000002s
+[23:42:41] q38-27b-kapitsa:  warm-up prefill~2.9k+decode64: ok (3.59s)
+[23:42:42] q38-27b-kapitsa:  warm-up tools: ok (0.85s)
+[23:43:42] q38-27b-kapitsa: GPU not quiet after 60s (['Claude Helper[95214] 9%']); benchmarking anyway, contention will be flagged
+== q38-27b-kapitsa
+  decode T=0.6: 161.31 tok/s (e2e 161.68; 512 tok, finish=length, d4=0.861)
+  decode T=0.6: 131.78 tok/s (e2e 132.83; 512 tok, finish=length, d4=0.9534)
+  decode T=0.6: 142.37 tok/s (e2e 143.00; 512 tok, finish=length, d4=0.9307)
+  decode T=0.6: 127.40 tok/s (e2e 127.80; 512 tok, finish=length, d4=0.9169)
+  decode T=0.6: 126.71 tok/s (e2e 126.39; 512 tok, finish=length, d4=0.9157)
+  decode median 131.78 (min 126.71, max 161.31) over 5/5 valid
+  decode T=0: median 147.05 (min 145.08, max 150.44) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 3.72s -> 1112 tok/s, cold cached=0 | cached TTFT median 0.13s over 3 turns (cached [4197, 4229, 4263])
+  prefill 16000: 16287 tok (ref 16286), TTFT 15.58s -> 1045 tok/s, cold cached=0 | cached TTFT median 0.14s over 3 turns (cached [16331, 16374, 16425])
+  sweep 1000: 1103.0 tok, TTFT 1.50s, 743 tok/s prefill, decode 94.21 tok/s
+  sweep 2000: 2129.0 tok, TTFT 2.32s, 918 tok/s prefill, decode 83.94 tok/s
+  sweep 4000: 4156.5 tok, TTFT 4.16s, 999 tok/s prefill, decode 80.01 tok/s
+  sweep 8000: 8307.5 tok, TTFT 7.88s, 1054 tok/s prefill, decode 80.72 tok/s
+  sweep 16000: 16309.0 tok, TTFT 15.70s, 1039 tok/s prefill, decode 78.29 tok/s
+  sweep 30902: 31549.0 tok, TTFT 33.40s, 945 tok/s prefill, decode 72.83 tok/s
+  memory: phys_footprint_peak 21.40 GB, resident mapped files 0.01 GB, swap used 2780.25 MB
+  -> <scratch>/cells/runs/results/q38-27b-kapitsa-20261104-234230.json
+[23:47:36] q38-27b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:47:36] q38-27b-kapitsa: -> <scratch>/cells/runs/results/q38-27b-kapitsa-20261104-234230.json  flags: 1
+=== q36-35b-kapitsa run 1 23:47:36 powermode            2 Now drawing from 'AC Power'
+
+===== q36-35b-kapitsa  [kapitsa] Kapitsa (DFlash2 drafter)  version 446165e
+[23:47:37] q36-35b-kapitsa: GPU lock held externally (by the caller, NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1); holders now: 38150 lockf -k -t 3000 /tmp/kapitsa-gpu.lock env NACE_GPU_LOCK_HELD=1 KAPITSA_BIN=<scratch>
+[23:47:37] q36-35b-kapitsa: starting <repo>/build/kapitsa serve --model ~/models/qwen3.6-35b-a3b-4bit --model-id qwen3.6-35b-a3b --dflash ~/models/drafters/Qwen3.6-35B-A3B-DFlash2 --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:47:39] q36-35b-kapitsa: ready after 2s (pid 38181, listener 38181)
+[23:47:40] q36-35b-kapitsa: cold start: ready 2.0s, first TTFT 0.2307096249999998s, repeat median 0.201788917s
+[23:47:40] q36-35b-kapitsa:  warm-up prefill~2.9k+decode64: ok (0.76s)
+[23:47:41] q36-35b-kapitsa:  warm-up tools: ok (0.25s)
+[23:48:41] q36-35b-kapitsa: GPU not quiet after 60s (['Claude Helper[95214] 10%']); benchmarking anyway, contention will be flagged
+== q36-35b-kapitsa
+  decode T=0.6: 344.61 tok/s (e2e 342.81; 512 tok, finish=length, d4=0.5479)
+  decode T=0.6: 368.04 tok/s (e2e 367.52; 512 tok, finish=length, d4=0.9282)
+  decode T=0.6: 336.21 tok/s (e2e 338.19; 512 tok, finish=length, d4=0.9693)
+  decode T=0.6: 353.54 tok/s (e2e 354.46; 512 tok, finish=length, d4=0.9825)
+  decode T=0.6: 352.73 tok/s (e2e 353.71; 512 tok, finish=length, d4=0.9673)
+  decode median 352.73 (min 336.21, max 368.04) over 5/5 valid
+  decode T=0: median 371.95 (min 358.64, max 382.74) over 5/5 valid
+  prefill 4000: 4135 tok (ref 4133), TTFT 0.63s -> 6558 tok/s, cold cached=0 | cached TTFT median 0.04s over 3 turns (cached [4174, 4209, 4250])
+  prefill 16000: 16287 tok (ref 16286), TTFT 2.88s -> 5656 tok/s, cold cached=0 | cached TTFT median 0.05s over 3 turns (cached [16330, 16370, 16421])
+  sweep 1000: 1103.0 tok, TTFT 0.22s, 5025 tok/s prefill, decode 264.24 tok/s
+  sweep 2000: 2131.5 tok, TTFT 0.35s, 6080 tok/s prefill, decode 281.60 tok/s
+  sweep 4000: 4158.0 tok, TTFT 0.64s, 6459 tok/s prefill, decode 272.91 tok/s
+  sweep 8000: 8305.0 tok, TTFT 1.39s, 5970 tok/s prefill, decode 263.75 tok/s
+  sweep 16000: 16311.0 tok, TTFT 3.04s, 5363 tok/s prefill, decode 240.37 tok/s
+  sweep 30902: 31550.5 tok, TTFT 7.25s, 4351 tok/s prefill, decode 205.22 tok/s
+  memory: phys_footprint_peak 22.92 GB, resident mapped files 0.01 GB, swap used 2780.25 MB
+  -> <scratch>/cells/runs/results/q36-35b-kapitsa-20261104-234736.json
+[23:49:48] q36-35b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:49:48] q36-35b-kapitsa: -> <scratch>/cells/runs/results/q36-35b-kapitsa-20261104-234736.json  flags: 1
+=== q36-35b-kapitsa run 2 23:49:48 powermode            2 Now drawing from 'AC Power'
+
+===== q36-35b-kapitsa  [kapitsa] Kapitsa (DFlash2 drafter)  version 446165e
+[23:49:48] q36-35b-kapitsa: GPU lock held externally (by the caller, NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1); holders now: 38813 lockf -k -t 3000 /tmp/kapitsa-gpu.lock env NACE_GPU_LOCK_HELD=1 KAPITSA_BIN=<scratch>
+[23:49:49] q36-35b-kapitsa: starting <repo>/build/kapitsa serve --model ~/models/qwen3.6-35b-a3b-4bit --model-id qwen3.6-35b-a3b --dflash ~/models/drafters/Qwen3.6-35B-A3B-DFlash2 --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:49:51] q36-35b-kapitsa: ready after 2s (pid 38844, listener 38844)
+[23:49:52] q36-35b-kapitsa: cold start: ready 2.0s, first TTFT 0.23021729199999985s, repeat median 0.202516916s
+[23:49:52] q36-35b-kapitsa:  warm-up prefill~2.9k+decode64: ok (0.71s)
+[23:49:53] q36-35b-kapitsa:  warm-up tools: ok (0.23s)
+[23:50:53] q36-35b-kapitsa: GPU not quiet after 60s (['Claude Helper[95214] 10%']); benchmarking anyway, contention will be flagged
+== q36-35b-kapitsa
+  decode T=0.6: 358.59 tok/s (e2e 357.04; 512 tok, finish=length, d4=0.9743)
+  decode T=0.6: 333.55 tok/s (e2e 335.17; 512 tok, finish=length, d4=0.7153)
+  decode T=0.6: 347.30 tok/s (e2e 342.60; 512 tok, finish=length, d4=0.9865)
+  decode T=0.6: 351.03 tok/s (e2e 350.47; 512 tok, finish=length, d4=0.7113)
+  decode T=0.6: 325.29 tok/s (e2e 329.89; 512 tok, finish=length, d4=0.7002)
+  decode median 347.3 (min 325.29, max 358.59) over 5/5 valid
+  decode T=0: median 358.33 (min 355.98, max 388.85) over 5/5 valid
+  prefill 4000: 4130 tok (ref 4133), TTFT 0.63s -> 6565 tok/s, cold cached=0 | cached TTFT median 0.04s over 3 turns (cached [4163, 4208, 4251])
+  prefill 16000: 16285 tok (ref 16286), TTFT 2.88s -> 5657 tok/s, cold cached=0 | cached TTFT median 0.05s over 3 turns (cached [16326, 16360, 16401])
+  sweep 1000: 1101.0 tok, TTFT 0.22s, 5015 tok/s prefill, decode 293.97 tok/s
+  sweep 2000: 2127.5 tok, TTFT 0.35s, 6086 tok/s prefill, decode 275.78 tok/s
+  sweep 4000: 4158.0 tok, TTFT 0.64s, 6468 tok/s prefill, decode 262.37 tok/s
+  sweep 8000: 8307.5 tok, TTFT 1.40s, 5947 tok/s prefill, decode 256.10 tok/s
+  sweep 16000: 16311.0 tok, TTFT 3.13s, 5218 tok/s prefill, decode 214.55 tok/s
+  sweep 30902: 31550.5 tok, TTFT 7.87s, 4010 tok/s prefill, decode 194.97 tok/s
+  memory: phys_footprint_peak 22.93 GB, resident mapped files 0.01 GB, swap used 2780.25 MB
+  -> <scratch>/cells/runs/results/q36-35b-kapitsa-20261104-234948.json
+[23:52:02] q36-35b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[23:52:02] q36-35b-kapitsa: -> <scratch>/cells/runs/results/q36-35b-kapitsa-20261104-234948.json  flags: 1
+=== q36-35b-kapitsa run 3 23:52:02 powermode            2 Now drawing from 'AC Power'
+
+===== q36-35b-kapitsa  [kapitsa] Kapitsa (DFlash2 drafter)  version 446165e
+[23:52:02] q36-35b-kapitsa: GPU lock held externally (by the caller, NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1); holders now: 39465 lockf -k -t 3000 /tmp/kapitsa-gpu.lock env NACE_GPU_LOCK_HELD=1 KAPITSA_BIN=<scratch>
+[23:52:02] q36-35b-kapitsa: starting <repo>/build/kapitsa serve --model ~/models/qwen3.6-35b-a3b-4bit --model-id qwen3.6-35b-a3b --dflash ~/models/drafters/Qwen3.6-35B-A3B-DFlash2 --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:52:05] q36-35b-kapitsa: ready after 2s (pid 39497, listener 39497)
+[23:52:05] q36-35b-kapitsa: cold start: ready 2.0s, first TTFT 0.23072533399999973s, repeat median 0.20263391599999991s
+[23:52:06] q36-35b-kapitsa:  warm-up prefill~2.9k+decode64: ok (0.71s)
+[23:52:06] q36-35b-kapitsa:  warm-up tools: ok (0.23s)
+[23:53:07] q36-35b-kapitsa: GPU not quiet after 60s (['Claude Helper[95214] 10%']); benchmarking anyway, contention will be flagged
+== q36-35b-kapitsa
+  decode T=0.6: 309.37 tok/s (e2e 308.29; 512 tok, finish=length, d4=0.7033)
+  decode T=0.6: 356.36 tok/s (e2e 353.69; 512 tok, finish=length, d4=0.544)
+  decode T=0.6: 373.22 tok/s (e2e 373.60; 512 tok, finish=length, d4=0.7171)
+  decode T=0.6: 365.86 tok/s (e2e 366.27; 512 tok, finish=length, d4=0.9741)
+  decode T=0.6: 369.41 tok/s (e2e 370.18; 512 tok, finish=length, d4=0.5668)
+  decode median 365.86 (min 309.37, max 373.22) over 5/5 valid
+  decode T=0: median 372.81 (min 371.56, max 383.02) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 0.63s -> 6554 tok/s, cold cached=0 | cached TTFT median 0.04s over 3 turns (cached [4171, 4216, 4257])
+  prefill 16000: 16287 tok (ref 16286), TTFT 2.88s -> 5661 tok/s, cold cached=0 | cached TTFT median 0.05s over 3 turns (cached [16330, 16362, 16403])
+  sweep 1000: 1102.0 tok, TTFT 0.22s, 5004 tok/s prefill, decode 278.71 tok/s
+  sweep 2000: 2130.0 tok, TTFT 0.45s, 4987 tok/s prefill, decode 296.70 tok/s
+  sweep 4000: 4156.5 tok, TTFT 0.64s, 6447 tok/s prefill, decode 254.03 tok/s
+  sweep 8000: 8306.5 tok, TTFT 1.39s, 5979 tok/s prefill, decode 236.63 tok/s
+  sweep 16000: 16310.0 tok, TTFT 3.07s, 5317 tok/s prefill, decode 236.92 tok/s
+  sweep 30902: 31549.0 tok, TTFT 7.53s, 4190 tok/s prefill, decode 218.19 tok/s
+  memory: phys_footprint_peak 22.92 GB, resident mapped files 0.01 GB, swap used 2780.25 MB
+  -> <scratch>/cells/runs/results/q36-35b-kapitsa-20261104-235202.json
+[23:54:15] q36-35b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:54:15] q36-35b-kapitsa: -> <scratch>/cells/runs/results/q36-35b-kapitsa-20261104-235202.json  flags: 1
+done

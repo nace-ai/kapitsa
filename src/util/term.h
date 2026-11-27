@@ -81,6 +81,9 @@ void end_status();
 // The handlers that take the status block off the screen and show the cursor when a signal ends the process: put in
 // with the first status block, or before it by code whose own handlers pass the signal on to them
 void guard_signals();
+// Before an exit that skips the status block's own end (a stop, _exit): the block off the screen, the cursor back.
+// write() only, so a signal handler or the stop thread may call it.
+void clear_for_exit();
 
 // A spinner on the status line: "⠹ <label>  <seconds>  <detail>" until done()
 class Spinner {

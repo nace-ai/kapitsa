@@ -1,0 +1,20 @@
+[kapitsa] read 19.51 GB of weights in 1479 ms (13.2 GB/s)
+[kapitsa] read 0.58 GB of weights in 84 ms (6.9 GB/s)
+[kapitsa] MTP head loaded in 77 ms (MoE, trunk hidden pre-norm, drafts over ids < 32768 + specials)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] prewarmed 96 prefill pipelines in 12 ms
+[kapitsa] loaded ~/models/qwen3.6-35b-a3b-4bit: 40 layers, MoE, 19.5 GB mapped in 1779 ms; weights 4-bit group 64 100%, 8-bit group 64 0%
+[kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] compiled the tensor kernels in 2 ms
+[kapitsa] NI_MOE_QTM: routed expert GEMMs on tensor_ops (qmtm_gu_m64_n64, qmtm_dn_m64_n64, 64-row tiles)
+[kapitsa] NI_QMT6: 6-bit g64 dense prefill GEMMs on tensor_ops (qmt6_m64_n64), M >= 64
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+prefill rep 0: 4096 tok in 699.53 ms (GPU 682.58 ms)
+prefill rep 1: 4096 tok in 674.82 ms (GPU 673.46 ms)
+prefill rep 2: 4096 tok in 675.00 ms (GPU 673.65 ms)
+mean GPU time per step: 4.84 ms (4 steps)
+prompt 4096 tok in 675 ms (6067.8 tok/s); decode 6 tok in 33 ms (179.8 tok/s)
+ids: 248046 198 248045 846 248046 198 248045

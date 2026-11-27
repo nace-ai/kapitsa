@@ -1,0 +1,47 @@
+Started erase on disk5
+Unmounting disk
+Erasing
+Initialized /dev/rdisk5 as a 14 GB case-insensitive HFS Plus volume
+Mounting disk
+Finished erase on disk5 (KapitsaCancel133912)
+   Device Identifier:         disk5
+   Device Node:               /dev/disk5
+   Whole:                     Yes
+   Part of Whole:             disk5
+   Device / Media Name:       Disk Image
+
+   Volume Name:               KapitsaCancel133912
+   Mounted:                   Yes
+   Mount Point:               /Volumes/KapitsaCancel133912
+
+   Content (IOContent):       None
+   File System Personality:   HFS+
+   Type (Bundle):             hfs
+   Name (User Visible):       Mac OS Extended
+   Owners:                    Disabled
+
+   OS Can Be Installed:       No
+   Media Type:                通用
+   Protocol:                  Disk Image
+   SMART Status:              Not Supported
+   Volume UUID:               908A6252-1C0A-3BA1-B53F-4EF6958C4504
+
+   Disk Size:                 15.0 GB (15032385536 Bytes) (exactly 29360128 512-Byte-Units)
+   Device Block Size:         512 Bytes
+
+   Volume Total Space:        15.0 GB (15032385536 Bytes) (exactly 29360128 512-Byte-Units)
+   Volume Used Space:         28.8 MB (28782592 Bytes) (exactly 56216 512-Byte-Units) (0.2%)
+   Volume Free Space:         15.0 GB (15003602944 Bytes) (exactly 29303912 512-Byte-Units) (99.8%)
+   Allocation Block Size:     4096 Bytes
+
+   Media OS Use Only:         No
+   Media Read-Only:           No
+   Volume Read-Only:          No
+
+   Device Location:           External
+   Removable Media:           Removable
+   Media Removal:             Software-Activated
+
+   Solid State:               Info not available
+   Virtual:                   Yes
+

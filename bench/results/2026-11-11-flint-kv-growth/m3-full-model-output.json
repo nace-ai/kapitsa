@@ -1,0 +1,264 @@
+{
+  "provenance": "Redacted derivative of private execution records. File names are relative and command examples use placeholders. All timing samples, flags and invalid results are retained in their respective evidence files.",
+  "hardware": {
+    "chip": "Apple M3 Ultra",
+    "gpu_cores": 60,
+    "memory_gib": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)"
+  },
+  "source_and_binary_identity": {
+    "A": {
+      "head": "4a8265d1aa656e8e523c10c23d5dd4cd0b82c532",
+      "flint_cpp_sha256": "7838d290383347db82ca5c5f1589fdd79f89072555a0437d3f18b8a1d9fd5823",
+      "growth_driver_sha256": "08378f293b5f0ad66c8afa9b11951dc4b248543130bebad0f7992146f0806638",
+      "binary_sha256": {
+        "kapitsa": "b7fa28b379236a88d4e4c7275c83d474f1e73f849475ba6792c11903322070f1",
+        "logit_dump": "d5191b296f821dc70bc82b5a89ec35725f96f776f5e64d7c80b36237e0649157",
+        "flint_kv_growth_check": "7a707590cfb91587b1245800b75a879bee16f0055f6692e0ffbf658d1a234ad4"
+      },
+      "growth_binary_sha256": "5b7aca96a032257992fcdf24f8b6314e61b79bd1c6894db4139b9e84300894f4"
+    },
+    "B": {
+      "head": "ae599dd1342b7d699f62e0a5dadb06a2ecb91d30",
+      "flint_cpp_sha256": "1c4c34eafd01ceafa2cccc8dc0864a16c648ad6f47fd354cae8262357228896a",
+      "growth_driver_sha256": "08378f293b5f0ad66c8afa9b11951dc4b248543130bebad0f7992146f0806638",
+      "binary_sha256": {
+        "kapitsa": "c58decec7e9641a7816b39af8e41f55d96b5539d34d1224f8ffd2b33e78686cb",
+        "logit_dump": "757cbb33c01216f8d3fe45e95bc0bc1cd29a8ace1bac3691a6953fa795046ced",
+        "flint_kv_growth_check": "2cb081706dbe8fece84ec19bd8ae28e38cbad1a2db1a7fd45be1abcac2df5268"
+      },
+      "growth_binary_sha256": "c94356114b87c0431637bf327fc5da1745aed25d543d80e476cb0357dfdbc8a5"
+    }
+  },
+  "started_at": "2026-11-11T03:03:28.604819+00:00",
+  "finished_at": "2026-11-11T04:23:29.547160+00:00",
+  "gpu_lock": "All GPU work held the exclusive lock with NI_LOCK_HELD=1 and NACE_GPU_LOCK_HELD=1.",
+  "configuration": {
+    "build": "Explicit Release CMake configuration per source commit",
+    "model": "unsloth/flint-GGUF, flint-UD-IQ2_XXS",
+    "model_files": {
+      ".kapitsa/manifest.json": {
+        "bytes": 1461,
+        "sha256": "7efec7c0f5b7070ab1ff535eeb3f639f52f1c6c5ec92afba873b54a7111a6ed9"
+      },
+      "config.json": {
+        "bytes": 37187,
+        "sha256": "14fb7887edfbbf3a5a9ccdde550e8a774887837485c25acfc1c1d4b52e9c2cd4"
+      },
+      "experts.safetensors": {
+        "bytes": 10563372336,
+        "sha256": "13ebe03fb1dba49079010e5723fa4e539414958aab1760c458e4cf2412789c90"
+      },
+      "generation_config.json": {
+        "bytes": 129,
+        "sha256": "745132f7a56e9ff429f4bf4409a588d28a89942a3efe390710d064ceef89de46"
+      },
+      "model.safetensors": {
+        "bytes": 1163262656,
+        "sha256": "431fda6a6f44233053e31fecc74aa050219ed1f03d3cbbc4b35fa19c909341ba"
+      },
+      "model.safetensors.index.json": {
+        "bytes": 105174,
+        "sha256": "003bb87e318dd21a6555bcb0053b8fd926a3337d81319c9d5ef7d469ee5079dc"
+      },
+      "tokenizer.json": {
+        "bytes": 4278400,
+        "sha256": "cbc69b4fd04328e2c637b28fed83af5afe4b9f3c4cecd03559c257351ff53f60"
+      },
+      "tokenizer_config.json": {
+        "bytes": 20882,
+        "sha256": "d5b94880b30e4fa7df11b2b84d91941f3f40130bcc73d3045ad7b9f5c0b6782e"
+      }
+    },
+    "gguf_sha256": "c1fa4a6d5ec67fbeff460c68829984e4aa3eea95dc9d2067691f19e5406deeee",
+    "import": "The first import stopped at the destination reserve check. One subsequent import with the reference binary completed. Both M3 arms read that import.",
+    "model_imports_completed": 1
+  },
+  "method": {
+    "command_examples": "Placeholder examples, not literal original commands",
+    "dump": "$BUILD/logit_dump \"$MODEL\" \"$OUT\" --paths step,verify",
+    "compare": "python3 tools/logit_compare.py \"$REF_OUT\" \"$CAND_OUT\" --min-top1 1 --max-mean-kl 0 --max-median-kl 0 --max-p99-kl 0 --max-far-flips 0 --max-nll-change 0",
+    "scope": "8 prefill + 192 teacher-forced step + 192 teacher-forced verify rows per arm; not free speculative decoding. Exact-byte checks separately cover logits, records and input sequences."
+  },
+  "comparison": {
+    "paths": {
+      "prefill": {
+        "records": 8,
+        "bitwise": 8,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": "flags"
+        },
+        "reference": {
+          "build": "0.2.34 (4a8265d1aa656e8e523c10c23d5dd4cd0b82c532)",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "records": 8,
+          "vocab": 150144,
+          "source": "bench/corpus.txt"
+        },
+        "candidate": {
+          "build": "0.2.34 (ae599dd1342b7d699f62e0a5dadb06a2ecb91d30)",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "records": 8,
+          "vocab": 150144,
+          "source": "bench/corpus.txt"
+        }
+      },
+      "step": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        },
+        "reference": {
+          "build": "0.2.34 (4a8265d1aa656e8e523c10c23d5dd4cd0b82c532)",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "records": 192,
+          "vocab": 150144,
+          "source": "bench/corpus.txt"
+        },
+        "candidate": {
+          "build": "0.2.34 (ae599dd1342b7d699f62e0a5dadb06a2ecb91d30)",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "records": 192,
+          "vocab": 150144,
+          "source": "bench/corpus.txt"
+        }
+      },
+      "verify": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        },
+        "reference": {
+          "build": "0.2.34 (4a8265d1aa656e8e523c10c23d5dd4cd0b82c532)",
+          "path": "verify",
+          "prefill_chunk": 2048,
+          "records": 192,
+          "vocab": 150144,
+          "source": "bench/corpus.txt"
+        },
+        "candidate": {
+          "build": "0.2.34 (ae599dd1342b7d699f62e0a5dadb06a2ecb91d30)",
+          "path": "verify",
+          "prefill_chunk": 2048,
+          "records": 192,
+          "vocab": 150144,
+          "source": "bench/corpus.txt"
+        }
+      }
+    }
+  },
+  "complete_file_byte_comparisons": {
+    "prefill/logits.f32": {
+      "bytes": 4804608,
+      "equal": true,
+      "reference_sha256": "89944da6596471ef3365a8b8084d8d88df4cd82bb3777c31426e58d0d161f978",
+      "candidate_sha256": "89944da6596471ef3365a8b8084d8d88df4cd82bb3777c31426e58d0d161f978"
+    },
+    "prefill/records.txt": {
+      "bytes": 54,
+      "equal": true,
+      "reference_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+      "candidate_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d"
+    },
+    "prefill/sequences.txt": {
+      "bytes": 71888,
+      "equal": true,
+      "reference_sha256": "535facf83d02bc81ab809508d3bb9ab26047acf335fd010a745e7d6afd55c2fa",
+      "candidate_sha256": "535facf83d02bc81ab809508d3bb9ab26047acf335fd010a745e7d6afd55c2fa"
+    },
+    "step/logits.f32": {
+      "bytes": 115310592,
+      "equal": true,
+      "reference_sha256": "929c6fadff54f0fe6f50082495883e003f4eb4767713724dc1a2919b095e8a1a",
+      "candidate_sha256": "929c6fadff54f0fe6f50082495883e003f4eb4767713724dc1a2919b095e8a1a"
+    },
+    "step/records.txt": {
+      "bytes": 1296,
+      "equal": true,
+      "reference_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+      "candidate_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc"
+    },
+    "step/sequences.txt": {
+      "bytes": 71888,
+      "equal": true,
+      "reference_sha256": "535facf83d02bc81ab809508d3bb9ab26047acf335fd010a745e7d6afd55c2fa",
+      "candidate_sha256": "535facf83d02bc81ab809508d3bb9ab26047acf335fd010a745e7d6afd55c2fa"
+    },
+    "verify/logits.f32": {
+      "bytes": 115310592,
+      "equal": true,
+      "reference_sha256": "65bc84c64d53160d8ecf3b21189f371e976c50919b21c5ada34054929c85f561",
+      "candidate_sha256": "65bc84c64d53160d8ecf3b21189f371e976c50919b21c5ada34054929c85f561"
+    },
+    "verify/records.txt": {
+      "bytes": 1296,
+      "equal": true,
+      "reference_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+      "candidate_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc"
+    },
+    "verify/sequences.txt": {
+      "bytes": 71888,
+      "equal": true,
+      "reference_sha256": "535facf83d02bc81ab809508d3bb9ab26047acf335fd010a745e7d6afd55c2fa",
+      "candidate_sha256": "535facf83d02bc81ab809508d3bb9ab26047acf335fd010a745e7d6afd55c2fa"
+    }
+  }
+}

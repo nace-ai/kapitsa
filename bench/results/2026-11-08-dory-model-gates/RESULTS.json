@@ -1,0 +1,962 @@
+{
+  "source": "b3bece8931c78885e682bfb8da771598d721093a",
+  "base": "bbd84e0d53be75866087aa615bdeb6f2411f393f",
+  "environment": {
+    "chip": "Apple M3 Ultra",
+    "gpu_cores": 60,
+    "ram_gib": 96,
+    "macos": "26.4.1 (25E253)",
+    "build": "Release -O3"
+  },
+  "runs": [
+    {
+      "name": "dory-logits-reference",
+      "command": [
+        "/Users/bytedance/kapitsa-two-candidates-20261107/reference/build/logit_dump",
+        "/Volumes/KapitsaDoryProbe/nemotron-labs-dory1.0-4b-nvfp4",
+        "/Volumes/KapitsaDoryProbe/two-candidate-source-logits/dory-reference",
+        "--paths",
+        "step,verify",
+        "--corpus",
+        "/Users/bytedance/kapitsa-two-candidates-20261107/reference/bench/corpus.txt",
+        "--loop-kv",
+        "per-loop"
+      ],
+      "quiet": [
+        true,
+        21.258496046066284,
+        []
+      ],
+      "rc": 0,
+      "contention": {
+        "samples": 34,
+        "mean_foreign_gpu_pct": 0.0,
+        "max_foreign_gpu_pct": 0,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 0,
+        "longest_busy_run": 0,
+        "top": [],
+        "flagged": false
+      },
+      "samples": [
+        [
+          1794068362.551,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068363.101,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068363.648,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068364.196,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068364.743,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068365.29,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068365.837,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068366.384,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068366.931,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068367.478,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068368.026,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068368.571,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068369.115,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068369.66,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068370.204,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068370.749,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068371.294,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068371.84,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068372.384,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068372.93,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068373.476,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068374.021,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068374.566,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068375.112,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068375.66,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068376.207,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068376.753,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068377.298,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068377.844,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068378.391,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068378.935,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068379.479,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068380.025,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068380.571,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "name": "dory-logits-dory",
+      "command": [
+        "/Users/bytedance/kapitsa-two-candidates-20261107/dory/build/logit_dump",
+        "/Volumes/KapitsaDoryProbe/nemotron-labs-dory1.0-4b-nvfp4",
+        "/Volumes/KapitsaDoryProbe/two-candidate-source-logits/dory-dory",
+        "--paths",
+        "step,verify",
+        "--corpus",
+        "/Users/bytedance/kapitsa-two-candidates-20261107/reference/bench/corpus.txt",
+        "--loop-kv",
+        "per-loop",
+        "--from",
+        "/Volumes/KapitsaDoryProbe/two-candidate-source-logits/dory-reference"
+      ],
+      "quiet": [
+        true,
+        19.080969095230103,
+        []
+      ],
+      "rc": 0,
+      "contention": {
+        "samples": 26,
+        "mean_foreign_gpu_pct": 0.33,
+        "max_foreign_gpu_pct": 4.74,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 0,
+        "longest_busy_run": 0,
+        "top": [],
+        "flagged": false
+      },
+      "samples": [
+        [
+          1794068400.291,
+          1.96,
+          "loginwindow",
+          1.96,
+          0.0
+        ],
+        [
+          1794068400.839,
+          4.74,
+          "loginwindow",
+          4.74,
+          0.0
+        ],
+        [
+          1794068401.389,
+          1.96,
+          "loginwindow",
+          1.96,
+          0.0
+        ],
+        [
+          1794068401.938,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068402.484,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068403.03,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068403.576,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068404.123,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068404.67,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068405.213,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068405.759,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068406.304,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068406.848,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068407.395,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068407.94,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068408.485,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068409.03,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068409.576,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068410.122,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068410.668,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068411.215,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068411.761,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068412.308,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068412.852,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068413.397,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068413.945,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "name": "dory-logit-compare",
+      "command": [
+        "python3",
+        "/Users/bytedance/kapitsa-two-candidates-20261107/reference/tools/logit_compare.py",
+        "/Volumes/KapitsaDoryProbe/two-candidate-source-logits/dory-reference",
+        "/Volumes/KapitsaDoryProbe/two-candidate-source-logits/dory-dory"
+      ],
+      "rc": 0
+    },
+    {
+      "name": "dory-decode-0-reference",
+      "command": [
+        "/Users/bytedance/kapitsa-two-candidates-20261107/model-checks/build/reference_run",
+        "/Volumes/KapitsaDoryProbe/nemotron-labs-dory1.0-4b-nvfp4",
+        "@/Users/bytedance/kapitsa-two-candidates-20261107/model-checks/prompt-clean.ids",
+        "256"
+      ],
+      "quiet": [
+        true,
+        19.073472023010254,
+        []
+      ],
+      "rc": 0,
+      "contention": {
+        "samples": 13,
+        "mean_foreign_gpu_pct": 0.0,
+        "max_foreign_gpu_pct": 0,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 0,
+        "longest_busy_run": 0,
+        "top": [],
+        "flagged": false
+      },
+      "samples": [
+        [
+          1794068553.597,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068554.146,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068554.693,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068555.247,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068555.797,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068556.344,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068556.888,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068557.433,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068557.979,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068558.524,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068559.07,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068559.618,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068560.166,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "name": "dory-decode-1-dory",
+      "command": [
+        "/Users/bytedance/kapitsa-two-candidates-20261107/model-checks/build/dory_run",
+        "/Volumes/KapitsaDoryProbe/nemotron-labs-dory1.0-4b-nvfp4",
+        "@/Users/bytedance/kapitsa-two-candidates-20261107/model-checks/prompt-clean.ids",
+        "256"
+      ],
+      "quiet": [
+        true,
+        19.084091901779175,
+        []
+      ],
+      "rc": 0,
+      "contention": {
+        "samples": 10,
+        "mean_foreign_gpu_pct": 0.54,
+        "max_foreign_gpu_pct": 3.61,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 0,
+        "longest_busy_run": 0,
+        "top": [],
+        "flagged": false
+      },
+      "samples": [
+        [
+          1794068580.744,
+          3.61,
+          "loginwindow",
+          3.61,
+          0.0
+        ],
+        [
+          1794068581.306,
+          1.0,
+          "loginwindow",
+          1.0,
+          0.0
+        ],
+        [
+          1794068581.858,
+          0.78,
+          "loginwindow",
+          0.78,
+          0.0
+        ],
+        [
+          1794068582.404,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068582.951,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068583.496,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068584.049,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068584.6,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068585.148,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068585.694,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "name": "dory-decode-2-reference",
+      "command": [
+        "/Users/bytedance/kapitsa-two-candidates-20261107/model-checks/build/reference_run",
+        "/Volumes/KapitsaDoryProbe/nemotron-labs-dory1.0-4b-nvfp4",
+        "@/Users/bytedance/kapitsa-two-candidates-20261107/model-checks/prompt-clean.ids",
+        "256"
+      ],
+      "quiet": [
+        true,
+        19.001923084259033,
+        []
+      ],
+      "rc": 0,
+      "contention": {
+        "samples": 9,
+        "mean_foreign_gpu_pct": 0.0,
+        "max_foreign_gpu_pct": 0,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 0,
+        "longest_busy_run": 0,
+        "top": [],
+        "flagged": false
+      },
+      "samples": [
+        [
+          1794068605.927,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068606.472,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068607.018,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068607.563,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068608.11,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068608.657,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068609.204,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068609.752,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068610.298,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "name": "dory-decode-3-dory",
+      "command": [
+        "/Users/bytedance/kapitsa-two-candidates-20261107/model-checks/build/dory_run",
+        "/Volumes/KapitsaDoryProbe/nemotron-labs-dory1.0-4b-nvfp4",
+        "@/Users/bytedance/kapitsa-two-candidates-20261107/model-checks/prompt-clean.ids",
+        "256"
+      ],
+      "quiet": [
+        true,
+        19.055789947509766,
+        []
+      ],
+      "rc": 0,
+      "contention": {
+        "samples": 9,
+        "mean_foreign_gpu_pct": 0.0,
+        "max_foreign_gpu_pct": 0,
+        "mean_ambient_gpu_pct": 0.0,
+        "busy_samples": 0,
+        "longest_busy_run": 0,
+        "top": [],
+        "flagged": false
+      },
+      "samples": [
+        [
+          1794068630.572,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068631.12,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068631.665,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068632.212,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068632.76,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068633.305,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068633.851,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068634.399,
+          0,
+          "-",
+          0.0,
+          0.0
+        ],
+        [
+          1794068634.946,
+          0,
+          "-",
+          0.0,
+          0.0
+        ]
+      ]
+    }
+  ],
+  "raw_dumps_sha256": {},
+  "binary_sha256": {
+    "reference/kapitsa": "0a86259afc425f712a72e1ca2b1efdd5c8e5c1d1e405f76baa908f777cb2553b",
+    "reference/logit_dump": "fc983d05bd55d056281a7d9d484f1e71f184a8a458f36226616e28c7d4c40246",
+    "dory/kapitsa": "df1d01d8dfd3a9c6b47e11417b2c2eabf9627cd22d730010e05382384b3b5ac4",
+    "dory/logit_dump": "08e5aefa072f242c26f61842e3b4ac35acf508d8fadb86969adf8fbfee4c9505"
+  },
+  "completed_at": "2026-11-07T16:23:55.551405+00:00",
+  "logit_report": "prefill: 8 records (nemotron-labs-dory1.0-4b-nvfp4)\n  reference: 0.2.31 (bbd84e0), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  candidate: 0.2.31 (b3bece89), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  every row bitwise identical\nstep: 192 records (nemotron-labs-dory1.0-4b-nvfp4)\n  reference: 0.2.31 (bbd84e0), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  candidate: 0.2.31 (b3bece89), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  every row bitwise identical\n  PASS (tools/logit_floors/nemotron-labs-dory1.0-4b-nvfp4.json: the decode passes' gate (the prefill rows are bitwise the same))\nverify: 192 records (nemotron-labs-dory1.0-4b-nvfp4)\n  reference: 0.2.31 (bbd84e0), verify \"8 rows\", prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  candidate: 0.2.31 (b3bece89), verify \"8 rows\", prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  every row bitwise identical\n  PASS (tools/logit_floors/nemotron-labs-dory1.0-4b-nvfp4.json: the decode passes' gate (the prefill rows are bitwise the same))\n",
+  "cpu": {
+    "vk_passed": 21,
+    "vk_failed": 0,
+    "supplemental_passed": 19
+  },
+  "continuations": [
+    {
+      "name": "dory-decode-0-reference",
+      "count": 256,
+      "nonempty": true,
+      "end_tokens": 0,
+      "ids_sha256": "f3a6bcc97edcce75f8fbfcd9b072ed620a7c0f648e1be5eea7e6dda79bb417a6",
+      "timing": [
+        "prompt 3291 tok in 2286.301 ms; decode 255 tok in 2806.234 ms (90.869099 tok/s); GPU 2680.280 ms"
+      ]
+    },
+    {
+      "name": "dory-decode-1-dory",
+      "count": 256,
+      "nonempty": true,
+      "end_tokens": 0,
+      "ids_sha256": "f3a6bcc97edcce75f8fbfcd9b072ed620a7c0f648e1be5eea7e6dda79bb417a6",
+      "timing": [
+        "prompt 3291 tok in 2291.909 ms; decode 255 tok in 2752.343 ms (92.648324 tok/s); GPU 2621.255 ms"
+      ]
+    },
+    {
+      "name": "dory-decode-2-reference",
+      "count": 256,
+      "nonempty": true,
+      "end_tokens": 0,
+      "ids_sha256": "f3a6bcc97edcce75f8fbfcd9b072ed620a7c0f648e1be5eea7e6dda79bb417a6",
+      "timing": [
+        "prompt 3291 tok in 2286.450 ms; decode 255 tok in 2800.301 ms (91.061625 tok/s); GPU 2667.685 ms"
+      ]
+    },
+    {
+      "name": "dory-decode-3-dory",
+      "count": 256,
+      "nonempty": true,
+      "end_tokens": 0,
+      "ids_sha256": "f3a6bcc97edcce75f8fbfcd9b072ed620a7c0f648e1be5eea7e6dda79bb417a6",
+      "timing": [
+        "prompt 3291 tok in 2287.341 ms; decode 255 tok in 2751.046 ms (92.692022 tok/s); GPU 2617.748 ms"
+      ]
+    }
+  ],
+  "continuation_ids_equal": true,
+  "model_weights_sha256": "ca08dec5d70b653c03e57903dd33725ec8cc80133c53a1bd9c83f99dd03f3e46"
+}

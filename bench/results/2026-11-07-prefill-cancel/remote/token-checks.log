@@ -1,0 +1,5 @@
+built: parser_test structured_check grammar_test (log: /Users/bytedance/kapitsa-cancel-checkpoint-20261107/evidence/cancel-checkpoint-final/3ce43203/build.log)
+PASS parser and structured CLI 4b
+PASS parser and structured CLI 35b
+no server started by this run
+removed /tmp/verify-kapitsa/state/cancel-checkpoint-final; evidence kept in /Users/bytedance/kapitsa-cancel-checkpoint-20261107/evidence/cancel-checkpoint-final/3ce43203

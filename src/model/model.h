@@ -6,14 +6,21 @@
 #include "metal/gpu.h"
 #include "vision/embed.h"
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace ni {
 
+struct TokenSuppression {
+  Buffer mask;
+  int words = 0;
+};
+
 // One conversation's state: token buffer, recurrent states, attention KV cache.
 struct Seq {
+  std::shared_ptr<const TokenSuppression> suppression;
   // Positions the attention caches hold now, which is also their row stride (every kernel takes it as
   // max_seq). It grows on demand up to `limit` (Model::reserve); encoding past it is a fatal "context full".
   int cap = 0;
@@ -29,6 +36,10 @@ struct Seq {
   // tree acceptance writes), not rows 0 .. n_pend
   Buffer pend_path;
   bool pend_tree = false;
+  // Qwen3.5 lazy GDN fold (Qwen35::encode_verify8): accepted rows of an earlier verify not yet stored into rec (per
+  // recurrent layer: k / g / d rows, n_back of them); every pass but the next tree verify folds them first
+  std::vector<Buffer> back_k, back_g, back_d;
+  int n_back = 0;
   int pend_pos = 0;                // position of the first pending row (Nemotron-H)
   int pend_half = 0;               // which half of pend_qkv holds the pending rows (Nemotron-H: 2 x 8 rows)
   Buffer mtp_kc, mtp_vc;           // MTP head's attention cache (positions = trunk positions)
@@ -64,6 +75,7 @@ struct Seq {
 // [mask_row0, mask_row0 + rows), after a GPU wait for the host's signal when s.mask_event is set. Nothing is encoded for
 // a sequence without masks (s.mask_rows 0).
 void enc_logit_mask(Encoder& e, Seq& s, const Buffer& logits, int rows, int vocab, int ld, int mask_row0 = 0);
+void enc_token_suppression(Encoder& e, const Seq& s, const Buffer& logits, int rows, int vocab, int ld);
 
 // Snapshot of a Seq's recurrent state at a position (attention KV needs no copy: entries
 // before `pos` stay valid as long as the token prefix matches).
@@ -114,7 +126,7 @@ struct MemPlan {
   bool dense = false;
   bool ffn_ane = true;        // dense FFN weights in a format the Neural Engine split stages (any Kapitsa reads)
   bool ffn_mma = false;       // the M5 default share: the split's GPU share on the matrix units (Qwen35: NI_QMT,
-                              // 4-bit g64, a model it was measured on)
+                              // 4-bit g64, a model with an M5 share)
   std::string formats;        // "bf16", "4-bit group 64 + 80 modules 8-bit group 64", ...
   size_t ane = 0;             // a GPU + Neural Engine prefill split the model runs by default (Nemotron-H)
   size_t fixed(int slots) const { return weights + mtp + activations + size_t(slots) * slot_state; }
@@ -138,6 +150,9 @@ class Model {
   virtual bool reserve(Seq& s, int need) = 0;
   virtual void drop_kv(Seq& s) = 0;
   virtual size_t kv_bytes_per_pos() const = 0;
+  // What growing s's attention caches holds beside their new size while it copies the old rows (bytes): a reserve()
+  // needs room for both. Default: a 256 MB batch, or the whole old cache when smaller.
+  virtual size_t kv_grow_held(const Seq& s) const { return std::min(size_t(256) << 20, size_t(s.cap) * kv_bytes_per_pos()); }
   virtual void reset(Seq& s) = 0;
   virtual Checkpoint new_checkpoint() = 0;
   virtual void save(Encoder& e, const Seq& s, Checkpoint& c, int pos) = 0;

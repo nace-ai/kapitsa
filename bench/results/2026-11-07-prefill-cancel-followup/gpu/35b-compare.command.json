@@ -1,0 +1,19 @@
+{
+  "label": "35b-compare",
+  "argv": [
+    "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python3",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/tools/logit_compare.py",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/35b-logits-base",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/35b-logits-candidate",
+    "--json",
+    "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/35b-compare.json"
+  ],
+  "cwd": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate",
+  "started_at": "2026-11-07T13:55:53.314781+00:00",
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/home-35b-compare"
+  }
+}

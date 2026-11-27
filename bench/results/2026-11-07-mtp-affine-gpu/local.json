@@ -1,0 +1,27 @@
+{
+  "output": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b",
+  "trees": {
+    "base": "/tmp/verify-kapitsa/ref/b171f983/src",
+    "candidate": "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool"
+  },
+  "builds": {
+    "base": "/tmp/verify-kapitsa/ref/b171f983/build",
+    "candidate": "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/build"
+  },
+  "heads": {
+    "base": "b171f98363abd5dfd8ae5d24f786ca77b3801a4a",
+    "candidate": "02e53017f19aaac71d4f64795ec55d0fb4c12d0e"
+  },
+  "ready_files": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/local-ready"
+  ],
+  "models": [
+    {
+      "name": "27b",
+      "path": "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+      "mtp": true
+    }
+  ],
+  "tokenizer_source": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/tokenizer.cpp",
+  "min_free_bytes": 6442450944
+}

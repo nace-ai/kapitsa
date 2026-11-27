@@ -1,0 +1,397 @@
+{
+  "platform": "macOS-15.7.1-arm64-arm-64bit",
+  "sources": {
+    "reference": {
+      "head": "d65a0afa35a176e1ecd1107f176a1b4028753f1d",
+      "dflash2_sha256": "51e500abcd44437635425c42cd680dce8af3b06b5c6ce8192a39a2e968b8db0d",
+      "library_sha256": "0a2cba0e9f38815e0a785ac70a71913c6006b8215a9d6d9c1a7929058f4778ea",
+      "actual_version": "kapitsa 0.2.31 (d65a0afa)"
+    },
+    "candidate": {
+      "head": "09b7f4f8ca420ed16713a5066b007eefcc716e7a",
+      "dflash2_sha256": "3e5542a750705d510e62bd56b9a60d9fb7934ba6686d4d88ffeb77f600107c90",
+      "library_sha256": "de8fb01f83f75f43e45bd72e5354fcfbe847990fcdccf0560f3a80157813d913",
+      "actual_version": "kapitsa 0.2.31 (279ce236)"
+    }
+  },
+  "checkpoints": {
+    "qwen3.5-4b-4bit": {
+      "drafter_source": "/Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-model/dflash2",
+      "config_sha256": "6fa9ca0d10d2c3f5c93043bdd492e35283e284e4eb6a9e0479ba663609117203",
+      "weights_sha256": "1eb221d36abb13a5f1b972f8d031a9723fad8cbb7d275abe548b60e77577eb42",
+      "size_bytes": 1268859081
+    },
+    "qwen3.5-9b-4bit": {
+      "drafter_source": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit/dflash2",
+      "config_sha256": "e68516cac920c0482d26858f21021a1ddd111069a685aa5aaa60ca2c41101bce",
+      "weights_sha256": "0a42274b32554f48de1faa0d42824e9c2ceda649c30ae0a731cddf410dd698c7",
+      "size_bytes": 2583816465
+    }
+  },
+  "prompt_sha256": "245b4fa14bc61b723cbc59a088adcfa02702029cfe00919b410b9a62dbf6dfbd",
+  "harness_sha256": "d0df4deb6291591f2ccc7aee76e5b917c1f73e62eaea7c61fa98a17425ac1fab",
+  "harness_change": "qmm_draft_check same source in both builds; constructor explicit4 replacedwith0 to honor existingNI_KFLASH_BITS. Modeloverlays symlink unchanged targetdata and explicitv1drafter. No productionchange.",
+  "pairs": [
+    {
+      "label": "draft-4b-q4-candidate",
+      "environment": {
+        "NI_DFLASH": "/Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-model/dflash2",
+        "NI_KFLASH_BITS": "4",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/home-draft-4b-q4-candidate"
+      },
+      "compared_files": 270,
+      "compared_bytes": 35198376,
+      "mismatches": 0,
+      "drafter": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2",
+      "drafter_v1": true,
+      "head_rows": 98304,
+      "finite_outputs": [
+        {
+          "name": "debug0-anchor0-hidden",
+          "values": 20480,
+          "finite": true,
+          "sha256": "730fc5a8df6179c10fae007263798674421526583429b5e688ab35187fcc006d"
+        },
+        {
+          "name": "debug0-anchor0-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "5fcc5df9d4bff0b0ec033276d399c03f96246f952964cd28a47fc2829c210323"
+        },
+        {
+          "name": "debug0-anchor1-hidden",
+          "values": 20480,
+          "finite": true,
+          "sha256": "ed1f967efe9fdb7cc0d939ca73ea9f7d4574e4cd1cef12a1bbf8b6502d1baea7"
+        },
+        {
+          "name": "debug0-anchor1-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "ab90ee692bf9a6539b0a0952898c7699d238e1bb880f073b0646144d5c70c926"
+        },
+        {
+          "name": "debug0-anchor2-hidden",
+          "values": 20480,
+          "finite": true,
+          "sha256": "3fa47ba73563744beb0870a561711640ae2d306a165062b3645dd36ddf17dc38"
+        },
+        {
+          "name": "debug0-anchor2-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "eee8d7506a3f31d4e937f4ff5e640d6f0e1a54d7a259a5f64d87dacec9bde100"
+        },
+        {
+          "name": "debug1-anchor0-hidden",
+          "values": 20480,
+          "finite": true,
+          "sha256": "9745f07bd1838048b1cc7a13f09133d94ffbe5dd57f24fe6b4f5c0f75feb277b"
+        },
+        {
+          "name": "debug1-anchor0-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "86da14ef699be1b429f1af1b41cabd8c1c112a460b13b4bbb63d2736aaef6e23"
+        },
+        {
+          "name": "debug1-anchor1-hidden",
+          "values": 20480,
+          "finite": true,
+          "sha256": "61b4172f4969d45eee89eb085473d34ee6e12f280316a47ec505fdc2deee25f2"
+        },
+        {
+          "name": "debug1-anchor1-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "390941cc9a00cec5dc09968a7d8f7ca2600e8aeef1b15cc2e0db1412d7bbc127"
+        },
+        {
+          "name": "debug1-anchor2-hidden",
+          "values": 20480,
+          "finite": true,
+          "sha256": "8ba9e79e0ced558ae60f645308d72a83c9ce44e840cba0acd5852c7880f82247"
+        },
+        {
+          "name": "debug1-anchor2-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "f3fb57477a53082ab613ad824819bf5b8d3daa9678360bb2cbd672d631667b6c"
+        }
+      ]
+    },
+    {
+      "label": "draft-4b-q8-candidate",
+      "environment": {
+        "NI_DFLASH": "/Users/bytedance/Documents/ChatGPT/kapitsa/overnight-20261106/local-model/dflash2",
+        "NI_KFLASH_BITS": "8",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/home-draft-4b-q8-candidate"
+      },
+      "compared_files": 270,
+      "compared_bytes": 35198376,
+      "mismatches": 0,
+      "drafter": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-4b-4bit/dflash2",
+      "drafter_v1": true,
+      "head_rows": 98304,
+      "finite_outputs": [
+        {
+          "name": "debug0-anchor0-hidden",
+          "values": 20480,
+          "finite": true,
+          "sha256": "084bc01afeffb801d8ccde9e129070a6c1e2cb638479415dfbf3fd1934b6dc36"
+        },
+        {
+          "name": "debug0-anchor0-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "2490f21290fbe7804cd76b4bd6c3de24d8ead815b491292f71c88ef17ecb6ab6"
+        },
+        {
+          "name": "debug0-anchor1-hidden",
+          "values": 20480,
+          "finite": true,
+          "sha256": "28d382c252edaa31aba0aafac0aabd271e17c90b35ad13955755298d59ae08e1"
+        },
+        {
+          "name": "debug0-anchor1-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "14d02f7a88f7c936e9d2bed5e1010de69f789c67af47d55f81a8e20992d8e278"
+        },
+        {
+          "name": "debug0-anchor2-hidden",
+          "values": 20480,
+          "finite": true,
+          "sha256": "1aff036512e550331a41780a9b59ffd360bb8bbd2dfe9db19f868e9c41bcd702"
+        },
+        {
+          "name": "debug0-anchor2-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "4d799df58df7b722c54cc12b4abb576a218b7a4021ba1b7bbef55da8584a513d"
+        },
+        {
+          "name": "debug1-anchor0-hidden",
+          "values": 20480,
+          "finite": true,
+          "sha256": "02341cfd2caf4c99af2dc0a923d741809d2d4ba9b1934e8ef11f2dc788a29361"
+        },
+        {
+          "name": "debug1-anchor0-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "e779145905020f2b7b6b91c71e0d984d50c86f3cab2be877f7ad176d79dc0124"
+        },
+        {
+          "name": "debug1-anchor1-hidden",
+          "values": 20480,
+          "finite": true,
+          "sha256": "32b608647553f821b99af8a6d33c957bcf78b526fb21c16054ec409435a8c9a9"
+        },
+        {
+          "name": "debug1-anchor1-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "9542a282529198b9768e309efb17716ea2ef54afd1c7fe06559eb37d325571b2"
+        },
+        {
+          "name": "debug1-anchor2-hidden",
+          "values": 20480,
+          "finite": true,
+          "sha256": "0c5a17b0f03bb4384bc5fbd1aedaabf832b54d5f431c0730d0336b23775c6341"
+        },
+        {
+          "name": "debug1-anchor2-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "14af1dfb756eb0a86c8d68b51a6facb56ea4a15f267de322df66b72917f7df40"
+        }
+      ]
+    },
+    {
+      "label": "draft-9b-q4-candidate",
+      "environment": {
+        "NI_DFLASH": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit/dflash2",
+        "NI_KFLASH_BITS": "4",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/home-draft-9b-q4-candidate"
+      },
+      "compared_files": 270,
+      "compared_bytes": 42866088,
+      "mismatches": 0,
+      "drafter": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-9b-4bit/dflash2",
+      "drafter_v1": true,
+      "head_rows": 98304,
+      "finite_outputs": [
+        {
+          "name": "debug0-anchor0-hidden",
+          "values": 32768,
+          "finite": true,
+          "sha256": "8bfa4f224cda345b7c6aaca77edbdc0b1515f9228b47c3301cfdd7d84b1d8201"
+        },
+        {
+          "name": "debug0-anchor0-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "89a2faf976877fa662262786bf7fdbaa7090a4eb54015d08ca2404c4bdb3408a"
+        },
+        {
+          "name": "debug0-anchor1-hidden",
+          "values": 32768,
+          "finite": true,
+          "sha256": "460caa7064602ba413eaf72948900e7420f571172b5cce6cc6493dc7b8c723bb"
+        },
+        {
+          "name": "debug0-anchor1-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "cb33dd4df015b1b190a5b065e3c8afaa844edb4b108754fda133096d37f7b168"
+        },
+        {
+          "name": "debug0-anchor2-hidden",
+          "values": 32768,
+          "finite": true,
+          "sha256": "e38f189ec1c703d4cccf0f4c9cd9e477f39e746dca1949f87a46fe2f75db1dc8"
+        },
+        {
+          "name": "debug0-anchor2-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "c4bca284f61f20235f1929c93d7e10497263a42b6c8d72a9cacb055954f2aa28"
+        },
+        {
+          "name": "debug1-anchor0-hidden",
+          "values": 32768,
+          "finite": true,
+          "sha256": "024d02b4fb5715af59d33adb4e73e284c53d0d5a032413529e1d8f71912ac7f7"
+        },
+        {
+          "name": "debug1-anchor0-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "3d9a85fe0c79348a1615cb0e9d2c412508b788dbdde77eebf4cbc1988fc29396"
+        },
+        {
+          "name": "debug1-anchor1-hidden",
+          "values": 32768,
+          "finite": true,
+          "sha256": "96bb0ada6fad0a85667d4956d7e93bc5a70a4535fa68af0ce25984beec0f1a5a"
+        },
+        {
+          "name": "debug1-anchor1-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "09805bad5fc324aa8779ba34d5ac3a98a4c566ce7dba5bc4b25089564f68d765"
+        },
+        {
+          "name": "debug1-anchor2-hidden",
+          "values": 32768,
+          "finite": true,
+          "sha256": "ccf39ae90b60cabfea11ea5221ce491f5631a6042fd7202bfb6f0e2827537a73"
+        },
+        {
+          "name": "debug1-anchor2-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "e1c1acfa2abdc0847a8340552bed7d01ccc220230fbe66119b4190cb376285c1"
+        }
+      ]
+    },
+    {
+      "label": "draft-9b-q8-candidate",
+      "environment": {
+        "NI_DFLASH": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit/dflash2",
+        "NI_KFLASH_BITS": "8",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/home-draft-9b-q8-candidate"
+      },
+      "compared_files": 270,
+      "compared_bytes": 42866088,
+      "mismatches": 0,
+      "drafter": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/models/qwen3.5-9b-4bit/dflash2",
+      "drafter_v1": true,
+      "head_rows": 98304,
+      "finite_outputs": [
+        {
+          "name": "debug0-anchor0-hidden",
+          "values": 32768,
+          "finite": true,
+          "sha256": "d30f4a2bfdddfcf497bcc36fe30d7082bb7753cfe896841b342d093e05a1b72e"
+        },
+        {
+          "name": "debug0-anchor0-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "d56a125e993db57718f4fbd1b1ab433d9781cb6f468056a88ca7a5f37f6ba87f"
+        },
+        {
+          "name": "debug0-anchor1-hidden",
+          "values": 32768,
+          "finite": true,
+          "sha256": "d2f3f3779007da851df679221735d53b8b9a00bd40b0088c3c0ff07f0cc350e5"
+        },
+        {
+          "name": "debug0-anchor1-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "ad1cb41ccf2d4fef8a8ead411b9c069a0cd2b016ff67d5493cca29b9aee31f38"
+        },
+        {
+          "name": "debug0-anchor2-hidden",
+          "values": 32768,
+          "finite": true,
+          "sha256": "048cf50a16260dd0d88b26dc95b53500babfe4a309f2311b6c0a0d0ede04a622"
+        },
+        {
+          "name": "debug0-anchor2-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "fdfa9fb026bd67272298394988ee66bf1010fa71d30fe14fbf1262ba7c01e9e4"
+        },
+        {
+          "name": "debug1-anchor0-hidden",
+          "values": 32768,
+          "finite": true,
+          "sha256": "3ba79eef9c27b834cfa9da6bc0bcf651d99273b32fe664530ba34c138e080e31"
+        },
+        {
+          "name": "debug1-anchor0-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "76217cc4430d0ec3c44a6ee7bad476d22d9f24699c0587c30b646b72f50bcf81"
+        },
+        {
+          "name": "debug1-anchor1-hidden",
+          "values": 32768,
+          "finite": true,
+          "sha256": "6b0efc08a5fb9c50f31e7d57f04f2821e00ac94bdf5006ee4f6c7752ce832c1d"
+        },
+        {
+          "name": "debug1-anchor1-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "b7a9b7baf1c8bdaf71787922c3a2505168e238b08661e7eb02b8553d2b3ce908"
+        },
+        {
+          "name": "debug1-anchor2-hidden",
+          "values": 32768,
+          "finite": true,
+          "sha256": "2968a99e796452a63b222d7b9fc1e078522171d3a24e7229bd3016f55d113e91"
+        },
+        {
+          "name": "debug1-anchor2-logits",
+          "values": 688128,
+          "finite": true,
+          "sha256": "d82b0006932885ca55be6c24fc356ac991684544fe0bfdfea1e1eb7796d92584"
+        }
+      ]
+    }
+  ],
+  "limitation": "Correctness only, CPUregressions concurrent; no inference speed claims. First baseline no-localdrafter attempt preserved separately."
+}

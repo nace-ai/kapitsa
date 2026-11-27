@@ -1,0 +1,46 @@
+{
+  "evidence_kind": "Explicitly filtered and derived public copy; private originals retained",
+  "source_reference": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+  "source_candidate": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+  "GPU_or_full_model_claim": false,
+  "implementation_source_sha256": {
+    "src/gguf/quant.cpp": "cebeba7f3c511968e134d69a96b5e6f6a00d5463ceb8987ffba1c04cfc5e609b",
+    "tools/gguf_q8_0_test.h": "6280fcc3c81defdf2fd2c923ba09f11f5394dcab4e02770cc6613e70df8c9f64",
+    "tools/iq_layout_test.cpp": "b541676ff12cbc6c2c3dcc1b10e615685dc230e07e3234f228f7f8491a544430"
+  },
+  "actual_Release_flags": {
+    "O3": true,
+    "arm64": true,
+    "no_NDEBUG": true,
+    "no_fast_math": true
+  },
+  "focused_test_binary_sha256": "a385acb02dc0c786cee1fdbbcdf0f1f660c777f8f331c1ee89c0c1faf373e2d3",
+  "release": {
+    "first_original_rc": 0,
+    "final_actual_restored_rc": 0,
+    "exhaustive_blocks": 67108864,
+    "lane_products": 2147483648,
+    "mixed_alignment_cases": 65536,
+    "whole_buffer_overlap_cases": 18720,
+    "guarded_cases": 96,
+    "original_version_metadata": "Configured before the candidate commit with reference version metadata; implementation and test bytes match the candidate commit."
+  },
+  "sanitizer": {
+    "rc": 0,
+    "scope": "O1 ASan/UBSan mixed alignment, whole-buffer overlap, guard pages, prior flags and n contracts; full Release exhaustive suite was not run under sanitizers"
+  },
+  "mutants": {
+    "unsigned_widening_rc": 1,
+    "overlap_disabled_rc": 1,
+    "restored_exact_source": true
+  },
+  "retained_stale_binary_test_failure": {
+    "cause": "Make skipped recompilation after restored production source and the preceding mutant object received the same whole-second timestamp. The executed binary still contained the overlap mutant.",
+    "correction": "Removed the task quant object, explicitly reconfigured and rebuilt, verified the restored production object digest, then reran the full test with rc 0.",
+    "failed_run_was_not_a_production_regression": true,
+    "configure_build_rc": 0,
+    "stale_binary_test_rc": 1,
+    "restored_production_reconfigure_build_rc": 0,
+    "restored_production_test_rc": 0
+  }
+}

@@ -1,0 +1,370 @@
+#!/usr/bin/env python3
+"""Real pull/resume against a local Hub; tiny files, no model load or external network."""
+import hashlib
+import http.server
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import threading
+
+
+def download_checks(kapitsa, check):
+    config = json.dumps({"model_type": "qwen3_5", "linear_num_value_heads": 1,
+                         "num_hidden_layers": 1}).encode()
+    files = {"config.json": config, "model.safetensors": b"new weights",
+             "README.md": b"new metadata", "tokenizer.json": b"unchanged",
+             "NOTICE": b"no digest"}
+
+    def blob(data):
+        return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
+
+    listing = {"sha": "fixture-revision", "siblings": []}
+    for name, data in files.items():
+        entry = {"rfilename": name, "size": len(data)}
+        if name.endswith(".safetensors"):
+            entry["lfs"] = {"sha256": hashlib.sha256(data).hexdigest()}
+        elif name != "NOTICE":
+            entry["blobId"] = blob(data)
+        listing["siblings"].append(entry)
+
+    class Hub(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *_):
+            pass
+
+        def do_GET(self):
+            self.server.requests.append((self.path, self.headers.get("Range")))
+            if self.server.unavailable:
+                self.send_error(404)
+                return
+            if self.path in ("/api/models/test/resume/revision/main?blobs=true",
+                             "/api/models/test/resume/revision/refs%2Fpr%2F123?blobs=true"):
+                data = json.dumps(listing).encode()
+            elif self.path.startswith("/test/resume/resolve/fixture-revision/"):
+                name = self.path.rsplit("/", 1)[1]
+                if name not in files:
+                    self.send_error(404)
+                    return
+                data = files[name]
+                if self.server.corrupt and name == "model.safetensors":
+                    data = b"bad weights"
+            else:
+                self.send_error(404)
+                return
+            status = 200
+            content_range = None
+            if span := self.headers.get("Range"):
+                first, last = map(int, span.removeprefix("bytes=").split("-"))
+                content_range = f"bytes {first}-{last}/{len(data)}"
+                data = data[first:last + 1]
+                status = 206
+            self.send_response(status)
+            self.send_header("Content-Length", str(len(data)))
+            if content_range:
+                self.send_header("Content-Range", content_range)
+            self.end_headers()
+            self.wfile.write(data)
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Hub)
+    server.requests = []
+    server.unavailable = False
+    server.corrupt = False
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        with tempfile.TemporaryDirectory(prefix="kapitsa-pull-") as tmp:
+            root = Path(tmp)
+            # Neither the user's Hub credentials nor their file caches reach this fixture.
+            env = dict(os.environ, HF_ENDPOINT=f"http://127.0.0.1:{server.server_port}",
+                       HF_HOME=str(root / "hf"), HF_HUB_CACHE=str(root / "hf" / "hub"),
+                       HUGGINGFACE_HUB_CACHE=str(root / "hf" / "hub"), HF_TOKEN="",
+                       HUGGING_FACE_HUB_TOKEN="", HF_TOKEN_PATH=str(root / "no-token"),
+                       KAPITSA_NO_AUTO_UPDATE="1", KAPITSA_NO_PROMPT="1", NI_LOG="0")
+
+            def pull(home, model_ref="test/resume"):
+                return subprocess.run([kapitsa, "pull", model_ref],
+                                      env=dict(env, KAPITSA_HOME=str(home)),
+                                      capture_output=True, text=True, timeout=30)
+
+            revision_home = root / "revision"
+            result = pull(revision_home, "test/resume@refs/pr/123")
+            downloaded = list((revision_home / "models").glob("*/model.safetensors"))
+            check("pull: a revision with slashes is one URL segment",
+                  result.returncode == 0 and len(downloaded) == 1
+                  and downloaded[0].read_bytes() == files["model.safetensors"], result.stderr)
+
+            home = root / "adopt"
+            model = home / "models" / "test--resume"
+            model.mkdir(parents=True)
+            old = dict(files, **{"model.safetensors": b"old weights", "README.md": b"old metadata",
+                                 "NOTICE": b"old notes"})
+            for name, data in old.items():
+                (model / name).write_bytes(data)
+            kept = {name: (model / name).stat().st_mtime_ns for name in ("config.json", "tokenizer.json", "NOTICE")}
+            manifest = model / ".kapitsa" / "manifest.json"
+            server.unavailable = True
+            failed = pull(home)
+            check("pull: failed adoption keeps old files and leaves no complete manifest",
+                  failed.returncode != 0 and not manifest.exists() and (model / ".kapitsa").is_dir()
+                  and all((model / name).read_bytes() == data for name, data in old.items()), failed.stderr)
+            server.unavailable = False
+            server.requests.clear()
+            resumed = pull(home)
+            check("pull: retry of failed adoption completes", resumed.returncode == 0 and manifest.exists(), resumed.stderr)
+            for name in ("model.safetensors", "README.md"):
+                check(f"pull: retry replaces same-size stale {name} using its digest",
+                      (model / name).read_bytes() == files[name])
+                check(f"pull: retry actually fetches stale {name}",
+                      any(path.endswith("/" + name) and span for path, span in server.requests))
+            check("pull: matching files and size-only files are retained without range downloads",
+                  all((model / name).read_bytes() == old[name] and (model / name).stat().st_mtime_ns == stamp
+                      for name, stamp in kept.items())
+                  and not any(path.rsplit("/", 1)[-1] in kept and span for path, span in server.requests))
+            server.unavailable = True
+            server.requests.clear()
+            completed = pull(home)
+            check("pull: a completed manifest is still reused offline",
+                  completed.returncode == 0 and not server.requests, completed.stderr)
+
+            # A failed transfer can also leave verified final files but no manifest.
+            home = root / "transfer"
+            model = home / "models" / "test--resume"
+            manifest = model / ".kapitsa" / "manifest.json"
+            server.unavailable = False
+            server.corrupt = True
+            bad = pull(home)
+            check("pull: a bad downloaded digest cannot publish a complete manifest",
+                  bad.returncode != 0 and "checksum mismatch" in bad.stderr and not manifest.exists(), bad.stderr)
+            server.corrupt = False
+            retry = pull(home)
+            check("pull: a failed transfer resumes to the complete requested bytes",
+                  retry.returncode == 0 and manifest.exists()
+                  and all((model / name).read_bytes() == data for name, data in files.items()), retry.stderr)
+
+            name = "model.safetensors"
+            data = files[name]
+            size = len(data)
+            identity = hashlib.sha256(data).hexdigest()
+            cases = [
+                ("end past file", [[0, size + 1]]),
+                ("negative end", [[0, -1]]),
+                ("maximum end", [[0, 2**64 - 1]]),
+                ("negative start", [[-1, size]]),
+                ("fractional end", [[0, size + 0.5]]),
+                ("boolean start", [[False, size]]),
+                ("extra endpoint", [[0, size, size]]),
+                ("object instead of list", {"range": [0, size]}),
+                ("valid then invalid", [[0, 4], [4, size + 1]]),
+                ("reversed range", [[0, 4], [size, 4]]),
+                ("empty range", [[0, 4], [4, 4]]),
+            ]
+            for label, ranges in cases:
+                home = root / ("invalid-" + label.replace(" ", "-"))
+                model = home / "models" / "test--resume"
+                parts = model / ".kapitsa" / "parts"
+                parts.mkdir(parents=True)
+                for other, content in files.items():
+                    if other != name:
+                        (model / other).write_bytes(content)
+                (parts / (name + ".part")).write_bytes(b"?" * size)
+                (parts / (name + ".part.json")).write_text(json.dumps(
+                    {"id": identity, "size": size, "done": ranges}))
+                server.requests.clear()
+                result = pull(home)
+                final = model / name
+                completed = (model / ".kapitsa" / "manifest.json").exists()
+                detail = f"exit={result.returncode}, final={final.exists()}, manifest={completed}\n{result.stderr}"
+                check(f"pull: invalid resume state ({label}) restarts the entire file",
+                      result.returncode == 0 and final.exists() and final.read_bytes() == data
+                      and (model / ".kapitsa" / "manifest.json").exists()
+                      and any(path.endswith("/" + name) and span == f"bytes=0-{size - 1}"
+                              for path, span in server.requests),
+                      detail)
+
+            # Valid ranges may overlap or arrive out of order; only their gaps need fetching.
+            for label, ranges, spans in [
+                ("prefix", [[0, 4]], [f"bytes=4-{size - 1}"]),
+                ("overlap", [[2, 4], [0, 3], [7, size]], ["bytes=4-6"]),
+                ("complete", [[0, size]], []),
+            ]:
+                home = root / ("valid-" + label)
+                model = home / "models" / "test--resume"
+                parts = model / ".kapitsa" / "parts"
+                parts.mkdir(parents=True)
+                for other, content in files.items():
+                    if other != name:
+                        (model / other).write_bytes(content)
+                partial = bytearray(b"?" * size)
+                for first, last in ranges:
+                    partial[first:last] = data[first:last]
+                (parts / (name + ".part")).write_bytes(partial)
+                (parts / (name + ".part.json")).write_text(json.dumps(
+                    {"id": identity, "size": size, "done": ranges}))
+                server.requests.clear()
+                result = pull(home)
+                final = model / name
+                fetched = [span for path, span in server.requests if path.endswith("/" + name) and span]
+                check(f"pull: valid resume state ({label}) fetches only missing bytes",
+                      result.returncode == 0 and final.exists() and final.read_bytes() == data
+                      and fetched == spans, result.stderr)
+
+            server.unavailable = True
+            revisions = ("refs/pr/123", "refs-pr-123")
+            for saved, requested in (revisions, revisions[::-1]):
+                home = root / ("legacy-" + saved.replace("/", "_"))
+                legacy = home / "models" / "test--resume@refs-pr-123"
+                meta = legacy / ".kapitsa" / "manifest.json"
+                meta.parent.mkdir(parents=True)
+                data = saved.encode()
+                (legacy / "model.safetensors").write_bytes(data)
+                meta.write_text(json.dumps({"repo": "test/resume", "revision": saved,
+                                            "files": [{"path": "model.safetensors", "size": len(data)}]}))
+                server.requests.clear()
+                def pull_revision(ref):
+                    return subprocess.run([kapitsa, "pull", "test/resume@" + ref],
+                                          env=dict(env, KAPITSA_HOME=str(home)), capture_output=True, text=True, timeout=30)
+                exact = pull_revision(saved)
+                check("pull: reuse the matching legacy revision " + saved,
+                      exact.returncode == 0 and not server.requests, exact.stderr)
+                other = pull_revision(requested)
+                check("pull: a different ref cannot reuse the legacy revision " + saved,
+                      other.returncode != 0 and server.requests and (legacy / "model.safetensors").read_bytes() == data
+                      and json.loads(meta.read_bytes())["revision"] == saved, other.stderr)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+def auth_checks(kapitsa, check):
+    config = json.dumps({"model_type": "qwen3_5", "linear_num_value_heads": 1,
+                         "num_hidden_layers": 1}).encode()
+    files = {"config.json": config, "tokenizer_config.json": b"{}",
+             "model.safetensors": b"fixture weights"}
+    listing = json.dumps({"sha": "fixture-revision", "siblings": [
+        {"rfilename": name, "size": len(data),
+         "lfs": {"sha256": hashlib.sha256(data).hexdigest()}}
+        for name, data in files.items()]}).encode()
+
+    class Hub(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *_):
+            pass
+
+        def do_GET(self):
+            authenticated = self.headers.get("Authorization") is not None
+            span = self.headers.get("Range")
+            self.server.requests.append((self.path, span, authenticated))
+            name = self.path.rsplit("/", 1)[-1]
+            denied = ((self.server.denied == "listing" and self.path.startswith("/api/"))
+                      or (self.server.denied == "metadata" and name == "config.json" and not span)
+                      or (self.server.denied == "chunk" and name == "tokenizer_config.json"))
+            if denied and (authenticated or self.server.anonymous_status):
+                self.send_error(self.server.token_status if authenticated else self.server.anonymous_status)
+                return
+            data = listing if self.path.startswith("/api/") else files[name]
+            status = 200
+            content_range = None
+            if span:
+                first, last = map(int, span.removeprefix("bytes=").split("-"))
+                content_range = f"bytes {first}-{last}/{len(data)}"
+                data = data[first:last + 1]
+                status = 206
+            self.send_response(status)
+            self.send_header("Content-Length", str(len(data)))
+            if content_range:
+                self.send_header("Content-Range", content_range)
+            self.end_headers()
+            self.wfile.write(data)
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Hub)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        with tempfile.TemporaryDirectory(prefix="kapitsa-auth-") as tmp:
+            root = Path(tmp)
+            # A synthetic token only; never read credentials or reuse the user's cache.
+            env = dict(os.environ, HF_ENDPOINT=f"http://127.0.0.1:{server.server_port}",
+                       HF_HOME=str(root / "hf"), HF_HUB_CACHE=str(root / "hf" / "hub"),
+                       HUGGINGFACE_HUB_CACHE=str(root / "hf" / "hub"),
+                       HF_TOKEN="fixture-token", HUGGING_FACE_HUB_TOKEN="",
+                       HF_TOKEN_PATH=str(root / "no-token"), KAPITSA_NO_AUTO_UPDATE="1",
+                       KAPITSA_NO_PROMPT="1", NI_LOG="0")
+            cases = [(stage, status, 0) for stage in ("listing", "metadata", "chunk")
+                     for status in (401, 403)]
+            cases += [("chunk", 403, 404), ("listing", 401, 403), ("chunk", 404, 0)]
+            for i, (stage, status, anonymous_status) in enumerate(cases):
+                server.requests = []
+                server.denied = stage
+                server.token_status = status
+                server.anonymous_status = anonymous_status
+                home = root / str(i)
+                result = subprocess.run([kapitsa, "pull", "test/public"],
+                                        env=dict(env, KAPITSA_HOME=str(home)),
+                                        capture_output=True, text=True, timeout=30)
+                retried = [(path, span) for path, span, auth in server.requests if not auth]
+                label = f"pull: {stage} HTTP {status}"
+                if not anonymous_status and status in (401, 403):
+                    model = home / "models" / "test--public"
+                    check(label + " retries anonymously and verifies downloaded bytes",
+                          result.returncode == 0 and retried
+                          and all((model / name).read_bytes() == data for name, data in files.items()),
+                          result.stderr)
+                    if stage in ("listing", "metadata"):
+                        # These requests complete before the download workers start.
+                        ranges = [auth for _, span, auth in server.requests if span]
+                        check(label + " keeps subsequent file requests anonymous",
+                              bool(ranges) and not any(ranges), result.stderr)
+                elif anonymous_status:
+                    check(label + " preserves the original error after anonymous failure",
+                          result.returncode != 0 and len(retried) == 1
+                          and f"(HTTP {status})" in result.stderr, result.stderr)
+                    if stage == "chunk":
+                        check("pull: chunk auth error links to the repo, not the filename",
+                              "https://huggingface.co/test/public" in result.stderr
+                              and "https://huggingface.co/tokenizer_config" not in result.stderr,
+                              result.stderr)
+                else:
+                    check(label + " does not retry anonymously",
+                          result.returncode != 0 and not retried, result.stderr)
+
+            server.denied = "listing"
+            server.token_status = 403
+            server.anonymous_status = 401
+            server.requests = []
+            result = subprocess.run([kapitsa, "pull", "test/public"],
+                                    env=dict(env, HF_TOKEN="", KAPITSA_HOME=str(root / "anonymous")),
+                                    capture_output=True, text=True, timeout=30)
+            check("pull: an already-anonymous auth failure is not retried",
+                  result.returncode != 0 and len(server.requests) == 1
+                  and not server.requests[0][2], result.stderr)
+
+            server.denied = "none"
+            server.requests = []
+            result = subprocess.run([kapitsa, "pull", "test/public"],
+                                    env=dict(env, KAPITSA_HOME=str(root / "authorized")),
+                                    capture_output=True, text=True, timeout=30)
+            check("pull: a working token stays on every request",
+                  result.returncode == 0 and bool(server.requests)
+                  and all(auth for _, _, auth in server.requests), result.stderr)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+if __name__ == "__main__":
+    failures = []
+
+    def report(name, ok, detail=""):
+        print(("PASS " if ok else "FAIL ") + name)
+        if not ok:
+            failures.append(name)
+            if detail:
+                print(detail)
+
+    kapitsa = str(Path(sys.argv[1] if len(sys.argv) > 1 else "build/kapitsa").resolve())
+    download_checks(kapitsa, report)
+    auth_checks(kapitsa, report)
+    sys.exit(bool(failures))

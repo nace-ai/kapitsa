@@ -1,0 +1,1988 @@
+{
+  "configuration": {
+    "chip": "Apple M3 Ultra",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.6.4.2)",
+    "gpu_cores": 60,
+    "macos": "26.4.1",
+    "memory_capacity_gib": 96
+  },
+  "driver_identity": {
+    "binary_sha256": "c58fe87449f16c7587fbc80d00a2d4228b132b415962a41cfaa94019086b870e",
+    "reference_library_sha256": "269f02149f2d819cc5ea148c369ac358993eeffba8387a3ae216d3494f1fe682",
+    "source_sha256": "6b022a4791ac656f74ca84dc7b2090e7bfd34e5ad0e7a1c6bc1197e8adcd8310"
+  },
+  "identities": {
+    "candidate": {
+      "actual_target_flag_checks": {
+        "kapitsa": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "logit_dump": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "naceinfer": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "ni_run": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        }
+      },
+      "binaries_sha256": {
+        "kapitsa": "c8e2ec53db372a42b324146ef4d5610c8bacb3258600b63e4eae264fa6353a5b",
+        "libnaceinfer.a": "ae5caff18c89062c7fc49caa79fc15c809d69a5e3b696f368759c74a84aa9f74",
+        "logit_dump": "ae62631bd12486eff599c9253c406f25b1f8d036988f17925476293c2e9c028f",
+        "ni_run": "6b642bc0f894111a82d1e226ab3471acf019cb0b1990e2efe91a3b4f233e4e2a"
+      },
+      "production_source": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+      "source_inventory_sha256": "78e539b5136bc3fd1d5b84be040f0068c18128728c4a6b2051a3da502d8431ad",
+      "source_sha256_by_path": {
+        "CMakeLists.txt": "cb13b0114fe217f9ca17049af75e400b3113c53563b1ce31050dba3d8e45ad5a",
+        "src/bench/bench.h": "dd385ffed63f7a484da25b3ad8a1a03b6865733547cacc2286becf780b7e1fa9",
+        "src/bench/protocol.cpp": "5df1e8795e4b8c501da2304adcef425cbe617fab3f7c5ceb3b0eb4202792a274",
+        "src/bench/system.mm": "148db0401fd8050cac9409b5eeb07d69ab1452ee1999eaf0cb86a155aa7e4602",
+        "src/gguf/gguf.h": "8ebf4e52ee69b8cafc19f57a62ff4b89bd1435194f421cf3424a1fa2e506660e",
+        "src/gguf/import.cpp": "6ec9edd8dbc1444537a4ad14df62bba015ca715725c43737847240e73ac69c62",
+        "src/gguf/quant.cpp": "bc56773f295da3541b603b01ae9407a07371276e19095740969087327003b3a8",
+        "tools/iq_layout_test.cpp": "d85855b019eae100b267d90ea2207147279e2652b0e405d4984028d0e30c8f07",
+        "tools/logit_compare.py": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+        "tools/logit_dump.cpp": "6225e655e828b426ebab4959bf5e6857bbff537c1b0d733385351afa5530e0c4"
+      }
+    },
+    "reference": {
+      "actual_target_flag_checks": {
+        "kapitsa": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "logit_dump": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "naceinfer": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        },
+        "ni_run": {
+          "NDEBUG": false,
+          "O3": true,
+          "arm64": true,
+          "fast_math": false
+        }
+      },
+      "binaries_sha256": {
+        "kapitsa": "994f06499086cca1de127d51b30dd5bb1d868ec1e0366536ed5d277245206065",
+        "libnaceinfer.a": "269f02149f2d819cc5ea148c369ac358993eeffba8387a3ae216d3494f1fe682",
+        "logit_dump": "5cb6981970527df44942d267ce1fb9c9de0d0194fb443e2e5a54ff5d94e7a191",
+        "ni_run": "e25b7d62d10f28918dbdb2f01933daee9e97e8fa5b4e93315af127829fccd862"
+      },
+      "production_source": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f",
+      "source_inventory_sha256": "e9ab6bb48b58ea72f11ecc9dd05cb7a51c5a689c5df761b7e8ea543d2b94d246",
+      "source_sha256_by_path": {
+        "CMakeLists.txt": "cb13b0114fe217f9ca17049af75e400b3113c53563b1ce31050dba3d8e45ad5a",
+        "src/bench/bench.h": "dd385ffed63f7a484da25b3ad8a1a03b6865733547cacc2286becf780b7e1fa9",
+        "src/bench/protocol.cpp": "5df1e8795e4b8c501da2304adcef425cbe617fab3f7c5ceb3b0eb4202792a274",
+        "src/bench/system.mm": "148db0401fd8050cac9409b5eeb07d69ab1452ee1999eaf0cb86a155aa7e4602",
+        "src/gguf/gguf.h": "8ebf4e52ee69b8cafc19f57a62ff4b89bd1435194f421cf3424a1fa2e506660e",
+        "src/gguf/import.cpp": "6ec9edd8dbc1444537a4ad14df62bba015ca715725c43737847240e73ac69c62",
+        "src/gguf/quant.cpp": "d33b66d3f1a4ef2089abbb3f03cb46fbab195afb95a8b73f1eb0e1f98a1e5035",
+        "tools/iq_layout_test.cpp": "ae40b21bd510e8437619485dbac0066cadd90503134cd901aca77dffdb0d5bf7",
+        "tools/logit_compare.py": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+        "tools/logit_dump.cpp": "6225e655e828b426ebab4959bf5e6857bbff537c1b0d733385351afa5530e0c4"
+      }
+    }
+  },
+  "leg_order": [
+    "A1",
+    "B1",
+    "A2",
+    "B2"
+  ],
+  "legs": [
+    {
+      "arm": "reference",
+      "cohort_seeds": [
+        1,
+        2,
+        3
+      ],
+      "label": "A1",
+      "phase": {
+        "execution_finished_utc": "2026-11-08T12:13:24.643788+00:00",
+        "execution_started_utc": "2026-11-08T12:12:40.559309+00:00",
+        "rc": 0,
+        "status": "COMPLETED"
+      },
+      "prefill_greedy": {
+        "cached": {
+          "flags": [],
+          "invalid": [],
+          "median_suffix_prefill_tps": 580.8,
+          "median_ttft_s": 0.0344,
+          "samples": [
+            {
+              "cached_tokens": 4164,
+              "finish": "stop",
+              "prompt_tokens": 4186,
+              "suffix_prefill_tps": 651.2,
+              "ttft_s": 0.033783125,
+              "uncached_tokens": 22
+            },
+            {
+              "cached_tokens": 4193,
+              "finish": "stop",
+              "prompt_tokens": 4220,
+              "suffix_prefill_tps": 539.3,
+              "ttft_s": 0.0500685,
+              "uncached_tokens": 27
+            },
+            {
+              "cached_tokens": 4230,
+              "finish": "length",
+              "prompt_tokens": 4250,
+              "suffix_prefill_tps": 580.8,
+              "ttft_s": 0.034436375,
+              "uncached_tokens": 20
+            }
+          ]
+        },
+        "cold_cached_tokens": 0,
+        "expected_prompt_tokens": 4133,
+        "finish": "stop",
+        "flags": [],
+        "invalid": [],
+        "prefill_tps": 1974.5806996052443,
+        "prompt_tokens": 4130,
+        "reasoning_chars": 0,
+        "target": 4000,
+        "ttft_s": 2.091583292,
+        "turn1_finish": "stop"
+      },
+      "production_source": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f",
+      "quiet_gate": true,
+      "rows": [
+        {
+          "chunks": 452,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "34d32f1a58919362fa45e1fbab01d218e9968bf5de080262eadd46b1083ac1a3",
+          "distinct4": 0.9687,
+          "e2e_tps": 229.3687195242473,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": false,
+          "invalid": [],
+          "middle_window_tps": 231.79572857889374,
+          "nonce": "0.100001",
+          "rate_method": {
+            "events": 452,
+            "rate_method": "chars",
+            "tokens_per_event": 1.133,
+            "window_s": 2.1061,
+            "window_tokens": 488.2
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.100001] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 1,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.6,
+            "top_k": 20,
+            "top_p": 0.95
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "94bdb35a92dbabfe14dcc6a314e576e5cac69c77847671ffabc88de248345961",
+          "seed": 1,
+          "total_s": 2.716037667,
+          "ttft_s": 0.486064917
+        },
+        {
+          "chunks": 405,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "48f619c69764fd378c9d17974257228ddefec597deb3195cd793b852411cb1cf",
+          "distinct4": 0.5485,
+          "e2e_tps": 258.8971513333647,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": false,
+          "invalid": [],
+          "middle_window_tps": 263.43540785665016,
+          "nonce": "0.100002",
+          "rate_method": {
+            "events": 405,
+            "rate_method": "chars",
+            "tokens_per_event": 1.264,
+            "window_s": 1.8569,
+            "window_tokens": 489.2
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.100002] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 2,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.6,
+            "top_k": 20,
+            "top_p": 0.95
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "90c2dab6754eb7804a90aa4f0a6f4c13d28a630784dfc96b4ad25e797180072d",
+          "seed": 2,
+          "total_s": 2.04530125,
+          "ttft_s": 0.069365083
+        },
+        {
+          "chunks": 417,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "6d53e18530a75bdd198d44d249a43dd74dd550c47223d5a20720a81bd289983b",
+          "distinct4": 0.3815,
+          "e2e_tps": 239.61661345598375,
+          "finish_reason": "length",
+          "flags": [
+            "repetition distinct-4 below 0.5"
+          ],
+          "greedy": false,
+          "invalid": [],
+          "middle_window_tps": 244.23468659276116,
+          "nonce": "0.100003",
+          "rate_method": {
+            "events": 417,
+            "rate_method": "chars",
+            "tokens_per_event": 1.228,
+            "window_s": 2.0035,
+            "window_tokens": 489.3
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.100003] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 3,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.6,
+            "top_k": 20,
+            "top_p": 0.95
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "f12b9a4535796218894ee5fc4871b0116666f5f4fe6dd11a84bc285b4f12ca67",
+          "seed": 3,
+          "total_s": 2.202964292,
+          "ttft_s": 0.068251625
+        },
+        {
+          "chunks": 425,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "distinct4": 0.5535,
+          "e2e_tps": 256.47553148569887,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": true,
+          "invalid": [],
+          "middle_window_tps": 263.12290475943945,
+          "nonce": "0.200001",
+          "rate_method": {
+            "events": 425,
+            "rate_method": "chars",
+            "tokens_per_event": 1.205,
+            "window_s": 1.8649,
+            "window_tokens": 490.7
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.200001] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 1,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.0,
+            "top_k": 1,
+            "top_p": 1.0
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "96e74c3ba2e34a7803d20bea66ff12e1f19cf57e6b7903ade928fbda1a52df6b",
+          "seed": 1,
+          "total_s": 2.0636205,
+          "ttft_s": 0.069075
+        },
+        {
+          "chunks": 425,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "distinct4": 0.5535,
+          "e2e_tps": 255.86580276671117,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": true,
+          "invalid": [],
+          "middle_window_tps": 262.4594386632696,
+          "nonce": "0.200002",
+          "rate_method": {
+            "events": 425,
+            "rate_method": "chars",
+            "tokens_per_event": 1.205,
+            "window_s": 1.8696,
+            "window_tokens": 490.7
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.200002] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 2,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.0,
+            "top_k": 1,
+            "top_p": 1.0
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "82ab0d143ec32d626016f122117771f7b4190e0aea072f1abbf0e850ca9fdefe",
+          "seed": 2,
+          "total_s": 2.065746042,
+          "ttft_s": 0.06643525
+        },
+        {
+          "chunks": 425,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "distinct4": 0.5535,
+          "e2e_tps": 255.84643205941043,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": true,
+          "invalid": [],
+          "middle_window_tps": 262.4761334721464,
+          "nonce": "0.200003",
+          "rate_method": {
+            "events": 425,
+            "rate_method": "chars",
+            "tokens_per_event": 1.205,
+            "window_s": 1.8695,
+            "window_tokens": 490.7
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.200003] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 3,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.0,
+            "top_k": 1,
+            "top_p": 1.0
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "de671128bf2f3d98c7c6d7ed95e4023d3cc16b9a2c7d60ac6d16943a6476f6ff",
+          "seed": 3,
+          "total_s": 2.066603417,
+          "ttft_s": 0.0670205
+        }
+      ],
+      "warmup": {
+        "adaptive": false,
+        "ok": true,
+        "steps": [
+          {
+            "completion_tokens": 64,
+            "finish": "length",
+            "name": "prefill~2.9k+decode64",
+            "ok": true,
+            "prompt_tokens": 2922,
+            "s": 2.26,
+            "thinking_leak": []
+          },
+          {
+            "completion_tokens": 27,
+            "finish": "tool_calls",
+            "name": "tools",
+            "ok": true,
+            "prompt_tokens": 430,
+            "s": 0.33,
+            "thinking_leak": []
+          }
+        ]
+      }
+    },
+    {
+      "arm": "candidate",
+      "cohort_seeds": [
+        1,
+        2,
+        3
+      ],
+      "label": "B1",
+      "phase": {
+        "execution_finished_utc": "2026-11-08T12:14:13.079743+00:00",
+        "execution_started_utc": "2026-11-08T12:13:30.908073+00:00",
+        "rc": 0,
+        "status": "COMPLETED"
+      },
+      "prefill_greedy": {
+        "cached": {
+          "flags": [],
+          "invalid": [],
+          "median_suffix_prefill_tps": 652.2,
+          "median_ttft_s": 0.0362,
+          "samples": [
+            {
+              "cached_tokens": 4164,
+              "finish": "stop",
+              "prompt_tokens": 4186,
+              "suffix_prefill_tps": 653.2,
+              "ttft_s": 0.033678166,
+              "uncached_tokens": 22
+            },
+            {
+              "cached_tokens": 4193,
+              "finish": "stop",
+              "prompt_tokens": 4220,
+              "suffix_prefill_tps": 652.2,
+              "ttft_s": 0.041401,
+              "uncached_tokens": 27
+            },
+            {
+              "cached_tokens": 4230,
+              "finish": "length",
+              "prompt_tokens": 4250,
+              "suffix_prefill_tps": 552.9,
+              "ttft_s": 0.036174333,
+              "uncached_tokens": 20
+            }
+          ]
+        },
+        "cold_cached_tokens": 0,
+        "expected_prompt_tokens": 4133,
+        "finish": "stop",
+        "flags": [],
+        "invalid": [],
+        "prefill_tps": 1971.6473059534142,
+        "prompt_tokens": 4130,
+        "reasoning_chars": 0,
+        "target": 4000,
+        "ttft_s": 2.094695125,
+        "turn1_finish": "stop"
+      },
+      "production_source": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+      "quiet_gate": true,
+      "rows": [
+        {
+          "chunks": 452,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "34d32f1a58919362fa45e1fbab01d218e9968bf5de080262eadd46b1083ac1a3",
+          "distinct4": 0.9687,
+          "e2e_tps": 229.2428360663785,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": false,
+          "invalid": [],
+          "middle_window_tps": 231.53327874159507,
+          "nonce": "0.100001",
+          "rate_method": {
+            "events": 452,
+            "rate_method": "chars",
+            "tokens_per_event": 1.133,
+            "window_s": 2.1085,
+            "window_tokens": 488.2
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.100001] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 1,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.6,
+            "top_k": 20,
+            "top_p": 0.95
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "94bdb35a92dbabfe14dcc6a314e576e5cac69c77847671ffabc88de248345961",
+          "seed": 1,
+          "total_s": 2.7110575,
+          "ttft_s": 0.479742125
+        },
+        {
+          "chunks": 405,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "48f619c69764fd378c9d17974257228ddefec597deb3195cd793b852411cb1cf",
+          "distinct4": 0.5485,
+          "e2e_tps": 258.3541730227291,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": false,
+          "invalid": [],
+          "middle_window_tps": 262.76864588741677,
+          "nonce": "0.100002",
+          "rate_method": {
+            "events": 405,
+            "rate_method": "chars",
+            "tokens_per_event": 1.264,
+            "window_s": 1.8616,
+            "window_tokens": 489.2
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.100002] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 2,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.6,
+            "top_k": 20,
+            "top_p": 0.95
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "90c2dab6754eb7804a90aa4f0a6f4c13d28a630784dfc96b4ad25e797180072d",
+          "seed": 2,
+          "total_s": 2.047478667,
+          "ttft_s": 0.067669958
+        },
+        {
+          "chunks": 417,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "6d53e18530a75bdd198d44d249a43dd74dd550c47223d5a20720a81bd289983b",
+          "distinct4": 0.3815,
+          "e2e_tps": 239.67489577835653,
+          "finish_reason": "length",
+          "flags": [
+            "repetition distinct-4 below 0.5"
+          ],
+          "greedy": false,
+          "invalid": [],
+          "middle_window_tps": 244.37989576757266,
+          "nonce": "0.100003",
+          "rate_method": {
+            "events": 417,
+            "rate_method": "chars",
+            "tokens_per_event": 1.228,
+            "window_s": 2.0023,
+            "window_tokens": 489.3
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.100003] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 3,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.6,
+            "top_k": 20,
+            "top_p": 0.95
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "f12b9a4535796218894ee5fc4871b0116666f5f4fe6dd11a84bc285b4f12ca67",
+          "seed": 3,
+          "total_s": 2.202761958,
+          "ttft_s": 0.067961208
+        },
+        {
+          "chunks": 425,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "distinct4": 0.5535,
+          "e2e_tps": 254.872774032654,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": true,
+          "invalid": [],
+          "middle_window_tps": 261.46014756749975,
+          "nonce": "0.200001",
+          "rate_method": {
+            "events": 425,
+            "rate_method": "chars",
+            "tokens_per_event": 1.205,
+            "window_s": 1.8767,
+            "window_tokens": 490.7
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.200001] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 1,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.0,
+            "top_k": 1,
+            "top_p": 1.0
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "96e74c3ba2e34a7803d20bea66ff12e1f19cf57e6b7903ade928fbda1a52df6b",
+          "seed": 1,
+          "total_s": 2.076923291,
+          "ttft_s": 0.069501708
+        },
+        {
+          "chunks": 425,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "distinct4": 0.5535,
+          "e2e_tps": 255.7691330702732,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": true,
+          "invalid": [],
+          "middle_window_tps": 262.4441845849889,
+          "nonce": "0.200002",
+          "rate_method": {
+            "events": 425,
+            "rate_method": "chars",
+            "tokens_per_event": 1.205,
+            "window_s": 1.8697,
+            "window_tokens": 490.7
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.200002] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 2,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.0,
+            "top_k": 1,
+            "top_p": 1.0
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "82ab0d143ec32d626016f122117771f7b4190e0aea072f1abbf0e850ca9fdefe",
+          "seed": 2,
+          "total_s": 2.067306417,
+          "ttft_s": 0.067143167
+        },
+        {
+          "chunks": 425,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "distinct4": 0.5535,
+          "e2e_tps": 257.3644013841041,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": true,
+          "invalid": [],
+          "middle_window_tps": 264.22605114635917,
+          "nonce": "0.200003",
+          "rate_method": {
+            "events": 425,
+            "rate_method": "chars",
+            "tokens_per_event": 1.205,
+            "window_s": 1.8571,
+            "window_tokens": 490.7
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.200003] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 3,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.0,
+            "top_k": 1,
+            "top_p": 1.0
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "de671128bf2f3d98c7c6d7ed95e4023d3cc16b9a2c7d60ac6d16943a6476f6ff",
+          "seed": 3,
+          "total_s": 2.054824333,
+          "ttft_s": 0.067308542
+        }
+      ],
+      "warmup": {
+        "adaptive": false,
+        "ok": true,
+        "steps": [
+          {
+            "completion_tokens": 64,
+            "finish": "length",
+            "name": "prefill~2.9k+decode64",
+            "ok": true,
+            "prompt_tokens": 2922,
+            "s": 2.25,
+            "thinking_leak": []
+          },
+          {
+            "completion_tokens": 27,
+            "finish": "tool_calls",
+            "name": "tools",
+            "ok": true,
+            "prompt_tokens": 430,
+            "s": 0.33,
+            "thinking_leak": []
+          }
+        ]
+      }
+    },
+    {
+      "arm": "reference",
+      "cohort_seeds": [
+        1,
+        2,
+        3
+      ],
+      "label": "A2",
+      "phase": {
+        "execution_finished_utc": "2026-11-08T12:15:01.482907+00:00",
+        "execution_started_utc": "2026-11-08T12:14:19.363250+00:00",
+        "rc": 0,
+        "status": "COMPLETED"
+      },
+      "prefill_greedy": {
+        "cached": {
+          "flags": [],
+          "invalid": [],
+          "median_suffix_prefill_tps": 646.1,
+          "median_ttft_s": 0.0389,
+          "samples": [
+            {
+              "cached_tokens": 4164,
+              "finish": "stop",
+              "prompt_tokens": 4186,
+              "suffix_prefill_tps": 646.1,
+              "ttft_s": 0.034048583,
+              "uncached_tokens": 22
+            },
+            {
+              "cached_tokens": 4193,
+              "finish": "stop",
+              "prompt_tokens": 4220,
+              "suffix_prefill_tps": 651.4,
+              "ttft_s": 0.041447375,
+              "uncached_tokens": 27
+            },
+            {
+              "cached_tokens": 4230,
+              "finish": "length",
+              "prompt_tokens": 4250,
+              "suffix_prefill_tps": 513.5,
+              "ttft_s": 0.038949541,
+              "uncached_tokens": 20
+            }
+          ]
+        },
+        "cold_cached_tokens": 0,
+        "expected_prompt_tokens": 4133,
+        "finish": "stop",
+        "flags": [],
+        "invalid": [],
+        "prefill_tps": 1974.7920340651492,
+        "prompt_tokens": 4130,
+        "reasoning_chars": 0,
+        "target": 4000,
+        "ttft_s": 2.091359459,
+        "turn1_finish": "stop"
+      },
+      "production_source": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f",
+      "quiet_gate": true,
+      "rows": [
+        {
+          "chunks": 452,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "34d32f1a58919362fa45e1fbab01d218e9968bf5de080262eadd46b1083ac1a3",
+          "distinct4": 0.9687,
+          "e2e_tps": 234.14706559263564,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": false,
+          "invalid": [],
+          "middle_window_tps": 236.60641671428166,
+          "nonce": "0.100001",
+          "rate_method": {
+            "events": 452,
+            "rate_method": "chars",
+            "tokens_per_event": 1.133,
+            "window_s": 2.0633,
+            "window_tokens": 488.2
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.100001] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 1,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.6,
+            "top_k": 20,
+            "top_p": 0.95
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "94bdb35a92dbabfe14dcc6a314e576e5cac69c77847671ffabc88de248345961",
+          "seed": 1,
+          "total_s": 2.6448655,
+          "ttft_s": 0.460378
+        },
+        {
+          "chunks": 405,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "48f619c69764fd378c9d17974257228ddefec597deb3195cd793b852411cb1cf",
+          "distinct4": 0.5485,
+          "e2e_tps": 261.796584182171,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": false,
+          "invalid": [],
+          "middle_window_tps": 266.3327409576454,
+          "nonce": "0.100002",
+          "rate_method": {
+            "events": 405,
+            "rate_method": "chars",
+            "tokens_per_event": 1.264,
+            "window_s": 1.8367,
+            "window_tokens": 489.2
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.100002] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 2,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.6,
+            "top_k": 20,
+            "top_p": 0.95
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "90c2dab6754eb7804a90aa4f0a6f4c13d28a630784dfc96b4ad25e797180072d",
+          "seed": 2,
+          "total_s": 2.021523792,
+          "ttft_s": 0.0676215
+        },
+        {
+          "chunks": 417,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "6d53e18530a75bdd198d44d249a43dd74dd550c47223d5a20720a81bd289983b",
+          "distinct4": 0.3815,
+          "e2e_tps": 241.495062339025,
+          "finish_reason": "length",
+          "flags": [
+            "repetition distinct-4 below 0.5"
+          ],
+          "greedy": false,
+          "invalid": [],
+          "middle_window_tps": 246.19089707134933,
+          "nonce": "0.100003",
+          "rate_method": {
+            "events": 417,
+            "rate_method": "chars",
+            "tokens_per_event": 1.228,
+            "window_s": 1.9876,
+            "window_tokens": 489.3
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.100003] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 3,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.6,
+            "top_k": 20,
+            "top_p": 0.95
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "f12b9a4535796218894ee5fc4871b0116666f5f4fe6dd11a84bc285b4f12ca67",
+          "seed": 3,
+          "total_s": 2.1862855,
+          "ttft_s": 0.068362916
+        },
+        {
+          "chunks": 425,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "distinct4": 0.5535,
+          "e2e_tps": 257.87943211614277,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": true,
+          "invalid": [],
+          "middle_window_tps": 264.6031356793632,
+          "nonce": "0.200001",
+          "rate_method": {
+            "events": 425,
+            "rate_method": "chars",
+            "tokens_per_event": 1.205,
+            "window_s": 1.8545,
+            "window_tokens": 490.7
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.200001] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 1,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.0,
+            "top_k": 1,
+            "top_p": 1.0
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "96e74c3ba2e34a7803d20bea66ff12e1f19cf57e6b7903ade928fbda1a52df6b",
+          "seed": 1,
+          "total_s": 2.051094666,
+          "ttft_s": 0.067311125
+        },
+        {
+          "chunks": 425,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "distinct4": 0.5535,
+          "e2e_tps": 258.1782008521444,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": true,
+          "invalid": [],
+          "middle_window_tps": 264.8990683371565,
+          "nonce": "0.200002",
+          "rate_method": {
+            "events": 425,
+            "rate_method": "chars",
+            "tokens_per_event": 1.205,
+            "window_s": 1.8524,
+            "window_tokens": 490.7
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.200002] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 2,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.0,
+            "top_k": 1,
+            "top_p": 1.0
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "82ab0d143ec32d626016f122117771f7b4190e0aea072f1abbf0e850ca9fdefe",
+          "seed": 2,
+          "total_s": 2.049730833,
+          "ttft_s": 0.0682745
+        },
+        {
+          "chunks": 425,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "distinct4": 0.5535,
+          "e2e_tps": 257.00582927947715,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": true,
+          "invalid": [],
+          "middle_window_tps": 263.63469136910294,
+          "nonce": "0.200003",
+          "rate_method": {
+            "events": 425,
+            "rate_method": "chars",
+            "tokens_per_event": 1.205,
+            "window_s": 1.8613,
+            "window_tokens": 490.7
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.200003] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 3,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.0,
+            "top_k": 1,
+            "top_p": 1.0
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "de671128bf2f3d98c7c6d7ed95e4023d3cc16b9a2c7d60ac6d16943a6476f6ff",
+          "seed": 3,
+          "total_s": 2.05887075,
+          "ttft_s": 0.068414
+        }
+      ],
+      "warmup": {
+        "adaptive": false,
+        "ok": true,
+        "steps": [
+          {
+            "completion_tokens": 64,
+            "finish": "length",
+            "name": "prefill~2.9k+decode64",
+            "ok": true,
+            "prompt_tokens": 2922,
+            "s": 2.32,
+            "thinking_leak": []
+          },
+          {
+            "completion_tokens": 27,
+            "finish": "tool_calls",
+            "name": "tools",
+            "ok": true,
+            "prompt_tokens": 430,
+            "s": 0.33,
+            "thinking_leak": []
+          }
+        ]
+      }
+    },
+    {
+      "arm": "candidate",
+      "cohort_seeds": [
+        1,
+        2,
+        3
+      ],
+      "label": "B2",
+      "phase": {
+        "execution_finished_utc": "2026-11-08T12:15:51.853200+00:00",
+        "execution_started_utc": "2026-11-08T12:15:09.785622+00:00",
+        "rc": 0,
+        "status": "COMPLETED"
+      },
+      "prefill_greedy": {
+        "cached": {
+          "flags": [],
+          "invalid": [],
+          "median_suffix_prefill_tps": 615.2,
+          "median_ttft_s": 0.0421,
+          "samples": [
+            {
+              "cached_tokens": 4164,
+              "finish": "stop",
+              "prompt_tokens": 4186,
+              "suffix_prefill_tps": 651.7,
+              "ttft_s": 0.033756708,
+              "uncached_tokens": 22
+            },
+            {
+              "cached_tokens": 4193,
+              "finish": "stop",
+              "prompt_tokens": 4220,
+              "suffix_prefill_tps": 615.2,
+              "ttft_s": 0.043891667,
+              "uncached_tokens": 27
+            },
+            {
+              "cached_tokens": 4230,
+              "finish": "length",
+              "prompt_tokens": 4250,
+              "suffix_prefill_tps": 475.4,
+              "ttft_s": 0.042069083,
+              "uncached_tokens": 20
+            }
+          ]
+        },
+        "cold_cached_tokens": 0,
+        "expected_prompt_tokens": 4133,
+        "finish": "stop",
+        "flags": [],
+        "invalid": [],
+        "prefill_tps": 1973.6980052844526,
+        "prompt_tokens": 4130,
+        "reasoning_chars": 0,
+        "target": 4000,
+        "ttft_s": 2.092518708,
+        "turn1_finish": "stop"
+      },
+      "production_source": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+      "quiet_gate": true,
+      "rows": [
+        {
+          "chunks": 452,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "34d32f1a58919362fa45e1fbab01d218e9968bf5de080262eadd46b1083ac1a3",
+          "distinct4": 0.9687,
+          "e2e_tps": 231.93760821330525,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": false,
+          "invalid": [],
+          "middle_window_tps": 234.26410190325743,
+          "nonce": "0.100001",
+          "rate_method": {
+            "events": 452,
+            "rate_method": "chars",
+            "tokens_per_event": 1.133,
+            "window_s": 2.0839,
+            "window_tokens": 488.2
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.100001] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 1,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.6,
+            "top_k": 20,
+            "top_p": 0.95
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "94bdb35a92dbabfe14dcc6a314e576e5cac69c77847671ffabc88de248345961",
+          "seed": 1,
+          "total_s": 2.677904041,
+          "ttft_s": 0.472569333
+        },
+        {
+          "chunks": 405,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "48f619c69764fd378c9d17974257228ddefec597deb3195cd793b852411cb1cf",
+          "distinct4": 0.5485,
+          "e2e_tps": 259.7411179084893,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": false,
+          "invalid": [],
+          "middle_window_tps": 264.38480587981604,
+          "nonce": "0.100002",
+          "rate_method": {
+            "events": 405,
+            "rate_method": "chars",
+            "tokens_per_event": 1.264,
+            "window_s": 1.8502,
+            "window_tokens": 489.2
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.100002] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 2,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.6,
+            "top_k": 20,
+            "top_p": 0.95
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "90c2dab6754eb7804a90aa4f0a6f4c13d28a630784dfc96b4ad25e797180072d",
+          "seed": 2,
+          "total_s": 2.037491166,
+          "ttft_s": 0.068114583
+        },
+        {
+          "chunks": 417,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "6d53e18530a75bdd198d44d249a43dd74dd550c47223d5a20720a81bd289983b",
+          "distinct4": 0.3815,
+          "e2e_tps": 242.63370102061802,
+          "finish_reason": "length",
+          "flags": [
+            "repetition distinct-4 below 0.5"
+          ],
+          "greedy": false,
+          "invalid": [],
+          "middle_window_tps": 247.27292721189278,
+          "nonce": "0.100003",
+          "rate_method": {
+            "events": 417,
+            "rate_method": "chars",
+            "tokens_per_event": 1.228,
+            "window_s": 1.9789,
+            "window_tokens": 489.3
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.100003] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 3,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.6,
+            "top_k": 20,
+            "top_p": 0.95
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "f12b9a4535796218894ee5fc4871b0116666f5f4fe6dd11a84bc285b4f12ca67",
+          "seed": 3,
+          "total_s": 2.175281458,
+          "ttft_s": 0.067391875
+        },
+        {
+          "chunks": 425,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "distinct4": 0.5535,
+          "e2e_tps": 259.1418007071503,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": true,
+          "invalid": [],
+          "middle_window_tps": 265.8935896466194,
+          "nonce": "0.200001",
+          "rate_method": {
+            "events": 425,
+            "rate_method": "chars",
+            "tokens_per_event": 1.205,
+            "window_s": 1.8455,
+            "window_tokens": 490.7
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.200001] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 1,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.0,
+            "top_k": 1,
+            "top_p": 1.0
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "96e74c3ba2e34a7803d20bea66ff12e1f19cf57e6b7903ade928fbda1a52df6b",
+          "seed": 1,
+          "total_s": 2.040942709,
+          "ttft_s": 0.067010625
+        },
+        {
+          "chunks": 425,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "distinct4": 0.5535,
+          "e2e_tps": 259.6079881276339,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": true,
+          "invalid": [],
+          "middle_window_tps": 266.38496962568723,
+          "nonce": "0.200002",
+          "rate_method": {
+            "events": 425,
+            "rate_method": "chars",
+            "tokens_per_event": 1.205,
+            "window_s": 1.842,
+            "window_tokens": 490.7
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.200002] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 2,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.0,
+            "top_k": 1,
+            "top_p": 1.0
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "82ab0d143ec32d626016f122117771f7b4190e0aea072f1abbf0e850ca9fdefe",
+          "seed": 2,
+          "total_s": 2.037586416,
+          "ttft_s": 0.067261166
+        },
+        {
+          "chunks": 425,
+          "completion_tokens": 512,
+          "content_nonempty": true,
+          "content_sha256": "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "distinct4": 0.5535,
+          "e2e_tps": 259.6376945695795,
+          "finish_reason": "length",
+          "flags": [],
+          "greedy": true,
+          "invalid": [],
+          "middle_window_tps": 266.4241416143111,
+          "nonce": "0.200003",
+          "rate_method": {
+            "events": 425,
+            "rate_method": "chars",
+            "tokens_per_event": 1.205,
+            "window_s": 1.8418,
+            "window_tokens": 490.7
+          },
+          "request": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            },
+            "frequency_penalty": 0.0,
+            "max_tokens": 512,
+            "messages": [
+              {
+                "content": "You are a helpful coding assistant. Answer with code only.",
+                "role": "system"
+              },
+              {
+                "content": "[run 0.200003] Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, a thread-safe wrapper, and a pytest test suite. Write at least 600 lines. Do not stop early.",
+                "role": "user"
+              }
+            ],
+            "min_p": 0.0,
+            "model": "iq4-nl-review",
+            "presence_penalty": 0.0,
+            "reasoning_effort": "none",
+            "repeat_penalty": 1.0,
+            "seed": 3,
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "temperature": 0.0,
+            "top_k": 1,
+            "top_p": 1.0
+          },
+          "request_derivation": "Reconstructed from pinned source; exact serialized request SHA matches recorded original. This object is not an original execution log.",
+          "request_sha256": "de671128bf2f3d98c7c6d7ed95e4023d3cc16b9a2c7d60ac6d16943a6476f6ff",
+          "seed": 3,
+          "total_s": 2.037257083,
+          "ttft_s": 0.067072167
+        }
+      ],
+      "warmup": {
+        "adaptive": false,
+        "ok": true,
+        "steps": [
+          {
+            "completion_tokens": 64,
+            "finish": "length",
+            "name": "prefill~2.9k+decode64",
+            "ok": true,
+            "prompt_tokens": 2922,
+            "s": 2.27,
+            "thinking_leak": []
+          },
+          {
+            "completion_tokens": 27,
+            "finish": "tool_calls",
+            "name": "tools",
+            "ok": true,
+            "prompt_tokens": 430,
+            "s": 0.33,
+            "thinking_leak": []
+          }
+        ]
+      }
+    }
+  ],
+  "matched_decode_cohorts": {
+    "cohorts": [
+      {
+        "complete_contents_match_across_4_legs": true,
+        "content_sha256_by_leg": [
+          "34d32f1a58919362fa45e1fbab01d218e9968bf5de080262eadd46b1083ac1a3",
+          "34d32f1a58919362fa45e1fbab01d218e9968bf5de080262eadd46b1083ac1a3",
+          "34d32f1a58919362fa45e1fbab01d218e9968bf5de080262eadd46b1083ac1a3",
+          "34d32f1a58919362fa45e1fbab01d218e9968bf5de080262eadd46b1083ac1a3"
+        ],
+        "greedy": false,
+        "request_sha256_by_leg": [
+          "94bdb35a92dbabfe14dcc6a314e576e5cac69c77847671ffabc88de248345961",
+          "94bdb35a92dbabfe14dcc6a314e576e5cac69c77847671ffabc88de248345961",
+          "94bdb35a92dbabfe14dcc6a314e576e5cac69c77847671ffabc88de248345961",
+          "94bdb35a92dbabfe14dcc6a314e576e5cac69c77847671ffabc88de248345961"
+        ],
+        "requests_match_across_4_legs": true,
+        "row_flags_or_invalid_by_leg": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "seed": 1
+      },
+      {
+        "complete_contents_match_across_4_legs": true,
+        "content_sha256_by_leg": [
+          "48f619c69764fd378c9d17974257228ddefec597deb3195cd793b852411cb1cf",
+          "48f619c69764fd378c9d17974257228ddefec597deb3195cd793b852411cb1cf",
+          "48f619c69764fd378c9d17974257228ddefec597deb3195cd793b852411cb1cf",
+          "48f619c69764fd378c9d17974257228ddefec597deb3195cd793b852411cb1cf"
+        ],
+        "greedy": false,
+        "request_sha256_by_leg": [
+          "90c2dab6754eb7804a90aa4f0a6f4c13d28a630784dfc96b4ad25e797180072d",
+          "90c2dab6754eb7804a90aa4f0a6f4c13d28a630784dfc96b4ad25e797180072d",
+          "90c2dab6754eb7804a90aa4f0a6f4c13d28a630784dfc96b4ad25e797180072d",
+          "90c2dab6754eb7804a90aa4f0a6f4c13d28a630784dfc96b4ad25e797180072d"
+        ],
+        "requests_match_across_4_legs": true,
+        "row_flags_or_invalid_by_leg": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "seed": 2
+      },
+      {
+        "complete_contents_match_across_4_legs": true,
+        "content_sha256_by_leg": [
+          "6d53e18530a75bdd198d44d249a43dd74dd550c47223d5a20720a81bd289983b",
+          "6d53e18530a75bdd198d44d249a43dd74dd550c47223d5a20720a81bd289983b",
+          "6d53e18530a75bdd198d44d249a43dd74dd550c47223d5a20720a81bd289983b",
+          "6d53e18530a75bdd198d44d249a43dd74dd550c47223d5a20720a81bd289983b"
+        ],
+        "greedy": false,
+        "request_sha256_by_leg": [
+          "f12b9a4535796218894ee5fc4871b0116666f5f4fe6dd11a84bc285b4f12ca67",
+          "f12b9a4535796218894ee5fc4871b0116666f5f4fe6dd11a84bc285b4f12ca67",
+          "f12b9a4535796218894ee5fc4871b0116666f5f4fe6dd11a84bc285b4f12ca67",
+          "f12b9a4535796218894ee5fc4871b0116666f5f4fe6dd11a84bc285b4f12ca67"
+        ],
+        "requests_match_across_4_legs": true,
+        "row_flags_or_invalid_by_leg": [
+          true,
+          true,
+          true,
+          true
+        ],
+        "seed": 3
+      },
+      {
+        "complete_contents_match_across_4_legs": true,
+        "content_sha256_by_leg": [
+          "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863"
+        ],
+        "greedy": true,
+        "request_sha256_by_leg": [
+          "96e74c3ba2e34a7803d20bea66ff12e1f19cf57e6b7903ade928fbda1a52df6b",
+          "96e74c3ba2e34a7803d20bea66ff12e1f19cf57e6b7903ade928fbda1a52df6b",
+          "96e74c3ba2e34a7803d20bea66ff12e1f19cf57e6b7903ade928fbda1a52df6b",
+          "96e74c3ba2e34a7803d20bea66ff12e1f19cf57e6b7903ade928fbda1a52df6b"
+        ],
+        "requests_match_across_4_legs": true,
+        "row_flags_or_invalid_by_leg": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "seed": 1
+      },
+      {
+        "complete_contents_match_across_4_legs": true,
+        "content_sha256_by_leg": [
+          "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863"
+        ],
+        "greedy": true,
+        "request_sha256_by_leg": [
+          "82ab0d143ec32d626016f122117771f7b4190e0aea072f1abbf0e850ca9fdefe",
+          "82ab0d143ec32d626016f122117771f7b4190e0aea072f1abbf0e850ca9fdefe",
+          "82ab0d143ec32d626016f122117771f7b4190e0aea072f1abbf0e850ca9fdefe",
+          "82ab0d143ec32d626016f122117771f7b4190e0aea072f1abbf0e850ca9fdefe"
+        ],
+        "requests_match_across_4_legs": true,
+        "row_flags_or_invalid_by_leg": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "seed": 2
+      },
+      {
+        "complete_contents_match_across_4_legs": true,
+        "content_sha256_by_leg": [
+          "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863",
+          "92bc5e5d4c263f3cf27f3d3cec09834d607635687caa8a4869e71c05e9019863"
+        ],
+        "greedy": true,
+        "request_sha256_by_leg": [
+          "de671128bf2f3d98c7c6d7ed95e4023d3cc16b9a2c7d60ac6d16943a6476f6ff",
+          "de671128bf2f3d98c7c6d7ed95e4023d3cc16b9a2c7d60ac6d16943a6476f6ff",
+          "de671128bf2f3d98c7c6d7ed95e4023d3cc16b9a2c7d60ac6d16943a6476f6ff",
+          "de671128bf2f3d98c7c6d7ed95e4023d3cc16b9a2c7d60ac6d16943a6476f6ff"
+        ],
+        "requests_match_across_4_legs": true,
+        "row_flags_or_invalid_by_leg": [
+          false,
+          false,
+          false,
+          false
+        ],
+        "seed": 3
+      }
+    ],
+    "status": "COMPLETED_COHORT_COMPARISON"
+  },
+  "model": {
+    "expected_vocab": 248320,
+    "filename": "Qwen_Qwen3.5-4B-IQ4_NL.gguf",
+    "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "source_bytes": 2775541728,
+    "source_sha256": "f007c3dbf67df668354d37ae13d87fd5789059704977959187e8342aec03b66f"
+  },
+  "production_source": {
+    "candidate": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+    "reference": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f"
+  },
+  "record_kind": "Explicitly sanitized derived evidence; not raw execution logs",
+  "scope": "Request and complete-content hashes cover the six sampled/greedy decode cohorts only. Prefill/cached text and random native transcripts are not byte-compared here; cached timings are not necessarily matched-input measurements. All flags/invalid/error/rc are preserved, with private machine-usage details mapped to stable failed-gate IDs.",
+  "setup": "M3"
+}

@@ -1,0 +1,503 @@
+{
+  "evidence_kind": "Explicitly filtered and derived public copy; private originals retained",
+  "source_reference": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+  "source_candidate": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+  "GPU_or_full_model_claim": false,
+  "environment": {
+    "chip": "M4 Pro",
+    "GPU_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "method": "Each width has 1024 separately called real GGUF rows, eight alternating A/B legs and 16 passes per leg. Entire output bytes and finite values checked on every timed pass; input and binary digests checked before and after each leg.",
+  "widths": [
+    {
+      "schema": "kapitsa-q8-0-cpu-ab-summary-v1",
+      "scope": "warm official CPU per-row dequantization of 1024 real Q8_0 rows; no loading or inference speed claim",
+      "source_reference": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+      "source_candidate": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+      "fixture_sha256": "198e0b839d0adf35382d50487bc10bf63b3c3ae277f44688785357074e027541",
+      "full_output_bytes": 16777216,
+      "oracle_output_sha256": "68e0bbf04504ec10f2941f45ebfba065f7a53ac801a43f115a1d120ee6975811",
+      "legs": [
+        {
+          "label": "A1",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            1132.73046875,
+            1110.2705078125,
+            1074.70703125,
+            1075.6435546875,
+            1080.119140625,
+            1090.1689453125,
+            1066.7724609375,
+            1053.2626953125,
+            1055.6240234375,
+            1051.1875,
+            1056.5185546875,
+            1054.240234375,
+            1071.4931640625,
+            1058.9599609375,
+            1053.9951171875,
+            1057.4140625
+          ],
+          "median_ns_per_row": 1062.8662109375,
+          "mean_ns_per_row": 1071.4442138671875
+        },
+        {
+          "label": "B1",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            310.83203125,
+            272.9091796875,
+            272.705078125,
+            264.36328125,
+            265.5029296875,
+            263.671875,
+            273.0712890625,
+            266.0322265625,
+            270.8740234375,
+            274.658203125,
+            277.2216796875,
+            265.177734375,
+            269.978515625,
+            263.345703125,
+            268.5947265625,
+            262.939453125
+          ],
+          "median_ns_per_row": 269.28662109375,
+          "mean_ns_per_row": 271.36737060546875
+        },
+        {
+          "label": "A2",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            1063.8017578125,
+            1055.6640625,
+            1054.6875,
+            1048.013671875,
+            1047.119140625,
+            1046.2646484375,
+            1048.9501953125,
+            1048.13671875,
+            1053.751953125,
+            1059.48828125,
+            1041.4228515625,
+            1051.310546875,
+            1059.6513671875,
+            1059.2451171875,
+            1048.0556640625,
+            1044.1083984375
+          ],
+          "median_ns_per_row": 1050.13037109375,
+          "mean_ns_per_row": 1051.8544921875
+        },
+        {
+          "label": "B2",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            311.8076171875,
+            263.427734375,
+            264.8515625,
+            266.2353515625,
+            266.845703125,
+            265.9501953125,
+            264.404296875,
+            264.16015625,
+            258.1787109375,
+            268.1484375,
+            258.7890625,
+            256.7138671875,
+            257.8125,
+            257.8935546875,
+            263.4677734375,
+            274.6171875
+          ],
+          "median_ns_per_row": 264.2822265625,
+          "mean_ns_per_row": 266.45648193359375
+        },
+        {
+          "label": "A3",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            1026.9375,
+            1028.23828125,
+            1045.5322265625,
+            1067.0166015625,
+            1034.0166015625,
+            1036.4580078125,
+            1040.0390625,
+            1051.06640625,
+            1010.212890625,
+            1041.748046875,
+            1029.541015625,
+            1026.205078125,
+            1067.626953125,
+            1092.244140625,
+            1082.3564453125,
+            1070.271484375
+          ],
+          "median_ns_per_row": 1040.8935546875,
+          "mean_ns_per_row": 1046.8444213867188
+        },
+        {
+          "label": "B3",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            307.90234375,
+            272.8271484375,
+            287.2314453125,
+            289.2255859375,
+            289.876953125,
+            261.3115234375,
+            271.6875,
+            268.798828125,
+            267.2529296875,
+            260.05078125,
+            267.578125,
+            269.24609375,
+            272.990234375,
+            265.869140625,
+            268.7578125,
+            261.3115234375
+          ],
+          "median_ns_per_row": 269.0224609375,
+          "mean_ns_per_row": 273.869873046875
+        },
+        {
+          "label": "A4",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            1077.63671875,
+            1141.560546875,
+            1068.2783203125,
+            1033.4873046875,
+            1083.29296875,
+            1055.7861328125,
+            1100.015625,
+            1059.4482421875,
+            1086.5068359375,
+            1052.3681640625,
+            1056.0302734375,
+            1059.1630859375,
+            1090.6162109375,
+            1102.091796875,
+            1039.794921875,
+            1058.349609375
+          ],
+          "median_ns_per_row": 1063.86328125,
+          "mean_ns_per_row": 1072.7766723632812
+        },
+        {
+          "label": "B4",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            285.400390625,
+            267.9443359375,
+            257.4462890625,
+            258.6669921875,
+            255.453125,
+            252.6044921875,
+            277.0595703125,
+            263.5908203125,
+            258.259765625,
+            274.7802734375,
+            263.0615234375,
+            275.4716796875,
+            261.5146484375,
+            263.224609375,
+            270.1416015625,
+            272.908203125
+          ],
+          "median_ns_per_row": 263.40771484375,
+          "mean_ns_per_row": 266.09552001953125
+        }
+      ],
+      "pairs": [
+        {
+          "pair": 1,
+          "reference": "A1",
+          "candidate": "B1",
+          "reference_median_ns_per_row": 1062.8662109375,
+          "candidate_median_ns_per_row": 269.28662109375,
+          "candidate_time_change_percent": -74.6641093373148
+        },
+        {
+          "pair": 2,
+          "reference": "A2",
+          "candidate": "B2",
+          "reference_median_ns_per_row": 1050.13037109375,
+          "candidate_median_ns_per_row": 264.2822265625,
+          "candidate_time_change_percent": -74.83338889749088
+        },
+        {
+          "pair": 3,
+          "reference": "A3",
+          "candidate": "B3",
+          "reference_median_ns_per_row": 1040.8935546875,
+          "candidate_median_ns_per_row": 269.0224609375,
+          "candidate_time_change_percent": -74.15466166295298
+        },
+        {
+          "pair": 4,
+          "reference": "A4",
+          "candidate": "B4",
+          "reference_median_ns_per_row": 1063.86328125,
+          "candidate_median_ns_per_row": 263.40771484375,
+          "candidate_time_change_percent": -75.24045434350778
+        }
+      ],
+      "all_128_timed_passes_byte_equal_finite_input_unchanged": true,
+      "input_and_binary_sha256_before_after_all_legs": true,
+      "finished_at": "2026-11-08T13:29:40.490638+00:00"
+    },
+    {
+      "schema": "kapitsa-q8-0-cpu-ab-summary-v1",
+      "scope": "warm official CPU per-row dequantization of 1024 real Q8_0 rows; no loading or inference speed claim",
+      "source_reference": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+      "source_candidate": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+      "fixture_sha256": "33ab9892fe21218a58d5e7e56c2353689f48b0d57383ce94cc4ec8483cba7576",
+      "full_output_bytes": 10485760,
+      "oracle_output_sha256": "9cc4e3799d11be32b8aec372af5701951539f2da5061468719e7394ae97e661c",
+      "legs": [
+        {
+          "label": "A1",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            661.5810546875,
+            664.9169921875,
+            658.0810546875,
+            661.6611328125,
+            664.0224609375,
+            653.1171875,
+            801.228515625,
+            818.400390625,
+            808.9189453125,
+            702.2294921875,
+            658.447265625,
+            662.6796875,
+            665.12109375,
+            666.8701171875,
+            652.384765625,
+            673.7060546875
+          ],
+          "median_ns_per_row": 664.4697265625,
+          "mean_ns_per_row": 692.0853881835938
+        },
+        {
+          "label": "B1",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            179.728515625,
+            169.515625,
+            164.021484375,
+            167.806640625,
+            161.4580078125,
+            165.3642578125,
+            162.9228515625,
+            160.9287109375,
+            162.353515625,
+            161.62109375,
+            161.5390625,
+            162.3134765625,
+            160.8076171875,
+            159.5869140625,
+            163.1259765625,
+            164.1435546875
+          ],
+          "median_ns_per_row": 162.63818359375,
+          "mean_ns_per_row": 164.20233154296875
+        },
+        {
+          "label": "A2",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            654.337890625,
+            680.134765625,
+            663.7783203125,
+            665.486328125,
+            655.7216796875,
+            653.1171875,
+            663.044921875,
+            675.9033203125,
+            660.685546875,
+            652.9951171875,
+            659.0576171875,
+            660.84765625,
+            661.41796875,
+            671.2236328125,
+            666.9921875,
+            654.78515625
+          ],
+          "median_ns_per_row": 661.1328125,
+          "mean_ns_per_row": 662.4705810546875
+        },
+        {
+          "label": "B2",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            182.7802734375,
+            171.345703125,
+            169.921875,
+            164.9169921875,
+            168.3349609375,
+            169.962890625,
+            175.537109375,
+            179.6474609375,
+            168.0908203125,
+            173.1767578125,
+            172.8515625,
+            171.0205078125,
+            170.5322265625,
+            172.8115234375,
+            166.056640625,
+            165.1611328125
+          ],
+          "median_ns_per_row": 170.7763671875,
+          "mean_ns_per_row": 171.38427734375
+        },
+        {
+          "label": "A3",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            670.451171875,
+            670.736328125,
+            679.646484375,
+            664.998046875,
+            664.9990234375,
+            665.6904296875,
+            670.8173828125,
+            660.400390625,
+            662.271484375,
+            686.5234375,
+            663.1669921875,
+            668.8232421875,
+            652.587890625,
+            656.3720703125,
+            645.263671875,
+            648.3974609375
+          ],
+          "median_ns_per_row": 664.99853515625,
+          "mean_ns_per_row": 664.4465942382812
+        },
+        {
+          "label": "B3",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            179.728515625,
+            172.119140625,
+            165.8125,
+            165.3232421875,
+            166.056640625,
+            162.150390625,
+            162.2314453125,
+            162.9638671875,
+            164.103515625,
+            160.9697265625,
+            162.3125,
+            159.2607421875,
+            160.0341796875,
+            161.294921875,
+            164.34765625,
+            166.6259765625
+          ],
+          "median_ns_per_row": 163.53369140625,
+          "mean_ns_per_row": 164.70843505859375
+        },
+        {
+          "label": "A4",
+          "arm": "reference",
+          "raw_ns_per_row": [
+            669.515625,
+            664.9990234375,
+            661.3359375,
+            653.076171875,
+            654.3369140625,
+            655.96484375,
+            662.841796875,
+            658.3251953125,
+            659.2607421875,
+            665.7314453125,
+            659.3427734375,
+            657.3486328125,
+            654.703125,
+            655.435546875,
+            661.7431640625,
+            662.1904296875
+          ],
+          "median_ns_per_row": 659.3017578125,
+          "mean_ns_per_row": 659.7594604492188
+        },
+        {
+          "label": "B4",
+          "arm": "candidate",
+          "raw_ns_per_row": [
+            201.7421875,
+            167.96875,
+            165.9345703125,
+            159.66796875,
+            166.8291015625,
+            160.84765625,
+            164.14453125,
+            163.3701171875,
+            170.125,
+            163.6962890625,
+            159.0986328125,
+            161.3359375,
+            161.4169921875,
+            157.7958984375,
+            160.806640625,
+            158.3662109375
+          ],
+          "median_ns_per_row": 162.3935546875,
+          "mean_ns_per_row": 165.1966552734375
+        }
+      ],
+      "pairs": [
+        {
+          "pair": 1,
+          "reference": "A1",
+          "candidate": "B1",
+          "reference_median_ns_per_row": 664.4697265625,
+          "candidate_median_ns_per_row": 162.63818359375,
+          "candidate_time_change_percent": -75.52361272572554
+        },
+        {
+          "pair": 2,
+          "reference": "A2",
+          "candidate": "B2",
+          "reference_median_ns_per_row": 661.1328125,
+          "candidate_median_ns_per_row": 170.7763671875,
+          "candidate_time_change_percent": -74.16912850812407
+        },
+        {
+          "pair": 3,
+          "reference": "A3",
+          "candidate": "B3",
+          "reference_median_ns_per_row": 664.99853515625,
+          "candidate_median_ns_per_row": 163.53369140625,
+          "candidate_time_change_percent": -75.40841328803444
+        },
+        {
+          "pair": 4,
+          "reference": "A4",
+          "candidate": "B4",
+          "reference_median_ns_per_row": 659.3017578125,
+          "candidate_median_ns_per_row": 162.3935546875,
+          "candidate_time_change_percent": -75.36885761895945
+        }
+      ],
+      "all_128_timed_passes_byte_equal_finite_input_unchanged": true,
+      "input_and_binary_sha256_before_after_all_legs": true,
+      "finished_at": "2026-11-08T13:29:41.664866+00:00"
+    }
+  ],
+  "focused_execution_reuse": {
+    "binary_sha256": "a385acb02dc0c786cee1fdbbcdf0f1f660c777f8f331c1ee89c0c1faf373e2d3",
+    "exact_completed_binary_reused": true,
+    "new_iq_layout_test_invocations": 0
+  },
+  "scope": "Warm CPU row dequantization only; no whole import, model load or inference speed conclusion",
+  "model_validation": "Full model validation remains incomplete. The original candidate import stopped before conversion at the unchanged workspace reserve guard after one completed reference import; no model-output or default-performance result is claimed."
+}

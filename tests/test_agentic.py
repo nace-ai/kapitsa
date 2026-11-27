@@ -47,7 +47,6 @@ class Fake(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.end_headers()
-        time.sleep(0.002 if cached else 0.02)  # a cache hit prefills faster
         for i in range(n):
             key = "reasoning_content" if Fake.reasons and i < 300 else "content"
             ev = {"choices": [{"delta": {key: f"w{i} "}, "finish_reason": None}]}
@@ -57,6 +56,23 @@ class Fake(http.server.BaseHTTPRequestHandler):
                "usage": {"prompt_tokens": pt, "completion_tokens": n, "prompt_tokens_details": {"cached_tokens": cached}}}
         self.wfile.write(f"data: {json.dumps(fin)}\n\ndata: [DONE]\n\n".encode())
 
+
+# TTFT is modeled from the usage the fake server reports, not read off the wall clock: a sleep-based latency
+# (0.02 s for a miss against 0.002 s for a hit) let a 10 ms scheduling pause on a loaded CI runner push the A-after-B
+# TTFT over KEPT_RATIO of the cold TTFT and fail "four slots keep A" with no flag set (main CI, 20 Nov 2026).
+# Decode timing (gen_time, tokens per second) stays real; only the prefill latency the cache checks compare is modeled.
+_real_stream_chat = bench.stream_chat
+
+
+def modeled_stream_chat(*args, **kw):
+    r = _real_stream_chat(*args, **kw)
+    u = r.get("usage") or {}
+    missed = (u.get("prompt_tokens") or 0) - (bench.cached_of(u, r.get("timings")) or 0)
+    r["ttft"] = 0.001 + 1e-5 * missed  # prefill cost grows with the tokens the engine did not reuse
+    return r
+
+
+bench.stream_chat = modeled_stream_chat
 
 srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Fake)
 threading.Thread(target=srv.serve_forever, daemon=True).start()

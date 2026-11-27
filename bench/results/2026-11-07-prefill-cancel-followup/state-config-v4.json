@@ -1,0 +1,14 @@
+{
+  "output": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/state-cases-image-ram-v4",
+  "test": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/test-snapshot/tests/test_prefill_cancel.py",
+  "test_commit": "d1b3c89154ecceb5e6ff1c792d7d4934bfc94c31",
+  "binaries": {
+    "base": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/build/kapitsa",
+    "candidate": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/build/kapitsa"
+  },
+  "heads": {
+    "base": "2c41b56cc6c5f0895d4359d5ff33d1459b22bc39",
+    "candidate": "3ce432031569e364af6731ffb59aec1bc67355ef"
+  },
+  "model": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit"
+}

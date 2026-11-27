@@ -42,26 +42,68 @@ Error unhealthy(uint64_t id, const std::string& code, const std::string& message
 
 }  // namespace
 
-Runtime::Runtime(RuntimeOptions o) : o_(std::move(o)) {}
+Runtime::Runtime(RuntimeOptions o) : o_(std::move(o)) {
+  if (!std::isfinite(o_.cancel_timeout_s) || o_.cancel_timeout_s <= 0)
+    throw std::invalid_argument("cancel timeout must be finite and positive");
+}
 
 Runtime::~Runtime() { shutdown(); }
 
+Ready Runtime::ready() const {
+  std::lock_guard<std::mutex> l(m_);
+  return ready_;
+}
+
 bool Runtime::alive() const {
   std::lock_guard<std::mutex> l(m_);
-  return state_ == State::kReady;
+  return state_ == State::kReady && !stopping_;
 }
 
 void Runtime::start() {
+  std::unique_lock<std::mutex> lifecycle(shutdown_m_);
   {
     std::lock_guard<std::mutex> l(m_);
-    if (state_ != State::kIdle) throw std::logic_error("splash runtime started twice");
-    if (o_.argv.empty()) throw std::logic_error("splash runtime has no command");
+    if (state_ != State::kIdle) throw std::logic_error("native runtime started twice");
+    if (o_.argv.empty()) throw std::logic_error("native runtime has no command");
     state_ = State::kStarting;
   }
-  signal(SIGPIPE, SIG_IGN);  // a write to a dead child is an EPIPE this class handles, not a signal that ends the server
+  signal(SIGPIPE, SIG_IGN);  // a dead child's pipe is an EPIPE, not a signal that ends the server
+  try {
+    spawn_child();
+    reader_ = std::thread([this] { read_loop(); });
+  } catch (...) {
+    signal_child(SIGKILL);
+    reap(5);
+    if (in_fd_ >= 0) { close(in_fd_); in_fd_ = -1; }
+    if (out_fd_ >= 0) { close(out_fd_); out_fd_ = -1; }
+    fail_all("engine_start", "the engine could not start");
+    throw;
+  }
+  lifecycle.unlock();
 
+  std::unique_lock<std::mutex> l(m_);
+  bool ok = cv_.wait_for(l, std::chrono::duration<double>(o_.ready_timeout_s), [&] { return state_ != State::kStarting || stopping_; });
+  if (ok && state_ == State::kReady && !stopping_) return;
+  std::string why = stopping_ ? "the engine is shutting down" :
+                    ok ? dead_reason_ : "the engine was not ready within " + std::to_string(int(o_.ready_timeout_s)) + " s";
+  l.unlock();
+  if (!ok) signal_child(SIGKILL);
+  shutdown();
+  throw EngineUnhealthy(why);
+}
+
+void Runtime::spawn_child() {
+  std::unique_lock<std::mutex> writer(write_m_);
+  std::unique_lock<std::mutex> state(m_);
+  if (stopping_) throw EngineUnhealthy("the engine is shutting down");
   int to_child[2], from_child[2];
-  if (pipe(to_child) != 0 || pipe(from_child) != 0) throw EngineUnhealthy(std::string("pipe: ") + std::strerror(errno));
+  if (pipe(to_child) != 0) throw EngineUnhealthy(std::string("pipe: ") + std::strerror(errno));
+  if (pipe(from_child) != 0) {
+    const int error = errno;
+    close(to_child[0]);
+    close(to_child[1]);
+    throw EngineUnhealthy(std::string("pipe: ") + std::strerror(error));
+  }
   for (int fd : {to_child[0], to_child[1], from_child[0], from_child[1]}) fcntl(fd, F_SETFD, FD_CLOEXEC);
 
   posix_spawn_file_actions_t fa;
@@ -70,7 +112,7 @@ void Runtime::start() {
   posix_spawnattr_init(&at);
   // Only what is named below reaches the child: stdin and stdout are the pipes, stderr is ours (as runtime.py's Popen).
   // The child leads its own process group, so one signal reaches it and what it started.
-  // SIGPIPE is ignored here but default in the child, as when Splash's own runtime spawns it.
+  // SIGPIPE is ignored here but default in the child.
   sigset_t dfl;
   sigemptyset(&dfl);
   sigaddset(&dfl, SIGPIPE);
@@ -107,7 +149,6 @@ void Runtime::start() {
   if (rc != 0) {
     close(to_child[1]);
     close(from_child[0]);
-    std::lock_guard<std::mutex> l(m_);
     state_ = State::kDead;
     dead_reason_ = std::string("cannot start ") + o_.argv[0] + ": " + std::strerror(rc);
     throw EngineUnhealthy(dead_reason_);
@@ -116,17 +157,10 @@ void Runtime::start() {
   in_fd_ = to_child[1];
   fcntl(in_fd_, F_SETFL, fcntl(in_fd_, F_GETFL) | O_NONBLOCK);  // write_frame polls, so it can give up
   out_fd_ = from_child[0];
+  ++generation_;
+  state.unlock();
+  writer.unlock();
   say("engine pid " + std::to_string(child) + " started");
-  reader_ = std::thread([this] { read_loop(); });
-
-  std::unique_lock<std::mutex> l(m_);
-  bool ok = cv_.wait_for(l, std::chrono::duration<double>(o_.ready_timeout_s), [&] { return state_ != State::kStarting; });
-  if (ok && state_ == State::kReady) return;
-  std::string why = ok ? dead_reason_ : "the engine was not ready within " + std::to_string(int(o_.ready_timeout_s)) + " s";
-  l.unlock();
-  if (!ok) signal_child(SIGKILL);
-  shutdown();
-  throw EngineUnhealthy(why);
 }
 
 void Runtime::signal_child(int sig) {
@@ -137,10 +171,10 @@ void Runtime::signal_child(int sig) {
 // One writer at a time. stdin is non-blocking and polled in 100 ms steps, so a child that stops reading holds neither
 // shutdown() (it sets stopping_ and takes write_m_) nor a Sink that cancels: the writer leaves on stopping_, and on a
 // frame still unwritten after write_timeout_s it kills the child, whose stream would otherwise be cut mid-frame.
-void Runtime::write_frame(const std::vector<uint8_t>& f) {
+void Runtime::write_frame(const std::vector<uint8_t>& f, uint64_t generation) {
   {
     std::lock_guard<std::mutex> l(write_m_);
-    write_locked(f);
+    write_locked(f, generation);
   }
   flush_cancels();
 }
@@ -153,9 +187,11 @@ void Runtime::flush_cancels() {
       {
         std::unique_lock<std::mutex> l(write_m_, std::try_to_lock);
         if (!l) return;  // the holder flushes after its frame
-        std::vector<uint64_t> ids;
+        std::vector<std::pair<uint64_t, uint64_t>> ids;
         { std::lock_guard<std::mutex> c(cancel_m_); ids.swap(cancels_); }
-        for (uint64_t id : ids) write_locked(encode_cancel(id));
+        for (auto [generation, id] : ids) {
+          try { write_locked(encode_cancel(id), generation); } catch (const EngineUnhealthy&) {}
+        }
       }
       std::lock_guard<std::mutex> c(cancel_m_);
       if (cancels_.empty()) return;
@@ -165,11 +201,16 @@ void Runtime::flush_cancels() {
   }
 }
 
-void Runtime::write_locked(const std::vector<uint8_t>& f) {
+void Runtime::write_locked(const std::vector<uint8_t>& f, uint64_t generation) {
   if (in_fd_ < 0) throw EngineUnhealthy("the engine is not running");
   const auto deadline = Clock::now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(o_.write_timeout_s));
   size_t off = 0;
   while (off < f.size()) {
+    {
+      std::lock_guard<std::mutex> l(m_);
+      if (stopping_ || state_ != State::kReady || generation != generation_)
+        throw EngineUnhealthy("the engine changed before the frame was sent");
+    }
     ssize_t n = write(in_fd_, f.data() + off, f.size() - off);
     if (n > 0) { off += size_t(n); continue; }
     if (n < 0 && errno == EINTR) continue;
@@ -189,88 +230,105 @@ void Runtime::write_locked(const std::vector<uint8_t>& f) {
 }
 
 uint64_t Runtime::submit(Request r, std::shared_ptr<Sink> sink, double deadline_s) {
-  uint64_t id;
+  uint64_t id, generation;
+  std::vector<uint8_t> frame;
   {
     // The slot is taken in the same step as the check, so concurrent submitters cannot pass a full pool together.
     std::lock_guard<std::mutex> l(m_);
-    if (state_ != State::kReady) throw EngineUnhealthy("the engine is not running" + (dead_reason_.empty() ? "" : ": " + dead_reason_));
+    if (state_ != State::kReady || stopping_) throw EngineUnhealthy("the engine is not running" + (dead_reason_.empty() ? "" : ": " + dead_reason_), restarting_ && !stopping_);
     if (pending_.size() >= ready_.max_concurrent_requests) throw PendingLimitExceeded("the engine's request capacity is full");
     id = next_id_++;
-    pending_[id] = Pending{std::move(sink), false, r.constraint == Constraint::kTokenMask, false};  // before the write: the first event can follow it at once
-  }
-  std::vector<uint8_t> frame;
-  try {
+    generation = generation_;
     r.request_id = id;
     r.remaining_deadline_micros = remaining_micros(deadline_s);
     uint64_t now = unix_micros();
     r.absolute_deadline_unix_micros = r.remaining_deadline_micros > UINT64_MAX - now ? UINT64_MAX : now + r.remaining_deadline_micros;
-    frame = encode_request(r);  // may throw ProtocolError: nothing has been sent
-    write_frame(frame);
+    frame = encode_request(r);  // validate before admission: a bad request never receives an engine failure callback
+    pending_[id] = Pending{std::move(sink), false, r.constraint == Constraint::kTokenMask, false};
+  }
+  try {
+    write_frame(frame, generation);
   } catch (...) {
     std::lock_guard<std::mutex> l(m_);
     // Already failed by the reader (it ended the request with on_error): then this is not a second report of it.
-    if (pending_.erase(id) == 0 && state_ == State::kDead) return id;
+    if (state_ == State::kDead) return id;
+    if (pending_.erase(id) == 0) return id;
     throw;
   }
   return id;
 }
 
 void Runtime::cancel(uint64_t id) {
+  uint64_t generation;
   {
     std::lock_guard<std::mutex> l(m_);
     auto it = pending_.find(id);
     if (it == pending_.end()) return;  // done already
+    if (!it->second.cancelled) it->second.cancel_started = Clock::now();
     it->second.cancelled = true;
+    generation = generation_;
   }
-  { std::lock_guard<std::mutex> c(cancel_m_); cancels_.push_back(id); }
+  { std::lock_guard<std::mutex> c(cancel_m_); cancels_.emplace_back(generation, id); }
   flush_cancels();
 }
 
 void Runtime::mask_response(uint64_t id, uint64_t mask_id, const std::vector<uint32_t>& words) {
   std::vector<uint8_t> frame = encode_mask_response(id, mask_id, words);  // may throw ProtocolError: nothing sent
+  uint64_t generation;
   {
     std::lock_guard<std::mutex> l(m_);
     auto it = pending_.find(id);
-    if (it == pending_.end() || it->second.cancelled) return;  // as runtime.py: no answer to a call that is over
+    if (it == pending_.end() || it->second.cancelled) return;  // no answer to a call that is over
+    generation = generation_;
   }
-  write_frame(frame);
+  write_frame(frame, generation);
 }
 
 std::string Runtime::status(double timeout_s) {
-  uint64_t corr;
+  uint64_t corr, generation;
   {
     std::lock_guard<std::mutex> l(m_);
-    if (state_ != State::kReady) return "";
+    if (state_ != State::kReady || stopping_) return "";
     corr = next_corr_++;
+    generation = generation_;
     status_replies_[corr];
   }
   try {
-    write_frame(encode_status_request(corr));
+    write_frame(encode_status_request(corr), generation);
   } catch (const EngineUnhealthy&) {
     std::lock_guard<std::mutex> l(m_);
     status_replies_.erase(corr);
     return "";
   }
   std::unique_lock<std::mutex> l(m_);
-  cv_.wait_for(l, std::chrono::duration<double>(timeout_s), [&] { return !status_replies_[corr].empty() || state_ == State::kDead; });
-  std::string out = std::move(status_replies_[corr]);
+  cv_.wait_for(l, std::chrono::duration<double>(timeout_s), [&] {
+    auto it = status_replies_.find(corr);
+    return generation != generation_ || state_ != State::kReady || it == status_replies_.end() || !it->second.empty();
+  });
+  auto it = status_replies_.find(corr);
+  std::string out = it == status_replies_.end() ? "" : std::move(it->second);
   status_replies_.erase(corr);
   return out;
 }
 
-void Runtime::fail_all(const std::string& code, const std::string& message) {
+void Runtime::fail_all(const std::string& code, const std::string& message, bool restarting) {
   std::map<uint64_t, Pending> held;
   {
     std::lock_guard<std::mutex> l(m_);
     held.swap(pending_);
+    restarting = restarting_ = restarting && !stopping_;
+    status_replies_.clear();
     if (state_ != State::kDead) {
       state_ = State::kDead;
       dead_reason_ = code + ": " + message;
     }
   }
+  { std::lock_guard<std::mutex> c(cancel_m_); cancels_.clear(); }
   cv_.notify_all();
   for (auto& [id, p] : held) {
-    try { p.sink->on_error(unhealthy(id, code, message)); } catch (...) { say("a request's sink threw from on_error"); }
+    Error error = unhealthy(id, code, message);
+    error.retryable = restarting;  // child error metadata cannot mark a runtime-managed recovery
+    try { p.sink->on_error(error); } catch (...) { say("a request's sink threw from on_error"); }
   }}
 
 void Runtime::reap(double grace_s) {
@@ -306,12 +364,65 @@ void Runtime::reap(double grace_s) {
 }
 
 void Runtime::read_loop() {
+  while (read_child()) {
+    {
+      std::lock_guard<std::mutex> writer(write_m_);
+      if (in_fd_ >= 0) { close(in_fd_); in_fd_ = -1; }
+    }
+    if (out_fd_ >= 0) { close(out_fd_); out_fd_ = -1; }
+    {
+      std::lock_guard<std::mutex> l(m_);
+      if (stopping_) return;
+      state_ = State::kStarting;
+      dead_reason_ = "cancel_timeout: restarting the engine";
+    }
+    try {
+      spawn_child();
+    } catch (const std::exception& e) {
+      signal_child(SIGKILL);
+      reap(5);
+      {
+        std::lock_guard<std::mutex> writer(write_m_);
+        if (in_fd_ >= 0) { close(in_fd_); in_fd_ = -1; }
+      }
+      if (out_fd_ >= 0) { close(out_fd_); out_fd_ = -1; }
+      fail_all("engine_start", e.what());
+      return;  // a replacement that cannot start does not create a retry loop
+    }
+  }
+}
+
+bool Runtime::read_child() {
+  const auto ready_deadline = Clock::now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(o_.ready_timeout_s));
   FrameParser parser;
   std::vector<uint8_t> buf(1 << 16);
   std::string code = "engine_exited", message = "the engine closed its output";
-  bool fatal = false, eof = false;
+  bool fatal = false, eof = false, cancellation_expired = false;
   try {
     while (true) {
+      {
+        std::lock_guard<std::mutex> l(m_);
+        if (!stopping_ && state_ == State::kStarting && Clock::now() >= ready_deadline) {
+          code = "ready_timeout";
+          message = "the replacement engine did not become ready";
+          fatal = true;
+          state_ = State::kDead;
+          dead_reason_ = code + ": " + message;
+        }
+        for (const auto& [id, request] : pending_) {
+          if (!stopping_ && request.cancelled && std::chrono::duration<double>(Clock::now() - request.cancel_started).count() >= o_.cancel_timeout_s) {
+            code = "cancel_timeout";
+            cancellation_expired = true;
+            restarting_ = true;
+            message = "the engine did not end request " + std::to_string(id) + " after cancellation";
+            fatal = true;
+            state_ = State::kDead;
+            dead_reason_ = code + ": " + message;
+            break;
+          }
+        }
+      }
+      if (fatal) break;
       pollfd pf{out_fd_, POLLIN, 0};  // a bounded wait, so shutdown() can end this when a descendant keeps the pipe open
       int pr = poll(&pf, 1, 200);
       if (pr < 0 && errno == EINTR) continue;
@@ -329,6 +440,7 @@ void Runtime::read_loop() {
           std::lock_guard<std::mutex> l(m_);
           if (state_ != State::kStarting) throw ProtocolError(Issue{FailureClass::kProtocolFatal, IssueCode::kInvalidEnumValue, 0, "a second ready event"});
           ready_ = *e;
+          restarting_ = false;
           state_ = State::kReady;
           cv_.notify_all();
           continue;
@@ -404,20 +516,30 @@ void Runtime::read_loop() {
     message = e.what();
     fatal = true;
   }
+  if (!cancellation_expired) {
+    std::lock_guard<std::mutex> l(m_);
+    restarting_ = false;
+    state_ = State::kDead;
+    dead_reason_ = code + ": " + message;
+  }
   if (fatal) signal_child(SIGKILL);  // an untrusted stream: do not read more of it
   reap(fatal ? 5 : std::max(0.1, o_.stop_grace_s));
   bool stopping;
   { std::lock_guard<std::mutex> l(m_); stopping = stopping_; }
   if (stopping) { code = "engine_stopped"; message = "the engine was shut down"; }
-  fail_all(code, message);
+  fail_all(code, message, cancellation_expired && !stopping);
+  return cancellation_expired && !stopping;
 }
 
 void Runtime::shutdown() {
+  std::lock_guard<std::mutex> lifecycle(shutdown_m_);
   {
     std::lock_guard<std::mutex> l(m_);
     if (state_ == State::kIdle) return;
     stopping_ = true;
+    restarting_ = false;
   }
+  cv_.notify_all();
   {
     std::lock_guard<std::mutex> l(write_m_);  // a blocked writer leaves on stopping_ within 100 ms
     if (in_fd_ >= 0) { close(in_fd_); in_fd_ = -1; }  // EOF on its stdin: it drains and exits

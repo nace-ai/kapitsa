@@ -1,0 +1,122 @@
+kapitsa bench: qwen3.5-4b-4bit 4-bit on Mac Studio (2025): Apple M3 Ultra, 60-core GPU, 96 GB, macOS 26.4.1, quick
+Left out of the server, as the harness does: NI_LOCK_HELD
+Starting the server on 127.0.0.1:53533 (log ~/kapitsa-stop-sequence-20261107/gpu-results-checked/home-4b-bench-1-candidate/logs/bench-53533-ctx32768.log)
+[?2026h  ✓ Loaded qwen3.5-4b-4bit  ·  4-bit in 1.6s  ·  KFlash speculative decoding (…
+[?2026lReady after 1.6s: KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)
+Warm-up done in 2.0s
+GPU quiet after 18s
+  decode T=0.6: 410.76 tok/s (512 tok, finish="length")
+  decode T=0.6: 371.98 tok/s (512 tok, finish="length")
+  decode T=0.6: 345.14 tok/s (512 tok, finish="length")
+decode T=0.6: median 371.98 tok/s over 3/3 valid, accepted drafts 266.63 tok/s (71.7% of tokens)
+  decode T=0: 365.71 tok/s (512 tok, finish="length")
+  decode T=0: 379.71 tok/s (512 tok, finish="length")
+  decode T=0: 384.68 tok/s (512 tok, finish="length")
+decode T=0: median 379.71 tok/s over 3/3 valid, accepted drafts 275.14 tok/s (72.1% of tokens)
+prefill 4000: 4131 tok, 2132 tok/s; cached TTFT median 0.02 s (883 tok/s on the uncached suffix)
+tools: pass
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "quick",
+  "time_utc": "2026-11-07T07:27:46Z",
+  "kapitsa": {
+    "version": "0.2.31",
+    "commit": "cf2f25c"
+  },
+  "mac": {
+    "identifier": "Mac15,14",
+    "name": "Mac Studio (2025)",
+    "year": 2025,
+    "chip": "Apple M3 Ultra",
+    "cpu_cores": 28,
+    "gpu_cores": 60,
+    "memory_gb": 96,
+    "macos": "26.4.1",
+    "macos_build": "25E253"
+  },
+  "model": {
+    "name": "qwen3.5-4b-4bit",
+    "title": "qwen3.5-4b-4bit",
+    "variant": null,
+    "precision": "4-bit",
+    "catalog": false,
+    "revision": null,
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "dflash2",
+    "drafter_kind": "DFlash",
+    "drafter_source": "dflash2",
+    "drafter_reason": "found in the model's folder"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 3,
+    "greedy_runs": 3,
+    "sizes": [
+      4000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 371.98,
+      "runs_tps": [
+        410.76,
+        371.98,
+        345.14
+      ],
+      "median_accepted_draft_tps": 266.63,
+      "median_accepted_draft_share": 0.7168
+    },
+    "decode_greedy": {
+      "median_tps": 379.71,
+      "runs_tps": [
+        365.71,
+        379.71,
+        384.68
+      ],
+      "median_accepted_draft_tps": 275.14,
+      "median_accepted_draft_share": 0.7207
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4131,
+        "ttft_s": 1.9373,
+        "tps": 2132.3,
+        "followup_s": [
+          0.0222,
+          0.0306,
+          0.0249
+        ],
+        "followup_median_s": 0.0249,
+        "followup_suffix_tps": 883.0
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 4.55
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.0,
+    "gpu_other_max_pct": 0.0,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [
+    "decode: repetition loop (distinct-4-gram 0.3856)",
+    "decode: repetition loop (distinct-4-gram 0.4575)"
+  ],
+  "invalid": []
+}
+flag: decode: repetition loop (distinct-4-gram 0.3856)
+flag: decode: repetition loop (distinct-4-gram 0.4575)
+Saved /Users/bytedance/kapitsa-stop-sequence-20261107/gpu-results-checked/4b-bench-1-candidate.json

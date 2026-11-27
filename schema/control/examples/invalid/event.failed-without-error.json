@@ -1,0 +1,1 @@
+{"base": "event.request-finished.json", "merge_patch": {"data": {"finish_reason": "error"}}}

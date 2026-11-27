@@ -1,0 +1,17 @@
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (266 ms)
+[kapitsa] read 2.37 GB of weights in 367 ms (6.5 GB/s)
+[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)
+[kapitsa] read 0.24 GB of weights in 15 ms (16.3 GB/s)
+[kapitsa] MTP head loaded in 226 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 13 ms
+[kapitsa] prewarmed 93 prefill pipelines in 18 ms
+[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 657 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+prefill 8 rows: next-token NLL 1.8013, top-1 = next token 0.6250 -> /Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/4b-logits-base/prefill
+step   192 rows: next-token NLL 0.6791, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/4b-logits-base/step
+verify 192 rows: next-token NLL 0.6791, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/4b-logits-base/verify
+batch  192 rows: next-token NLL 0.6792, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-cancel-checkpoint-20261107/followup-133912/gpu/4b-logits-base/batch
+8 windows, 14848 prefilled tokens in 6.7 s; 9.3 s in all

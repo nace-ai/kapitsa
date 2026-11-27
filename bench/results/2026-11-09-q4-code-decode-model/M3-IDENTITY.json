@@ -1,0 +1,358 @@
+{
+  "export": "Explicitly redacted derived evidence; not an original execution log. Private originals retained. Numeric results and source/binary identities unchanged.",
+  "environment": {
+    "chip": "M3 Ultra",
+    "GPU_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "source_commits": {
+    "reference": "87c105238186beadb375805e47a89791a499319a",
+    "candidate": "5bcbe7e2069f55485473ba45755ab4c65a3c44c5"
+  },
+  "model": {
+    "repo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "filename": "Qwen_Qwen3.5-4B-Q4_0.gguf",
+    "source_bytes": 2776033248,
+    "source_sha256": "3e977de32dfb9377ff827f210091cce5d3c05c7b0f0b9b0c8005df7c0677a49b"
+  },
+  "sources": {
+    "reference": {
+      "commit": "87c105238186beadb375805e47a89791a499319a",
+      "bundle_sha256": "07c3eb9d19fb274f69e81784a03acdb0fdd73f9cdf3922b7ced3ff3240029905",
+      "source_sha256_by_path": {
+        "CMakeLists.txt": "03c1a4e63b1af4d1a77ab59891a87085cb9ff27de034bbe87826b57f7e42ed40",
+        "src/gguf/gguf.cpp": "c634b436b7b2d7aa10f42e1c7f455b4366b233c80f133210da43c20998557be7",
+        "src/gguf/import.cpp": "0ea72ec5ec03e0956dad5dc9f9c184a0b0bf46fc3dceca4d1328e1c00b925322",
+        "src/gguf/quant.cpp": "fcad7ef4387d68d333b60179ae429e3a2343fe4c56098c0a29f791271decd6f9",
+        "tools/logit_compare.py": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+        "tools/logit_dump.cpp": "6225e655e828b426ebab4959bf5e6857bbff537c1b0d733385351afa5530e0c4"
+      },
+      "source_inventory_sha256": "1918d9c55056259da9d2a9386b4709a044cf710d1e9ae8f5b628639104a9f3d5"
+    },
+    "candidate": {
+      "commit": "5bcbe7e2069f55485473ba45755ab4c65a3c44c5",
+      "bundle_sha256": "48683f7f172af5885c9a13de1b72bcd9447d62f40d78d2e5ca212ccec5402963",
+      "source_sha256_by_path": {
+        "CMakeLists.txt": "03c1a4e63b1af4d1a77ab59891a87085cb9ff27de034bbe87826b57f7e42ed40",
+        "src/gguf/gguf.cpp": "c634b436b7b2d7aa10f42e1c7f455b4366b233c80f133210da43c20998557be7",
+        "src/gguf/import.cpp": "0ea72ec5ec03e0956dad5dc9f9c184a0b0bf46fc3dceca4d1328e1c00b925322",
+        "src/gguf/quant.cpp": "af1f8764882734825250d16cfed412aa325cd12535de6345fd64b045b32da9e6",
+        "tools/logit_compare.py": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+        "tools/logit_dump.cpp": "6225e655e828b426ebab4959bf5e6857bbff537c1b0d733385351afa5530e0c4"
+      },
+      "source_inventory_sha256": "e7598a1ec47c3956ab6cd722db84e707b1a0baaef14517373b48e73d9bbf2642"
+    }
+  },
+  "builds": {
+    "reference": {
+      "binaries_sha256": {
+        "kapitsa": "a69d360e5bc8a5ce0d25231f39fbeed2f700cbdcc1a042fb0dac2cf1b0f76358",
+        "logit_dump": "ec985e0607c6dcfdb547ac4019bc439e473d9b09b604a5052804c62172184bdc",
+        "ni_run": "8fa09f51a41b8288284eb3b0e7010f2591e1afb5b08cabe747e21b63f81ebe2a",
+        "libnaceinfer.a": "96266a469116e07a48ea560e3818af9902c6f2b64e303e70ce607319bdd26f65"
+      },
+      "compile_flags": {
+        "kapitsa": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "naceinfer": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "logit_dump": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "ni_run": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        }
+      }
+    },
+    "candidate": {
+      "binaries_sha256": {
+        "kapitsa": "9136acedcf06f5fdfa7105052186428ac9bbe3bca85ade7f77e6329615a237c6",
+        "logit_dump": "71426c8a5ac1e4d276ee6cf39e853c5fe662c41daa95234a4054527aa3010d02",
+        "ni_run": "c8a930e8ae69641a98872babd956c2f4eb3c7e90f986717d223a517a0df679b7",
+        "libnaceinfer.a": "ba1f4167d4af97fc2b6a7263a6b6ca63970620ed8eba4f8da10019a0b3c21c43"
+      },
+      "compile_flags": {
+        "kapitsa": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "naceinfer": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "logit_dump": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        },
+        "ni_run": {
+          "optimization": "-O3",
+          "architecture": "arm64",
+          "NDEBUG_defined": false
+        }
+      }
+    }
+  },
+  "fixed_driver": {
+    "source_sha256": "6b022a4791ac656f74ca84dc7b2090e7bfd34e5ad0e7a1c6bc1197e8adcd8310",
+    "binary_sha256": "c58fe87449f16c7587fbc80d00a2d4228b132b415962a41cfaa94019086b870e",
+    "reference_library_sha256": "96266a469116e07a48ea560e3818af9902c6f2b64e303e70ce607319bdd26f65"
+  },
+  "execution_steps": [
+    {
+      "label": "compiler_version",
+      "started_at": "2026-11-09T00:20:36.070352+00:00",
+      "finished_at": "2026-11-09T00:20:36.173357+00:00",
+      "rc": 0
+    },
+    {
+      "label": "cmake_version",
+      "started_at": "2026-11-09T00:20:36.179174+00:00",
+      "finished_at": "2026-11-09T00:20:36.281100+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_configure",
+      "started_at": "2026-11-09T00:21:52.768323+00:00",
+      "finished_at": "2026-11-09T00:22:01.047107+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_build",
+      "started_at": "2026-11-09T00:22:01.053879+00:00",
+      "finished_at": "2026-11-09T00:32:15.011574+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_version",
+      "started_at": "2026-11-09T00:32:15.017407+00:00",
+      "finished_at": "2026-11-09T00:32:16.658467+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_configure",
+      "started_at": "2026-11-09T00:32:30.122372+00:00",
+      "finished_at": "2026-11-09T00:32:38.061150+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_build",
+      "started_at": "2026-11-09T00:32:38.067928+00:00",
+      "finished_at": "2026-11-09T00:42:50.712811+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_version",
+      "started_at": "2026-11-09T00:42:50.718881+00:00",
+      "finished_at": "2026-11-09T00:42:52.630321+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_import_plan",
+      "started_at": "2026-11-09T00:44:47.143738+00:00",
+      "finished_at": "2026-11-09T00:44:47.935663+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_import_after_capacity",
+      "started_at": "2026-11-09T00:44:47.942539+00:00",
+      "finished_at": "2026-11-09T00:44:48.690056+00:00",
+      "rc": 1,
+      "technical_result": "Import prerequisite guard stopped before conversion; preserved failed attempt. A later labeled attempt completed with unchanged source and binary identities."
+    },
+    {
+      "label": "reference_import_after_exact_storage_recovery",
+      "started_at": "2026-11-09T02:36:01.781504+00:00",
+      "finished_at": "2026-11-09T02:36:19.125190+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_import_plan",
+      "started_at": "2026-11-09T02:36:56.694039+00:00",
+      "finished_at": "2026-11-09T02:36:57.501590+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_import",
+      "started_at": "2026-11-09T02:36:57.510017+00:00",
+      "finished_at": "2026-11-09T02:37:13.631490+00:00",
+      "rc": 0
+    },
+    {
+      "label": "reference_output",
+      "started_at": "2026-11-09T02:37:34.686235+00:00",
+      "finished_at": "2026-11-09T02:39:19.700503+00:00",
+      "rc": 0
+    },
+    {
+      "label": "candidate_output",
+      "started_at": "2026-11-09T02:39:19.710201+00:00",
+      "finished_at": "2026-11-09T02:40:58.609842+00:00",
+      "rc": 0
+    },
+    {
+      "label": "report_only",
+      "started_at": "2026-11-09T02:42:16.253126+00:00",
+      "finished_at": "2026-11-09T02:45:48.168788+00:00",
+      "rc": 0
+    },
+    {
+      "label": "strict_zero",
+      "started_at": "2026-11-09T02:45:48.181291+00:00",
+      "finished_at": "2026-11-09T02:49:21.127068+00:00",
+      "rc": 0
+    },
+    {
+      "label": "native_A1",
+      "started_at": "2026-11-09T02:49:21.153565+00:00",
+      "finished_at": "2026-11-09T02:51:33.358383+00:00",
+      "rc": 0
+    },
+    {
+      "label": "native_B1",
+      "started_at": "2026-11-09T02:51:33.380038+00:00",
+      "finished_at": "2026-11-09T02:53:44.154796+00:00",
+      "rc": 0
+    },
+    {
+      "label": "native_A2",
+      "started_at": "2026-11-09T02:53:44.176149+00:00",
+      "finished_at": "2026-11-09T02:55:56.693721+00:00",
+      "rc": 0
+    },
+    {
+      "label": "native_B2",
+      "started_at": "2026-11-09T02:55:56.715613+00:00",
+      "finished_at": "2026-11-09T02:58:08.732473+00:00",
+      "rc": 0
+    },
+    {
+      "label": "fixed_driver_compile",
+      "started_at": "2026-11-09T02:58:08.778167+00:00",
+      "finished_at": "2026-11-09T02:58:09.252679+00:00",
+      "rc": 1,
+      "technical_result": "Compiler temporary-file prerequisite failed before the fixed driver was built; a later labeled attempt uses unchanged source and compiler flags."
+    },
+    {
+      "label": "fixed_driver_compile_after_temp_recovery",
+      "started_at": "2026-11-09T03:00:00.505767+00:00",
+      "finished_at": "2026-11-09T03:00:14.283188+00:00",
+      "rc": 0
+    },
+    {
+      "label": "fixed_A1",
+      "started_at": "2026-11-09T03:04:18.484649+00:00",
+      "finished_at": "2026-11-09T03:05:02.989721+00:00",
+      "rc": 0
+    },
+    {
+      "label": "fixed_B1",
+      "started_at": "2026-11-09T03:06:31.623789+00:00",
+      "finished_at": "2026-11-09T03:07:15.401026+00:00",
+      "rc": 0
+    },
+    {
+      "label": "fixed_A2",
+      "started_at": "2026-11-09T03:08:42.025441+00:00",
+      "finished_at": "2026-11-09T03:09:25.710084+00:00",
+      "rc": 0
+    },
+    {
+      "label": "fixed_B2",
+      "started_at": "2026-11-09T03:10:52.353556+00:00",
+      "finished_at": "2026-11-09T03:11:35.969430+00:00",
+      "rc": 0
+    },
+    {
+      "label": "http_reference",
+      "started_at": "2026-11-09T03:13:02.707233+00:00",
+      "finished_at": "2026-11-09T03:14:11.260203+00:00",
+      "rc": 1
+    },
+    {
+      "label": "http_candidate",
+      "started_at": "2026-11-09T03:15:41.953104+00:00",
+      "finished_at": "2026-11-09T03:16:50.054867+00:00",
+      "rc": 1
+    }
+  ],
+  "server_attempts": [
+    {
+      "arm": "reference",
+      "label": "fixed_A1",
+      "started_at": "2026-11-09T03:00:14.377800+00:00",
+      "ready": false,
+      "stop_rc": 2,
+      "stopped_at": "2026-11-09T03:00:16.607280+00:00"
+    },
+    {
+      "arm": "reference",
+      "label": "fixed_retained_reference_recovery_A1",
+      "started_at": "2026-11-09T03:02:52.006462+00:00",
+      "ready": true,
+      "action_completed": true,
+      "stop_rc": -15,
+      "stopped_at": "2026-11-09T03:05:03.162678+00:00"
+    },
+    {
+      "arm": "candidate",
+      "label": "fixed_retained_reference_recovery_B1",
+      "started_at": "2026-11-09T03:05:03.188601+00:00",
+      "ready": true,
+      "action_completed": true,
+      "stop_rc": -15,
+      "stopped_at": "2026-11-09T03:07:15.572144+00:00"
+    },
+    {
+      "arm": "reference",
+      "label": "fixed_retained_reference_recovery_A2",
+      "started_at": "2026-11-09T03:07:15.601336+00:00",
+      "ready": true,
+      "action_completed": true,
+      "stop_rc": -15,
+      "stopped_at": "2026-11-09T03:09:25.887196+00:00"
+    },
+    {
+      "arm": "candidate",
+      "label": "fixed_retained_reference_recovery_B2",
+      "started_at": "2026-11-09T03:09:25.919061+00:00",
+      "ready": true,
+      "action_completed": true,
+      "stop_rc": -15,
+      "stopped_at": "2026-11-09T03:11:36.148352+00:00"
+    },
+    {
+      "arm": "reference",
+      "label": "http_reference",
+      "started_at": "2026-11-09T03:11:36.235680+00:00",
+      "ready": true,
+      "action_completed": true,
+      "stop_rc": -15,
+      "stopped_at": "2026-11-09T03:14:11.424759+00:00"
+    },
+    {
+      "arm": "candidate",
+      "label": "http_candidate",
+      "started_at": "2026-11-09T03:14:11.460251+00:00",
+      "ready": true,
+      "action_completed": true,
+      "stop_rc": -15,
+      "stopped_at": "2026-11-09T03:16:50.211610+00:00"
+    }
+  ]
+}

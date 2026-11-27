@@ -1,0 +1,4 @@
+<|im_start|>user
+Write a detailed numbered list explaining the integers from 1 through 100, one sentence per integer. Begin with 1 and continue without stopping early.
+<|im_end|>
+<|im_start|>assistant

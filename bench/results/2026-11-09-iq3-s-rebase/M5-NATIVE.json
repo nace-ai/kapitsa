@@ -1,0 +1,197 @@
+{
+  "notice": "Explicitly redacted derived summary, not a raw execution log. Original commands and complete records retained privately.",
+  "source_versions": {
+    "reference": "1ea325c87b0302db86fea7c5d0bddfc2c72257ad",
+    "candidate": "60d312d1ee278cc0b07f2f6cc1ae3162c6265a36"
+  },
+  "setup": {
+    "chip": "Apple M5 Pro",
+    "gpu_cores": 20,
+    "memory_capacity_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "order": [
+    "A1",
+    "B1",
+    "A2",
+    "B2"
+  ],
+  "legs": {
+    "A1": {
+      "rc": 0,
+      "invalid": [],
+      "decode": {
+        "median_tps": 133.56,
+        "runs_tps": [
+          126.12,
+          133.56,
+          138.38
+        ],
+        "median_accepted_draft_tps": 84.78,
+        "median_accepted_draft_share": 0.6348
+      },
+      "decode_greedy": {
+        "median_tps": 138.54,
+        "runs_tps": [
+          138.35,
+          144.75,
+          138.54
+        ],
+        "median_accepted_draft_tps": 88.63,
+        "median_accepted_draft_share": 0.6406
+      },
+      "prefill": [
+        {
+          "size": 4000,
+          "prompt_tokens": 4134,
+          "ttft_s": 1.6524,
+          "tps": 2501.8,
+          "followup_s": [
+            0.0419,
+            0.0469,
+            0.0403
+          ],
+          "followup_median_s": 0.0419,
+          "followup_suffix_tps": 525.4
+        }
+      ],
+      "tool_calls": "pass",
+      "raw_sha256": "42db062d3d726718d5b42c009ccc3c8e885a77359a575755947105a780b6d7f7",
+      "flags": [
+        "decode: repetition loop (distinct-4-gram 0.4289)",
+        "decode: repetition loop (distinct-4-gram 0.456)"
+      ]
+    },
+    "B1": {
+      "rc": 0,
+      "invalid": [],
+      "decode": {
+        "median_tps": 139.41,
+        "runs_tps": [
+          139.41,
+          133.84,
+          140.37
+        ],
+        "median_accepted_draft_tps": 89.58,
+        "median_accepted_draft_share": 0.6426
+      },
+      "decode_greedy": {
+        "median_tps": 144.71,
+        "runs_tps": [
+          144.71,
+          148.19,
+          142.27
+        ],
+        "median_accepted_draft_tps": 94.12,
+        "median_accepted_draft_share": 0.6504
+      },
+      "prefill": [
+        {
+          "size": 4000,
+          "prompt_tokens": 4135,
+          "ttft_s": 1.6465,
+          "tps": 2511.4,
+          "followup_s": [
+            0.0423,
+            0.0496,
+            0.0379
+          ],
+          "followup_median_s": 0.0423,
+          "followup_suffix_tps": 528.2
+        }
+      ],
+      "tool_calls": "pass",
+      "raw_sha256": "de6e9374054fd4ebf22a79d3c9931f4c4f1058b43f3a4ca6211605f97e5cabcb",
+      "flags": []
+    },
+    "A2": {
+      "rc": 0,
+      "invalid": [],
+      "decode": {
+        "median_tps": 128.89,
+        "runs_tps": [
+          140.37,
+          127.1,
+          128.89
+        ],
+        "median_accepted_draft_tps": 79.8,
+        "median_accepted_draft_share": 0.6191
+      },
+      "decode_greedy": {
+        "median_tps": 141.97,
+        "runs_tps": [
+          143.64,
+          139.59,
+          141.97
+        ],
+        "median_accepted_draft_tps": 91.78,
+        "median_accepted_draft_share": 0.6465
+      },
+      "prefill": [
+        {
+          "size": 4000,
+          "prompt_tokens": 4133,
+          "ttft_s": 1.6515,
+          "tps": 2502.6,
+          "followup_s": [
+            0.0421,
+            0.0493,
+            0.0401
+          ],
+          "followup_median_s": 0.0421,
+          "followup_suffix_tps": 522.1
+        }
+      ],
+      "tool_calls": "pass",
+      "raw_sha256": "31d3cf946301fb014663a60a79a6b53a15ca92e075c5e918bc2526415ac3454d",
+      "flags": []
+    },
+    "B2": {
+      "rc": 0,
+      "invalid": [],
+      "decode": {
+        "median_tps": 141.38,
+        "runs_tps": [
+          132.41,
+          152.17,
+          141.38
+        ],
+        "median_accepted_draft_tps": 90.57,
+        "median_accepted_draft_share": 0.6406
+      },
+      "decode_greedy": {
+        "median_tps": 142.19,
+        "runs_tps": [
+          142.19,
+          142.02,
+          144.86
+        ],
+        "median_accepted_draft_tps": 91.64,
+        "median_accepted_draft_share": 0.6445
+      },
+      "prefill": [
+        {
+          "size": 4000,
+          "prompt_tokens": 4133,
+          "ttft_s": 1.6706,
+          "tps": 2473.9,
+          "followup_s": [
+            0.0425,
+            0.0523,
+            0.0408
+          ],
+          "followup_median_s": 0.0425,
+          "followup_suffix_tps": 516.7
+        }
+      ],
+      "tool_calls": "pass",
+      "raw_sha256": "87e09e90deaee37a92f84fd13d2e95709f1323235b203e84fb19c41019846479",
+      "flags": []
+    }
+  },
+  "limitations": [
+    "A1 has two repetition flags; all original rates and flags retained.",
+    "Native requests do not establish matched-request inference acceleration or universal no-regression."
+  ]
+}

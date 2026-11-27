@@ -1,0 +1,39 @@
+{
+  "paths": [
+    {
+      "path": "prefill",
+      "bytes": 7946240,
+      "sha256": "444fb1fb136d9df8f3eb41645cda6399d8eb1c290018f33e100573b1254e06f6",
+      "finite": true,
+      "nonzero_values": 1986560,
+      "byte_equal": true,
+      "records": 8
+    },
+    {
+      "path": "step",
+      "bytes": 190709760,
+      "sha256": "c49e22ec61f712b5839f75c3c02bd1c0da1bcfc4993982be4b29c608881a1bf2",
+      "finite": true,
+      "nonzero_values": 47677438,
+      "byte_equal": true,
+      "records": 192
+    },
+    {
+      "path": "verify",
+      "bytes": 190709760,
+      "sha256": "c49e22ec61f712b5839f75c3c02bd1c0da1bcfc4993982be4b29c608881a1bf2",
+      "finite": true,
+      "nonzero_values": 47677438,
+      "byte_equal": true,
+      "records": 192
+    }
+  ],
+  "comparator_exit": 0,
+  "coverage": {
+    "required_rows": 83302,
+    "missing_rows": 0,
+    "all_row_bytes_rechecked": true,
+    "ordered_row_digest": "2a980066952074fd22cec306c2d741cff4022ba22eedc2ec012dca805dce6229"
+  },
+  "scope": "Pinned actual Sushi weights; sparse table contains every input row of these exact windows. No full-table or calibrated-floor claim."
+}

@@ -1,0 +1,151 @@
+[
+  {
+    "label": "api-candidate-compile",
+    "argv": [
+      "/usr/bin/c++",
+      "-O3",
+      "-std=gnu++20",
+      "-arch",
+      "arm64",
+      "-mmacosx-version-min=14.0",
+      "-I/Users/bytedance/kapitsa-nameless-tool-20261107/candidate/src",
+      "-I/Users/bytedance/kapitsa-nameless-tool-20261107/candidate/include",
+      "-I/Users/bytedance/kapitsa-nameless-tool-20261107/candidate/third_party",
+      "/Users/bytedance/kapitsa-nameless-tool-20261107/api-regression.cpp",
+      "/Users/bytedance/kapitsa-nameless-tool-20261107/candidate/build/libnaceinfer.a",
+      "-o",
+      "/Users/bytedance/kapitsa-nameless-tool-20261107/api-candidate",
+      "-framework",
+      "Metal",
+      "-framework",
+      "Foundation",
+      "-framework",
+      "CoreFoundation",
+      "-framework",
+      "IOSurface",
+      "-framework",
+      "IOKit",
+      "-framework",
+      "ImageIO",
+      "-framework",
+      "CoreGraphics",
+      "-framework",
+      "Security",
+      "-framework",
+      "SystemConfiguration",
+      "-framework",
+      "Accelerate"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-nameless-tool-20261107/candidate",
+    "rc": 0
+  },
+  {
+    "label": "4b-parser",
+    "argv": [
+      "/Users/bytedance/kapitsa-nameless-tool-20261107/candidate/build/parser_test",
+      "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-nameless-tool-20261107/candidate",
+    "rc": 0
+  },
+  {
+    "label": "4b-api",
+    "argv": [
+      "/Users/bytedance/kapitsa-nameless-tool-20261107/api-candidate",
+      "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-nameless-tool-20261107/candidate",
+    "rc": 1
+  },
+  {
+    "label": "4b-structured",
+    "argv": [
+      "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python3",
+      "tests/test_structured.py",
+      "--cli",
+      "build",
+      "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-nameless-tool-20261107/candidate",
+    "rc": 0
+  },
+  {
+    "label": "35b-parser",
+    "argv": [
+      "/Users/bytedance/kapitsa-nameless-tool-20261107/candidate/build/parser_test",
+      "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-nameless-tool-20261107/candidate",
+    "rc": 0
+  },
+  {
+    "label": "35b-api",
+    "argv": [
+      "/Users/bytedance/kapitsa-nameless-tool-20261107/api-candidate",
+      "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-nameless-tool-20261107/candidate",
+    "rc": 0
+  },
+  {
+    "label": "35b-structured",
+    "argv": [
+      "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python3",
+      "tests/test_structured.py",
+      "--cli",
+      "build",
+      "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-nameless-tool-20261107/candidate",
+    "rc": 0
+  },
+  {
+    "label": "api-base-compile",
+    "argv": [
+      "/usr/bin/c++",
+      "-O3",
+      "-std=gnu++20",
+      "-arch",
+      "arm64",
+      "-mmacosx-version-min=14.0",
+      "-I/Users/bytedance/kapitsa-affine-rebase-20261107/base/src",
+      "-I/Users/bytedance/kapitsa-affine-rebase-20261107/base/include",
+      "-I/Users/bytedance/kapitsa-affine-rebase-20261107/base/third_party",
+      "/Users/bytedance/kapitsa-nameless-tool-20261107/api-regression.cpp",
+      "/Users/bytedance/kapitsa-affine-rebase-20261107/base/build/libnaceinfer.a",
+      "-o",
+      "/Users/bytedance/kapitsa-nameless-tool-20261107/api-base",
+      "-framework",
+      "Metal",
+      "-framework",
+      "Foundation",
+      "-framework",
+      "CoreFoundation",
+      "-framework",
+      "IOSurface",
+      "-framework",
+      "IOKit",
+      "-framework",
+      "ImageIO",
+      "-framework",
+      "CoreGraphics",
+      "-framework",
+      "Security",
+      "-framework",
+      "SystemConfiguration",
+      "-framework",
+      "Accelerate"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-nameless-tool-20261107/candidate",
+    "rc": 0
+  },
+  {
+    "label": "api-base-4b",
+    "argv": [
+      "/Users/bytedance/kapitsa-nameless-tool-20261107/api-base",
+      "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit"
+    ],
+    "cwd": "/Users/bytedance/kapitsa-nameless-tool-20261107/candidate",
+    "rc": 1
+  }
+]

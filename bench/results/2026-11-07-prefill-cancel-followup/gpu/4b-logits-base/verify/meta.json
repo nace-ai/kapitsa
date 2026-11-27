@@ -1,0 +1,21 @@
+{
+  "engine": "kapitsa",
+  "build": "0.2.31 (2c41b56)",
+  "model": "qwen3.5-4b-4bit",
+  "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+  "path": "verify",
+  "verify": "KFlash tree (a chain of 8 live rows)",
+  "prefill_chunk": 2048,
+  "ane": {
+    "chunks": 0,
+    "evals": 0,
+    "reruns": 0
+  },
+  "records": 192,
+  "vocab": 248320,
+  "source": "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/reference/bench/corpus.txt",
+  "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+  "macos": "26.4.1",
+  "date": "2026-11-07T13:45:24Z",
+  "env": {}
+}

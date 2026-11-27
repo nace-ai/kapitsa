@@ -1,0 +1,15 @@
+{
+  "reason": "CPU suite inherited NI_NO_MTP=1 from model runs; rerun with clean environment",
+  "prior_status": {
+    "phase": "waiting_for_CPU_suite",
+    "time": 1793981874.559911
+  },
+  "pids": [
+    3706,
+    5564,
+    5969,
+    5970,
+    6199,
+    7150
+  ]
+}

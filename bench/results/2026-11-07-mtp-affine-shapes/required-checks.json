@@ -1,0 +1,59 @@
+{
+ "tier": 2,
+ "files": [
+  {
+   "path": "src/model/affine_pack.h",
+   "tier": 2,
+   "why": "kernel or model code every model may reach"
+  },
+  {
+   "path": "src/model/qwen35_spec.cpp",
+   "tier": 2,
+   "why": "Qwen3.5/3.6/3.8 model code"
+  },
+  {
+   "path": "tools/affine_pack_test.cpp",
+   "tier": 1,
+   "why": "unclassified path: treated as host code on the hot path until a rule says otherwise"
+  },
+  {
+   "path": "tools/load_error_test.cpp",
+   "tier": 1,
+   "why": "unclassified path: treated as host code on the hot path until a rule says otherwise"
+  }
+ ],
+ "checks": [
+  "cpu: `vk cpu-tests` (AGENTS.md's CPU list) and `prek run --all-files`",
+  "tokens: build/tokenizer_test, build/structured_check, build/grammar_test, `python3 tests/test_structured.py --cli build` with a model folder's tokenizer, `build/parser_test MODEL_DIR`",
+  "gpu e2e: `vk serve <4B dir>` then `python3 tests/test_server.py http://127.0.0.1:8090`",
+  "outputs: logit gate per model below (CONTRIBUTING.md \"Output check\"); a change not meant to move outputs shows \"every row bitwise identical\" or passes the gate",
+  "speed: one interleaved A B A B on an idle GPU per model below (`kapitsa bench --quick` of `vk ref` and build/), every run reported with Mac, macOS, commit",
+  "metal: changed kernels at small sizes under MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1 (static threadgroup memory > 16,384 B: say the layer cannot run it, with the size)",
+  "if the PR means to move outputs (tier 3): it fails the gate and says so with numbers, plus ni_eval against bf16 (bench/quality) and, for a default, bench/reasoning math500-quick",
+  "decode legs (decode path; references/output-check.md \"Decode legs\"): (a) assert non-empty text and print the token count before any md5/ids comparison, else VOID; (b) print the count of 248044/248046 (<|endoftext|>/<|im_end|>) in the first N ids and the ids before the first, on a chat-templated prompt that gives >=256 tokens before <|im_end|>; (c) a speculative row prints the drafter load line (drafter, path, sha), tok/cycle and accepted draft tokens/cycle"
+ ],
+ "models": [
+  {
+   "floor": "qwen3.5-4b-4bit",
+   "label": "Qwen3.5 4B 4-bit (dense, Neural Engine split)",
+   "floor_file": "qwen3.5-4b-4bit.json",
+   "dir": null
+  },
+  {
+   "floor": "qwen3.6-35b-a3b-4bit",
+   "label": "Qwen3.6 35B-A3B 4-bit (MoE)",
+   "floor_file": "qwen3.6-35b-a3b-4bit.json",
+   "dir": null
+  },
+  {
+   "floor": "qwen3.8-27b-4bit",
+   "label": "Qwen3.8 27B 4-bit (dense)",
+   "floor_file": "qwen3.8-27b-4bit.json",
+   "dir": null
+  }
+ ],
+ "notes": [
+  "unclassified path: treated as host code on the hot path until a rule says otherwise"
+ ],
+ "chip_gen": 4
+}

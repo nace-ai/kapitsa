@@ -1,0 +1,12 @@
+{
+  "required_rows": 16064,
+  "tokens": 1536,
+  "heads": 16,
+  "all_accessed_row_bytes_rechecked": true,
+  "ordered_subset_payload_sha256": "a75ea834239e5a166753700f6f80dd1c4c377be8c855f7b320c9f7ea5ddd1cb6",
+  "source_payload_sha256": "53bf8df49689d726f4713b794a70e8f164f062e1ef273d6e3be16a7ae2b642a1",
+  "logical_bytes": 32000153976,
+  "allocated_bytes": 768131072,
+  "free_bytes": 2957250560,
+  "scope": "First corpus sequence through 1536 tokens only; original row IDs, header and offsets preserved; not a complete model"
+}

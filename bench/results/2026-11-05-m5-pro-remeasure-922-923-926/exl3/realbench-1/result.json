@@ -1,0 +1,149 @@
+{
+  "started": 1793829916.08934,
+  "mode": "realbench",
+  "command": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/build/exl3_register_check",
+    "/Users/alisheramantay/Documents/nace/k343/exl3_reference.metal",
+    "realbench",
+    "/Volumes/Extreme Pro/downloads/k343-exl3-L0"
+  ],
+  "timing_eligible": true,
+  "head": "af7d79580a176ffef45d1aaa72cc0b888f214453",
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.5.2\nBuildVersion:\t\t25F84\n",
+  "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=7602275)\t100%; charged; 0:00 remaining present: true\n",
+  "hashes": {
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/src/kernels/exl3moe.metal": "a85ca4b3c18378551f9f21ea54a2afe3c664ca5223e035b11d490152efd5716b",
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/tools/exl3_check.cpp": "741ab25d66a0c357d56a1f51e27eb67bfce4348aad7a5a7d215b580af911f657",
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/src/model/moe_exl3.cpp": "9f3f876aed0a70601a3853ca9d58ec63722ab08ae574236e77f35ce91aa6daaf",
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/tools/exl3_register_check.cpp": "801f1387cfef122d34aceaaf53ef19879fbed8283e0d16c9dd36e5bb62478667",
+    "/Users/alisheramantay/Documents/nace/k343/exl3_reference.metal": "ee6e631f7809139827013c5b199d41f4dbc545f018da509ba900b212a3e71721",
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/build/exl3_register_check": "a5718e7338fbfa4245d03e9984e2686be66d2b49e0b3f10bbda07d200bb2d811"
+  },
+  "env": {
+    "NI_LOCK_HELD": "1",
+    "MTL_SHADER_VALIDATION": "0",
+    "MTL_DEBUG_LAYER": "0"
+  },
+  "quiet": true,
+  "quiet_wait_s": 12.478157997131348,
+  "last_busy": [],
+  "returncode": 0,
+  "elapsed_s": 20.845289945602417,
+  "contention": {
+    "samples": 15,
+    "mean_foreign_gpu_pct": 0.04,
+    "max_foreign_gpu_pct": 0.66,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+  },
+  "samples": [
+    [
+      1793829929.158,
+      0,
+      "-",
+      0.0,
+      0.0
+    ],
+    [
+      1793829929.705,
+      0,
+      "-",
+      0.0,
+      0.0
+    ],
+    [
+      1793829930.239,
+      0,
+      "-",
+      0.0,
+      0.0
+    ],
+    [
+      1793829930.772,
+      0,
+      "-",
+      0.0,
+      0.0
+    ],
+    [
+      1793829931.309,
+      0,
+      "-",
+      0.0,
+      0.0
+    ],
+    [
+      1793829931.845,
+      0,
+      "-",
+      0.0,
+      0.0
+    ],
+    [
+      1793829932.383,
+      0,
+      "-",
+      0.0,
+      0.0
+    ],
+    [
+      1793829932.919,
+      0,
+      "-",
+      0.0,
+      0.0
+    ],
+    [
+      1793829933.455,
+      0,
+      "-",
+      0.0,
+      0.0
+    ],
+    [
+      1793829933.991,
+      0.66,
+      "com.apple.WebKit",
+      0.66,
+      0.0
+    ],
+    [
+      1793829934.529,
+      0,
+      "-",
+      0.0,
+      0.0
+    ],
+    [
+      1793829935.07,
+      0,
+      "-",
+      0.0,
+      0.0
+    ],
+    [
+      1793829935.605,
+      0,
+      "-",
+      0.0,
+      0.0
+    ],
+    [
+      1793829936.141,
+      0,
+      "-",
+      0.0,
+      0.0
+    ],
+    [
+      1793829936.676,
+      0,
+      "-",
+      0.0,
+      0.0
+    ]
+  ]
+}

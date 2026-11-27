@@ -1,0 +1,12 @@
+{
+  "command": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/llama_probe",
+    "/Volumes/PR775Eval/Qwen3.5-9B-Q4_K_M.gguf",
+    "dump",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step",
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/competitors-resume/llama-raw"
+  ],
+  "returncode": 0,
+  "start": 1793992411.38133,
+  "end": 1793992452.862328
+}

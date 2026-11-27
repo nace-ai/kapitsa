@@ -1,0 +1,15 @@
+PASS extra execution_session_test
+PASS extra http_stream_test
+PASS extra drafter_attach_test
+PASS extra exl3_test
+PASS extra device_profile_test
+PASS extra qwen4_config_test
+PASS extra json_file_test
+PASS extra affine_pack_test
+PASS extra systemone_test
+PASS extra systemone_codes_probe_test
+PASS extra splash_protocol_test
+PASS extra splash_runtime_test
+PASS extra splash_discover_test
+PASS extra splash_plan_test
+PASS extra test_profile_gates

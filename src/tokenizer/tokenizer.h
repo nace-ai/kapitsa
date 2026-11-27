@@ -40,10 +40,11 @@ class Tokenizer {
   std::vector<std::string> id_to_bytes_;              // id -> raw bytes
   std::unordered_map<uint64_t, std::pair<int, int>> merges_; // (a,b) -> (rank, merged id)
   std::vector<std::pair<std::string, int>> added_;    // content -> id, longest first
+  bool added_first_[256] = {};
   std::vector<bool> special_;
   std::vector<bool> added_id_;
   int byte_id_[256];
-  enum class Split { Qwen, Tekken, Flint };  // the pre-tokenizer split, from tokenizer.json's pre_tokenizer
+  enum class Split { Qwen, Tekken, Flint, O200k };  // the pre-tokenizer split, from tokenizer.json's pre_tokenizer
   Split split_ = Split::Qwen;
   bool nfc_ = true;             // NFC-normalize the text first (Qwen; Tekken and Flint have no normalizer)
   bool ignore_merges_ = false;  // a word found whole in the vocabulary is one token (HF BPE ignore_merges)

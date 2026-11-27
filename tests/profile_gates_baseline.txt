@@ -1,0 +1,5 @@
+# path, call-form hits. A rise fails tests/test_profile_gates.py. A drop to zero fails until this row is removed.
+src/metal/gpu.h	1
+src/metal/gpu.mm	1
+tools/coop_layout.cpp	1
+tools/nh_mlp_bench.cpp	1

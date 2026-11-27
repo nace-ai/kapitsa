@@ -1,0 +1,5 @@
+step.f32: 192 records (?)
+  reference: no meta.json
+  candidate: no meta.json
+  every row bitwise identical
+  PASS (flags)

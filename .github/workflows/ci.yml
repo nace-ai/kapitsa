@@ -45,6 +45,44 @@ jobs:
       - uses: actions/checkout@v5
       - run: python3 tests/test_pr_size.py
 
+  server-test-lock:
+    # tests/test_server.py --cli takes the GPU lock itself and waits for it; this is that behavior, on a throwaway lock file,
+    # and `vk cpu-tests` failing at once on that entry when someone else holds the lock
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 tests/test_server_lock.py
+      - run: python3 tests/test_vk_cpu_tests_lock.py
+
+  profile-gates:
+    # A new inline chip, core or RAM check outside src/engine/device_profile.cpp fails this, and so does a comment or doc line
+    # that gives a measured-only-here or nothing-was-run reason for a narrow default, anywhere in the repo
+    # (tests/test_comment_gates.py). CPU only.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 tests/test_profile_gates.py
+      - name: Inkling planning with a simulated older macOS and no live device
+        run: python3 tests/test_inkling_plan_profile.py
+      - run: python3 tests/test_comment_gates.py --self-test
+      - run: python3 tests/test_comment_gates.py
+      - name: Inkling conditional-quality evidence
+        run: |
+          python3 tests/test_inkling_profile_evidence.py
+          python3 tools/check_inkling_profile_evidence.py bench/results/inkling-fast-default-20261124/conditional-quality.json
+
+  models-table:
+    # docs/models.md is written by tools/models_table.py from src/hub/catalog.cpp; a catalog change without the rewritten
+    # table fails here. No build.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 tests/test_models_table.py
+      - run: python3 tools/models_table.py --check
+
   splash-patches:
     # packaging/splash/: the patches' headers, the kernel generator, and every patch applied to the pinned Splash (clones it).
     runs-on: ubuntu-latest
@@ -88,14 +126,14 @@ jobs:
           fi
           # show what the table is missing, then fail: the row and its rewrite have to ride in the same pull request
           python3 tools/community_table.py
-          git --no-pager diff -- bench/community/RESULTS.md || true
-          fix="python3 tools/community_table.py && git add bench/community/RESULTS.md && git commit -m 'bench/community/RESULTS.md: the community results, rewritten from bench/community/results'"
-          echo "::error title=Community results table is stale::bench/community/RESULTS.md does not match bench/community/results after this merge. Run: $fix"
+          git --no-pager diff -- bench/community/RESULTS.md docs/site/leaderboard-data.js || true
+          fix="python3 tools/community_table.py && git add bench/community/RESULTS.md docs/site/leaderboard-data.js && git commit -m 'bench/community: RESULTS.md and the leaderboard data, rewritten from bench/community/results'"
+          echo "::error title=Community results table is stale::bench/community/RESULTS.md does not match bench/community/results after this merge. One command rewrites it and docs/site/leaderboard-data.js. Run: $fix"
           {
             echo "### Community results table is stale"
             echo
             echo "After this pull request merges, \`bench/community/RESULTS.md\` would not match \`bench/community/results\`."
-            echo "The result row and its rewrite land in the same pull request. Regenerate it, commit, and push to this branch:"
+            echo "The result row and its rewrites (\`bench/community/RESULTS.md\` and \`docs/site/leaderboard-data.js\`, both written by the one command below) land in the same pull request. Regenerate them, commit, and push to this branch:"
             echo
             echo '```sh'
             echo "$fix"
@@ -104,6 +142,14 @@ jobs:
             echo
             echo "A branch that was updated to the current main after another result landed needs this again before merging."
           } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+      - name: Check the leaderboard data file
+        run: |
+          if python3 tools/build_leaderboard_data.py --check; then
+            exit 0
+          fi
+          python3 tools/build_leaderboard_data.py
+          echo "::error title=Leaderboard data is stale::docs/site/leaderboard-data.js does not match bench/community/results and uncensored.json. Run: python3 tools/community_table.py && git add bench/community/RESULTS.md docs/site/leaderboard-data.js"
           exit 1
 
   docs-links:
@@ -116,6 +162,19 @@ jobs:
       - uses: actions/checkout@v5
       - run: python3 tests/test_docs_links.py
 
+  control-schema:
+    # The control socket's wire format (docs/control-socket.md): schema/control/ is valid JSON Schema 2020-12, its $refs
+    # into docs/serve-config.schema.json resolve, every example passes and every must-fail example is refused. No build.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --disable-pip-version-check jsonschema==4.23.0
+      - run: python tests/test_control_schema.py
+
   agentic-metrics-script:
     # bench/harness/agentic.py against a fake server: no model, no GPU.
     runs-on: ubuntu-latest
@@ -124,6 +183,7 @@ jobs:
       - uses: actions/checkout@v5
       - run: python3 tests/test_agentic.py
       - run: python3 tests/test_cached_increment.py
+      - run: python3 tests/test_qmm_device_ab.py
       - run: python3 tools/test_max_readout_compare.py
 
   build-and-test:
@@ -158,7 +218,13 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa systemone api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_accept_test tokenizer_test iq_layout_test exl3_test vision_pixels_test tree_reduce_test rope_pair_test remote_test cluster_test split_place_test qwen4_config_test json_file_test affine_pack_test systemone_test systemone_codes_probe_test execution_session_test http_stream_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa gguf_output_cleanup_test ane_segment_check systemone api_test bench_test update_test prefix_cache_test kflash_cache_test grammar_test structured_check fn_store_test hy4_engram_test fn_dflash_test dflash_lowrank_cache_test dflash_plan_test drafter_attach_test dflash_accept_test tokenizer_test iq_layout_test ink2_gguf_test plan_weights_test exl3_test vision_pixels_test tree_reduce_test rope_pair_test remote_test cluster_test split_place_test gemm_slices_test kv_grow_test device_profile_test profile_test sample_topk_test catalog_profile_test qwen4_config_test flint_kv_test json_file_test affine_pack_test ffn_share_test systemone_test systemone_codes_probe_test execution_session_test think_control_test http_stream_test disconnect_test splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test logit_dump qmm_device_conditions serve_options_test events_test control_test engine_view_test ink2_check
+      - name: GGUF row worker lifetime
+        if: steps.changes.outputs.code == 'true'
+        run: python3 tests/test_gguf_parallel_rows.py
+      - name: GGUF output cleanup
+        if: steps.changes.outputs.code == 'true'
+        run: build/gguf_output_cleanup_test
       - name: SDK C ABI contract
         if: steps.changes.outputs.code == 'true'
         run: |
@@ -167,6 +233,11 @@ jobs:
           cmake --build build -j"$(sysctl -n hw.ncpu)" --target sdk_contract_test sdk_model_test sdk_deferred_test load_error_test
           ctest --test-dir build -R '^(sdk_contract_test|load_error_test)$' --output-on-failure
           diff <(nm -gUj build/libkapitsa_sdk.dylib | sort) <(sort sdk/c/exports.txt)
+      - name: Python SDK contracts (CPU only)
+        if: steps.changes.outputs.code == 'true'
+        run: |
+          python3 sdk/python/test_sdk.py
+          python3 sdk/python/test_native.py --library "$PWD/build/libkapitsa_sdk.dylib"
       - uses: actions/setup-node@v5
         if: steps.changes.outputs.code == 'true'
         with:
@@ -177,24 +248,54 @@ jobs:
           npm ci --prefix sdk/node
           KAPITSA_LIBRARY="$PWD/build/libkapitsa_sdk.dylib" npm test --prefix sdk/node
           npm run typecheck --prefix sdk/node
+      - name: Rust SDK contract
+        if: steps.changes.outputs.code == 'true'
+        env:
+          RUSTUP_TOOLCHAIN: '1.95.0'
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt,clippy
+          python3 sdk/rust/test.py build
       - name: Python environment
         if: steps.changes.outputs.code == 'true'
         run: |
           python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install --quiet jsonschema
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet jsonschema==4.23.0  # as community-bench.yml
       - name: C++ tests
         if: steps.changes.outputs.code == 'true'
         run: build/api_test
+      - name: think_control_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/think_control_test
       - name: prefix cache store
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/prefix_cache_test
+      - name: KFlash budget cache (loads only into the build that wrote it)
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/kflash_cache_test
       # One step per suite, so one failure does not hide the others.
       - name: fn_store_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/fn_store_test
+      - name: hy4_engram_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/hy4_engram_test
+      - name: dflash_lowrank_cache_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/dflash_lowrank_cache_test
+      - name: dflash_row_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: |
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target dflash_row_test
+          build/dflash_row_test
+      - name: dflash_plan_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/dflash_plan_test
       - name: fn_dflash_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/fn_dflash_test
+      - name: drafter_attach_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/drafter_attach_test
       - name: dflash_accept_test --cpu
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/dflash_accept_test --cpu
@@ -204,6 +305,12 @@ jobs:
       - name: iq_layout_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/iq_layout_test
+      - name: ink2_gguf_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/ink2_gguf_test
+      - name: plan_weights_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/plan_weights_test
       - name: exl3_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/exl3_test
@@ -219,15 +326,53 @@ jobs:
       - name: split_place_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/split_place_test
+      - name: Stage CLI flag validation
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: python3 tests/test_split.py build --flags-only
+      - name: gemm_slices_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/gemm_slices_test
+      - name: kv_grow_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/kv_grow_test
+      - name: device_profile_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/device_profile_test
+      - name: profile_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/profile_test
+      - name: sample_topk_test --cpu
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/sample_topk_test --cpu
+      - name: catalog_profile_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/catalog_profile_test
+      - name: ane_segment_check (CPU)
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/ane_segment_check
+      - name: ANE profile policy (CPU)
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_ane_profile.py build/ane_segment_check
       - name: qwen4_config_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/qwen4_config_test
+      - name: flint_kv_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/flint_kv_test
       - name: json_file_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/json_file_test
       - name: affine_pack_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/affine_pack_test
+      - name: ffn_share_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/ffn_share_test
+      - name: nh_quant_q8_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: |
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target nh_quant_q8_test
+          build/nh_quant_q8_test
       - name: systemone_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/systemone_test
@@ -237,9 +382,39 @@ jobs:
       - name: execution_session_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/execution_session_test
+      - name: serve_options_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/serve_options_test docs/serve-config.schema.json
+      - name: test_serve_schema
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_serve_schema.py build/serve_options_test
+      - name: events_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/events_test
+      - name: test_events_schema
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_events_schema.py build/events_test
+      - name: control_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/control_test
+      - name: engine_view_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/engine_view_test
+      - name: test_control_socket
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_control_socket.py build/control_test build/kapitsa
+      - name: test_engine_view
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: |
+          $RUNNER_TEMP/venv/bin/python tests/test_events_schema.py tools/engine_replay.py
+          $RUNNER_TEMP/venv/bin/python tests/test_engine_view.py
+          node tests/test_engine_page.mjs
       - name: http_stream_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/http_stream_test
+      - name: disconnect_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/disconnect_test
       - name: splash_protocol_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/splash_protocol_test
@@ -260,6 +435,9 @@ jobs:
       - name: test_server --cli
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_server.py --cli build/kapitsa
+      - name: test_idle_unload (the --idle-unload flag; the GPU cases need a Mac with a model)
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: python3 tests/test_idle_unload.py --no-gpu
       - name: test_sidecar
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_sidecar.py build/kapitsa
@@ -290,6 +468,10 @@ jobs:
         # its output directory only: every case stops before the GPU lock and the model
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_logit_dump.py build
+      - name: test_sampled_tokens_harness
+        # Fake ni_run executables and temporary lock files only; no model or GPU.
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_sampled_tokens_harness.py
       - name: test_structured --cli
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_structured.py --cli build
@@ -304,6 +486,10 @@ jobs:
         # the converter's n-gram table from a config.json, in test_nh_fp4_requant's numpy venv
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv-np/bin/python tools/qwen4_exp_pack_test.py
+      - name: hy4_ref_score_test
+        # hy4_ref.py score on tiny synthetic logit files, in the same numpy venv
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv-np/bin/python tools/hy4_ref_score_test.py
 
   metal-compile:
     # The kernels are embedded as source and built by the GPU driver when a model loads, so nothing else here
@@ -439,6 +625,7 @@ jobs:
           need metal3.2 && check nh      embed_kernels_nh.cmake    metal3.2
           need metal3.2 && check dory    embed_kernels_dory.cmake  metal3.2
           need metal3.2 && check flint   embed_kernels_flint.cmake metal3.2
+          need metal3.2 && check ink2    embed_kernels_inkling2.cmake metal3.2
           # The tensor library is Metal 4, and a macOS 15 runner has no Metal 4 compiler - the driver on such a Mac
           # does not build it either, so this is a skip on this image, not a pass. On a runner that has Metal 4 it is
           # compiled like the rest, which is how a typo there gets caught instead of shipped.

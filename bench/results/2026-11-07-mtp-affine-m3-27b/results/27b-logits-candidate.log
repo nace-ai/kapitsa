@@ -1,0 +1,15 @@
+[kapitsa] read 15.13 GB of weights in 695 ms (21.8 GB/s)
+[kapitsa] read 0.24 GB of weights in 14 ms (16.9 GB/s)
+[kapitsa] MTP head loaded in 15 ms (dense, trunk hidden post-norm, drafts over the full vocabulary)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 14 ms
+[kapitsa] prewarmed 93 prefill pipelines in 20 ms
+[kapitsa] loaded /Volumes/Kapitsa1041/qwen3.8-27b-4bit: 64 layers, dense, 15.1 GB mapped in 916 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+prefill 8 rows: next-token NLL 1.0210, top-1 = next token 0.7500 -> /Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-logits-candidate/prefill
+step   192 rows: next-token NLL 0.4372, top-1 = next token 0.8646 -> /Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-logits-candidate/step
+verify 192 rows: next-token NLL 0.4372, top-1 = next token 0.8646 -> /Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-logits-candidate/verify
+batch  192 rows: next-token NLL 0.4372, top-1 = next token 0.8646 -> /Users/bytedance/kapitsa-mtp-affine-20261107/m3-27b-full/27b-logits-candidate/batch
+8 windows, 14848 prefilled tokens in 41.7 s; 49.3 s in all

@@ -6,6 +6,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <span>
 
 namespace ni {
 
@@ -17,11 +19,25 @@ inline int affine_kernel_group_size(int bits, int gs) {
 // Bits per weight of an MLX affine tensor that is `words` uint32 per row, `groups` scales per row, group size gs: the
 // bits b with words * 32 == groups * gs * b, or 0 when the shapes fit no whole width (a truncated or mislabelled tensor).
 inline int affine_bits(int64_t words, int64_t groups, int64_t gs) {
-  if (words <= 0 || groups <= 0 || gs <= 0) return 0;
+  const int64_t limit = std::numeric_limits<int64_t>::max();
+  if (words <= 0 || groups <= 0 || gs <= 0 || groups > limit / gs || words > limit / 32) return 0;
   const int64_t K = groups * gs;
   if ((words * 32) % K) return 0;
   const int64_t b = words * 32 / K;
   return b >= 2 && b <= 8 ? int(b) : 0;
+}
+
+// A sidecar's affine matrix [N, words] or stacked experts [E, N, words]. Parameters have the same leading
+// dimensions and one scale and bias per group. Validate before indexing shapes, casting dimensions or copying data.
+inline bool affine_matrix_shape(std::span<const int64_t> w, std::span<const int64_t> s,
+                                std::span<const int64_t> b, int64_t gs) {
+  if ((w.size() != 2 && w.size() != 3) || s.size() != w.size() || b.size() != w.size() || gs <= 0) return false;
+  const int64_t limit = std::numeric_limits<uint32_t>::max();
+  for (size_t i = 0; i < w.size(); ++i) {
+    if (w[i] <= 0 || s[i] <= 0 || b[i] != s[i]) return false;
+    if (i + 1 < w.size() && (w[i] != s[i] || w[i] > limit)) return false;
+  }
+  return s.back() <= limit / gs && affine_bits(w.back(), s.back(), gs) != 0;
 }
 
 // float32 / float16 values -> bf16 bits (round to nearest even); returns how many values changed. Every float16 value,

@@ -40,6 +40,7 @@
 #include <ctime>
 #include <deque>
 #include <filesystem>
+#include <regex>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -48,7 +49,7 @@
 #include <thread>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.2.26"
+#define KAPITSA_VERSION "0.2.40"
 #endif
 
 namespace ni::hub {
@@ -64,6 +65,7 @@ constexpr int kWorkers = 8;               // parallel connections (8 measured ~4
 constexpr int kAttempts = 8;              // per range, with backoff up to 15 s, resuming where it stopped
 
 std::atomic<bool> g_stop{false};  // Ctrl+C during a download
+std::atomic<bool> g_stop_asked{false};  // stop_downloads(): this one stays, and every later download stops too
 
 // ---------------------------------------------------------------- small helpers
 
@@ -179,11 +181,39 @@ Headers hub_headers() {
   return h;
 }
 
-std::string url_path(const std::string& p) {
+// Shared by the listing, metadata reads and download workers for one operation. A
+// public repo may reject a fine-grained token while accepting the same request anonymously.
+struct HubAuth {
+  const Headers authenticated = hub_headers();
+  const Headers anonymous{{"User-Agent", "kapitsa/" KAPITSA_VERSION}};
+  std::mutex mu;
+  std::map<std::string, bool> public_repos;
+
+  template <class Send>
+  HttpResult request(const std::string& repo, Send send) {
+    bool use_token;
+    {
+      std::lock_guard<std::mutex> lock(mu);
+      use_token = authenticated.size() > anonymous.size() && !public_repos[repo];
+    }
+    HttpResult original = send(use_token ? authenticated : anonymous);
+    if (!use_token || (original.status != 401 && original.status != 403)) return original;
+    HttpResult retry = send(anonymous);
+    // A stream's sink also cancels once it has received its complete range.
+    if (retry.status >= 200 && retry.status < 300 && retry.error.empty() && !retry.range_ignored) {
+      std::lock_guard<std::mutex> lock(mu);
+      public_repos[repo] = true;
+      return retry;
+    }
+    return original;
+  }
+};
+
+std::string url_encode(const std::string& p, bool keep_slashes) {
   static const char* hexd = "0123456789ABCDEF";
   std::string o;
   for (unsigned char c : p) {
-    if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~' || c == '/') {
+    if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~' || (keep_slashes && c == '/')) {
       o += char(c);
     } else {
       o += '%';
@@ -195,7 +225,7 @@ std::string url_path(const std::string& p) {
 }
 
 std::string file_url(const std::string& repo, const std::string& commit, const std::string& path) {
-  return endpoint() + "/" + repo + "/resolve/" + commit + "/" + url_path(path);
+  return endpoint() + "/" + repo + "/resolve/" + url_encode(commit, false) + "/" + url_encode(path, true);
 }
 
 std::string hf_cache_root() {
@@ -334,8 +364,8 @@ bool retryable(const HttpResult& r) {
 }
 
 // A range download that keeps failing.
-std::string chunk_failure(const HttpResult& r, const std::string& label) {
-  if (r.offline || r.status == 401 || r.status == 403 || r.status == 429) return failure(r, label, "", label);
+std::string chunk_failure(const HttpResult& r, const std::string& repo, const std::string& label) {
+  if (r.offline || r.status == 401 || r.status == 403 || r.status == 429) return failure(r, repo, "", label);
   if (r.range_ignored) return "The download server ignored a byte-range request for " + label + ". Run the same command again.";
   if (!r.error.empty())
     return "The download of " + label + " keeps failing (" + r.error + "). Run the same command again; it continues where it stopped.";
@@ -344,9 +374,9 @@ std::string chunk_failure(const HttpResult& r, const std::string& label) {
          ". Run the same command again in a minute; it continues where it stopped.";
 }
 
-HttpResult get_retry(HttpClient& c, const std::string& url, uint64_t a = 0, uint64_t b = 0, int attempts = 4) {
+HttpResult get_retry(HttpClient& c, HubAuth& auth, const std::string& repo, const std::string& url, uint64_t a = 0, uint64_t b = 0, int attempts = 4) {
   for (int i = 1;; ++i) {
-    HttpResult r = c.get(url, hub_headers(), a, b);
+    HttpResult r = auth.request(repo, [&](const Headers& h) { return c.get(url, h, a, b); });
     if (r.ok()) {
       if (b <= a || (r.status == 206 && r.body.size() == b - a)) return r;
       r.error = "short read";
@@ -357,10 +387,10 @@ HttpResult get_retry(HttpClient& c, const std::string& url, uint64_t a = 0, uint
   }
 }
 
-Listing list_repo(HttpClient& c, const std::string& repo, const std::string& revision) {
+Listing list_repo(HttpClient& c, HubAuth& auth, const std::string& repo, const std::string& revision) {
   const std::string rev = revision.empty() ? "main" : revision;
-  const std::string url = endpoint() + "/api/models/" + repo + "/revision/" + url_path(rev) + "?blobs=true";
-  HttpResult r = get_retry(c, url);
+  const std::string url = endpoint() + "/api/models/" + repo + "/revision/" + url_encode(rev, false) + "?blobs=true";
+  HttpResult r = get_retry(c, auth, repo, url);
   if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
   if (!r.ok()) throw Error(failure(r, repo, rev, "the file list of " + repo));
   Listing L;
@@ -431,6 +461,7 @@ struct Piece {
   std::string url;
   uint64_t src = 0, dst = 0, len = 0;
   bool plus_one = false;  // bf16 values + 1 (the sidecar's norm weights): fetched whole, converted, written
+  std::string repo;
 };
 
 // One file to produce.
@@ -463,18 +494,35 @@ void save_state(Target& t) {
   }
 }
 
+bool resume_ranges(const Target& t, Ranges& done) {
+  try {
+    const json j = json::parse(read_text(t.state_path));
+    const auto unsigned_integer = [](const json& n) {
+      return n.is_number_unsigned() || (n.is_number_integer() && n.get<int64_t>() >= 0);
+    };
+    if (j.at("id") != t.id || !unsigned_integer(j.at("size")) || j.at("size").get<uint64_t>() != t.size) return false;
+    const auto& ranges = j.at("done");
+    if (!ranges.is_array()) return false;
+    Ranges r;
+    for (const auto& p : ranges) {
+      if (!p.is_array() || p.size() != 2 || !unsigned_integer(p[0]) || !unsigned_integer(p[1])) return false;
+      const uint64_t a = p[0].get<uint64_t>(), b = p[1].get<uint64_t>();
+      if (a >= b || b > t.size) return false;
+      r.add(a, b);
+    }
+    // Counts and gaps must use the same bounded ranges; discard the whole journal if any entry is invalid.
+    done = std::move(r);
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
 uint64_t part_bytes(const Target& t) {  // already downloaded bytes of an unfinished part (no open)
   uint64_t sz;
   if (!file_size(t.part_path, sz) || sz != t.size) return 0;
-  try {
-    const json j = json::parse(read_text(t.state_path));
-    if (j.value("id", "") != t.id || j.value("size", uint64_t(0)) != t.size) return 0;
-    Ranges r;
-    for (const auto& p : j.at("done")) r.add(p.at(0).get<uint64_t>(), p.at(1).get<uint64_t>());
-    return r.covered();
-  } catch (...) {
-    return 0;
-  }
+  Ranges r;
+  return resume_ranges(t, r) ? r.covered() : 0;
 }
 
 void prepare(Target& t) {
@@ -482,16 +530,7 @@ void prepare(Target& t) {
   t.done = Ranges();
   uint64_t sz = 0;
   bool keep = file_size(t.part_path, sz) && sz == t.size;
-  if (keep) {
-    try {
-      const json j = json::parse(read_text(t.state_path));
-      keep = j.value("id", "") == t.id && j.value("size", uint64_t(0)) == t.size;
-      if (keep)
-        for (const auto& p : j.at("done")) t.done.add(p.at(0).get<uint64_t>(), p.at(1).get<uint64_t>());
-    } catch (...) {
-      keep = false;
-    }
-  }
+  if (keep) keep = resume_ranges(t, t.done);
   if (!keep) {
     unlink(t.part_path.c_str());
     t.done = Ranges();
@@ -619,7 +658,7 @@ struct Chunk {
 };
 
 // One range, retried from where it stopped. False with `err` set when it cannot be completed.
-bool fetch_chunk(HttpClient& c, const Headers& h, const Chunk& k, Progress& prog, const std::atomic<bool>& failed,
+bool fetch_chunk(HttpClient& c, HubAuth& auth, const Chunk& k, Progress& prog, const std::atomic<bool>& failed,
                  std::string& err) {
   Target& t = *k.t;
   const Piece& p = *k.p;
@@ -630,7 +669,7 @@ bool fetch_chunk(HttpClient& c, const Headers& h, const Chunk& k, Progress& prog
     HttpResult r;
     std::string werr;
     if (p.plus_one) {
-      r = c.get(p.url, h, a, b);
+      r = auth.request(p.repo, [&](const Headers& h) { return c.get(p.url, h, a, b); });
       if (r.ok() && r.status == 206 && r.body.size() == k.len) {
         const std::string v = plus_one(r.body);
         if (!pwrite_all(t.fd, v.data(), v.size(), p.dst + k.off)) {
@@ -665,7 +704,7 @@ bool fetch_chunk(HttpClient& c, const Headers& h, const Chunk& k, Progress& prog
         prog.done += m;
         return pos < end;
       };
-      r = c.stream(p.url, h, a, b, sink);
+      r = auth.request(p.repo, [&](const Headers& h) { return c.stream(p.url, h, a, b, sink); });
       if (!werr.empty()) {
         err = werr;
         return false;
@@ -674,7 +713,7 @@ bool fetch_chunk(HttpClient& c, const Headers& h, const Chunk& k, Progress& prog
     }
     if (g_stop || failed) return false;
     if (!retryable(r) || attempt >= kAttempts) {
-      err = chunk_failure(r, t.label);
+      err = chunk_failure(r, p.repo, t.label);
       return false;
     }
     nap(std::min(15.0, 0.5 * double(1 << attempt)));
@@ -682,7 +721,7 @@ bool fetch_chunk(HttpClient& c, const Headers& h, const Chunk& k, Progress& prog
 }
 
 // Downloads every target (8 connections, 64 MB ranges, small files first), verifying each as it completes.
-void download(std::vector<Target*>& todo, Progress& prog) {
+void download(std::vector<Target*>& todo, Progress& prog, HubAuth& auth) {
   std::deque<Chunk> q;
   std::stable_sort(todo.begin(), todo.end(), [](const Target* a, const Target* b) { return a->size < b->size; });
   uint64_t total = 0;
@@ -729,7 +768,6 @@ void download(std::vector<Target*>& todo, Progress& prog) {
   };
   auto worker = [&] {
     HttpClient c(60);
-    const Headers h = hub_headers();
     for (;;) {
       Chunk k;
       {
@@ -739,7 +777,7 @@ void download(std::vector<Target*>& todo, Progress& prog) {
         q.pop_front();
       }
       std::string err;
-      if (!fetch_chunk(c, h, k, prog, failed, err)) {
+      if (!fetch_chunk(c, auth, k, prog, failed, err)) {
         if (!err.empty()) fail(err);
         return;
       }
@@ -795,6 +833,7 @@ struct SignalGuard {
   struct sigaction old_int {}, old_term {};
   SignalGuard() {
     g_stop = false;
+    if (g_stop_asked) g_stop = true;  // (stop_downloads() sets g_stop_asked first: a stop during this is not lost)
     struct sigaction sa {};
     sa.sa_handler = [](int) {
       if (g_stop) _exit(130);
@@ -967,6 +1006,7 @@ struct SidecarSource {
   bool local = false;
   std::string src, rev;
   HttpClient* http = nullptr;
+  HubAuth* auth = nullptr;
   std::string url(const std::string& file) const {
     return local ? src + "/" + file : file_url(src, rev, file);
   }
@@ -978,7 +1018,7 @@ struct SidecarSource {
       if (!f.read(out.data(), std::streamsize(b - a))) throw Error("Can't read " + src + "/" + file + ".");
       return out;
     }
-    HttpResult r = get_retry(*http, url(file), a, b);
+    HttpResult r = get_retry(*http, *auth, src, url(file), a, b);
     if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
     if (!r.ok() || r.status != 206) throw Error(failure(r, src, rev, file + " of " + src));
     return r.body;
@@ -1009,7 +1049,7 @@ struct SidecarSource {
         return wm;
       }
     } else {
-      HttpResult r = get_retry(*http, url("model.safetensors.index.json"));
+      HttpResult r = get_retry(*http, *auth, src, url("model.safetensors.index.json"));
       if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
       if (!r.ok()) throw Error(failure(r, src, rev, "the weight index of " + src));
       text = r.body;
@@ -1062,7 +1102,7 @@ SidecarPlan plan_sidecar(const SidecarSource& s, const std::string& source_name,
   p.head = le64_bytes(h.size()) + h;
   uint64_t dst = p.head.size();
   for (const auto& [k, t] : tensors) {
-    p.pieces.push_back(Piece{s.url(t.file), t.a, dst, t.b - t.a, is_norm(k)});
+    p.pieces.push_back(Piece{s.url(t.file), t.a, dst, t.b - t.a, is_norm(k), s.src});
     dst += t.b - t.a;
   }
   p.size = dst;
@@ -1094,7 +1134,7 @@ std::string now_iso() {
 // affine 3/4/5/6/8-bit with groups of 64 (4-bit also 32, 8-bit also 128), one format or mixed per module (the engine's
 // format_supported, model/qwen35.cpp); or Recursive's Flint in MLX 4- or 8-bit group 64 (its 4-bit export, 8-bit or mixed
 // 4/8-bit packs; model/flint.h, which checks each module's format at load).
-void check_supported(HttpClient& c, const Listing& L) {
+void check_supported(HttpClient& c, HubAuth& auth, const Listing& L) {
   const RemoteFile* cfg = L.find("config.json");
   bool st = false;
   for (const auto& f : L.files)
@@ -1102,7 +1142,7 @@ void check_supported(HttpClient& c, const Listing& L) {
   const std::string runs = " Kapitsa runs Qwen3.5-family models (Qwen3.5, 3.6, 3.8) in MLX format: bf16, or MLX affine "
                            "3/4/5/6/8-bit.";
   if (!cfg || !st) throw Error(L.repo + " has no " + (cfg ? "safetensors weights" : "config.json") + "." + runs);
-  HttpResult r = get_retry(c, file_url(L.repo, L.commit, "config.json"));
+  HttpResult r = get_retry(c, auth, L.repo, file_url(L.repo, L.commit, "config.json"));
   if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
   if (!r.ok()) throw Error(failure(r, L.repo, L.revision, "config.json of " + L.repo));
   json j;
@@ -1157,6 +1197,17 @@ bool keep_file(const std::string& p) {  // files of a generic repo worth fetchin
 
 // ---------------------------------------------------------------- public
 
+namespace detail {
+ojson catalog_gguf_metadata(const ojson& imported, const GgufFile& g) {
+  ojson metadata = imported.value("gguf", ojson::object());
+  metadata["path"] = g.path;
+  metadata["sha256"] = g.sha256;
+  metadata["size"] = g.size;
+  if (!metadata.contains("conversions")) metadata["conversions"] = ojson::object();
+  return metadata;
+}
+}  // namespace detail
+
 std::string sha256_file(const std::string& path) {
   std::string s;
   if (!hash_file(path, &s, nullptr)) throw Error("Can't read " + tilde(path) + ".");
@@ -1174,6 +1225,60 @@ bool is_complete(const std::string& dir) {
   } catch (...) {
     return false;
   }
+}
+
+// What a plan's `.complete` holds: the variant's repo at its revision, a GGUF variant's conversion, its companions
+std::string plan_want(const Variant& m) {
+  std::string want = m.repo + "@" + m.revision;
+  // a GGUF variant's plan is the import's: planned again by another Kapitsa, whose conversion may differ
+  if (!m.gguf.path.empty()) want += "\ngguf " + m.gguf.path + " " + m.gguf.sha256 + "\nkapitsa " KAPITSA_VERSION;
+  for (const auto& c : m.companions) want += "\n" + c.kind + " " + c.repo + "@" + c.revision;
+  return want;
+}
+
+bool is_plan(const std::string& dir) { return dir.rfind(home_dir(), 0) == 0 && dir.find("/plans/") != std::string::npos; }
+
+bool plan_is_current(const std::string& dir) {
+  if (!is_plan(dir)) return false;
+  try {  // a plan has no manifest: its `.complete` holds what it was planned as
+    const ModelRef r = resolve(dir.substr(dir.find_last_of('/') + 1));
+    if (r.kind == ModelRef::kCatalog) return read_text(dir + "/.complete") == plan_want(*r.variant);
+  } catch (const std::exception&) {  // not a catalog name
+  }
+  return !read_text(dir + "/.complete").empty();  // a plan of a Hugging Face repo, or a folder of its own: complete
+}
+
+// Language weights, including MLX's separately sharded language model. A vision tower or MTP head alone is not a model.
+static const std::regex kWeightsFile(R"((^|/)((model(-language-model)?-)?\d+-of-\d+|model|weights)\.safetensors$)");
+// Bigger than any header in the catalog (a shard's is a few hundred KB, the MTP head's a few KB): the height of a header.
+static constexpr uint64_t kHeaderBytes = 1024 * 1024;
+
+// Whether a plan's model is on this Mac: planned, and its folder holding the weights. Planning writes none of them (the
+// files a plan lists are config.json and the safetensors headers), so a plan is only planned from its headers until
+// the model is downloaded into that folder; a GGUF variant's plan is its conversion, written where it is planned.
+bool plan_has_model(const std::string& dir) {
+  // planning writes the files the plan lists as their headers, a few hundred KB each: one file that is a weights file
+  // and is bigger than a header is the model, and it is here whether or not another file of the plan is still a header.
+  // So the first such file answers true, and the order the files come in does not decide the answer: a downloaded
+  // model.safetensors stays the model beside a header-sized file of another name, and one written shard of a split
+  // file is the model while the rest are still headers.
+  for (std::error_code ec; const auto& e : std::filesystem::directory_iterator(dir, ec)) {
+    const std::string f = e.path().filename().string();
+    if (!e.is_regular_file() || !std::regex_search(f, kWeightsFile)) continue;
+    uint64_t size = 0;
+    if (file_size(dir + "/" + f, size) && size >= kHeaderBytes) return true;
+  }
+  // GGUF planning uses a full-logical-size sparse input containing only its header. Only a completed retained import
+  // certifies the configured payload: its marker, listed size and every other listed file must agree.
+  try {
+    const json m = json::parse(read_text(manifest_path(dir)));
+    if (!m.at("gguf").value("retained", false)) return false;
+    const std::string payload = json::parse(read_text(dir + "/config.json")).at("gguf_file").get<std::string>();
+    for (const auto& f : m.at("files"))
+      if (f.at("path").get<std::string>() == payload && f.at("size").get<uint64_t>() > 0) return is_complete(dir);
+  } catch (const std::exception&) {
+  }
+  return false;
 }
 
 bool is_current(const ModelRef& ref) {
@@ -1238,6 +1343,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
   mkdirs(ref.dir);
   FolderLock lock(ref.dir);
   if (is_current(ref)) return ref.dir;  // another kapitsa just finished it
+  HubAuth auth;
   HttpClient api(30);
   // a GGUF variant: its pinned file, then the import (no file list to fetch)
   const bool gguf = ref.kind == ModelRef::kCatalog && !ref.variant->gguf.path.empty();
@@ -1249,8 +1355,8 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
                                                 : "Fetching the file list of " + term::bold(ref.name) + term::dim(" from " + endpoint_host()));
   else if (opt.progress && !gguf) fprintf(stderr, "Fetching the file list of %s from %s...\n", ref.name.c_str(), endpoint_host().c_str());
 
-  const Listing main = gguf ? gguf_listing(ref) : list_repo(api, ref.repo, ref.revision);
-  if (ref.kind == ModelRef::kRepo) check_supported(api, main);
+  const Listing main = gguf ? gguf_listing(ref) : list_repo(api, auth, ref.repo, ref.revision);
+  if (ref.kind == ModelRef::kRepo) check_supported(api, auth, main);
 
   std::vector<std::unique_ptr<Target>> targets;
   ojson mfiles = ojson::array(), mcomp = ojson::array();
@@ -1266,7 +1372,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     t->final_path = ref.dir + "/" + rel;
     t->part_path = ref.dir + "/.kapitsa/parts/" + rel + ".part";
     t->state_path = t->part_path + ".json";
-    t->pieces.push_back(Piece{file_url(L.repo, L.commit, f.path), 0, 0, f.size, false});
+    t->pieces.push_back(Piece{file_url(L.repo, L.commit, f.path), 0, 0, f.size, false, L.repo});
     std::string cache_repo = L.repo;
     for (size_t p; (p = cache_repo.find('/')) != std::string::npos;) cache_repo.replace(p, 1, "--");
     t->hf_cached = hf_cache_root() + "/models--" + cache_repo + "/snapshots/" + L.commit + "/" + f.path;
@@ -1288,6 +1394,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
         s.src = c.repo;
         s.rev = c.revision;
         s.http = &api;
+        s.auth = &auth;
         const SidecarPlan p = plan_sidecar(s, c.repo, "post_norm");
         auto t = std::make_unique<Target>();
         const std::string rel = c.subdir.empty() ? "mtp.safetensors" : c.subdir + "/mtp.safetensors";
@@ -1311,7 +1418,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
         extras.push_back("MTP head " + fmt_bytes(p.size));
         continue;
       }
-      const Listing L = list_repo(api, c.repo, c.revision);
+      const Listing L = list_repo(api, auth, c.repo, c.revision);
       ojson cf = ojson::array();
       uint64_t cbytes = 0;
       for (const auto& name : c.files) {
@@ -1340,7 +1447,9 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     else if (file_size(d, sz)) from.by_size.emplace(sz, d);
   }
   if (ref.kind == ModelRef::kCatalog) {
-    const std::string app = user_home() + "/.nace/models/" + ref.model->name + "-" + ref.variant->name;
+    std::string app = user_home() + "/.nace/models/" + ref.model->name + "-" + ref.variant->name;
+    const std::string was = legacy_dir_name(*ref.model, *ref.variant);
+    if (!is_dir(app) && !was.empty()) app = user_home() + "/.nace/models/" + was;
     if (is_dir(app)) {
       from.scan(app, 3);
       if (spin) spin->label("Checking Nace Agent's copy in " + tilde(app));
@@ -1357,12 +1466,12 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
   std::vector<std::pair<std::string, Target*>> reuse;
   uint64_t need = 0, total = 0, have = 0;
   int n_hf = 0, n_from = 0;
-  // A manifest that is no longer current (a file went missing, or this Kapitsa pins newer revisions): drop it now
-  // that the new file list is in, check the files that are here against it, and write it again at the end. The
-  // files of an adopted folder are checked the same way. The checks run in parallel (8 files at a time).
+  // A manifest that is no longer current is replaced once the files match the new listing. Check existing
+  // files on every incomplete pull: a failed adoption or update can leave .kapitsa/ without a manifest, so neither
+  // its presence nor a matching length proves the content. Checks run in parallel (8 files at a time).
   const bool recheck = unlink(manifest_path(ref.dir).c_str()) == 0;
   std::vector<char> matches(targets.size(), 1);
-  if (recheck || adopt) {
+  {
     std::vector<size_t> check;
     uint64_t check_bytes = 0;
     for (size_t i = 0; i < targets.size(); ++i) {
@@ -1491,7 +1600,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
       fprintf(stderr, "Downloading %s (%s) into %s%s\n", ref.name.c_str(), what.c_str(), tilde(ref.dir).c_str(),
               have ? (", " + fmt_bytes(have) + " already here").c_str() : "");
     }
-    download(todo, prog);
+    download(todo, prog, auth);
     if (tui)
       term::line("  " + term::accent(term::kOk) + " Downloaded " + fmt_bytes(prog.total) +
                      term::dim(" in " + fmt_duration(prog.secs()) + " (" +
@@ -1515,6 +1624,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     io.name = ref.dir.substr(ref.dir.find_last_of('/') + 1);
     io.force = true;
     io.progress = opt.progress;
+    io.drafter = false;  // the catalog variant lists its own companions
     if (models_dir() + "/" + io.name != ref.dir) throw Error("internal: " + tilde(ref.dir) + " is not in " + tilde(models_dir()));
     try {
       gguf::import_model(io);
@@ -1526,16 +1636,14 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     } catch (const std::exception& e) {
       throw Error("The import of " + g.path + " failed: " + e.what());
     }
-    ojson conv = ojson::object();
     try {
       const ojson im = ojson::parse(read_text(manifest_path(ref.dir)));
       mfiles = im.at("files");
       total = im.at("total_bytes").get<uint64_t>();
-      if (im.contains("gguf") && im["gguf"].contains("conversions")) conv = im["gguf"]["conversions"];
+      m["gguf"] = detail::catalog_gguf_metadata(im, g);
     } catch (const std::exception&) {
       throw Error("The import of " + g.path + " left no manifest in " + tilde(ref.dir) + ". Please report this.");
     }
-    m["gguf"] = ojson{{"path", g.path}, {"sha256", g.sha256}, {"size", g.size}, {"conversions", conv}};
   }
   m["files"] = mfiles;
   m["companions"] = mcomp;
@@ -1550,6 +1658,11 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
 }
 
 }  // namespace
+
+void stop_downloads() {
+  g_stop_asked = true;
+  g_stop = true;
+}
 
 std::string ensure(const ModelRef& ref, const PullOptions& opt) {
   if (ref.kind == ModelRef::kLocal || is_current(ref)) return ref.dir;
@@ -1580,14 +1693,16 @@ std::string ensure(const ModelRef& ref, const PullOptions& opt) {
 void build_mtp_sidecar(const std::string& src, const std::string& revision, const std::string& out,
                        const std::string& hidden) {
   SignalGuard sig;
+  HubAuth auth;
   HttpClient http(30);
   SidecarSource s;
   s.local = is_dir(src);
   s.src = src;
   s.rev = revision.empty() ? "main" : revision;
   s.http = &http;
+  s.auth = &auth;
   if (!s.local) {  // pin the revision's commit, like a download
-    const Listing L = list_repo(http, src, s.rev);
+    const Listing L = list_repo(http, auth, src, s.rev);
     s.rev = L.commit;
   }
   const SidecarPlan p = plan_sidecar(s, src, hidden);
@@ -1614,18 +1729,51 @@ void build_mtp_sidecar(const std::string& src, const std::string& revision, cons
     Progress prog;
     prog.tty = isatty(2);
     std::vector<Target*> todo{&t};
-    download(todo, prog);
+    download(todo, prog, auth);
   }
   fprintf(stderr, "wrote %s: %zu tensors, %.1f MB, base_hidden_variant %s\n", out.c_str(), p.pieces.size(),
           double(p.size - p.head.size()) / 1e6, hidden.c_str());
 }
 
-static std::atomic<bool> g_offline{false};
+// Offline visits (hub.h): per thread a nesting count, and the number of threads with a visit open, which is what a
+// thread that was started inside a visit reads: a worker thread of plan_dir starts inside the caller's visit, and before
+// this every caller's plans fetched even with set_offline(true) set (issue #1187). Two threads count separately and
+// neither's end removes the other's count, so the count is the number of threads with a visit open, never negative.
+static thread_local int tl_visits = 0;
+
+// One locked step: every change of a thread's nesting count changes the count of threads with a visit open with it, so
+// two threads with a visit open count 2, one thread's end leaves 1, and the count is never negative.
+static std::mutex g_visits_mu;
+static std::atomic<int> g_visits{0};
+
+// Whether a fetch from this thread is refused: its own visits, or a visit open on another thread
+static bool no_fetch() { return tl_visits > 0 || g_visits.load() > 0; }
+
 static std::atomic<int> g_offline_misses{0};
 
+bool fetch_refused() { return no_fetch(); }
+
 void set_offline(bool on) {
-  g_offline = on;
-  g_offline_misses = 0;
+  {
+    const std::lock_guard<std::mutex> lock(g_visits_mu);
+    if (on) {
+      if (tl_visits++ == 0) ++g_visits;  // this thread's outermost visit: one more thread inside
+    } else if (tl_visits > 0 && --tl_visits == 0) {
+      --g_visits;  // its outermost visit's end: one thread fewer inside
+    }
+  }
+  if (g_visits.load() == 0) g_offline_misses = 0;
+}
+
+void leave_offline() {
+  {
+    const std::lock_guard<std::mutex> lock(g_visits_mu);
+    if (tl_visits > 0) {
+      tl_visits = 0;
+      --g_visits;  // every visit on this thread ends at once, and this thread is inside once, not tl_visits times
+    }
+  }
+  if (g_visits.load() == 0) g_offline_misses = 0;
 }
 
 int offline_misses() { return g_offline_misses; }
@@ -1661,13 +1809,14 @@ static bool plan_gguf(const ModelRef& ref, const std::string& dir, const std::st
       where = tmp_dir = t;
     }
     tmp = src = where + "/" + g.path.substr(g.path.find_last_of('/') + 1);
+    HubAuth auth;
     HttpClient http(30);
     const std::string url = file_url(ref.repo, ref.revision, g.path);
     std::string head;
     bool whole = false;  // the header, all of it
     for (uint64_t n = 16ull << 20; !whole; n *= 4) {
       n = std::min(n, g.size);
-      HttpResult r = get_retry(http, url, head.size(), n);
+      HttpResult r = get_retry(http, auth, ref.repo, url, head.size(), n);
       if (!r.ok() || r.status != 206) break;
       head += r.body;
       const int fd = open(tmp.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
@@ -1720,12 +1869,9 @@ std::string plan_dir(const ModelRef& ref) {
   if (ref.kind != ModelRef::kCatalog) return "";
   const Variant& m = *ref.variant;
   const std::string dir = home_dir() + "/plans/" + ref.model->name + "-" + m.name, mark = dir + "/.complete";
-  std::string want = m.repo + "@" + m.revision;
-  // a GGUF variant's plan is the import's: planned again by another Kapitsa, whose conversion may differ
-  if (!m.gguf.path.empty()) want += "\ngguf " + m.gguf.path + " " + m.gguf.sha256 + "\nkapitsa " KAPITSA_VERSION;
-  for (const auto& c : m.companions) want += "\n" + c.kind + " " + c.repo + "@" + c.revision;
+  const std::string want = plan_want(m);
   if (read_text(mark) == want) return dir;
-  if (g_offline) {
+  if (no_fetch()) {
     ++g_offline_misses;
     return "";
   }
@@ -1744,6 +1890,7 @@ std::string plan_dir(const ModelRef& ref) {
     if (c.kind == "mtp-sidecar") sidecar = &c;
     else repos.push_back({c.repo, c.revision, c.subdir.empty() ? "" : c.subdir + "/", c.files, {}});
   }
+  HubAuth auth;
   std::atomic<bool> bad{false};
   auto parallel = [&](size_t n, const std::function<void(size_t, HttpClient&)>& job) {
     std::atomic<size_t> next{0};
@@ -1764,40 +1911,42 @@ std::string plan_dir(const ModelRef& ref) {
   std::string head4b;
   parallel(repos.size() + (sidecar ? 1 : 0), [&](size_t i, HttpClient& http) {
     if (i < repos.size()) {
-      repos[i].L = list_repo(http, repos[i].repo, repos[i].revision);
+      repos[i].L = list_repo(http, auth, repos[i].repo, repos[i].revision);
       return;
     }
     SidecarSource s;
     s.src = sidecar->repo;
     s.rev = sidecar->revision;
     s.http = &http;
+    s.auth = &auth;
     head4b = plan_sidecar(s, sidecar->repo, "post_norm").head;
   });
   if (bad) return "";
   struct Job {
     std::string url, dest;
     bool header;
+    std::string repo;
   };
   std::vector<Job> jobs;
   for (const Repo& r : repos)
     for (const auto& f : r.L.files) {
       if (!r.only.empty() && std::find(r.only.begin(), r.only.end(), f.path) == r.only.end()) continue;
       const bool st = f.path.size() > 12 && f.path.compare(f.path.size() - 12, 12, ".safetensors") == 0;
-      if (st || f.path == "config.json") jobs.push_back({file_url(r.repo, r.L.commit, f.path), dir + "/" + r.sub + f.path, st});
+      if (st || f.path == "config.json") jobs.push_back({file_url(r.repo, r.L.commit, f.path), dir + "/" + r.sub + f.path, st, r.repo});
     }
   parallel(jobs.size(), [&](size_t i, HttpClient& http) {
     const Job& j = jobs[i];
     if (!j.header) {
-      HttpResult r = get_retry(http, j.url);
+      HttpResult r = get_retry(http, auth, j.repo, j.url);
       if (!r.ok()) throw Error(r.error);
       write_atomic(j.dest, r.body);
       return;
     }
-    HttpResult r = get_retry(http, j.url, 0, 8);
+    HttpResult r = get_retry(http, auth, j.repo, j.url, 0, 8);
     if (!r.ok() || r.status != 206) throw Error(r.error);
     const uint64_t n = le64(r.body);
     if (n > (64u << 20)) throw Error("not a safetensors file");
-    HttpResult h = get_retry(http, j.url, 8, 8 + n);
+    HttpResult h = get_retry(http, auth, j.repo, j.url, 8, 8 + n);
     if (!h.ok() || h.status != 206) throw Error(h.error);
     write_atomic(j.dest, r.body + h.body);
   });
@@ -1874,6 +2023,14 @@ std::vector<Installed> installed() {
       const json j = json::parse(read_text(manifest_path(m.dir)));
       m.name = j.value("name", n);
       m.variant = j.value("variant", "");
+      // a pack pulled before the rename names its old variant: it is the catalog's current one, so it lists once
+      const std::string now_variant = current_variant_name(m.variant);
+      if (now_variant != m.variant) {
+        const std::string tail = ":" + m.variant;
+        if (m.name.size() > tail.size() && m.name.compare(m.name.size() - tail.size(), tail.size(), tail) == 0)
+          m.name = m.name.substr(0, m.name.size() - tail.size()) + ":" + now_variant;
+        m.variant = now_variant;
+      }
       m.repo = j.value("repo", "");
       m.commit = j.value("commit", "");
       m.total = j.value("total_bytes", uint64_t(0));
@@ -1933,6 +2090,148 @@ std::vector<Installed> installed() {
     out.push_back(m);
   }
   return out;
+}
+
+// A drafter folder whose weights are there. download() renames model.safetensors into place last (it is the biggest file
+// and only a verified one is renamed), so a folder that a stopped or failed download left with config.json alone is not
+// an installed drafter and the next fetch resumes it.
+bool drafter_installed(const std::string& dir) {
+  for (const char* sub : {"/dflash2", "/drafter"}) {
+    DIR* d = opendir((dir + sub).c_str());
+    if (!d) continue;
+    bool found = false;
+    while (const dirent* e = readdir(d)) {
+      const std::string n = e->d_name;
+      if (n.size() > 12 && n.compare(n.size() - 12, 12, ".safetensors") == 0) found = true;
+    }
+    closedir(d);
+    if (found) return true;
+  }
+  return false;
+}
+
+bool drafter_declined(const std::string& dir) {
+  try {
+    return ojson::parse(read_text(manifest_path(dir))).value("no_drafter", false);
+  } catch (...) {
+    return false;
+  }
+}
+
+void set_drafter_declined(const std::string& dir, bool declined) {
+  try {
+    ojson m = ojson::parse(read_text(manifest_path(dir)));
+    if (m.value("no_drafter", false) == declined) return;
+    if (declined) m["no_drafter"] = true;
+    else m.erase("no_drafter");
+    write_atomic(manifest_path(dir), m.dump(2) + "\n");
+  } catch (const std::exception&) {
+    // a folder without a manifest (hand-made): nothing to remember it in
+  }
+}
+
+std::string fetch_drafter(const std::string& dir, bool progress) {
+  if (drafter_installed(dir)) return "";
+  json cfg;
+  try {
+    cfg = json::parse(read_text(dir + "/config.json"));
+  } catch (...) {
+    return "";
+  }
+  const json t = cfg.contains("text_config") ? cfg["text_config"] : cfg;
+  if (!t.contains("hidden_size") || !t.contains("num_hidden_layers")) return "";
+  const Companion* c = drafter_for_shape(t["hidden_size"].get<int>(), t["num_hidden_layers"].get<int>());
+  if (!c) return "";
+  SignalGuard sig;
+  FolderLock lock(dir);
+  HubAuth auth;
+  HttpClient api(30);
+  const Listing L = list_repo(api, auth, c->repo, c->revision);
+  std::vector<std::unique_ptr<Target>> targets;
+  std::vector<Target*> todo;
+  ojson added = ojson::array();
+  uint64_t need = 0, bytes = 0;
+  for (const auto& name : c->files) {
+    const RemoteFile* f = L.find(name);
+    if (!f) throw Error(c->repo + " has no " + name + " at " + c->revision.substr(0, 7) + ". Please report this.");
+    auto tg = std::make_unique<Target>();
+    const std::string rel = c->subdir + "/" + name;
+    tg->label = rel;
+    tg->size = f->size;
+    tg->sha256 = f->sha256;
+    tg->blob = f->sha256.empty() ? f->blob : "";
+    tg->id = !f->sha256.empty() ? f->sha256 : f->blob;
+    tg->final_path = dir + "/" + rel;
+    tg->part_path = dir + "/.kapitsa/parts/" + rel + ".part";
+    tg->state_path = tg->part_path + ".json";
+    tg->pieces.push_back(Piece{file_url(L.repo, L.commit, f->path), 0, 0, f->size, false, L.repo});
+    std::string cache_repo = L.repo;
+    for (size_t q; (q = cache_repo.find('/')) != std::string::npos;) cache_repo.replace(q, 1, "--");
+    tg->hf_cached = hf_cache_root() + "/models--" + cache_repo + "/snapshots/" + L.commit + "/" + f->path;
+    ojson e{{"path", rel}, {"size", f->size}};
+    if (!f->sha256.empty()) e["sha256"] = f->sha256;
+    added.push_back(e);
+    bytes += f->size;
+    uint64_t sz;
+    if (file_size(tg->final_path, sz) && sz == tg->size) {
+      targets.push_back(std::move(tg));
+      continue;
+    }
+    const FromIndex none;
+    bool hf = false;
+    const std::string src = reusable(*tg, none, hf);
+    Target* raw = tg.get();
+    targets.push_back(std::move(tg));
+    if (!src.empty()) {
+      if (device_of(src) != device_of(dir)) need += raw->size;
+      place(src, raw->final_path);
+      continue;
+    }
+    const uint64_t part = part_bytes(*raw);
+    need += raw->size - part;
+    todo.push_back(raw);
+  }
+  if (need + (1ull << 30) > free_bytes(dir))
+    throw Error("Not enough disk space for the " + fmt_bytes(bytes) + " drafter of " + tilde(dir) + ": " + fmt_bytes(need) +
+                " needed, " + fmt_bytes(free_bytes(dir)) + " free (keeping 1 GB spare).");
+  if (!todo.empty()) {
+    Progress prog;
+    prog.show = progress;
+    prog.tty = isatty(2);
+    if (progress) fprintf(stderr, "Fetching the %s drafter (%s) into %s/%s...\n", c->repo.c_str(), fmt_bytes(bytes).c_str(), tilde(dir).c_str(), c->subdir.c_str());
+    try {
+      download(todo, prog, auth);
+    } catch (...) {
+      // a stopped or failed download leaves the small files (config.json, LICENSE) in dflash2/ and the weights as a .part:
+      // without the weights `--dflash auto` must not find the folder (DFlash2::find accepts it on config.json alone)
+      if (!drafter_installed(dir))
+        for (const auto& name : c->files) std::remove((dir + "/" + c->subdir + "/" + name).c_str());
+      rmdir((dir + "/" + c->subdir).c_str());
+      throw;
+    }
+  }
+  // `kapitsa list` shows it: a companions entry (one per kind, so a drafter deleted and fetched again is not listed twice)
+  // and its bytes. Not in "files": is_complete() decides whether an import is reused, and a drafter deleted to save disk
+  // must not make the whole conversion look unfinished (`serve --model FILE.gguf` would then ask for --force)
+  try {
+    ojson m = ojson::parse(read_text(manifest_path(dir)));
+    ojson comps = ojson::array();
+    bool counted = false;
+    for (const auto& e : m.value("companions", ojson::array())) {
+      if (e.value("kind", "") == c->kind) counted = true;
+      else comps.push_back(e);
+    }
+    comps.push_back(ojson{{"kind", c->kind}, {"repo", c->repo}, {"revision", c->revision}, {"commit", L.commit}, {"files", ojson::array()}});
+    m["companions"] = comps;
+    if (!counted) m["total_bytes"] = m.value("total_bytes", uint64_t(0)) + bytes;
+    write_atomic(manifest_path(dir), m.dump(2) + "\n");
+  } catch (const std::exception&) {
+    // a folder without a manifest (hand-made): the files stand on their own
+  }
+  for (const auto& tg : targets)
+    for (std::string d = dirname_of(tg->part_path); d.size() > dir.size() + 15 && rmdir(d.c_str()) == 0;) d = dirname_of(d);
+  rmdir((dir + "/.kapitsa/parts").c_str());
+  return c->repo.substr(c->repo.find('/') + 1);
 }
 
 }  // namespace ni::hub

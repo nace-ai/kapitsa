@@ -1,0 +1,270 @@
+{
+  "publication": "Privacy-filtered derived summary. Timing rows retain measured values; original execution commands and machine-local records remain private.",
+  "scope": "In-memory CPU FP8 row-packing latency, not complete model startup or inference",
+  "default_for": "Existing FP8 weight-row packing on Apple silicon; no dispatch, precision, format, flag or device gate change.",
+  "source": "8f3996fea6f1f44537bee4e789b98cd6a531f347",
+  "reference": "052104f8f9c99edde129415a7384a1a58dc24ae6",
+  "production_source_sha256": "94e9cf4632e4d63783e9701494a325d6176f321a95fa9b25266b2f571dcd5b40",
+  "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+  "compiler_flags": [
+    "-std=gnu++20",
+    "-O3",
+    "-arch",
+    "arm64",
+    "-mmacosx-version-min=14.0"
+  ],
+  "timing_driver_sha256": "b75e251f9d04a81daeb9c8f7630e555400e3981a58ef85380debaa562ff4adf7",
+  "driver_source_sha256": "04df03e22f8a3b8cfb5c5a5676406d163dc86012f541017d4b2ad651d26810d5",
+  "timing_build": "Same driver and compiler flags, separate candidate/reference source-function objects, no LTO. The candidate uses exactly the source function at the recorded commit.",
+  "extracted_translation_units": [
+    {
+      "arm": "reference",
+      "full_production_source_sha256": "5f14e86f96c6fd1431fa2184d113d22b2466c6693b798d7413db53fb31c0b4df",
+      "extracted_translation_unit_sha256": "2b81597f5df5811ebfe7ee7c728b85107df3d796cb686e24f5a4dd0b1ceb1a3c"
+    },
+    {
+      "arm": "candidate",
+      "full_production_source_sha256": "94e9cf4632e4d63783e9701494a325d6176f321a95fa9b25266b2f571dcd5b40",
+      "extracted_translation_unit_sha256": "47751f27670373035c57a8bfdc9fbe8552bc4f3b4962a4a37adf502d97225e25"
+    }
+  ],
+  "setups": [
+    {
+      "chip": "Apple M4 Pro",
+      "memory_capacity_gib": 48,
+      "macos": "15.7.1 (24G231)",
+      "execution": "Locally compiled arm64 driver",
+      "oracle_rc": 0,
+      "oracle_cases": 17161,
+      "timing_rc": 0,
+      "cells": [
+        {
+          "rows": 256,
+          "K": 512,
+          "bytes": 131072,
+          "reference_us_per_call": 15.810333251953125,
+          "candidate_us_per_call": 2.1148884277343747,
+          "median_reduction_percent": 86.62337855862012,
+          "every_pair_reduction_percent": [
+            87.8288466946461,
+            86.69057994803566,
+            86.36732062572614,
+            86.56108441885627,
+            86.7275291870838,
+            82.37298696320478,
+            86.86220463446996,
+            86.66274288183499
+          ],
+          "all_legs_output_gate": "PASS",
+          "legs": 16
+        },
+        {
+          "rows": 1024,
+          "K": 3136,
+          "bytes": 3211264,
+          "reference_us_per_call": 404.55848192771083,
+          "candidate_us_per_call": 53.92169277108434,
+          "median_reduction_percent": 86.67147144854093,
+          "every_pair_reduction_percent": [
+            86.60879424057808,
+            86.70322686222947,
+            86.49330691462805,
+            85.4268939124473,
+            87.58927225665305,
+            86.6985531649958,
+            86.67591992297528,
+            86.86329310496718
+          ],
+          "all_legs_output_gate": "PASS",
+          "legs": 16
+        },
+        {
+          "rows": 4096,
+          "K": 4096,
+          "bytes": 16777216,
+          "reference_us_per_call": 2079.58203125,
+          "candidate_us_per_call": 274.6731875,
+          "median_reduction_percent": 86.79190417245051,
+          "every_pair_reduction_percent": [
+            87.06774440398777,
+            86.82790259516099,
+            86.88272979000284,
+            86.67294514774284,
+            86.61059517069903,
+            86.70612005922035,
+            86.62619817473049,
+            86.74472262614239
+          ],
+          "all_legs_output_gate": "PASS",
+          "legs": 16
+        },
+        {
+          "rows": 8192,
+          "K": 4096,
+          "bytes": 33554432,
+          "reference_us_per_call": 4146.8203125,
+          "candidate_us_per_call": 577.4974375,
+          "median_reduction_percent": 86.07372893011022,
+          "every_pair_reduction_percent": [
+            84.43075275515386,
+            86.56833767376766,
+            85.86957707231569,
+            85.87120522581266,
+            86.09370444610826,
+            86.10971561867369,
+            86.15249393489177,
+            86.13273571072244
+          ],
+          "all_legs_output_gate": "PASS",
+          "legs": 16
+        }
+      ]
+    },
+    {
+      "chip": "Apple M3 Ultra",
+      "gpu_cores": 60,
+      "memory_capacity_gib": 96,
+      "macos": "26.4.1 (25E253)",
+      "execution": "Same arm64 driver binary, SHA256 verified",
+      "oracle_rc": 0,
+      "oracle_cases": 17161,
+      "timing_rc": 0,
+      "cells": [
+        {
+          "rows": 256,
+          "K": 512,
+          "reference_us_per_call": 139.8176982421875,
+          "candidate_us_per_call": 14.36803173828125,
+          "median_reduction_percent": 89.72373889792304,
+          "paired_reduction_percent": [
+            89.75442050070197,
+            89.70185100083303,
+            89.72979496562984,
+            89.76687823825712,
+            89.74998158304707,
+            89.7020848053085,
+            89.67346383026263,
+            89.73045984625399
+          ],
+          "every_leg_output_gate": "PASS",
+          "legs": 16
+        },
+        {
+          "rows": 1024,
+          "K": 3136,
+          "reference_us_per_call": 3447.0042710843372,
+          "candidate_us_per_call": 384.9701265060241,
+          "median_reduction_percent": 88.83174791121095,
+          "paired_reduction_percent": [
+            89.01896543663177,
+            88.62871399117222,
+            89.10620894465873,
+            88.73236860470351,
+            88.5958934618234,
+            89.08691097096757,
+            88.8231800553231,
+            88.84385914826099
+          ],
+          "every_leg_output_gate": "PASS",
+          "legs": 16
+        },
+        {
+          "rows": 4096,
+          "K": 4096,
+          "reference_us_per_call": 18005.36065625,
+          "candidate_us_per_call": 2297.69528125,
+          "median_reduction_percent": 87.23882667436364,
+          "paired_reduction_percent": [
+            87.1331913327943,
+            87.54067940883526,
+            87.41531340471984,
+            86.26852908197131,
+            87.21037661212196,
+            87.25272655234586,
+            87.36238217173282,
+            87.0780903876414
+          ],
+          "every_leg_output_gate": "PASS",
+          "legs": 16
+        },
+        {
+          "rows": 8192,
+          "K": 4096,
+          "reference_us_per_call": 36015.653625,
+          "candidate_us_per_call": 4935.6510625,
+          "median_reduction_percent": 86.29581705252198,
+          "paired_reduction_percent": [
+            86.37507230600109,
+            86.86355787005434,
+            86.86791822752599,
+            86.07719584238629,
+            86.38243376501565,
+            86.04809302640358,
+            86.2162138084991,
+            84.71912195632768
+          ],
+          "every_leg_output_gate": "PASS",
+          "legs": 16
+        }
+      ]
+    }
+  ],
+  "method": {
+    "order": "Eight interleaved A/B pairs per shape: A B A B repeated; every leg retained",
+    "warmup": "Four untimed calls per arm, preallocated/initialized input and output buffers; no model or storage I/O",
+    "timed_work": "Approximately256MiB of input bytes per leg, whole-call repeats; identical output address across arms",
+    "output_gate": "After every timed leg compare all output bytes to the independent source-index oracle",
+    "oracle": "source element j maps to output4*((j%8)/2)+(j%2)+2*(j/8), separately for each16-bytegroup",
+    "oracle_scope": "All256bytecodesatall16positions; independentper-rowpatterns,source/destinationoffsets0/1/7/15/16/31,zeroandmultiple rows,widths0/1/15/16/17/31/32/48/64/128/256/512/1536/3136/4096,source/outputtailguardpages,canaries,sourceimmutability,bothfp4_l2values,unchangedformatreferencecontrols",
+    "interpretation": "Unsupported non-multiple-of16 widths were legacy-tail safety controls; admitted productionFP8widthsare divisibleby16. Independent input/output buffers, as production uses."
+  },
+  "sanitizer_oracle": {
+    "flags": "-O1 -g -fsanitize=address,undefined -arch arm64 -mmacosx-version-min=14.0",
+    "cases": 17161,
+    "rc": 0,
+    "scope": "Separate CPU correctness configuration, not speed evidence"
+  },
+  "native_release_library_oracle": {
+    "candidate": "Actual CMake Release libnaceinfer.a function at source commit, not extracted candidate object",
+    "reference": "Same pre-change function source used by the timing harness",
+    "cases": 17161,
+    "rc": 0,
+    "binary_sha256": "a34db94ac16690661f23d23e038679fd70f6abe84580dd05d68aa7a8d4681bba",
+    "candidate_library_sha256": "bfb5bcffbf65d89476aa1ac2d77e65e07ffd8aa9ce189ddeebe0677d541932e3",
+    "candidate_object_sha256": "ec94096325731e035983f182010bb1b03a8349b17105e7eb4d31da57613c9d18"
+  },
+  "negative_control": {
+    "mutation": "Test-only shuffle index8changedto9",
+    "rc": 1,
+    "expected_rc": 1,
+    "detected": "Independent source-index oracle failed",
+    "production_unchanged": true
+  },
+  "limitations": [
+    "No GPU or actual model output check for this change yet.",
+    "No complete-model startup timing or inference speedup claim.",
+    "No NaN numerical-behavior claim: the tests establish preservation of raw FP8 bytes.",
+    "M1/M2/M5 setup repetitions not run; nativeNEONrowpacker remainsactiveforallAppleSilicon."
+  ],
+  "general_cpu_validation": {
+    "source": "8f3996fea6f1f44537bee4e789b98cd6a531f347",
+    "configure_rc": 0,
+    "build_rc": 0,
+    "vk_cpu_passed": 21,
+    "vk_cpu_rc": 0,
+    "supplemental_native_passed": 14,
+    "supplemental_native_total": 15,
+    "supplemental_python_checks_covered": 5,
+    "initial_dependency_failure": "Drex encoder five cases could not execute because build/systemone was missing. The target was built; only those five cases were rerun and passed. The initial other ten cases passed.",
+    "remaining_supplemental_failure": "load_error_test cache-residency fixture assertion fails in both pre-change control and candidate; it is not counted as passing. Earlier tensor bounds/read checks in that test passed.",
+    "baseline_control_source": "c6fd4ed766f65c5d310fc919dc1a0d37cad7f6e2",
+    "baseline_tree_equal_to_reference": true,
+    "load_error_baseline_rc": 1,
+    "load_error_candidate_retry_rc": 1,
+    "load_error_identical_binary_sha256": "9445d9c9e125c3b9e32a0e05a3a82250ffc7926f6d428b362fabd63ab0c2f90a",
+    "cleanup_rc": 0,
+    "worker_exited": true,
+    "cli_sha256": "0e25a651538f82255b413af2835f0177c461300200813f245cefe6ddd5d45c80",
+    "logit_dump_sha256": "5bb0a25e144bf953c78baf418545ad56ea7c531241296916374690c9cc00abdf"
+  }
+}

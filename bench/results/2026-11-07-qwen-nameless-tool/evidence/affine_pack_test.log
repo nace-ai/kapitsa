@@ -1,0 +1,2 @@
+packed interleave: 840 cases
+affine_pack_test: ALL PASSED (63488 finite float16 values, 54784 not bf16 numbers; 8704 bf16 values via float16)

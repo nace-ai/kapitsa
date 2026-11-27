@@ -1,6 +1,8 @@
 // The Qwen3.5-family image encoder (see qwen_vit.h).
+#include "engine/device_profile.h"
 #include "vision/qwen_vit.h"
 #include "model/kparams.h"
+#include "model/qwen4_config.h"
 #include "util/bf16.h"
 #include "util/log.h"
 
@@ -29,8 +31,7 @@ static std::string vision_prefix(const std::string& dir) {
 bool QwenViT::supports(const std::string& dir, QwenViTConfig* c) {
   const json root = vit_read_json(dir + "/config.json");
   if (!root.contains("vision_config") || !root["vision_config"].is_object()) return false;
-  const std::string mt = root.value("model_type", std::string());
-  if (mt.rfind("qwen3_5", 0) != 0 && mt != "qwen4_exp") return false;  // (Qwen3.8-Flash-Next: the same tower)
+  if (qwen_layout(root) == QwenLayout::none) return false;  // (Qwen3.8-Flash-Next: the same tower)
   const json& v = root["vision_config"];
   QwenViTConfig q;
   q.depth = v.value("depth", q.depth);
@@ -396,11 +397,11 @@ void QwenViT::load() {
   m1_ = w_.lin("merger.linear_fc1");
   m2_ = w_.lin("merger.linear_fc2");
   w_.close();
-  // The measured Qwen 4B and 35B tower shapes on M4 Pro; other shapes keep the bf16 path.
+  // The Qwen 4B and 35B tower shapes on M4 Pro; other shapes keep the bf16 path today.
   const bool pack = (H == 1024 && c_.depth == 24 && c_.inter == 4096 && c_.out_hidden == 2560) ||
                     (H == 1152 && c_.depth == 27 && c_.inter == 4304 && c_.out_hidden == 2048);
   const char* prepack = getenv("NI_VIT_PREPACK");
-  if (pack && !(prepack && !strcmp(prepack, "0")) && Gpu::get().name() == "Apple M4 Pro") {
+  if (pack && !(prepack && !strcmp(prepack, "0")) && simd_gpu()) {
     auto e = Gpu::get().begin();
     for (VitLin* L : {&patch_, &m1_, &m2_}) vit_pack_linear(*e, *L);
     for (Block& B : blocks_)

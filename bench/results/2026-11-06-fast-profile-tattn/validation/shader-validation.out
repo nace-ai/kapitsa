@@ -1,0 +1,32 @@
+2026-11-06 20:52:21.901 ni_run[865:66707095] Metal GPU Validation Enabled
+[kapitsa] read 4.99 GB of weights in 439 ms (11.4 GB/s)
+[kapitsa] RMSNorm weights zero-centred (indexer norm mean -0.04): read as 1 + w
+[kapitsa] MTP head loaded in 0 ms (drafts over ids < 32768 + specials)
+[kapitsa] expert store: NI_PREFILL_GROUP=4 slots -0.50 GB
+[kapitsa] expert store: 24.0 GB of the 34.2 GB of experts, the NI_EXPERT_STORE pin
+[kapitsa] expert store: 17233 slots of 1.39 MB (24.00 GB, 70.1% of the 24576 experts) in one buffer (up to 30.15 GB each); 17233 read at load in 4352 ms (5.82 GB/s)
+[kapitsa] GPU heater: 141 rounds per ms
+[kapitsa] memory pressure warning: the weights are no longer kept wired while idle
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64
+[kapitsa] NI_QMT6: 6-bit g64 dense prefill GEMMs on tensor_ops (qmt6_m64_n64), M >= 64
+[kapitsa] compiled kernels in 3592 ms
+[kapitsa] compiled the tensor kernels in 1113 ms
+[kapitsa] compiled the weight-format kernels in 7994 ms
+[kapitsa] prewarmed 140 prefill pipelines in 13785 ms
+[kapitsa] loaded /Users/alisheramantay/Documents/nace/kapitsa-m5pro/models/flash-next-q20: Qwen3.8-Flash-Next, 48 layers (12 attention), 5.0 GB of weights in 22810 ms; 4-bit group 64 4%, 6-bit group 64 3%, 8-bit group 64 2%, Q2_0 91%, bf16 0%; n-gram table 320001536 x 160, 4-bit group 32, 32.0 GB mapped; routed experts: 17233 of 24576 experts in memory (24.0 GB, 70%), the rest read from the SSD
+[kapitsa] NI_PF_GROUPED: prefill on a grouped encoder (independent projections and expert GEMMs overlap)
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMT128: qmt GEMMs of 96+ rows on the 128-row tile (qmt_m128_n64, qmtg_m128_n64)
+[kapitsa] NI_MOE_QTM_Q20: routed Q2_0 expert GEMMs on tensor_ops (qmtm_gu_q20_m64_n64, qmtm_dn_q20_m64_n64, 64-row tiles)
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+[kapitsa] memory pressure normal: the weights are kept wired again
+[kapitsa] profile fast: Flash-Next sparse prefill attention on the matrix units (NI_QSA_TATTN) (NI_QSA_TATTN=0 or KAPITSA_PROFILE=precise turns it off)
+[kapitsa] NI_QSA_TATTN: sparse list attention on the matrix units (qattn_t_sparse_g12d2)
+expert store, prompt: 240 turns, 91927 experts looked up: 99.9% in memory, 0.0% read ahead and waited for, 0.1% read at the turn; 40706 read ahead (33387 routed), 60.01 GB read; GPU stalled 0.377 ms a turn (0.307 waiting for reads)
+mean GPU time per step: 107.17 ms (7 steps)
+prompt 10240 tok in 34120 ms (300.1 tok/s); decode 7 tok in 1069 ms (6.5 tok/s)
+expert store, decode: 336 turns, 3360 experts looked up: 86.5% in memory, 2.0% read ahead and waited for, 11.5% read at the turn; 783 read ahead (506 routed), 1.72 GB read; GPU stalled 0.299 ms a turn (0.287 waiting for reads)
+[kapitsa] GPU heater: 371 command buffers run, 0 in flight at exit (after 0.0 ms)
+ids: 421 7166 26 1892 524 16384 13 271

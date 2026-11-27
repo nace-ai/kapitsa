@@ -1,0 +1,337 @@
+{
+  "provenance": "Explicitly redacted derived evidence, not original execution logs. Full original records remain private. Paths use relative names or placeholders. Resource usage and host identifiers are omitted; numerical samples, flags and invalid results are preserved.",
+  "hardware": {
+    "chip": "Apple M5 Pro",
+    "gpu_cores": 20,
+    "memory_gib": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "source_and_binary_identity": {
+    "A": {
+      "head": "4a8265d1aa656e8e523c10c23d5dd4cd0b82c532",
+      "flint_cpp_sha256": "7838d290383347db82ca5c5f1589fdd79f89072555a0437d3f18b8a1d9fd5823",
+      "growth_driver_sha256": "08378f293b5f0ad66c8afa9b11951dc4b248543130bebad0f7992146f0806638",
+      "binary_sha256": {
+        "kapitsa": "01fbf43abde79ea09dbcbcfee77b7edb1df69b4e0e6877a966111e3591f2980b",
+        "logit_dump": "deb1b6ade6eec440d7f02a42746cfe6c1c57afbc905897353683c2a01d19c1b7",
+        "flint_kv_growth_check": "5969a95eb05b6ec7d586409a349be09b58cd7e889e7126cb855fcf948e0aab04"
+      },
+      "growth_binary_sha256": "be3c8beae7ed983edf578ba42806c5fe498cd213c8854f52735769ccb9ecb46b"
+    },
+    "B": {
+      "head": "ae599dd1342b7d699f62e0a5dadb06a2ecb91d30",
+      "flint_cpp_sha256": "1c4c34eafd01ceafa2cccc8dc0864a16c648ad6f47fd354cae8262357228896a",
+      "growth_driver_sha256": "08378f293b5f0ad66c8afa9b11951dc4b248543130bebad0f7992146f0806638",
+      "binary_sha256": {
+        "kapitsa": "33f65d020d90a2975637a7ecbf7cda7713cb64632e02530e382bd2369cada612",
+        "logit_dump": "7874b188a6da6280e78389b423d3707df66aa817eda9bc5c6b14b8cefe65bdfa",
+        "flint_kv_growth_check": "9e87c0170c5d72788dac531f8dd9f288b8b694578678c36579acf802708d1cab"
+      },
+      "growth_binary_sha256": "5dddffa82ea7abcb73a658b80484dbeaceba763ab7b4eb92c96f4e1f9e2e859a"
+    }
+  },
+  "started_at": "2026-11-11T02:22:37.054391+00:00",
+  "finished_at": "2026-11-11T02:29:24.218660+00:00",
+  "gpu_lock": "exclusive, NI_LOCK_HELD=1 and NACE_GPU_LOCK_HELD=1; released after worker completion",
+  "configuration": {
+    "cmake": "Release (-O3), explicit configure with KAPITSA_GIT set to each full source commit",
+    "model": "unsloth/flint-GGUF / flint-UD-IQ2_XXS, existing import shared unchanged by both builds",
+    "model_files": {
+      ".kapitsa/manifest.json": {
+        "bytes": 1459,
+        "sha256": "052f7d3370388b2c84e94b8002ac4d0c9a78bb526e09b546eb132ec3a442b5c6"
+      },
+      "config.json": {
+        "bytes": 37187,
+        "sha256": "14fb7887edfbbf3a5a9ccdde550e8a774887837485c25acfc1c1d4b52e9c2cd4"
+      },
+      "experts.safetensors": {
+        "bytes": 11855541696,
+        "sha256": "cccdf388ce07687844fd4f949bf6f3d2cfd65d2e5a24f4082bae771a59d47a84"
+      },
+      "generation_config.json": {
+        "bytes": 129,
+        "sha256": "745132f7a56e9ff429f4bf4409a588d28a89942a3efe390710d064ceef89de46"
+      },
+      "model.safetensors": {
+        "bytes": 1163262656,
+        "sha256": "431fda6a6f44233053e31fecc74aa050219ed1f03d3cbbc4b35fa19c909341ba"
+      },
+      "model.safetensors.index.json": {
+        "bytes": 105174,
+        "sha256": "003bb87e318dd21a6555bcb0053b8fd926a3337d81319c9d5ef7d469ee5079dc"
+      },
+      "tokenizer.json": {
+        "bytes": 4278400,
+        "sha256": "cbc69b4fd04328e2c637b28fed83af5afe4b9f3c4cecd03559c257351ff53f60"
+      },
+      "tokenizer_config.json": {
+        "bytes": 20882,
+        "sha256": "d5b94880b30e4fa7df11b2b84d91941f3f40130bcc73d3045ad7b9f5c0b6782e"
+      }
+    },
+    "model_imports_this_run": 0,
+    "gpu_debug_layers": "Off for full-model runs; both flags were on for the separately recorded small cache-copy checks. No Metal kernel changed."
+  },
+  "method": {
+    "command_examples": "Placeholder examples, not literal original commands",
+    "dump": "$BUILD/logit_dump \"$MODEL\" \"$OUT\" --paths step,verify",
+    "compare": "python3 tools/logit_compare.py \"$REF_OUT\" \"$CAND_OUT\" --min-top1 1 --max-mean-kl 0 --max-median-kl 0 --max-p99-kl 0 --max-far-flips 0 --max-nll-change 0",
+    "scope": "8 prefill + 192 teacher-forced step + 192 teacher-forced verify rows per arm; not free speculative decoding. Exact-byte checks separately cover logits, records and input sequences."
+  },
+  "comparison": {
+    "paths": {
+      "prefill": {
+        "records": 8,
+        "bitwise": 8,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": "flags"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.34 (4a8265d1aa656e8e523c10c23d5dd4cd0b82c532)",
+          "model": "flint-UD-IQ2_XXS",
+          "model_dir": "$MODEL",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 8,
+          "vocab": 150144,
+          "source": "bench/corpus.txt",
+          "macos": "26.6.2",
+          "date": "2026-11-11T02:23:26Z",
+          "env": {},
+          "disk_format": "flint FFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSF; K, V f16 [4][cap][256]; rings of 528; 4-bit group 64 (embedding 3-bit group 64, LM head 6-bit group 64, router bf16; routed experts as stored: 6 IQ1_S 32 IQ2_S 92 IQ2_XXS 11 IQ3_XXS)"
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.34 (ae599dd1342b7d699f62e0a5dadb06a2ecb91d30)",
+          "model": "flint-UD-IQ2_XXS",
+          "model_dir": "$MODEL",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 8,
+          "vocab": 150144,
+          "source": "bench/corpus.txt",
+          "macos": "26.6.2",
+          "date": "2026-11-11T02:23:44Z",
+          "env": {},
+          "disk_format": "flint FFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSF; K, V f16 [4][cap][256]; rings of 528; 4-bit group 64 (embedding 3-bit group 64, LM head 6-bit group 64, router bf16; routed experts as stored: 6 IQ1_S 32 IQ2_S 92 IQ2_XXS 11 IQ3_XXS)"
+        }
+      },
+      "step": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.34 (4a8265d1aa656e8e523c10c23d5dd4cd0b82c532)",
+          "model": "flint-UD-IQ2_XXS",
+          "model_dir": "$MODEL",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 150144,
+          "source": "bench/corpus.txt",
+          "macos": "26.6.2",
+          "date": "2026-11-11T02:23:26Z",
+          "env": {},
+          "disk_format": "flint FFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSF; K, V f16 [4][cap][256]; rings of 528; 4-bit group 64 (embedding 3-bit group 64, LM head 6-bit group 64, router bf16; routed experts as stored: 6 IQ1_S 32 IQ2_S 92 IQ2_XXS 11 IQ3_XXS)"
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.34 (ae599dd1342b7d699f62e0a5dadb06a2ecb91d30)",
+          "model": "flint-UD-IQ2_XXS",
+          "model_dir": "$MODEL",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 150144,
+          "source": "bench/corpus.txt",
+          "macos": "26.6.2",
+          "date": "2026-11-11T02:23:44Z",
+          "env": {},
+          "disk_format": "flint FFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSF; K, V f16 [4][cap][256]; rings of 528; 4-bit group 64 (embedding 3-bit group 64, LM head 6-bit group 64, router bf16; routed experts as stored: 6 IQ1_S 32 IQ2_S 92 IQ2_XXS 11 IQ3_XXS)"
+        }
+      },
+      "verify": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.34 (4a8265d1aa656e8e523c10c23d5dd4cd0b82c532)",
+          "model": "flint-UD-IQ2_XXS",
+          "model_dir": "$MODEL",
+          "path": "verify",
+          "verify": "8 rows",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 150144,
+          "source": "bench/corpus.txt",
+          "macos": "26.6.2",
+          "date": "2026-11-11T02:23:26Z",
+          "env": {},
+          "disk_format": "flint FFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSF; K, V f16 [4][cap][256]; rings of 528; 4-bit group 64 (embedding 3-bit group 64, LM head 6-bit group 64, router bf16; routed experts as stored: 6 IQ1_S 32 IQ2_S 92 IQ2_XXS 11 IQ3_XXS)"
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.34 (ae599dd1342b7d699f62e0a5dadb06a2ecb91d30)",
+          "model": "flint-UD-IQ2_XXS",
+          "model_dir": "$MODEL",
+          "path": "verify",
+          "verify": "8 rows",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 150144,
+          "source": "bench/corpus.txt",
+          "macos": "26.6.2",
+          "date": "2026-11-11T02:23:44Z",
+          "env": {},
+          "disk_format": "flint FFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSSFSSF; K, V f16 [4][cap][256]; rings of 528; 4-bit group 64 (embedding 3-bit group 64, LM head 6-bit group 64, router bf16; routed experts as stored: 6 IQ1_S 32 IQ2_S 92 IQ2_XXS 11 IQ3_XXS)"
+        }
+      }
+    }
+  },
+  "complete_file_byte_comparisons": {
+    "prefill/logits.f32": {
+      "bytes": 4804608,
+      "equal": true,
+      "reference_sha256": "126cf4bded43c3989e8c456bd9c6dbff24f1bb4ce81dea788d19d3437873fc28",
+      "candidate_sha256": "126cf4bded43c3989e8c456bd9c6dbff24f1bb4ce81dea788d19d3437873fc28"
+    },
+    "prefill/records.txt": {
+      "bytes": 54,
+      "equal": true,
+      "reference_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+      "candidate_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d"
+    },
+    "prefill/sequences.txt": {
+      "bytes": 71888,
+      "equal": true,
+      "reference_sha256": "535facf83d02bc81ab809508d3bb9ab26047acf335fd010a745e7d6afd55c2fa",
+      "candidate_sha256": "535facf83d02bc81ab809508d3bb9ab26047acf335fd010a745e7d6afd55c2fa"
+    },
+    "step/logits.f32": {
+      "bytes": 115310592,
+      "equal": true,
+      "reference_sha256": "1af39c38ea3606dd499365b32d917883fbddf6818d6f374a02d42b66e5d7d44e",
+      "candidate_sha256": "1af39c38ea3606dd499365b32d917883fbddf6818d6f374a02d42b66e5d7d44e"
+    },
+    "step/records.txt": {
+      "bytes": 1296,
+      "equal": true,
+      "reference_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+      "candidate_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc"
+    },
+    "step/sequences.txt": {
+      "bytes": 71888,
+      "equal": true,
+      "reference_sha256": "535facf83d02bc81ab809508d3bb9ab26047acf335fd010a745e7d6afd55c2fa",
+      "candidate_sha256": "535facf83d02bc81ab809508d3bb9ab26047acf335fd010a745e7d6afd55c2fa"
+    },
+    "verify/logits.f32": {
+      "bytes": 115310592,
+      "equal": true,
+      "reference_sha256": "0cf32b3d19fe511867123b3c6d46de8c06008777dc5e2dbb8ec663ad626887fa",
+      "candidate_sha256": "0cf32b3d19fe511867123b3c6d46de8c06008777dc5e2dbb8ec663ad626887fa"
+    },
+    "verify/records.txt": {
+      "bytes": 1296,
+      "equal": true,
+      "reference_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+      "candidate_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc"
+    },
+    "verify/sequences.txt": {
+      "bytes": 71888,
+      "equal": true,
+      "reference_sha256": "535facf83d02bc81ab809508d3bb9ab26047acf335fd010a745e7d6afd55c2fa",
+      "candidate_sha256": "535facf83d02bc81ab809508d3bb9ab26047acf335fd010a745e7d6afd55c2fa"
+    }
+  }
+}

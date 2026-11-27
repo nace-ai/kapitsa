@@ -1,0 +1,32 @@
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] read 2.37 GB of weights in 367 ms (6.4 GB/s)
+[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)
+[kapitsa] read 0.24 GB of weights in 14 ms (17.0 GB/s)
+[kapitsa] MTP head loaded in 224 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 26 ms
+[kapitsa] prewarmed 93 prefill pipelines in 40 ms
+[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 670 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (231 ms)
+[kapitsa] read 1.27 GB of weights in 206 ms (6.2 GB/s)
+[kapitsa] KFlash: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB
+[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)
+[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)
+[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.54 GB resident (process footprint +0.77 GB), loaded in 284 ms
+[kapitsa] DFlash2: prewarmed 117 pipelines in 2 ms
+[kapitsa] DFlash2: 0.537 GB allocated at load (planned 0.536 GB); 0.151 GB more for 1 slots' rings and 0.138 GB at the first prefill
+[kapitsa] GPU: Apple M3 Ultra, 60 cores
+[kapitsa] memory: 3.95 GB allocated (model, buffers, 1 slot's state), budget 80.2 GB (recommended working set 83.5 GB): KV room 76.21 GB = 2067252 tokens (36 KB per token), one conversation up to 8192 of 8192 tokens
+[kapitsa] images: Qwen3.5 ViT (24 blocks, width 1024, 16-pixel patches; images of 65536 to 1200000 pixels), 0.67 GB loaded on the first image
+[kapitsa] drafter: DFlash dflash2 (found in the model's folder)
+[kapitsa] engine ready: test, context 8192, 1 slots, KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2), images on
+[kapitsa] listening on http://127.0.0.1:8194
+Ready: chat at http://127.0.0.1:8194, API at http://127.0.0.1:8194/v1 (model "test"). Ctrl+C stops.
+[kapitsa] KFlash: 3 cycles, 8.00 rows per cycle; cycles by rows 8:3; tokens per cycle expected 7.277, got 7.000; rate 0.7269 tok/ms; cost ms by rows 8:9.68; calibration (alpha, beta) by depth (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
+[kapitsa] chat: prompt 26 (cached 0) in 75 ms (+4.6 ms template/tokenize; last chunk: encoded by 1.6 ms, GPU start +44.7 ms, GPU 28.8 ms, wake +0.2 ms), 20 tokens in 33 ms (584.2 tok/s), stop, 6.33 tok/cycle, KFlash (DFlash2): 3 cycles
+[kapitsa] KFlash: 4 cycles, 8.00 rows per cycle; cycles by rows 8:4; tokens per cycle expected 7.297, got 7.250; rate 0.7610 tok/ms; cost ms by rows 8:9.36; calibration (alpha, beta) by depth (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
+[kapitsa] chat: prompt 26 (cached 19) in 9 ms (+0.4 ms template/tokenize; last chunk: encoded by 0.3 ms, GPU start +0.1 ms, GPU 8.5 ms, wake +0.1 ms), 2 tokens in 12 ms (85.9 tok/s), stop, 1.00 tok/cycle, KFlash (DFlash2): 1 cycles
+[kapitsa] KFlash: 5 cycles, 8.00 rows per cycle; cycles by rows 8:5; tokens per cycle expected 7.310, got 7.400; rate 0.7881 tok/ms; cost ms by rows 8:9.03; calibration (alpha, beta) by depth (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00) (0.00, 1.00)
+[kapitsa] chat: prompt 26 (cached 19) in 9 ms (+0.4 ms template/tokenize; last chunk: encoded by 0.4 ms, GPU start +0.2 ms, GPU 8.2 ms, wake +0.2 ms), 2 tokens in 11 ms (87.3 tok/s), stop, 1.00 tok/cycle, KFlash (DFlash2): 1 cycles
+[kapitsa] history: prefilled 5 tokens of the rendered reply (from 19) in 11 ms

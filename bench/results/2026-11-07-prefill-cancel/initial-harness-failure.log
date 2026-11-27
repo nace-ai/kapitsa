@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/tests/test_prefill_cancel.py", line 210, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/tests/test_prefill_cancel.py", line 164, in main
+    server = Server(binary, args.model, args.port, Path(tmp) / leg, args.output / (leg + "-server.log"))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/bytedance/kapitsa-cancel-checkpoint-20261107/candidate/tests/test_prefill_cancel.py", line 80, in __init__
+    probe.bind(("127.0.0.1", port))  # refuse a port another server already owns
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 48] Address already in use

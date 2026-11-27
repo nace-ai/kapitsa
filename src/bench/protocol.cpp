@@ -193,6 +193,8 @@ std::map<int, int> reference_prompt_tokens(const std::string& family) {
   if (family == "qwen3.5") return {{4000, 4133}, {16000, 16286}};
   if (family == "nemotron-h") return {{4000, 4183}, {16000, 16514}};
   if (family == "flint") return {{4000, 3874}, {16000, 15066}};
+  // Hy4-flash's template and tokenizer, thinking off (no_think): 4,175 and 16,065 in the 2026-11-20 M5 Max run
+  if (family == "hy4") return {{4000, 4175}, {16000, 16065}};
   return {};
 }
 

@@ -1,0 +1,63 @@
+{
+  "evidence_kind": "redacted derived evidence, not an original execution log",
+  "source_records": [
+    {
+      "record": "greedy-control-analysis.private.json",
+      "sha256": "4b1a8f795cb05e312635b2adec5e0a068a5ca6525bad83606c493139b683926a"
+    }
+  ],
+  "data": {
+    "protocol": "Fixed identical 512-token HTTP requests, ABAB, temperature0/topK1/spec0, no new HTTP suite",
+    "full_requests_literal_equal": true,
+    "full_outputs_literal_equal": true,
+    "runs": [
+      {
+        "label": "A1",
+        "tokens": 512,
+        "finish": "length",
+        "ttft_s": 0.06324112499714829,
+        "decode_tps": 102.53030480152647,
+        "wall_s": 5.057087707988103,
+        "binary_sha256": "f84c5f429bf45de6a34515c9c4b512b56bac1af3e1dab80b7a16644ed49abc9b",
+        "request_sha256": "76f4bf1dc5de132099f59fdc01e6170379673905c78fdacc4abbe17406ead815",
+        "sha256": "4fdc7696604f5cfc9a2e616d1c2b815a6d9d4c6950472713f26e4c7e50613f32"
+      },
+      {
+        "label": "B1",
+        "tokens": 512,
+        "finish": "length",
+        "ttft_s": 0.053201167000224814,
+        "decode_tps": 102.69822418784283,
+        "wall_s": 5.038934166994295,
+        "binary_sha256": "2fb07ae2931964a4560f7a1ac60831d0b2b8cf368786601d9241fafa68979919",
+        "request_sha256": "76f4bf1dc5de132099f59fdc01e6170379673905c78fdacc4abbe17406ead815",
+        "sha256": "4fdc7696604f5cfc9a2e616d1c2b815a6d9d4c6950472713f26e4c7e50613f32"
+      },
+      {
+        "label": "A2",
+        "tokens": 512,
+        "finish": "length",
+        "ttft_s": 0.05326625000452623,
+        "decode_tps": 102.72620729266107,
+        "wall_s": 5.037665708005079,
+        "binary_sha256": "f84c5f429bf45de6a34515c9c4b512b56bac1af3e1dab80b7a16644ed49abc9b",
+        "request_sha256": "76f4bf1dc5de132099f59fdc01e6170379673905c78fdacc4abbe17406ead815",
+        "sha256": "4fdc7696604f5cfc9a2e616d1c2b815a6d9d4c6950472713f26e4c7e50613f32"
+      },
+      {
+        "label": "B2",
+        "tokens": 512,
+        "finish": "length",
+        "ttft_s": 0.05301270799827762,
+        "decode_tps": 102.57992269518779,
+        "wall_s": 5.044306708005024,
+        "binary_sha256": "2fb07ae2931964a4560f7a1ac60831d0b2b8cf368786601d9241fafa68979919",
+        "request_sha256": "76f4bf1dc5de132099f59fdc01e6170379673905c78fdacc4abbe17406ead815",
+        "sha256": "4fdc7696604f5cfc9a2e616d1c2b815a6d9d4c6950472713f26e4c7e50613f32"
+      }
+    ],
+    "A_median_tps": 102.62825604709377,
+    "B_median_tps": 102.63907344151531,
+    "delta_pct": 0.010540366599021134
+  }
+}

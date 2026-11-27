@@ -1,0 +1,7 @@
+{
+  "median_decode_tok_s": {
+    "mlx": 114.09493820231273,
+    "llama": 80.998
+  },
+  "faster": "mlx"
+}

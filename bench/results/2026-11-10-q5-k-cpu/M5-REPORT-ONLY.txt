@@ -1,0 +1,18 @@
+Redacted derived transcript, not the original log. Path substitutions only; source and binary identities are unchanged.
+
+prefill: 8 records (q5-k-airy)
+  reference: 0.2.33 (aea6d097), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.33 (340eb56d), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+batch: 192 records (q5-k-airy)
+  reference: 0.2.33 (aea6d097), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.33 (340eb56d), batch {"members":4,"rows":2}, prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+step: 192 records (q5-k-airy)
+  reference: 0.2.33 (aea6d097), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.33 (340eb56d), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  every row bitwise identical
+verify: 192 records (q5-k-airy)
+  reference: 0.2.33 (aea6d097), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  candidate: 0.2.33 (340eb56d), verify "KFlash tree (a chain of 8 live rows)", prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"KAPITSA_PROFILE":"precise"}
+  every row bitwise identical

@@ -1,0 +1,19 @@
+{
+  "format": "Checksums of explicitly privacy-filtered derived exports, not original execution logs.",
+  "files": {
+    "M3-BUILDS.json": "41fcacffee537df7213e2bf50164a0af2ff1ec2b9b662f9c6470ed65afac3d39",
+    "M3-DEFAULT-FIXED.json": "1f48bbc55a5a3fc299395a111e9b2c61c5d85d30bac1219263b2283eda47e7e7",
+    "M3-DEFAULT-NATIVE.json": "982130bfced536feb540868f88402117c82316b8b57309db0ec2072fe74ab661",
+    "M3-HTTP.json": "1b496398e6f8d73d8aea122670443d1f1d5b5211cfb22a86e1177e8ad1bf28b0",
+    "M3-IMPORT.json": "f1b2f394a81b812d71ac23dcb9d200a31a435a45fff6e93ececa07202c7e33b6",
+    "M3-NUMERICAL.json": "edbb82f9ddbda2b18d2ec3069750513406043c7e8b88e13bc0d0eaa7ab526e79",
+    "M4-BUILDS.json": "d51515d83e0b0e60018678d3550b6ec3a489ceeadb6f56d125c302460e81d088",
+    "M4-DEFAULT-FIXED.json": "ef6e328c1cb392e9aa9d0fd34c35d358ed3e23d0104fd5b4380951908317741e",
+    "M4-DEFAULT-NATIVE.json": "2de1d6a1331f5013c4cb44f7729d1ad01e80d652306313879969e4915d49d94e",
+    "M4-HTTP.json": "cd49d6dfbb1e1d63f4d9fa4ec5ef89ca4174b082437f94d32bc73ff1e1061c21",
+    "M4-IMPORT.json": "40b681e6a349512d355f4940d55cc6a8ca68d7c55f6831c0126e4f6e249086a3",
+    "M4-NUMERICAL.json": "2c55bf1662d4bf1d0d98af8f8831bf6e2ddfba5b380692267cd42360e38ba81e",
+    "README.md": "8ad6c3f01c0879d052a104c9f84b220302b410d89a2c809b8fcc1d0f77688914"
+  },
+  "privacy_note": "Only necessary setup, public model/source/binary identities, methods and actual outcomes are exported. Original M4 B2 native environmental failure is retained with private detail omitted. Original records remain private."
+}

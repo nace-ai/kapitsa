@@ -1,0 +1,91 @@
+{
+  "notice": "Explicitly redacted derived evidence; not raw logs. Adds completed independent imports after the earlier CPU evidence snapshots; their not-yet-run statements describe that earlier point.",
+  "steps": [
+    {
+      "label": "reference-configure",
+      "rc": 0
+    },
+    {
+      "label": "reference-build",
+      "rc": 0
+    },
+    {
+      "label": "candidate-configure",
+      "rc": 0
+    },
+    {
+      "label": "candidate-build",
+      "rc": 0
+    },
+    {
+      "label": "reference-import",
+      "rc": 0
+    },
+    {
+      "label": "candidate-import",
+      "rc": 0
+    }
+  ],
+  "builds": {
+    "reference": {
+      "source": "7c5112243ba73252dd161d49b6b53207a6851940",
+      "kapitsa_sha256": "c018ee009b7f267479b6fca399e5a7cf117049e3f3db8db6eed6b37c1b3de95d",
+      "logit_dump_sha256": "519f8f22b5db66f10d4207abdf6afb797509a99ff0b45d9d8bd5ed134eecd64b",
+      "ni_run_sha256": "47426fb3f1ca0e45ba86799c24ac17d020844da230ff30a7f1be1f2c346e2250",
+      "quant_sha256": "1c0ac46c672ae9e74e4a4e129cd3a9ea7ce357da26d15ad94c0228ce5f196248",
+      "version": "kapitsa 0.2.33 (7c511224)"
+    },
+    "candidate": {
+      "source": "32e7aa73868f7f12a92a649fffa324d7d198b5f0",
+      "kapitsa_sha256": "dbccf436860e8cff94c22806b626e1ff0a0856c51d4165e919c7ef0518ad8fb9",
+      "logit_dump_sha256": "24324577d235d4a133a0a74e39c42bc5e989f83e693da81903a8387af7c9e903",
+      "ni_run_sha256": "33b008d4bfa6d26069f36b2a85ca4f697469eebc9bf7b0ef86e7dfaebb6aa4cb",
+      "quant_sha256": "5ba878299b75ae63da414a0761bdea734413dd18f42e2a33a61f3ad3843fe62c",
+      "version": "kapitsa 0.2.33 (32e7aa73)"
+    }
+  },
+  "model": "bartowski/Qwen_Qwen3.5-0.8B-GGUF@f36b1ea49a332ede8fe5f389bbf5b3575ef71f48",
+  "gguf_sha256": "6c72d205240d96e9b8cff0126fd3f6394b2bc082b17977851afde08c4bf59b06",
+  "options": [
+    "--no-drafter",
+    "--threads 4"
+  ],
+  "independent_import_executions": 2,
+  "files_by_arm": {
+    "reference": {
+      ".kapitsa/manifest.json": "cb679ef29ba9b7846bff203f3545a1d855f479a66d1412ec286ac27dab57e85b",
+      "chat_template.jinja": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+      "config.json": "8033cb683a7f686075a3c4927681c52ea9703e074733d66253dbab53a7292aa5",
+      "generation_config.json": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23",
+      "model.safetensors": "3316031fcdf3b68d0af92d5c869ad95e540f078fff1f674fabbde3a85b519319",
+      "model.safetensors.index.json": "f4b8e25b6e33fd2bcd31987c0f84d5153970c33268ca6a8279e292e04854f0c1",
+      "mtp.safetensors": "747e7ff56ce5b776d464323c83cb2009e0caaffb407c663f096fd27a674ab140",
+      "tokenizer.json": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1",
+      "tokenizer_config.json": "d50e3d0bb3f3ebc5dbb033b1bb74d340731fe91cc59e9c09d83dd29ae2fc07be"
+    },
+    "candidate": {
+      ".kapitsa/manifest.json": "cb679ef29ba9b7846bff203f3545a1d855f479a66d1412ec286ac27dab57e85b",
+      "chat_template.jinja": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+      "config.json": "8033cb683a7f686075a3c4927681c52ea9703e074733d66253dbab53a7292aa5",
+      "generation_config.json": "0db8b6c9aeb1a1f8a6a651c8e21b4cd6bce0d3a1b66c09287987d897ccff4d23",
+      "model.safetensors": "3316031fcdf3b68d0af92d5c869ad95e540f078fff1f674fabbde3a85b519319",
+      "model.safetensors.index.json": "f4b8e25b6e33fd2bcd31987c0f84d5153970c33268ca6a8279e292e04854f0c1",
+      "mtp.safetensors": "747e7ff56ce5b776d464323c83cb2009e0caaffb407c663f096fd27a674ab140",
+      "tokenizer.json": "e2326a296fa0119e728121a6bdfe87a9715d1b63db6eb45f02c8b4de5930f9e1",
+      "tokenizer_config.json": "d50e3d0bb3f3ebc5dbb033b1bb74d340731fe91cc59e9c09d83dd29ae2fc07be"
+    }
+  },
+  "complete_literal_file_comparisons": {
+    ".kapitsa/manifest.json": true,
+    "chat_template.jinja": true,
+    "config.json": true,
+    "generation_config.json": true,
+    "model.safetensors": true,
+    "model.safetensors.index.json": true,
+    "mtp.safetensors": true,
+    "tokenizer.json": true,
+    "tokenizer_config.json": true
+  },
+  "all_files_literal_equal": true,
+  "GPU_output_and_inference_qualification": "Not established by these import comparisons; separate worker in progress."
+}

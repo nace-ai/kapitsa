@@ -1,0 +1,205 @@
+{
+  "evidence_kind": "redacted derived evidence, not an original execution log",
+  "source_records": [
+    {
+      "record": "small.private.log",
+      "sha256": "47a71d44f74e516b29a9c6b2b969841ec15de32f4300bcab603172d41eb24e4d"
+    },
+    {
+      "record": "small3.private.log",
+      "sha256": "ae0de9957788498546210a81986ac5d38d15de11563ef2ac2d40f2e4b1bd4ad6"
+    },
+    {
+      "record": "check3.private.log",
+      "sha256": "81168ca3beb59b40071fd3235b0a90acf23bde755cfda637639aed661878dc7d"
+    },
+    {
+      "record": "production-small.private.log",
+      "sha256": "ea998f13917d980e0c6512cf90321883f58559670360a35233cdb7545b2a275f"
+    },
+    {
+      "record": "cpu-done.json",
+      "sha256": "955a03562b7dacc607ac3f158026f2a7f9a0fb0c732470d7efceb75ed718d352"
+    },
+    {
+      "record": "model-done.json",
+      "sha256": "09f310fcabb7491897227136ff725af4ba587368a5c9bee7afaeeb4d3f29601f"
+    },
+    {
+      "record": "mtp-done.private.json",
+      "sha256": "c58699a14e7f66e5c9d47963afc572fca10bcb548dfb10bd5b5aacd067233d80"
+    },
+    {
+      "record": "greedy-done.private.json",
+      "sha256": "44814ee3458c9474b93f5d2314d0f39f5bfdb7e448d972073b8ac522fb60ac40"
+    }
+  ],
+  "data": {
+    "operator_small": {
+      "draw_pairs": 11880,
+      "failures": 0,
+      "MTL_SHADER_VALIDATION": 1,
+      "MTL_DEBUG_LAYER": 1
+    },
+    "operator_expanded": {
+      "draw_pairs": 72900,
+      "failures": 0
+    },
+    "production_small": {
+      "cases": 135,
+      "failures": 0,
+      "MTL_SHADER_VALIDATION": 1,
+      "MTL_DEBUG_LAYER": 1
+    },
+    "earlier_implementation_failure": {
+      "draw_pairs": 2160,
+      "failures": 51,
+      "reason": "Initial implementation did not preserve legacy ID selection after finite values were exhausted.",
+      "disposition": "Corrected before production candidate 24f9182b; original failures retained."
+    },
+    "cpu": {
+      "rc": 0,
+      "steps": [
+        {
+          "step": "A-configure",
+          "rc": 0
+        },
+        {
+          "step": "A-build",
+          "rc": 0
+        },
+        {
+          "step": "B-configure",
+          "rc": 0
+        },
+        {
+          "step": "B-build",
+          "rc": 0
+        },
+        {
+          "step": "vk-build",
+          "rc": 0
+        },
+        {
+          "step": "vk-cpu",
+          "rc": 0
+        },
+        {
+          "step": "docs-links",
+          "rc": 0
+        },
+        {
+          "step": "comment-gates",
+          "rc": 0
+        },
+        {
+          "step": "profile-gates",
+          "rc": 0
+        },
+        {
+          "step": "cleanup",
+          "rc": 0
+        }
+      ]
+    },
+    "model_steps": {
+      "status": "complete",
+      "steps": [
+        {
+          "step": "operator-bench3",
+          "rc": 0
+        },
+        {
+          "step": "production-small",
+          "rc": 0
+        },
+        {
+          "step": "qwen-logits-A",
+          "rc": 0
+        },
+        {
+          "step": "qwen-logits-B",
+          "rc": 0
+        },
+        {
+          "step": "qwen-logit-compare",
+          "rc": 0
+        },
+        {
+          "step": "qwen-sampled",
+          "rc": 0
+        },
+        {
+          "step": "qwen-http-abab",
+          "rc": 0
+        },
+        {
+          "step": "qwen-native-0-A",
+          "rc": 0
+        },
+        {
+          "step": "qwen-native-1-B",
+          "rc": 0
+        },
+        {
+          "step": "qwen-native-2-A",
+          "rc": 0
+        },
+        {
+          "step": "qwen-native-3-B",
+          "rc": 0
+        },
+        {
+          "step": "bolt-logits-A",
+          "rc": 0
+        },
+        {
+          "step": "bolt-logits-B",
+          "rc": 0
+        },
+        {
+          "step": "bolt-logit-compare",
+          "rc": 0
+        },
+        {
+          "step": "bolt-http-abab",
+          "rc": 0
+        },
+        {
+          "step": "bolt-native-0-A",
+          "rc": 0
+        },
+        {
+          "step": "bolt-native-1-B",
+          "rc": 0
+        },
+        {
+          "step": "bolt-native-2-A",
+          "rc": 0
+        },
+        {
+          "step": "bolt-native-3-B",
+          "rc": 0
+        }
+      ]
+    },
+    "actual_mtp": {
+      "rc": 0,
+      "purpose": "Actual native MTP sampled-token equality, not teacher forced and not throughput"
+    },
+    "fixed_greedy": {
+      "rc": 0,
+      "purpose": "Investigate lower native greedy sample with identical512token HTTP input ABAB, spec0/temp0/K1; no file-transfer I/O until receipt reviewed"
+    },
+    "claims": {
+      "overall_inference_speedup": false,
+      "all_http_checks_passed": false,
+      "universal_no_regression": false
+    },
+    "not_verified": [
+      "Other chips including M3/M4 for this change",
+      "Other model families and production workloads",
+      "All sampling parameters or exhaustive GPU concurrency"
+    ]
+  }
+}

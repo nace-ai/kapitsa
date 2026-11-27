@@ -1,0 +1,60 @@
+/Users/bytedance/kapitsa-json-tools-20261107/nano9b-tokenizer: thinking by "/think" / "/no_think" flags; tags as text: think yes, tool calls <TOOLCALL>
+PASS enable_thinking absent: the prompt ends with <think>\n
+PASS enable_thinking absent: no flag text in the prompt
+PASS enable_thinking absent: the generation prompt is 6 tokens after the conversation's (<= 8)
+PASS enable_thinking true: the prompt ends with <think>\n
+PASS enable_thinking true: no flag text in the prompt
+PASS enable_thinking true: the generation prompt is 6 tokens after the conversation's (<= 8)
+PASS enable_thinking false: the prompt ends with <think></think>
+PASS enable_thinking false: no flag text in the prompt
+PASS enable_thinking false: the generation prompt is 8 tokens after the conversation's (<= 8)
+PASS a content array and the system's /think: enable_thinking false still closes the reasoning
+PASS thinking reply: reasoning apart from the answer
+PASS tool call: one call, its arguments as JSON (an integer kept)
+PASS text, then a call: the text is the content
+PASS reasoning, then a call
+PASS two calls, one with its arguments as a JSON string
+PASS a call that is not JSON stays text
+FAIL blank JSON call name {"name":"","arguments":{}}: the whole object or list stays text  ""
+FAIL blank JSON call name {"name":"","arguments":{}}: a later valid block still becomes a call  ""
+PASS blank JSON call name {"name":"","arguments":{}}: parsing disabled keeps both blocks
+FAIL blank JSON call name [{"name":"","arguments":{}}]: the whole object or list stays text  ""
+FAIL blank JSON call name [{"name":"","arguments":{}}]: a later valid block still becomes a call  ""
+PASS blank JSON call name [{"name":"","arguments":{}}]: parsing disabled keeps both blocks
+FAIL blank JSON call name [{"name":"read_file","arguments":{"path":"/etc/hosts"}},{"name":"","arguments":{}}]: the whole object or list stays text  ""
+FAIL blank JSON call name [{"name":"read_file","arguments":{"path":"/etc/hosts"}},{"name":"","arguments":{}}]: a later valid block still becomes a call  ""
+PASS blank JSON call name [{"name":"read_file","arguments":{"path":"/etc/hosts"}},{"name":"","arguments":{}}]: parsing disabled keeps both blocks
+FAIL blank JSON call name [{"name":"","arguments":{}},{"name":"read_file","arguments":{"path":"/etc/hosts"}}]: the whole object or list stays text  ""
+FAIL blank JSON call name [{"name":"","arguments":{}},{"name":"read_file","arguments":{"path":"/etc/hosts"}}]: a later valid block still becomes a call  ""
+PASS blank JSON call name [{"name":"","arguments":{}},{"name":"read_file","arguments":{"path":"/etc/hosts"}}]: parsing disabled keeps both blocks
+FAIL blank JSON call name {"name":" ","arguments":{}}: the whole object or list stays text  ""
+FAIL blank JSON call name {"name":" ","arguments":{}}: a later valid block still becomes a call  ""
+PASS blank JSON call name {"name":" ","arguments":{}}: parsing disabled keeps both blocks
+FAIL blank JSON call name [{"name":" ","arguments":{}}]: the whole object or list stays text  ""
+FAIL blank JSON call name [{"name":" ","arguments":{}}]: a later valid block still becomes a call  ""
+PASS blank JSON call name [{"name":" ","arguments":{}}]: parsing disabled keeps both blocks
+FAIL blank JSON call name [{"name":"read_file","arguments":{"path":"/etc/hosts"}},{"name":" ","arguments":{}}]: the whole object or list stays text  ""
+FAIL blank JSON call name [{"name":"read_file","arguments":{"path":"/etc/hosts"}},{"name":" ","arguments":{}}]: a later valid block still becomes a call  ""
+PASS blank JSON call name [{"name":"read_file","arguments":{"path":"/etc/hosts"}},{"name":" ","arguments":{}}]: parsing disabled keeps both blocks
+FAIL blank JSON call name [{"name":" ","arguments":{}},{"name":"read_file","arguments":{"path":"/etc/hosts"}}]: the whole object or list stays text  ""
+FAIL blank JSON call name [{"name":" ","arguments":{}},{"name":"read_file","arguments":{"path":"/etc/hosts"}}]: a later valid block still becomes a call  ""
+PASS blank JSON call name [{"name":" ","arguments":{}},{"name":"read_file","arguments":{"path":"/etc/hosts"}}]: parsing disabled keeps both blocks
+FAIL blank JSON call name {"name":"\t\r\n","arguments":{}}: the whole object or list stays text  ""
+FAIL blank JSON call name {"name":"\t\r\n","arguments":{}}: a later valid block still becomes a call  ""
+PASS blank JSON call name {"name":"\t\r\n","arguments":{}}: parsing disabled keeps both blocks
+FAIL blank JSON call name [{"name":"\t\r\n","arguments":{}}]: the whole object or list stays text  ""
+FAIL blank JSON call name [{"name":"\t\r\n","arguments":{}}]: a later valid block still becomes a call  ""
+PASS blank JSON call name [{"name":"\t\r\n","arguments":{}}]: parsing disabled keeps both blocks
+FAIL blank JSON call name [{"name":"read_file","arguments":{"path":"/etc/hosts"}},{"name":"\t\r\n","arguments":{}}]: the whole object or list stays text  ""
+FAIL blank JSON call name [{"name":"read_file","arguments":{"path":"/etc/hosts"}},{"name":"\t\r\n","arguments":{}}]: a later valid block still becomes a call  ""
+PASS blank JSON call name [{"name":"read_file","arguments":{"path":"/etc/hosts"}},{"name":"\t\r\n","arguments":{}}]: parsing disabled keeps both blocks
+FAIL blank JSON call name [{"name":"\t\r\n","arguments":{}},{"name":"read_file","arguments":{"path":"/etc/hosts"}}]: the whole object or list stays text  ""
+FAIL blank JSON call name [{"name":"\t\r\n","arguments":{}},{"name":"read_file","arguments":{"path":"/etc/hosts"}}]: a later valid block still becomes a call  ""
+PASS blank JSON call name [{"name":"\t\r\n","arguments":{}},{"name":"read_file","arguments":{"path":"/etc/hosts"}}]: parsing disabled keeps both blocks
+PASS a nonblank JSON name is not normalized: " read_file "
+PASS a nonblank JSON name is not normalized: "read_file"
+PASS a nonblank JSON name is not normalized: "讀檔"
+PASS a reply cut inside a tag: the text as it is
+PASS without tools in the request the tags are text
+PASS a tool loop renders: the call and its result in the next prompt
+FAILED: 24

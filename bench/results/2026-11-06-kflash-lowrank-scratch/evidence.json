@@ -1,0 +1,1292 @@
+{
+  "reference": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+  "mac": "Mac Studio (2025), Apple M3 Ultra, 60 GPU cores, 96 GiB",
+  "macos": "26.4.1 (25E253)",
+  "compiler_flags": "Release -O3",
+  "model": "Qwen3.5-4B-4bit, six-layer BF16 DFlash checkpoint",
+  "drafter_sha256": "1eb221d36abb13a5f1b972f8d031a9723fad8cbb7d275abe548b60e77577eb42",
+  "no_metal_changes": true,
+  "candidate": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df",
+  "cpu": {
+    "cpu": "PASS api_test\nPASS prefix_cache_test\nPASS fn_store_test\nPASS fn_dflash_test\nPASS tokenizer_test\nPASS iq_layout_test\nPASS remote_test\nPASS cluster_test\nPASS split_place_test\nPASS gemm_slices_test\nPASS ws_upgrade_test\nPASS test_server_cli\nPASS test_sidecar\nPASS test_bench\nPASS test_update\nPASS test_community\nPASS test_reasoning\nPASS test_pr_size\nPASS test_logit_compare\nPASS test_sampled_tokens_harness\nPASS test_structured_cli\n0 failed\nbuilt: execution_session_test http_stream_test exl3_test qwen4_config_test json_file_test affine_pack_test systemone systemone_test systemone_codes_probe_test systemone_codes_driver splash_protocol_test splash_runtime_test splash_discover_test splash_plan_test (log: /Users/bytedance/kapitsa-batch2-20261106/evidence/vk/lowrank-972e06/4cbb4a0a/build.log)\n........read model.safetensors (5 tensors)\n.GGUF v3: 3 tensors, 0 metadata KVs\narch: None name: None\n.read model.safetensors (3 tensors)\nread model.safetensors (3 tensors)\nread model.safetensors (3 tensors)\n.read model.safetensors (1 tensors)\nread model.safetensors (2 tensors)\nread model.safetensors (2 tensors)\nread model.safetensors (2 tensors)\nGGUF v3: 1 tensors, 0 metadata KVs\narch: None name: None\nGGUF v3: 2 tensors, 0 metadata KVs\narch: None name: None\nGGUF v3: 2 tensors, 0 metadata KVs\narch: None name: None\n...GGUF v3: 1 tensors, 0 metadata KVs\narch: None name: None\nGGUF v3: 1 tensors, 0 metadata KVs\narch: None name: None\n.\n----------------------------------------------------------------------\nRan 15 tests in 1.158s\n\nOK\nPASS nested path: stops at the corpus\nPASS nested path: dumps/x/ref made with its parents\nPASS existing path: kept, stops at the corpus\nPASS path under a file: cannot make, before the corpus\nPASS --verify-rows 12: refused before the directory\nall passed\n  ok    Flash-Next's multipliers from its seed\n  ok    Flash-Next's 16 head sizes: the primes from 20,000,000\n  ok    the heads' rows end to end\n  ok    320,001,536 rows in 128 shards of 2,500,012, rows of 160 values\n  ok    Flash-Next's ids as before\n  ok    Flash-Next's ids as ngram.cpp's\n  ok    5-grams of 3 heads: 12 heads of 40 values\n  ok    odd multipliers below 2^63 / vocab\n  ok    rows padded to 64, in 4 shards\n  ok    5-grams of 3 heads as ngram.cpp's\n  ok    Flash-Next's table: layer 1, its spec\n  ok    table_specs: 128 shards of 4-bit group-32 rows of 160 in layer 1\n  ok    a shard of another width is refused\n  ok    a missing shard is refused\n  ok    a shard past split_ngram_parts is refused\n  ok    the table in layer 5 (one-indexed) is read from layer 4's names, not layer 1's\n  ok    two n-gram layers are refused\n  ok    a hidden size the heads do not divide is refused\nPASS (0 failed)\nPASS pin: upstream Splash\nPASS pin: full commit hash\nPASS pin: release_binary_sha256\nPASS pin: release_metallib_sha256\nPASS pin: release_host_step_metallib_sha256\nPASS pin: kflash_binary_sha256\nPASS patches: present\nPASS patches: numbered 0001.. in order\nPASS 0001-runtime-kernels.patch: license header\nPASS 0001-runtime-kernels.patch: changes files\nPASS 0001-runtime-kernels.patch: runtime/metal/MetalBackend.mm marked modified\nPASS 0002-h1-gate-replay.patch: license header\nPASS 0002-h1-gate-replay.patch: changes files\nPASS 0002-h1-gate-replay.patch: runtime/metal/CommandGraph.hpp marked modified\nPASS 0002-h1-gate-replay.patch: runtime/metal/MetalBackend.hpp marked modified\nPASS 0002-h1-gate-replay.patch: runtime/metal/MetalBackend.mm marked modified\nPASS 0002-h1-gate-replay.patch: runtime/model/ExpertStore.cpp marked modified\nPASS 0002-h1-gate-replay.patch: runtime/model/Runtime.cpp marked modified\nPASS gen: internals pragma first\nPASS gen: 8 staging pointers coherent\nPASS gen: stops before gguf_repack\nPASS gen: H1 kernels appended\nPASS gen: refuses 7 pointers\nPASS gen: refuses no gguf_repack\nPASS out: mine becomes an empty build dir\nPASS out: empty becomes an empty build dir\nPASS out: new becomes an empty build dir\nPASS out: refuses a directory that is not a build\nPASS out: refuses a file\nPASS out: the refused directory's files survive\nPASS install: another Splash release is left alone, not built\nPASS install: says why KFlash was not built\nPASS install: the pinned release builds KFlash, its files untouched\nPASS apply: every patch applies to the pinned Splash\nall passed\n",
+    "prek": "check for merge conflicts................................................Passed\ncheck yaml...............................................................Passed\ncheck for added large files..............................................Passed\ncheck for case conflicts.................................................Passed\ntrim trailing whitespace.................................................Passed\nruff check...............................................................Passed\nshell scripts parse (bash -n)............................................Passed\n",
+    "parser": "[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (269 ms)\nPASS unchanged stream: think, answer\nPASS unchanged stream: think, call after </think>\nPASS unchanged stream: think, text and call\nPASS unchanged stream: thinking off: call\nPASS unchanged stream: thinking off: answer\nPASS unchanged stream: unterminated call after </think>\nPASS unclosed think, switch off: the call stays reasoning (old behaviour)\nPASS unclosed think, switch on: returned as a tool call\nPASS unclosed think, switch on: reasoning without the markup\nPASS unclosed think, switch on: no call markup streamed as reasoning\nPASS unclosed think + trailing newline: returned as a tool call\nPASS two calls at the end of an unclosed think block\nPASS integer argument typed from the tool schema\nPASS call then </think> then the end, switch off: no call\nPASS call then </think> then the end, switch on: returned as a tool call\nPASS same result as before: draft, more reasoning, real call\nPASS same result as before: draft, </think>, a different real call\nPASS same result as before: draft, </think>, an answer\nPASS same result as before: unknown function at the end\nPASS same result as before: unterminated call at the end\nPASS same result as before: cut by max_tokens after a call\nPASS same result as before: <tool_call> mentioned, reasoning goes on\nPASS same result as before: non-ASCII reasoning after a draft\nPASS same result as before: stray </tool_call> after a call\nPASS request without tools: unchanged\nPASS think_ws: the newline before </think> stays in the reasoning\nPASS deltas add up to the result\nPASS utf8_valid: U+FFFD per maximal subpart, well-formed text unchanged\nPASS a reply cut inside a character ends in U+FFFD\nPASS GLM: string, number, boolean, object and array arguments\nPASS GLM: typing: a string as written, a typed value that is no JSON as text, an untyped one as JSON, an unknown one as text\nPASS GLM: two calls\nPASS GLM: a call without arguments\nPASS GLM: GLM-4.5's newlines between the elements and the calls\nPASS GLM: spaces around the name and a key; the value as written\nPASS GLM: content, then the call\nPASS GLM: reasoning (the model's own <think>), content, then calls\nPASS GLM: reasoning in the prompt's think block, then a call\nPASS GLM: non-ASCII values\nPASS GLM: a string value with the call's tags in it\nPASS GLM: a malformed call, then a good one\nPASS GLM: malformed, a name with a space\nPASS GLM: malformed, no name\nPASS GLM: malformed, an empty call\nPASS GLM: malformed, a value left open\nPASS GLM: malformed, a key without a value\nPASS GLM: malformed, text between a key and its value\nPASS GLM: malformed, text after a value\nPASS GLM: malformed, a tag in a key\nPASS GLM: malformed, Qwen's markup\nPASS GLM: malformed, unterminated at the end of the turn\nPASS GLM: each turn the same a token per byte, cut every 2, 3, 5, 7 bytes, NI_THINK_TOOLCALLS on\nPASS GLM: the default call format reads no GLM call\nPASS GLM: unclosed think, switch off: the call stays reasoning\nPASS GLM: unclosed think, switch on: returned as a tool call\nPASS GLM: unclosed think, switch on: no markup streamed; the same in other tokens\nPASS GLM: same result as before: a draft, more reasoning, a real call\nPASS GLM: same result as before: an unknown function at the end\nPASS GLM: same result as before: a malformed call at the end\nPASS GLM: a draft stays reasoning, the call after </think> is the call\nALL PASSED\n",
+    "structured-tokenizer": "PASS grammar_test: grammars, refusals, masks against brute force (mask time per token over 248320 tokens (1786 states, warm): mean 7.8 us, median 3.5, p90 16.6, p99 42.3, max 51.7; 308 passed, 0 failed)\nPASS structured_check answers every request\nPASS chat: json_object: JSON\nPASS chat: json_schema, strict: JSON\nPASS chat: text: no grammar\nPASS chat: no format, tools, auto: no grammar\nPASS chat: json_schema without a schema: any object: JSON\nPASS chat: unknown format type: 400 (response_format.type)\nPASS chat: format not an object: 400 (response_format)\nPASS chat: json_schema missing: 400 (response_format.json_schema)\nPASS chat: schema not a schema: 400 (response_format.json_schema.schema)\nPASS chat: strict not a boolean: 400 (response_format.json_schema.strict)\nPASS chat: unknown type in the schema: 400 (response_format)\nPASS chat: remote $ref: 400 (response_format)\nPASS chat: a schema no value satisfies: 400 (response_format)\nPASS chat: tool_choice required: tool calls (get_weather, run_shell)\nPASS chat: tool_choice named: tool calls (get_weather)\nPASS chat: one call (parallel_tool_calls false): tool calls (get_weather, run_shell; one call)\nPASS chat: a named tool the request lacks: 400 (tool_choice)\nPASS chat: required without tools: 400 (tool_choice)\nPASS chat: unknown tool_choice: 400 (tool_choice)\nPASS chat: tool_choice object without a name: 400 (tool_choice)\nPASS chat: tool_choice none with a format: the format: JSON,\nPASS chat: a strict tool, auto: text or tool calls (get_weather, run_shell free)\nPASS chat: a format beside tools: JSON or tool calls\nPASS chat: a strict tool with a schema it cannot hold: 400 (tools)\nPASS responses: text.format json_schema: JSON\nPASS responses: text.format json_object: JSON\nPASS responses: text.format text: no grammar\nPASS responses: text.format unknown: 400 (text.format.type)\nPASS responses: text.format bad schema: 400 (text.format)\nPASS responses: tool_choice required: tool calls (get_weather)\nPASS responses: tool_choice a function: tool calls (run_shell)\nPASS responses: allowed_tools required: tool calls (run_shell)\nPASS responses: a built-in tool choice: 400 (tool_choice)\nPASS responses: a strict function: text or tool calls (get_weather)\nPASS responses: a function without strict is not strict: no grammar\nPASS responses: a namespace's strict function: text or tool calls (wx__get_weather)\nPASS responses: a custom tool named: tool calls (apply_patch)\nPASS messages: tool_choice any: tool calls (get_weather)\nPASS messages: tool_choice tool, one call: tool calls (run_shell; one call)\nPASS messages: tool_choice tool without a name: 400\nPASS messages: unknown tool_choice: 400\nPASS messages: output_format: JSON\nPASS messages: output_config.format: JSON\nPASS messages: output_format of another type: 400\nPASS messages: a strict tool: text or tool calls (get_weather)\nPASS messages: tool_choice none: no grammar\nALL PASSED\n"
+  },
+  "logit_comparison": {
+    "paths": {
+      "prefill": {
+        "records": 8,
+        "bitwise": 8,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": "../lowrank/tools/logit_floors/qwen3.5-4b-4bit.json"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (0cb86ee)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 8,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:14:53Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (4cbb4a0)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 8,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:15:24Z",
+          "env": {}
+        }
+      },
+      "batch": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "../lowrank/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (0cb86ee)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "batch",
+          "batch": {
+            "members": 4,
+            "rows": 2
+          },
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:14:54Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (4cbb4a0)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "batch",
+          "batch": {
+            "members": 4,
+            "rows": 2
+          },
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:15:24Z",
+          "env": {}
+        }
+      },
+      "step": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "../lowrank/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (0cb86ee)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:14:53Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (4cbb4a0)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:15:24Z",
+          "env": {}
+        }
+      },
+      "verify": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "../lowrank/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (0cb86ee)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "verify",
+          "verify": "KFlash tree (a chain of 8 live rows)",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:14:53Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (4cbb4a0)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "verify",
+          "verify": "KFlash tree (a chain of 8 live rows)",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T04:15:24Z",
+          "env": {}
+        }
+      }
+    }
+  },
+  "gpu_runs": [
+    {
+      "label": "logits-reference",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "batch2-logits-reference",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/build/logit_dump",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference"
+      ],
+      "environment": null,
+      "source_heads": {
+        "reference": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+        "quant": "0f92834788846394200eed4627faad000e3d0608",
+        "lowrank": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df"
+      },
+      "binary_sha256": "88fd3f20dafb3b0633d9561efefb79a7aa9809d8b0f08657c15a216a4f165722",
+      "log": "[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (292 ms)\n[kapitsa] read 2.37 GB of weights in 366 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 39 ms (6.2 GB/s)\n[kapitsa] MTP head loaded in 227 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 3634 ms\n[kapitsa] prewarmed 93 prefill pipelines in 3659 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 4320 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)\nprefill 8 rows: next-token NLL 1.8013, top-1 = next token 0.6250 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference/prefill\nstep   192 rows: next-token NLL 0.6791, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference/step\nverify 192 rows: next-token NLL 0.6791, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference/verify\nbatch  192 rows: next-token NLL 0.6792, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference/batch\n8 windows, 14848 prefilled tokens in 6.7 s; 8.8 s in all\n"
+    },
+    {
+      "label": "logits-lowrank",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "batch2-logits-lowrank",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/lowrank/build/logit_dump",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-lowrank",
+        "--from",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference"
+      ],
+      "environment": null,
+      "source_heads": {
+        "reference": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+        "quant": "0f92834788846394200eed4627faad000e3d0608",
+        "lowrank": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df"
+      },
+      "binary_sha256": "89fd2dd60f9812297c521f2ff8469ff55f269e9d1c063008165f16a72349d339",
+      "log": "[kapitsa] read 2.37 GB of weights in 364 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 39 ms (6.2 GB/s)\n[kapitsa] MTP head loaded in 221 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 3406 ms\n[kapitsa] prewarmed 93 prefill pipelines in 3413 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 4061 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)\nprefill 8 rows: next-token NLL 1.8013, top-1 = next token 0.6250 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-lowrank/prefill\nstep   192 rows: next-token NLL 0.6791, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-lowrank/step\nverify 192 rows: next-token NLL 0.6791, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-lowrank/verify\nbatch  192 rows: next-token NLL 0.6792, top-1 = next token 0.8385 -> /Users/bytedance/kapitsa-batch2-20261106/evidence/logits-lowrank/batch\n8 windows, 14848 prefilled tokens in 6.7 s; 8.9 s in all\n"
+    },
+    {
+      "label": "compare-lowrank",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-968-evidence-20261106/venv/bin/python3",
+        "/Users/bytedance/kapitsa-batch2-20261106/lowrank/tools/logit_compare.py",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-reference",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/logits-lowrank",
+        "--json",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/compare-lowrank.json"
+      ],
+      "environment": null,
+      "source_heads": {
+        "reference": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+        "quant": "0f92834788846394200eed4627faad000e3d0608",
+        "lowrank": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df"
+      },
+      "binary_sha256": "36984af9f922aec72ba5b03e811ee92512268785007192e20f826cbd07cf8d04",
+      "log": "prefill: 8 records (qwen3.5-4b-4bit)\n  reference: 0.2.31 (0cb86ee), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  candidate: 0.2.31 (4cbb4a0), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  every row bitwise identical\nbatch: 192 records (qwen3.5-4b-4bit)\n  reference: 0.2.31 (0cb86ee), batch {\"members\":4,\"rows\":2}, prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  candidate: 0.2.31 (4cbb4a0), batch {\"members\":4,\"rows\":2}, prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  every row bitwise identical\n  PASS (../lowrank/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same))\nstep: 192 records (qwen3.5-4b-4bit)\n  reference: 0.2.31 (0cb86ee), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  candidate: 0.2.31 (4cbb4a0), prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  every row bitwise identical\n  PASS (../lowrank/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same))\nverify: 192 records (qwen3.5-4b-4bit)\n  reference: 0.2.31 (0cb86ee), verify \"KFlash tree (a chain of 8 live rows)\", prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  candidate: 0.2.31 (4cbb4a0), verify \"KFlash tree (a chain of 8 live rows)\", prefill_chunk 2048, ane {\"chunks\":0,\"evals\":0,\"reruns\":0}\n  every row bitwise identical\n  PASS (../lowrank/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same))\n"
+    },
+    {
+      "label": "draft-reference-r768",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "batch2-draft-reference-r768",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/build/qmm_draft_check",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft.ids",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/draft-reference-r768"
+      ],
+      "environment": {
+        "NI_KFLASH_LOWRANK": "768"
+      },
+      "source_heads": {
+        "reference": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+        "quant": "0f92834788846394200eed4627faad000e3d0608",
+        "lowrank": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df"
+      },
+      "binary_sha256": "722dbf2921bad8cf83e070edfe3496111971143d7f5747653006fcb5c1e71a17",
+      "log": "[kapitsa] read 2.37 GB of weights in 363 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 39 ms (6.2 GB/s)\n[kapitsa] MTP head loaded in 275 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 13 ms\n[kapitsa] prewarmed 93 prefill pipelines in 19 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 719 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 195 ms (6.5 GB/s)\n[kapitsa] KFlash: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] KFlash: low-rank shortlist head r=768 (factors computed in 2055 ms, rows 187 ms)\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +1.05 GB), loaded in 2544 ms\nSaved 270 files / 35198376 bytes to /Users/bytedance/kapitsa-batch2-20261106/evidence/draft-reference-r768\n"
+    },
+    {
+      "label": "draft-lowrank-r768",
+      "exit_code": 0,
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "10",
+        "--label",
+        "batch2-draft-lowrank-r768",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/lowrank/build/qmm_draft_check",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "/Users/bytedance/kapitsa-night-20261106/evidence/draft.ids",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/draft-lowrank-r768",
+        "--from",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/draft-reference-r768"
+      ],
+      "environment": {
+        "NI_KFLASH_LOWRANK": "768"
+      },
+      "source_heads": {
+        "reference": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+        "quant": "0f92834788846394200eed4627faad000e3d0608",
+        "lowrank": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df"
+      },
+      "binary_sha256": "57c9068c700c4f3e31a947a619bf5d44994df206ca4118ca6a1138aeeb10c6db",
+      "log": "[kapitsa] read 2.37 GB of weights in 363 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 39 ms (6.2 GB/s)\n[kapitsa] MTP head loaded in 222 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 13 ms\n[kapitsa] prewarmed 93 prefill pipelines in 19 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 671 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 196 ms (6.5 GB/s)\n[kapitsa] KFlash: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] KFlash: low-rank shortlist head r=768 (factors computed in 1879 ms, rows 176 ms)\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +1.03 GB), loaded in 2360 ms\nAKO_CHECK={\"passed\":true,\"cases\":270,\"bytes\":35198376,\"mismatches\":0}\n"
+    }
+  ],
+  "http": [
+    {
+      "variant": "reference",
+      "head": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "65211",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "32768",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "NI_KFLASH_LOWRANK": "768",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-batch2-20261106/evidence/http-home-reference"
+      },
+      "exit_code": 1,
+      "passes": 47,
+      "failures": [
+        "FAIL in flight together: a 2K-token request sent during a long reply finishes first  side done 2.4 s, long reply done 0.9 s (693 tokens), side usage {'prompt_tokens': 2976, 'completion_tokens': 4, 'total_tokens': 2980, 'prompt_tokens_details': {'cached_tokens': 0}, 'kapitsa': {'prefill_ms': 1357.3, 'kflash': {'source': 'DFlash2', 'cycles': 2}}}",
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0008780956268310547, {'id': 'chatcmpl-179393859198014', 'object': 'chat.completion.chunk', 'created': 1793938591, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.142344951629639], first token at 17.2673020362854"
+      ]
+    },
+    {
+      "variant": "lowrank",
+      "head": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/lowrank/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "49897",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "32768",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "NI_KFLASH_LOWRANK": "768",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-batch2-20261106/evidence/http-home-lowrank"
+      },
+      "exit_code": 1,
+      "passes": 47,
+      "failures": [
+        "FAIL in flight together: a 2K-token request sent during a long reply finishes first  side done 2.4 s, long reply done 0.9 s (693 tokens), side usage {'prompt_tokens': 2976, 'completion_tokens': 4, 'total_tokens': 2980, 'prompt_tokens_details': {'cached_tokens': 0}, 'kapitsa': {'prefill_ms': 1361.6, 'kflash': {'source': 'DFlash2', 'cycles': 2}}}",
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0007801055908203125, {'id': 'chatcmpl-179393875177844', 'object': 'chat.completion.chunk', 'created': 1793938751, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.125556945800781], first token at 17.28821301460266"
+      ]
+    }
+  ],
+  "http_note": "47 pass / same two baseline timing failures in each arm; raw differences in timestamps retained.",
+  "host_runs": [
+    {
+      "label": "compile-lr-reference",
+      "command": [
+        "clang++",
+        "-std=c++20",
+        "-O3",
+        "-I/Users/bytedance/kapitsa-batch2-20261106/reference/src",
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/src/model/dflash2_lowrank.cpp",
+        "/Users/bytedance/kapitsa-batch2-20261106/lowrank-screen.cpp",
+        "-framework",
+        "Accelerate",
+        "-o",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-reference"
+      ],
+      "exit": 0,
+      "log": ""
+    },
+    {
+      "label": "compile-lr-lowrank",
+      "command": [
+        "clang++",
+        "-std=c++20",
+        "-O3",
+        "-I/Users/bytedance/kapitsa-batch2-20261106/lowrank/src",
+        "/Users/bytedance/kapitsa-batch2-20261106/lowrank/src/model/dflash2_lowrank.cpp",
+        "/Users/bytedance/kapitsa-batch2-20261106/lowrank-screen.cpp",
+        "-framework",
+        "Accelerate",
+        "-o",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-lowrank"
+      ],
+      "exit": 0,
+      "log": ""
+    },
+    {
+      "label": "lr-N128-K64-r16-0-reference",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N128-K64-r16-0-reference",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-reference",
+        "128",
+        "64",
+        "16",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N128-K64-r16-0-reference.bin"
+      ],
+      "exit": 0,
+      "log": "N128 K64 r16 2.601 ms maxrss 8536064 bytes outputs 8192 bytes\n",
+      "sha256": "de182a072a39fba43355d72baa9dd64a6717cbe8f712811e9b21c7cc8d007a37",
+      "bytes": 8192
+    },
+    {
+      "label": "lr-N128-K64-r16-0-lowrank",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N128-K64-r16-0-lowrank",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-lowrank",
+        "128",
+        "64",
+        "16",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N128-K64-r16-0-lowrank.bin"
+      ],
+      "exit": 0,
+      "log": "N128 K64 r16 2.628 ms maxrss 8503296 bytes outputs 8192 bytes\n",
+      "sha256": "de182a072a39fba43355d72baa9dd64a6717cbe8f712811e9b21c7cc8d007a37",
+      "bytes": 8192
+    },
+    {
+      "label": "lr-N5000-K128-r32-0-reference",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N5000-K128-r32-0-reference",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-reference",
+        "5000",
+        "128",
+        "32",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N5000-K128-r32-0-reference.bin"
+      ],
+      "exit": 0,
+      "log": "N5000 K128 r32 2.832 ms maxrss 11730944 bytes outputs 32768 bytes\n",
+      "sha256": "7af73428e311b3a62ffdccf1bf11fb531f616059542b11dababeff29b9bbb0c9",
+      "bytes": 32768
+    },
+    {
+      "label": "lr-N5000-K128-r32-0-lowrank",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N5000-K128-r32-0-lowrank",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-lowrank",
+        "5000",
+        "128",
+        "32",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N5000-K128-r32-0-lowrank.bin"
+      ],
+      "exit": 0,
+      "log": "N5000 K128 r32 2.964 ms maxrss 11370496 bytes outputs 32768 bytes\n",
+      "sha256": "7af73428e311b3a62ffdccf1bf11fb531f616059542b11dababeff29b9bbb0c9",
+      "bytes": 32768
+    },
+    {
+      "label": "lr-N8192-K2560-r768-0-reference",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N8192-K2560-r768-0-reference",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-reference",
+        "8192",
+        "2560",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N8192-K2560-r768-0-reference.bin"
+      ],
+      "exit": 0,
+      "log": "N8192 K2560 r768 1651.017 ms maxrss 414138368 bytes outputs 15728640 bytes\n",
+      "sha256": "b1c0681139176e294cea3bab81a74a0c5c43a768f455ed8eca888dc85685f2db",
+      "bytes": 15728640
+    },
+    {
+      "label": "lr-N8192-K2560-r768-0-lowrank",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N8192-K2560-r768-0-lowrank",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-lowrank",
+        "8192",
+        "2560",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N8192-K2560-r768-0-lowrank.bin"
+      ],
+      "exit": 0,
+      "log": "N8192 K2560 r768 1527.256 ms maxrss 365527040 bytes outputs 15728640 bytes\n",
+      "sha256": "b1c0681139176e294cea3bab81a74a0c5c43a768f455ed8eca888dc85685f2db",
+      "bytes": 15728640
+    },
+    {
+      "label": "lr-N8192-K2560-r768-1-reference",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N8192-K2560-r768-1-reference",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-reference",
+        "8192",
+        "2560",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N8192-K2560-r768-1-reference.bin"
+      ],
+      "exit": 0,
+      "log": "N8192 K2560 r768 1584.627 ms maxrss 412598272 bytes outputs 15728640 bytes\n",
+      "sha256": "b1c0681139176e294cea3bab81a74a0c5c43a768f455ed8eca888dc85685f2db",
+      "bytes": 15728640
+    },
+    {
+      "label": "lr-N8192-K2560-r768-1-lowrank",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N8192-K2560-r768-1-lowrank",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-lowrank",
+        "8192",
+        "2560",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N8192-K2560-r768-1-lowrank.bin"
+      ],
+      "exit": 0,
+      "log": "N8192 K2560 r768 1516.283 ms maxrss 365592576 bytes outputs 15728640 bytes\n",
+      "sha256": "b1c0681139176e294cea3bab81a74a0c5c43a768f455ed8eca888dc85685f2db",
+      "bytes": 15728640
+    },
+    {
+      "label": "lr-N8192-K2560-r768-2-reference",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N8192-K2560-r768-2-reference",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-reference",
+        "8192",
+        "2560",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N8192-K2560-r768-2-reference.bin"
+      ],
+      "exit": 0,
+      "log": "N8192 K2560 r768 1739.828 ms maxrss 413401088 bytes outputs 15728640 bytes\n",
+      "sha256": "b1c0681139176e294cea3bab81a74a0c5c43a768f455ed8eca888dc85685f2db",
+      "bytes": 15728640
+    },
+    {
+      "label": "lr-N8192-K2560-r768-2-lowrank",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N8192-K2560-r768-2-lowrank",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-lowrank",
+        "8192",
+        "2560",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N8192-K2560-r768-2-lowrank.bin"
+      ],
+      "exit": 0,
+      "log": "N8192 K2560 r768 1534.847 ms maxrss 364052480 bytes outputs 15728640 bytes\n",
+      "sha256": "b1c0681139176e294cea3bab81a74a0c5c43a768f455ed8eca888dc85685f2db",
+      "bytes": 15728640
+    },
+    {
+      "label": "lr-N8192-K2560-r768-3-reference",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N8192-K2560-r768-3-reference",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-reference",
+        "8192",
+        "2560",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N8192-K2560-r768-3-reference.bin"
+      ],
+      "exit": 0,
+      "log": "N8192 K2560 r768 1535.723 ms maxrss 412631040 bytes outputs 15728640 bytes\n",
+      "sha256": "b1c0681139176e294cea3bab81a74a0c5c43a768f455ed8eca888dc85685f2db",
+      "bytes": 15728640
+    },
+    {
+      "label": "lr-N8192-K2560-r768-3-lowrank",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N8192-K2560-r768-3-lowrank",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-lowrank",
+        "8192",
+        "2560",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N8192-K2560-r768-3-lowrank.bin"
+      ],
+      "exit": 0,
+      "log": "N8192 K2560 r768 1524.253 ms maxrss 365494272 bytes outputs 15728640 bytes\n",
+      "sha256": "b1c0681139176e294cea3bab81a74a0c5c43a768f455ed8eca888dc85685f2db",
+      "bytes": 15728640
+    },
+    {
+      "label": "lr-N4096-K4096-r768-0-reference",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N4096-K4096-r768-0-reference",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-reference",
+        "4096",
+        "4096",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N4096-K4096-r768-0-reference.bin"
+      ],
+      "exit": 0,
+      "log": "N4096 K4096 r768 5104.511 ms maxrss 853262336 bytes outputs 25165824 bytes\n",
+      "sha256": "67a03d72b99d9ab29272ee54cf61b3bf35c62f7b3bef4e6fa818fd30800a3a85",
+      "bytes": 25165824
+    },
+    {
+      "label": "lr-N4096-K4096-r768-0-lowrank",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N4096-K4096-r768-0-lowrank",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-lowrank",
+        "4096",
+        "4096",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N4096-K4096-r768-0-lowrank.bin"
+      ],
+      "exit": 0,
+      "log": "N4096 K4096 r768 4910.145 ms maxrss 828112896 bytes outputs 25165824 bytes\n",
+      "sha256": "67a03d72b99d9ab29272ee54cf61b3bf35c62f7b3bef4e6fa818fd30800a3a85",
+      "bytes": 25165824
+    },
+    {
+      "label": "lr-N4096-K4096-r768-1-reference",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N4096-K4096-r768-1-reference",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-reference",
+        "4096",
+        "4096",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N4096-K4096-r768-1-reference.bin"
+      ],
+      "exit": 0,
+      "log": "N4096 K4096 r768 5093.621 ms maxrss 853278720 bytes outputs 25165824 bytes\n",
+      "sha256": "67a03d72b99d9ab29272ee54cf61b3bf35c62f7b3bef4e6fa818fd30800a3a85",
+      "bytes": 25165824
+    },
+    {
+      "label": "lr-N4096-K4096-r768-1-lowrank",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N4096-K4096-r768-1-lowrank",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-lowrank",
+        "4096",
+        "4096",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N4096-K4096-r768-1-lowrank.bin"
+      ],
+      "exit": 0,
+      "log": "N4096 K4096 r768 4897.977 ms maxrss 828112896 bytes outputs 25165824 bytes\n",
+      "sha256": "67a03d72b99d9ab29272ee54cf61b3bf35c62f7b3bef4e6fa818fd30800a3a85",
+      "bytes": 25165824
+    },
+    {
+      "label": "lr-N4096-K4096-r768-2-reference",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N4096-K4096-r768-2-reference",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-reference",
+        "4096",
+        "4096",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N4096-K4096-r768-2-reference.bin"
+      ],
+      "exit": 0,
+      "log": "N4096 K4096 r768 5097.437 ms maxrss 853262336 bytes outputs 25165824 bytes\n",
+      "sha256": "67a03d72b99d9ab29272ee54cf61b3bf35c62f7b3bef4e6fa818fd30800a3a85",
+      "bytes": 25165824
+    },
+    {
+      "label": "lr-N4096-K4096-r768-2-lowrank",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N4096-K4096-r768-2-lowrank",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-lowrank",
+        "4096",
+        "4096",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N4096-K4096-r768-2-lowrank.bin"
+      ],
+      "exit": 0,
+      "log": "N4096 K4096 r768 4902.069 ms maxrss 828227584 bytes outputs 25165824 bytes\n",
+      "sha256": "67a03d72b99d9ab29272ee54cf61b3bf35c62f7b3bef4e6fa818fd30800a3a85",
+      "bytes": 25165824
+    },
+    {
+      "label": "lr-N4096-K4096-r768-3-reference",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N4096-K4096-r768-3-reference",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-reference",
+        "4096",
+        "4096",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N4096-K4096-r768-3-reference.bin"
+      ],
+      "exit": 0,
+      "log": "N4096 K4096 r768 5101.242 ms maxrss 853295104 bytes outputs 25165824 bytes\n",
+      "sha256": "67a03d72b99d9ab29272ee54cf61b3bf35c62f7b3bef4e6fa818fd30800a3a85",
+      "bytes": 25165824
+    },
+    {
+      "label": "lr-N4096-K4096-r768-3-lowrank",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "2",
+        "--label",
+        "lr-N4096-K4096-r768-3-lowrank",
+        "--",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lowrank-lowrank",
+        "4096",
+        "4096",
+        "768",
+        "/Users/bytedance/kapitsa-batch2-20261106/evidence/lr-N4096-K4096-r768-3-lowrank.bin"
+      ],
+      "exit": 0,
+      "log": "N4096 K4096 r768 4913.656 ms maxrss 828243968 bytes outputs 25165824 bytes\n",
+      "sha256": "67a03d72b99d9ab29272ee54cf61b3bf35c62f7b3bef4e6fa818fd30800a3a85",
+      "bytes": 25165824
+    }
+  ],
+  "factorization_statistics": [
+    {
+      "rows": 128,
+      "columns": 64,
+      "rank": 16,
+      "reference_peak_rss": 8536064,
+      "candidate_peak_rss": 8503296,
+      "reference_ms": 2.601,
+      "candidate_ms": 2.628,
+      "runs": {
+        "A": [
+          {
+            "ms": 2.601,
+            "rss": 8536064
+          }
+        ],
+        "B": [
+          {
+            "ms": 2.628,
+            "rss": 8503296
+          }
+        ]
+      }
+    },
+    {
+      "rows": 5000,
+      "columns": 128,
+      "rank": 32,
+      "reference_peak_rss": 11730944,
+      "candidate_peak_rss": 11370496,
+      "reference_ms": 2.832,
+      "candidate_ms": 2.964,
+      "runs": {
+        "A": [
+          {
+            "ms": 2.832,
+            "rss": 11730944
+          }
+        ],
+        "B": [
+          {
+            "ms": 2.964,
+            "rss": 11370496
+          }
+        ]
+      }
+    },
+    {
+      "rows": 8192,
+      "columns": 2560,
+      "rank": 768,
+      "reference_peak_rss": 413016064.0,
+      "candidate_peak_rss": 365510656.0,
+      "reference_ms": 1617.8220000000001,
+      "candidate_ms": 1525.7545,
+      "runs": {
+        "A": [
+          {
+            "ms": 1651.017,
+            "rss": 414138368
+          },
+          {
+            "ms": 1584.627,
+            "rss": 412598272
+          },
+          {
+            "ms": 1739.828,
+            "rss": 413401088
+          },
+          {
+            "ms": 1535.723,
+            "rss": 412631040
+          }
+        ],
+        "B": [
+          {
+            "ms": 1527.256,
+            "rss": 365527040
+          },
+          {
+            "ms": 1516.283,
+            "rss": 365592576
+          },
+          {
+            "ms": 1534.847,
+            "rss": 364052480
+          },
+          {
+            "ms": 1524.253,
+            "rss": 365494272
+          }
+        ]
+      }
+    },
+    {
+      "rows": 4096,
+      "columns": 4096,
+      "rank": 768,
+      "reference_peak_rss": 853270528.0,
+      "candidate_peak_rss": 828170240.0,
+      "reference_ms": 5099.3395,
+      "candidate_ms": 4906.107,
+      "runs": {
+        "A": [
+          {
+            "ms": 5104.511,
+            "rss": 853262336
+          },
+          {
+            "ms": 5093.621,
+            "rss": 853278720
+          },
+          {
+            "ms": 5097.437,
+            "rss": 853262336
+          },
+          {
+            "ms": 5101.242,
+            "rss": 853295104
+          }
+        ],
+        "B": [
+          {
+            "ms": 4910.145,
+            "rss": 828112896
+          },
+          {
+            "ms": 4897.977,
+            "rss": 828112896
+          },
+          {
+            "ms": 4902.069,
+            "rss": 828227584
+          },
+          {
+            "ms": 4913.656,
+            "rss": 828243968
+          }
+        ]
+      }
+    }
+  ],
+  "cache_comparison": {
+    "reference": "/Users/bytedance/kapitsa-batch2-20261106/evidence/home-draft-reference-r768/kflash/dflash2-lowrank-46961764c63092f88071bc4973aab53756d112db455b0c4529665b8f03d69281.bin",
+    "candidate": "/Users/bytedance/kapitsa-batch2-20261106/evidence/home-draft-lowrank-r768/kflash/dflash2-lowrank-46961764c63092f88071bc4973aab53756d112db455b0c4529665b8f03d69281.bin",
+    "bytes": 15728640,
+    "sha256": "554b53de2f8a8909904e6e782ec1b7be1dbd4e72862d1dc08333e515a12fba7f",
+    "equal": true
+  },
+  "generation_runs": [
+    {
+      "label": "rank-01-reference",
+      "head": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "3",
+        "--label",
+        "rank-01-reference",
+        "--",
+        "/usr/bin/time",
+        "-l",
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/build/ni_run",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "@/Users/bytedance/kapitsa-night-20261106/evidence/rank-smoke.ids",
+        "1024",
+        "0",
+        "--dflash",
+        "auto"
+      ],
+      "environment": {
+        "NI_KFLASH_LOWRANK": "768",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-batch2-20261106/evidence/perf-home-rank-01-reference"
+      },
+      "exit": 0,
+      "tokens": 1024,
+      "eos_count": 0,
+      "tokens_before_first_eos": 1024,
+      "text_nonempty": true,
+      "ids_match_reference": true,
+      "ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+      "log": "[kapitsa] read 2.37 GB of weights in 365 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 39 ms (6.2 GB/s)\n[kapitsa] MTP head loaded in 225 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 13 ms\n[kapitsa] prewarmed 93 prefill pipelines in 19 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 670 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 74 ms (17.1 GB/s)\n[kapitsa] KFlash: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] KFlash: low-rank shortlist head r=768 (factors computed in 2042 ms, rows 183 ms)\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +1.05 GB), loaded in 2407 ms\n[kapitsa] DFlash2: prewarmed 116 pipelines in 2 ms\nprompt 31 tok in 47 ms (656.9 tok/s); dflash decode (verify 7 of 7, greedy): 1023 tok in 1263 ms (810.2 tok/s), 129 cycles, 7.930 tok/cycle, 9.77 ms GPU/cycle, 9.79 ms wall/cycle (mode 3), hist 0 0 0 0 0 2 0 127; 7.00 proposals verified per cycle; acceptance by position 1.00 1.00 1.00 1.00 1.00 0.98 1.00\nKFlash: 129 cycles, 8.00 rows per cycle; cycles by rows 8:129; tokens per cycle expected 7.960, got 7.969; rate 0.8134 tok/ms; cost ms by rows 8:9.70; calibration (alpha, beta) by depth (0.01, 1.07) (0.07, 1.18) (0.01, 1.08) (0.19, 1.23) (0.02, 1.18) (-0.63, 0.69) (0.23, 1.27) (0.00, 1.00)\ndrafting pass: GPU ms/cycle mean 1.610 median 1.612 p10 1.545 p90 1.676 (128 cycles); GPU idle before the verify 0.001 ms/cycle\n[kapitsa] KFlash: budget saved (129 cycles) to /Users/bytedance/kapitsa-batch2-20261106/evidence/perf-home-rank-01-reference/kflash/qwen3.5-4b-4bit-dflash2-b4-Apple_M3_Ultra.json\nids: 16 198 17 198 18 198 19 198 20 198 21 198 22 198 23 198 24 198 16 15 198 16 16 198 16 17 198 16 18 198 16 19 198 16 20 198 16 21 198 16 22 198 16 23 198 16 24 198 17 15 198 17 16 198 17 17 198 17 18 198 17 19 198 17 20 198 17 21 198 17 22 198 17 23 198 17 24 198 18 15 198 18 16 198 18 17 198 18 18 198 18 19 198 18 20 198 18 21 198 18 22 198 18 23 198 18 24 198 19 15 198 19 16 198 19 17 198 19 18 198 19 19 198 19 20 198 19 21 198 19 22 198 19 23 198 19 24 198 20 15 198 20 16 198 20 17 198 20 18 198 20 19 198 20 20 198 20 21 198 20 22 198 20 23 198 20 24 198 21 15 198 21 16 198 21 17 198 21 18 198 21 19 198 21 20 198 21 21 198 21 22 198 21 23 198 21 24 198 22 15 198 22 16 198 22 17 198 22 18 198 22 19 198 22 20 198 22 21 198 22 22 198 22 23 198 22 24 198 23 15 198 23 16 198 23 17 198 23 18 198 23 19 198 23 20 198 23 21 198 23 22 198 23 23 198 23 24 198 24 15 198 24 16 198 24 17 198 24 18 198 24 19 198 24 20 198 24 21 198 24 22 198 24 23 198 24 24 198 16 15 15 198 16 15 16 198 16 15 17 198 16 15 18 198 16 15 19 198 16 15 20 198 16 15 21 198 16 15 22 198 16 15 23 198 16 15 24 198 16 16 15 198 16 16 16 198 16 16 17 198 16 16 18 198 16 16 19 198 16 16 20 198 16 16 21 198 16 16 22 198 16 16 23 198 16 16 24 198 16 17 15 198 16 17 16 198 16 17 17 198 16 17 18 198 16 17 19 198 16 17 20 198 16 17 21 198 16 17 22 198 16 17 23 198 16 17 24 198 16 18 15 198 16 18 16 198 16 18 17 198 16 18 18 198 16 18 19 198 16 18 20 198 16 18 21 198 16 18 22 198 16 18 23 198 16 18 24 198 16 19 15 198 16 19 16 198 16 19 17 198 16 19 18 198 16 19 19 198 16 19 20 198 16 19 21 198 16 19 22 198 16 19 23 198 16 19 24 198 16 20 15 198 16 20 16 198 16 20 17 198 16 20 18 198 16 20 19 198 16 20 20 198 16 20 21 198 16 20 22 198 16 20 23 198 16 20 24 198 16 21 15 198 16 21 16 198 16 21 17 198 16 21 18 198 16 21 19 198 16 21 20 198 16 21 21 198 16 21 22 198 16 21 23 198 16 21 24 198 16 22 15 198 16 22 16 198 16 22 17 198 16 22 18 198 16 22 19 198 16 22 20 198 16 22 21 198 16 22 22 198 16 22 23 198 16 22 24 198 16 23 15 198 16 23 16 198 16 23 17 198 16 23 18 198 16 23 19 198 16 23 20 198 16 23 21 198 16 23 22 198 16 23 23 198 16 23 24 198 16 24 15 198 16 24 16 198 16 24 17 198 16 24 18 198 16 24 19 198 16 24 20 198 16 24 21 198 16 24 22 198 16 24 23 198 16 24 24 198 17 15 15 198 17 15 16 198 17 15 17 198 17 15 18 198 17 15 19 198 17 15 20 198 17 15 21 198 17 15 22 198 17 15 23 198 17 15 24 198 17 16 15 198 17 16 16 198 17 16 17 198 17 16 18 198 17 16 19 198 17 16 20 198 17 16 21 198 17 16 22 198 17 16 23 198 17 16 24 198 17 17 15 198 17 17 16 198 17 17 17 198 17 17 18 198 17 17 19 198 17 17 20 198 17 17 21 198 17 17 22 198 17 17 23 198 17 17 24 198 17 18 15 198 17 18 16 198 17 18 17 198 17 18 18 198 17 18 19 198 17 18 20 198 17 18 21 198 17 18 22 198 17 18 23 198 17 18 24 198 17 19 15 198 17 19 16 198 17 19 17 198 17 19 18 198 17 19 19 198 17 19 20 198 17 19 21 198 17 19 22 198 17 19 23 198 17 19 24 198 17 20 15 198 17 20 16 198 17 20 17 198 17 20 18 198 17 20 19 198 17 20 20 198 17 20 21 198 17 20 22 198 17 20 23 198 17 20 24 198 17 21 15 198 17 21 16 198 17 21 17 198 17 21 18 198 17 21 19 198 17 21 20 198 17 21 21 198 17 21 22 198 17 21 23 198 17 21 24 198 17 22 15 198 17 22 16 198 17 22 17 198 17 22 18 198 17 22 19 198 17 22 20 198 17 22 21 198 17 22 22 198 17 22 23 198 17 22 24 198 17 23 15 198 17 23 16 198 17 23 17 198 17 23 18 198\n        5.30 real         4.83 user         0.94 sys\n          4424646656  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n              357134  page reclaims\n                   2  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                3685  voluntary context switches\n               12098  involuntary context switches\n         52569084842  instructions retired\n         20437074919  cycles elapsed\n          5100326368  peak memory footprint\n"
+    },
+    {
+      "label": "rank-02-lowrank",
+      "head": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "3",
+        "--label",
+        "rank-02-lowrank",
+        "--",
+        "/usr/bin/time",
+        "-l",
+        "/Users/bytedance/kapitsa-batch2-20261106/lowrank/build/ni_run",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "@/Users/bytedance/kapitsa-night-20261106/evidence/rank-smoke.ids",
+        "1024",
+        "0",
+        "--dflash",
+        "auto"
+      ],
+      "environment": {
+        "NI_KFLASH_LOWRANK": "768",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-batch2-20261106/evidence/perf-home-rank-02-lowrank"
+      },
+      "exit": 0,
+      "tokens": 1024,
+      "eos_count": 0,
+      "tokens_before_first_eos": 1024,
+      "text_nonempty": true,
+      "ids_match_reference": true,
+      "ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+      "log": "[kapitsa] read 2.37 GB of weights in 364 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 39 ms (6.2 GB/s)\n[kapitsa] MTP head loaded in 221 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 13 ms\n[kapitsa] prewarmed 93 prefill pipelines in 19 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 667 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 70 ms (18.1 GB/s)\n[kapitsa] KFlash: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] KFlash: low-rank shortlist head r=768 (factors computed in 1891 ms, rows 176 ms)\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +1.03 GB), loaded in 2246 ms\n[kapitsa] DFlash2: prewarmed 116 pipelines in 2 ms\nprompt 31 tok in 45 ms (689.8 tok/s); dflash decode (verify 7 of 7, greedy): 1023 tok in 1267 ms (807.2 tok/s), 129 cycles, 7.930 tok/cycle, 9.80 ms GPU/cycle, 9.82 ms wall/cycle (mode 3), hist 0 0 0 0 0 2 0 127; 7.00 proposals verified per cycle; acceptance by position 1.00 1.00 1.00 1.00 1.00 0.98 1.00\nKFlash: 129 cycles, 8.00 rows per cycle; cycles by rows 8:129; tokens per cycle expected 7.960, got 7.969; rate 0.8097 tok/ms; cost ms by rows 8:10.05; calibration (alpha, beta) by depth (0.01, 1.07) (0.07, 1.18) (0.01, 1.08) (0.19, 1.23) (0.02, 1.18) (-0.63, 0.69) (0.23, 1.27) (0.00, 1.00)\ndrafting pass: GPU ms/cycle mean 1.620 median 1.614 p10 1.556 p90 1.687 (128 cycles); GPU idle before the verify 0.001 ms/cycle\n[kapitsa] KFlash: budget saved (129 cycles) to /Users/bytedance/kapitsa-batch2-20261106/evidence/perf-home-rank-02-lowrank/kflash/qwen3.5-4b-4bit-dflash2-b4-Apple_M3_Ultra.json\nids: 16 198 17 198 18 198 19 198 20 198 21 198 22 198 23 198 24 198 16 15 198 16 16 198 16 17 198 16 18 198 16 19 198 16 20 198 16 21 198 16 22 198 16 23 198 16 24 198 17 15 198 17 16 198 17 17 198 17 18 198 17 19 198 17 20 198 17 21 198 17 22 198 17 23 198 17 24 198 18 15 198 18 16 198 18 17 198 18 18 198 18 19 198 18 20 198 18 21 198 18 22 198 18 23 198 18 24 198 19 15 198 19 16 198 19 17 198 19 18 198 19 19 198 19 20 198 19 21 198 19 22 198 19 23 198 19 24 198 20 15 198 20 16 198 20 17 198 20 18 198 20 19 198 20 20 198 20 21 198 20 22 198 20 23 198 20 24 198 21 15 198 21 16 198 21 17 198 21 18 198 21 19 198 21 20 198 21 21 198 21 22 198 21 23 198 21 24 198 22 15 198 22 16 198 22 17 198 22 18 198 22 19 198 22 20 198 22 21 198 22 22 198 22 23 198 22 24 198 23 15 198 23 16 198 23 17 198 23 18 198 23 19 198 23 20 198 23 21 198 23 22 198 23 23 198 23 24 198 24 15 198 24 16 198 24 17 198 24 18 198 24 19 198 24 20 198 24 21 198 24 22 198 24 23 198 24 24 198 16 15 15 198 16 15 16 198 16 15 17 198 16 15 18 198 16 15 19 198 16 15 20 198 16 15 21 198 16 15 22 198 16 15 23 198 16 15 24 198 16 16 15 198 16 16 16 198 16 16 17 198 16 16 18 198 16 16 19 198 16 16 20 198 16 16 21 198 16 16 22 198 16 16 23 198 16 16 24 198 16 17 15 198 16 17 16 198 16 17 17 198 16 17 18 198 16 17 19 198 16 17 20 198 16 17 21 198 16 17 22 198 16 17 23 198 16 17 24 198 16 18 15 198 16 18 16 198 16 18 17 198 16 18 18 198 16 18 19 198 16 18 20 198 16 18 21 198 16 18 22 198 16 18 23 198 16 18 24 198 16 19 15 198 16 19 16 198 16 19 17 198 16 19 18 198 16 19 19 198 16 19 20 198 16 19 21 198 16 19 22 198 16 19 23 198 16 19 24 198 16 20 15 198 16 20 16 198 16 20 17 198 16 20 18 198 16 20 19 198 16 20 20 198 16 20 21 198 16 20 22 198 16 20 23 198 16 20 24 198 16 21 15 198 16 21 16 198 16 21 17 198 16 21 18 198 16 21 19 198 16 21 20 198 16 21 21 198 16 21 22 198 16 21 23 198 16 21 24 198 16 22 15 198 16 22 16 198 16 22 17 198 16 22 18 198 16 22 19 198 16 22 20 198 16 22 21 198 16 22 22 198 16 22 23 198 16 22 24 198 16 23 15 198 16 23 16 198 16 23 17 198 16 23 18 198 16 23 19 198 16 23 20 198 16 23 21 198 16 23 22 198 16 23 23 198 16 23 24 198 16 24 15 198 16 24 16 198 16 24 17 198 16 24 18 198 16 24 19 198 16 24 20 198 16 24 21 198 16 24 22 198 16 24 23 198 16 24 24 198 17 15 15 198 17 15 16 198 17 15 17 198 17 15 18 198 17 15 19 198 17 15 20 198 17 15 21 198 17 15 22 198 17 15 23 198 17 15 24 198 17 16 15 198 17 16 16 198 17 16 17 198 17 16 18 198 17 16 19 198 17 16 20 198 17 16 21 198 17 16 22 198 17 16 23 198 17 16 24 198 17 17 15 198 17 17 16 198 17 17 17 198 17 17 18 198 17 17 19 198 17 17 20 198 17 17 21 198 17 17 22 198 17 17 23 198 17 17 24 198 17 18 15 198 17 18 16 198 17 18 17 198 17 18 18 198 17 18 19 198 17 18 20 198 17 18 21 198 17 18 22 198 17 18 23 198 17 18 24 198 17 19 15 198 17 19 16 198 17 19 17 198 17 19 18 198 17 19 19 198 17 19 20 198 17 19 21 198 17 19 22 198 17 19 23 198 17 19 24 198 17 20 15 198 17 20 16 198 17 20 17 198 17 20 18 198 17 20 19 198 17 20 20 198 17 20 21 198 17 20 22 198 17 20 23 198 17 20 24 198 17 21 15 198 17 21 16 198 17 21 17 198 17 21 18 198 17 21 19 198 17 21 20 198 17 21 21 198 17 21 22 198 17 21 23 198 17 21 24 198 17 22 15 198 17 22 16 198 17 22 17 198 17 22 18 198 17 22 19 198 17 22 20 198 17 22 21 198 17 22 22 198 17 22 23 198 17 22 24 198 17 23 15 198 17 23 16 198 17 23 17 198 17 23 18 198\n        4.76 real         4.66 user         0.91 sys\n          4424744960  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n              356321  page reclaims\n                   2  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                3629  voluntary context switches\n               11691  involuntary context switches\n         52542679430  instructions retired\n         19803627354  cycles elapsed\n          5087038920  peak memory footprint\n"
+    },
+    {
+      "label": "rank-03-reference",
+      "head": "0cb86eefcbbd91ef98110ee67cc59a6fbc28cb34",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "3",
+        "--label",
+        "rank-03-reference",
+        "--",
+        "/usr/bin/time",
+        "-l",
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/build/ni_run",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "@/Users/bytedance/kapitsa-night-20261106/evidence/rank-smoke.ids",
+        "1024",
+        "0",
+        "--dflash",
+        "auto"
+      ],
+      "environment": {
+        "NI_KFLASH_LOWRANK": "768",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-batch2-20261106/evidence/perf-home-rank-03-reference"
+      },
+      "exit": 0,
+      "tokens": 1024,
+      "eos_count": 0,
+      "tokens_before_first_eos": 1024,
+      "text_nonempty": true,
+      "ids_match_reference": true,
+      "ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+      "log": "[kapitsa] read 2.37 GB of weights in 363 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 39 ms (6.2 GB/s)\n[kapitsa] MTP head loaded in 221 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 13 ms\n[kapitsa] prewarmed 93 prefill pipelines in 18 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 662 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 70 ms (18.2 GB/s)\n[kapitsa] KFlash: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] KFlash: low-rank shortlist head r=768 (factors computed in 2037 ms, rows 173 ms)\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +1.05 GB), loaded in 2387 ms\n[kapitsa] DFlash2: prewarmed 116 pipelines in 2 ms\nprompt 31 tok in 46 ms (671.3 tok/s); dflash decode (verify 7 of 7, greedy): 1023 tok in 1268 ms (806.8 tok/s), 129 cycles, 7.930 tok/cycle, 9.81 ms GPU/cycle, 9.83 ms wall/cycle (mode 3), hist 0 0 0 0 0 2 0 127; 7.00 proposals verified per cycle; acceptance by position 1.00 1.00 1.00 1.00 1.00 0.98 1.00\nKFlash: 129 cycles, 8.00 rows per cycle; cycles by rows 8:129; tokens per cycle expected 7.960, got 7.969; rate 0.8085 tok/ms; cost ms by rows 8:10.04; calibration (alpha, beta) by depth (0.01, 1.07) (0.07, 1.18) (0.01, 1.08) (0.19, 1.23) (0.02, 1.18) (-0.63, 0.69) (0.23, 1.27) (0.00, 1.00)\ndrafting pass: GPU ms/cycle mean 1.614 median 1.615 p10 1.549 p90 1.685 (128 cycles); GPU idle before the verify 0.001 ms/cycle\n[kapitsa] KFlash: budget saved (129 cycles) to /Users/bytedance/kapitsa-batch2-20261106/evidence/perf-home-rank-03-reference/kflash/qwen3.5-4b-4bit-dflash2-b4-Apple_M3_Ultra.json\nids: 16 198 17 198 18 198 19 198 20 198 21 198 22 198 23 198 24 198 16 15 198 16 16 198 16 17 198 16 18 198 16 19 198 16 20 198 16 21 198 16 22 198 16 23 198 16 24 198 17 15 198 17 16 198 17 17 198 17 18 198 17 19 198 17 20 198 17 21 198 17 22 198 17 23 198 17 24 198 18 15 198 18 16 198 18 17 198 18 18 198 18 19 198 18 20 198 18 21 198 18 22 198 18 23 198 18 24 198 19 15 198 19 16 198 19 17 198 19 18 198 19 19 198 19 20 198 19 21 198 19 22 198 19 23 198 19 24 198 20 15 198 20 16 198 20 17 198 20 18 198 20 19 198 20 20 198 20 21 198 20 22 198 20 23 198 20 24 198 21 15 198 21 16 198 21 17 198 21 18 198 21 19 198 21 20 198 21 21 198 21 22 198 21 23 198 21 24 198 22 15 198 22 16 198 22 17 198 22 18 198 22 19 198 22 20 198 22 21 198 22 22 198 22 23 198 22 24 198 23 15 198 23 16 198 23 17 198 23 18 198 23 19 198 23 20 198 23 21 198 23 22 198 23 23 198 23 24 198 24 15 198 24 16 198 24 17 198 24 18 198 24 19 198 24 20 198 24 21 198 24 22 198 24 23 198 24 24 198 16 15 15 198 16 15 16 198 16 15 17 198 16 15 18 198 16 15 19 198 16 15 20 198 16 15 21 198 16 15 22 198 16 15 23 198 16 15 24 198 16 16 15 198 16 16 16 198 16 16 17 198 16 16 18 198 16 16 19 198 16 16 20 198 16 16 21 198 16 16 22 198 16 16 23 198 16 16 24 198 16 17 15 198 16 17 16 198 16 17 17 198 16 17 18 198 16 17 19 198 16 17 20 198 16 17 21 198 16 17 22 198 16 17 23 198 16 17 24 198 16 18 15 198 16 18 16 198 16 18 17 198 16 18 18 198 16 18 19 198 16 18 20 198 16 18 21 198 16 18 22 198 16 18 23 198 16 18 24 198 16 19 15 198 16 19 16 198 16 19 17 198 16 19 18 198 16 19 19 198 16 19 20 198 16 19 21 198 16 19 22 198 16 19 23 198 16 19 24 198 16 20 15 198 16 20 16 198 16 20 17 198 16 20 18 198 16 20 19 198 16 20 20 198 16 20 21 198 16 20 22 198 16 20 23 198 16 20 24 198 16 21 15 198 16 21 16 198 16 21 17 198 16 21 18 198 16 21 19 198 16 21 20 198 16 21 21 198 16 21 22 198 16 21 23 198 16 21 24 198 16 22 15 198 16 22 16 198 16 22 17 198 16 22 18 198 16 22 19 198 16 22 20 198 16 22 21 198 16 22 22 198 16 22 23 198 16 22 24 198 16 23 15 198 16 23 16 198 16 23 17 198 16 23 18 198 16 23 19 198 16 23 20 198 16 23 21 198 16 23 22 198 16 23 23 198 16 23 24 198 16 24 15 198 16 24 16 198 16 24 17 198 16 24 18 198 16 24 19 198 16 24 20 198 16 24 21 198 16 24 22 198 16 24 23 198 16 24 24 198 17 15 15 198 17 15 16 198 17 15 17 198 17 15 18 198 17 15 19 198 17 15 20 198 17 15 21 198 17 15 22 198 17 15 23 198 17 15 24 198 17 16 15 198 17 16 16 198 17 16 17 198 17 16 18 198 17 16 19 198 17 16 20 198 17 16 21 198 17 16 22 198 17 16 23 198 17 16 24 198 17 17 15 198 17 17 16 198 17 17 17 198 17 17 18 198 17 17 19 198 17 17 20 198 17 17 21 198 17 17 22 198 17 17 23 198 17 17 24 198 17 18 15 198 17 18 16 198 17 18 17 198 17 18 18 198 17 18 19 198 17 18 20 198 17 18 21 198 17 18 22 198 17 18 23 198 17 18 24 198 17 19 15 198 17 19 16 198 17 19 17 198 17 19 18 198 17 19 19 198 17 19 20 198 17 19 21 198 17 19 22 198 17 19 23 198 17 19 24 198 17 20 15 198 17 20 16 198 17 20 17 198 17 20 18 198 17 20 19 198 17 20 20 198 17 20 21 198 17 20 22 198 17 20 23 198 17 20 24 198 17 21 15 198 17 21 16 198 17 21 17 198 17 21 18 198 17 21 19 198 17 21 20 198 17 21 21 198 17 21 22 198 17 21 23 198 17 21 24 198 17 22 15 198 17 22 16 198 17 22 17 198 17 22 18 198 17 22 19 198 17 22 20 198 17 22 21 198 17 22 22 198 17 22 23 198 17 22 24 198 17 23 15 198 17 23 16 198 17 23 17 198 17 23 18 198\n        4.41 real         4.76 user         0.89 sys\n          4424531968  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n              357198  page reclaims\n                   2  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                3636  voluntary context switches\n               11773  involuntary context switches\n         52548736733  instructions retired\n         20132888632  cycles elapsed\n          5101342176  peak memory footprint\n"
+    },
+    {
+      "label": "rank-04-lowrank",
+      "head": "4cbb4a0a111e39fe4722eb7f6fd4c20beabf29df",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/reference/.dsh/skills/verify-kapitsa/scripts/vk",
+        "gpu",
+        "run",
+        "--eta",
+        "3",
+        "--label",
+        "rank-04-lowrank",
+        "--",
+        "/usr/bin/time",
+        "-l",
+        "/Users/bytedance/kapitsa-batch2-20261106/lowrank/build/ni_run",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "@/Users/bytedance/kapitsa-night-20261106/evidence/rank-smoke.ids",
+        "1024",
+        "0",
+        "--dflash",
+        "auto"
+      ],
+      "environment": {
+        "NI_KFLASH_LOWRANK": "768",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-batch2-20261106/evidence/perf-home-rank-04-lowrank"
+      },
+      "exit": 0,
+      "tokens": 1024,
+      "eos_count": 0,
+      "tokens_before_first_eos": 1024,
+      "text_nonempty": true,
+      "ids_match_reference": true,
+      "ids_sha256": "19c1d1832373a0121c7291ca170d58741587ecd61f5b19a1b6da9a9d5e8ef076",
+      "log": "[kapitsa] read 2.37 GB of weights in 363 ms (6.5 GB/s)\n[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)\n[kapitsa] read 0.24 GB of weights in 39 ms (6.2 GB/s)\n[kapitsa] MTP head loaded in 221 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)\n[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below\n[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)\n[kapitsa] compiled kernels in 13 ms\n[kapitsa] prewarmed 93 prefill pipelines in 18 ms\n[kapitsa] loaded /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit: 32 layers, dense, 2.4 GB mapped in 662 ms; weights 4-bit group 64 100%\n[kapitsa] NI_ANE: no calibration for Apple M3 Ultra (run ane_calib) and no default share; GPU only\n[kapitsa] read 1.27 GB of weights in 70 ms (18.1 GB/s)\n[kapitsa] KFlash: reduced draft head, 98304 of 248320 ids (id order = BPE merge order), 142 MB\n[kapitsa] KFlash: low-rank shortlist head r=768 (factors computed in 1845 ms, rows 170 ms)\n[kapitsa] KFlash: tree drafting on the DFlash2 lattice (budget cache on)\n[kapitsa] DFlash drafter (v1) /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: blocks of 8 rows (trained 16), context window 2047 positions (trained 4096)\n[kapitsa] DFlash2 drafter /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2: 6 layers, hidden 2560, 4-bit projections, 0.58 GB resident (process footprint +1.03 GB), loaded in 2191 ms\n[kapitsa] DFlash2: prewarmed 116 pipelines in 2 ms\nprompt 31 tok in 46 ms (677.1 tok/s); dflash decode (verify 7 of 7, greedy): 1023 tok in 1258 ms (813.0 tok/s), 129 cycles, 7.930 tok/cycle, 9.73 ms GPU/cycle, 9.75 ms wall/cycle (mode 3), hist 0 0 0 0 0 2 0 127; 7.00 proposals verified per cycle; acceptance by position 1.00 1.00 1.00 1.00 1.00 0.98 1.00\nKFlash: 129 cycles, 8.00 rows per cycle; cycles by rows 8:129; tokens per cycle expected 7.960, got 7.969; rate 0.8135 tok/ms; cost ms by rows 8:10.00; calibration (alpha, beta) by depth (0.01, 1.07) (0.07, 1.18) (0.01, 1.08) (0.19, 1.23) (0.02, 1.18) (-0.63, 0.69) (0.23, 1.27) (0.00, 1.00)\ndrafting pass: GPU ms/cycle mean 1.604 median 1.603 p10 1.542 p90 1.678 (128 cycles); GPU idle before the verify 0.001 ms/cycle\n[kapitsa] KFlash: budget saved (129 cycles) to /Users/bytedance/kapitsa-batch2-20261106/evidence/perf-home-rank-04-lowrank/kflash/qwen3.5-4b-4bit-dflash2-b4-Apple_M3_Ultra.json\nids: 16 198 17 198 18 198 19 198 20 198 21 198 22 198 23 198 24 198 16 15 198 16 16 198 16 17 198 16 18 198 16 19 198 16 20 198 16 21 198 16 22 198 16 23 198 16 24 198 17 15 198 17 16 198 17 17 198 17 18 198 17 19 198 17 20 198 17 21 198 17 22 198 17 23 198 17 24 198 18 15 198 18 16 198 18 17 198 18 18 198 18 19 198 18 20 198 18 21 198 18 22 198 18 23 198 18 24 198 19 15 198 19 16 198 19 17 198 19 18 198 19 19 198 19 20 198 19 21 198 19 22 198 19 23 198 19 24 198 20 15 198 20 16 198 20 17 198 20 18 198 20 19 198 20 20 198 20 21 198 20 22 198 20 23 198 20 24 198 21 15 198 21 16 198 21 17 198 21 18 198 21 19 198 21 20 198 21 21 198 21 22 198 21 23 198 21 24 198 22 15 198 22 16 198 22 17 198 22 18 198 22 19 198 22 20 198 22 21 198 22 22 198 22 23 198 22 24 198 23 15 198 23 16 198 23 17 198 23 18 198 23 19 198 23 20 198 23 21 198 23 22 198 23 23 198 23 24 198 24 15 198 24 16 198 24 17 198 24 18 198 24 19 198 24 20 198 24 21 198 24 22 198 24 23 198 24 24 198 16 15 15 198 16 15 16 198 16 15 17 198 16 15 18 198 16 15 19 198 16 15 20 198 16 15 21 198 16 15 22 198 16 15 23 198 16 15 24 198 16 16 15 198 16 16 16 198 16 16 17 198 16 16 18 198 16 16 19 198 16 16 20 198 16 16 21 198 16 16 22 198 16 16 23 198 16 16 24 198 16 17 15 198 16 17 16 198 16 17 17 198 16 17 18 198 16 17 19 198 16 17 20 198 16 17 21 198 16 17 22 198 16 17 23 198 16 17 24 198 16 18 15 198 16 18 16 198 16 18 17 198 16 18 18 198 16 18 19 198 16 18 20 198 16 18 21 198 16 18 22 198 16 18 23 198 16 18 24 198 16 19 15 198 16 19 16 198 16 19 17 198 16 19 18 198 16 19 19 198 16 19 20 198 16 19 21 198 16 19 22 198 16 19 23 198 16 19 24 198 16 20 15 198 16 20 16 198 16 20 17 198 16 20 18 198 16 20 19 198 16 20 20 198 16 20 21 198 16 20 22 198 16 20 23 198 16 20 24 198 16 21 15 198 16 21 16 198 16 21 17 198 16 21 18 198 16 21 19 198 16 21 20 198 16 21 21 198 16 21 22 198 16 21 23 198 16 21 24 198 16 22 15 198 16 22 16 198 16 22 17 198 16 22 18 198 16 22 19 198 16 22 20 198 16 22 21 198 16 22 22 198 16 22 23 198 16 22 24 198 16 23 15 198 16 23 16 198 16 23 17 198 16 23 18 198 16 23 19 198 16 23 20 198 16 23 21 198 16 23 22 198 16 23 23 198 16 23 24 198 16 24 15 198 16 24 16 198 16 24 17 198 16 24 18 198 16 24 19 198 16 24 20 198 16 24 21 198 16 24 22 198 16 24 23 198 16 24 24 198 17 15 15 198 17 15 16 198 17 15 17 198 17 15 18 198 17 15 19 198 17 15 20 198 17 15 21 198 17 15 22 198 17 15 23 198 17 15 24 198 17 16 15 198 17 16 16 198 17 16 17 198 17 16 18 198 17 16 19 198 17 16 20 198 17 16 21 198 17 16 22 198 17 16 23 198 17 16 24 198 17 17 15 198 17 17 16 198 17 17 17 198 17 17 18 198 17 17 19 198 17 17 20 198 17 17 21 198 17 17 22 198 17 17 23 198 17 17 24 198 17 18 15 198 17 18 16 198 17 18 17 198 17 18 18 198 17 18 19 198 17 18 20 198 17 18 21 198 17 18 22 198 17 18 23 198 17 18 24 198 17 19 15 198 17 19 16 198 17 19 17 198 17 19 18 198 17 19 19 198 17 19 20 198 17 19 21 198 17 19 22 198 17 19 23 198 17 19 24 198 17 20 15 198 17 20 16 198 17 20 17 198 17 20 18 198 17 20 19 198 17 20 20 198 17 20 21 198 17 20 22 198 17 20 23 198 17 20 24 198 17 21 15 198 17 21 16 198 17 21 17 198 17 21 18 198 17 21 19 198 17 21 20 198 17 21 21 198 17 21 22 198 17 21 23 198 17 21 24 198 17 22 15 198 17 22 16 198 17 22 17 198 17 22 18 198 17 22 19 198 17 22 20 198 17 22 21 198 17 22 22 198 17 22 23 198 17 22 24 198 17 23 15 198 17 23 16 198 17 23 17 198 17 23 18 198\n        4.21 real         4.48 user         0.88 sys\n          4424630272  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n              356254  page reclaims\n                   2  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   0  messages sent\n                   0  messages received\n                   0  signals received\n                3588  voluntary context switches\n               11616  involuntary context switches\n         52528041293  instructions retired\n         19194692668  cycles elapsed\n          5085908424  peak memory footprint\n"
+    }
+  ],
+  "generation_statistics": [
+    {
+      "label": "rank-01-reference",
+      "factor_ms": 2042,
+      "drafter_load_ms": 2407,
+      "maxrss": 4424646656,
+      "decode_tps": 810.2
+    },
+    {
+      "label": "rank-02-lowrank",
+      "factor_ms": 1891,
+      "drafter_load_ms": 2246,
+      "maxrss": 4424744960,
+      "decode_tps": 807.2
+    },
+    {
+      "label": "rank-03-reference",
+      "factor_ms": 2037,
+      "drafter_load_ms": 2387,
+      "maxrss": 4424531968,
+      "decode_tps": 806.8
+    },
+    {
+      "label": "rank-04-lowrank",
+      "factor_ms": 1845,
+      "drafter_load_ms": 2191,
+      "maxrss": 4424630272,
+      "decode_tps": 813.0
+    }
+  ],
+  "scope_note": "Isolated factorization RSS drops 45.3 MiB at K=2560 and 23.9 MiB at K=4096; whole-model process peak is unchanged near 4219.7 MiB. Fresh-factor drafter load median: 2397 -> 2218.5 ms. No inference throughput improvement is claimed."
+}

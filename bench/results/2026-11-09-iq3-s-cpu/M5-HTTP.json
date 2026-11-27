@@ -1,0 +1,29 @@
+{
+  "notice": "Explicitly redacted derived summary; not a raw execution log. Original records retained privately.",
+  "source_versions": {
+    "reference": "ee8ce8c8f6e3a5a1e4461015bdc2f2653f6d7b11",
+    "candidate": "5229f9c59dbf76d76f335175f4982ba77c0afb77"
+  },
+  "setup": {
+    "chip": "M5 Pro",
+    "gpu_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "arms": {
+    "reference": {
+      "rc": 0,
+      "pass": 55,
+      "fail": 0,
+      "raw_log_sha256": "747bb26839a2c288041ff7a9a90493cdfaace8e141d18edf581735f0892eb960"
+    },
+    "candidate": {
+      "rc": 0,
+      "pass": 55,
+      "fail": 0,
+      "raw_log_sha256": "747bb26839a2c288041ff7a9a90493cdfaace8e141d18edf581735f0892eb960"
+    }
+  },
+  "scope": "These HTTP cases on this model/setup only; not a universal API qualification."
+}

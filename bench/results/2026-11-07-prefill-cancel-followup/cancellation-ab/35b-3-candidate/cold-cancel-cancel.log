@@ -1,0 +1,11 @@
+[kapitsa] KV cache 15360 -> 19456 positions (398 MB) in 8.5 ms
+[kapitsa] checkpoints: prompt diverges at 3 of 16026, none usable, prefill from 0
+[kapitsa] prefill chunk of 2004 rows: 16026 of 16026 left, chunk 2112 even
+[kapitsa] prefill chunk of 2004 rows: 14022 of 16026 left, chunk 2112 even
+[kapitsa] checkpoints: prefix boundary at 2900
+[kapitsa] history: given up, a newer request superseded it
+[kapitsa] prefill chunk of 2003 rows: 12018 of 16026 left, chunk 2112 even
+[kapitsa] prefill chunk of 2003 rows: 10015 of 16026 left, chunk 2112 even
+[kapitsa] prefill chunk of 2003 rows: 8012 of 16026 left, chunk 2112 even
+[kapitsa] chat: cancelled during prefill at 10017 of 16026 tokens after 3861 ms
+[kapitsa] history: given up, another request used slot 0 (use 10, was 8; 3908 ms after the reply, 0 active, 7 requests, 6 then)

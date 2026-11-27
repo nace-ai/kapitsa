@@ -21,7 +21,7 @@ import sys
 # first match wins; fnmatch's * crosses /, so "dir/*" is the whole subtree
 UNCOUNTED = [
     ("third-party sources", ["third_party/*"]),
-    ("recorded results", ["bench/results/*", "bench/community/results/*"]),
+    ("recorded results", ["bench/results/*", "bench/community/results/*", "bench/community/uncensored/*"]),
     ("frozen prompts, ids and corpora", ["bench/prompts/*", "bench/quality/ids_*", "bench/quality/src/*",
                                          "bench/shortpf/p*.txt", "bench/harness/corpus/*", "bench/harness/agent-traces/*"]),
     ("images", ["docs/assets/*", "*.png", "*.jpg", "*.svg", "*.gif"]),

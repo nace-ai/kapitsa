@@ -1,0 +1,25 @@
+---- GPU profile per step (37 steps, 39.798 ms/step total, isolated dispatches) ----
+  moe_q20v_gate_up_slot/3x20x31    6.888 ms/step   17.3%    48.0 calls/step   143.49 us/call
+  qmvs_multi/3x2060x1             4.516 ms/step   11.3%    36.0 calls/step   125.45 us/call
+  moe_q20_down_slot/3x80x1        4.208 ms/step   10.6%    48.0 calls/step    87.66 us/call
+  hc_down_sk3_n2_b6/20x10x1       3.432 ms/step    8.6%    97.0 calls/step    35.38 us/call
+  hc_up_mix4_c4_b6/40x1x1         3.429 ms/step    8.6%    97.0 calls/step    35.35 us/call
+  qmvs_multi/3x320x1              2.223 ms/step    5.6%    37.4 calls/step    59.44 us/call
+  qmvs_multi_f6g64/3x1664x1       1.815 ms/step    4.6%    12.0 calls/step   151.23 us/call
+  qmvs_multi/3x31040x1            1.733 ms/step    4.4%     1.0 calls/step  1733.21 us/call
+  qsa_score/128x3x1               1.421 ms/step    3.6%     9.3 calls/step   152.36 us/call
+  gdn_step_verify_sg/48x1x1       1.313 ms/step    3.3%    36.0 calls/step    36.46 us/call
+  attn_rows_sparse/19x2x3         1.213 ms/step    3.0%    12.7 calls/step    95.47 us/call
+  qmvs_multi/3x129x1              1.075 ms/step    2.7%    47.0 calls/step    22.87 us/call
+  qsa_select/3x1x1                1.006 ms/step    2.5%    12.7 calls/step    79.23 us/call
+  qmvs_multi_f6g64/3x320x1        0.950 ms/step    2.4%    12.0 calls/step    79.19 us/call
+  qsa_score/129x3x1               0.518 ms/step    1.3%     3.4 calls/step   153.29 us/call
+  moe_topk512/3x1x1               0.460 ms/step    1.2%    95.7 calls/step     4.81 us/call
+  qmv2_b4_g64_r2/2048x1x1         0.382 ms/step    1.0%     2.0 calls/step   190.90 us/call
+  gdn_prep_verify/80x1x1          0.285 ms/step    0.7%    36.0 calls/step     7.92 us/call
+  moe_q20_unique/1x1x1            0.226 ms/step    0.6%    48.0 calls/step     4.70 us/call
+  qmvs_multi/3x1600x1             0.204 ms/step    0.5%     1.0 calls/step   204.47 us/call
+  qmvs_multi/1x1744x1             0.183 ms/step    0.5%     1.1 calls/step   160.96 us/call
+  qmvs_multi/3x80x1               0.171 ms/step    0.4%    12.0 calls/step    14.25 us/call
+  hc_down_sk3_n2_b8/20x10x1       0.161 ms/step    0.4%     6.0 calls/step    26.78 us/call
+  attn_rows_reduce/24x3x1         0.148 ms/step    0.4%    12.7 calls/step    11.67 us/call

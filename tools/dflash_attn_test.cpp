@@ -15,6 +15,7 @@
 // on the same T tables, bitwise; it needs the tensor library (Apple10, macOS 26) and is skipped otherwise. main()
 // returns 1 if any exactness check fails, 3 when a check selected by DAT_QK16_ONLY / DAT_PAIR_ONLY did not run.
 #include "metal/gpu.h"
+#include "engine/device_profile.h"
 #include "model/dflash2.h"
 #include "model/kparams.h"
 #include "util/bf16.h"
@@ -277,12 +278,12 @@ int main(int argc, char** argv) {
                  "GPU attn+reduce median %.4f ms%s\n", P, gpu ? "gpu " : "host", splits, chunk, nsplit, md, ref, sd,
                  ts[ts.size() / 2], ok ? "" : "  FAIL");
         }
-      // The 16-row block (NI_DFLASH_BLOCK=16): dfl_attn_qk16 dispatches both row tiles (tg.z = 0, 1), every row sees
+      // The 16-row block (NI_KFLASH_BLOCK=16): dfl_attn_qk16 dispatches both row tiles (tg.z = 0, 1), every row sees
       // all 16 block keys, and dfl_attn_reduce sums with nr = 16 into two X8 tiles. A wrong row-tile index there would
       // not fault, it would only lower acceptance, so both kernels are checked against the same fp64 reference as the
       // 8-row ones above. The reference's normed / roped q, k and v come from two dfl_qk_prep calls (rows 0-7 at P,
       // rows 8-15 at P + 8) stitched into the row order the kernel reads.
-      if (g.apple_family() >= 10) {  // dfl_attn_qk16 runs on the matrix units
+      if (ni::matrix_units()) {  // dfl_attn_qk16 runs on the matrix units
         auto rope16 = [&](Encoder& e, uint32_t Pk, Buffer& dst, uint32_t rows) {
           e.use(g.pipeline("dfl_rope_table"));
           e.buf(0, inv); e.buf(1, dst);
@@ -406,7 +407,7 @@ int main(int argc, char** argv) {
     if (__builtin_available(macOS 26.0, *)) return true;
     return false;
   }();
-  if (g.apple_family() >= 10 && tensor_ok) {
+  if (ni::matrix_units() && tensor_ok) {
     g.compile_extra("tensor", ni::kTensorKernelSource, true);
     if (!g.pipeline("qmm8t2d_b4_nt16", false).pso) {
       printf("qmm8t2d: the tensor library did not build, skipped\n");

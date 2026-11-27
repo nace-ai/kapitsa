@@ -1,0 +1,511 @@
+starting: lockf /tmp/kapitsa-gpu.lock kapitsa serve --model /Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit --port 8194 --model-id test --slots 1 --ctx 8192 --disk-cache 0 (log: /Users/bytedance/kapitsa-stop-sequence-20261107/evidence/stop-repro-base-0700/b171f983/serve.log)
+ready: http://127.0.0.1:8194 (pid 66334)
+{
+  "control": {
+    "request": {
+      "model": "test",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Write the numbers one through ten as English words, separated by commas."
+        }
+      ],
+      "temperature": 0,
+      "max_tokens": 96,
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      },
+      "stream": true
+    },
+    "events": [
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "role": "assistant",
+              "content": ""
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": "one"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": ","
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": " two"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": ","
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": " three"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": ","
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": " four"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": ","
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": " five"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": ","
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": " six"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": ","
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": " seven"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": ","
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": " eight"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": ","
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": " nine"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": ","
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": " ten"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459416807",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {},
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 26,
+          "completion_tokens": 20,
+          "total_tokens": 46,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "kapitsa": {
+            "prefill_ms": 75.3,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 3
+            }
+          }
+        }
+      }
+    ],
+    "chunks": [
+      "one",
+      ",",
+      " two",
+      ",",
+      " three",
+      ",",
+      " four",
+      ",",
+      " five",
+      ",",
+      " six",
+      ",",
+      " seven",
+      ",",
+      " eight",
+      ",",
+      " nine",
+      ",",
+      " ten"
+    ],
+    "content": "one, two, three, four, five, six, seven, eight, nine, ten"
+  },
+  "chosen_stop": "one,",
+  "streamed": {
+    "request": {
+      "model": "test",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Write the numbers one through ten as English words, separated by commas."
+        }
+      ],
+      "temperature": 0,
+      "max_tokens": 96,
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      },
+      "stream": true,
+      "stop": "one,"
+    },
+    "events": [
+      {
+        "id": "chatcmpl-179403459475249",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "role": "assistant",
+              "content": ""
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459475249",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": "one"
+            },
+            "finish_reason": null
+          }
+        ]
+      },
+      {
+        "id": "chatcmpl-179403459475249",
+        "object": "chat.completion.chunk",
+        "created": 1794034594,
+        "model": "test",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {},
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 26,
+          "completion_tokens": 2,
+          "total_tokens": 28,
+          "prompt_tokens_details": {
+            "cached_tokens": 19
+          },
+          "kapitsa": {
+            "prefill_ms": 9.1,
+            "kflash": {
+              "source": "DFlash2",
+              "cycles": 1
+            }
+          }
+        }
+      }
+    ],
+    "chunks": [
+      "one"
+    ],
+    "content": "one"
+  },
+  "nonstreamed": {
+    "request": {
+      "model": "test",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Write the numbers one through ten as English words, separated by commas."
+        }
+      ],
+      "temperature": 0,
+      "max_tokens": 96,
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      },
+      "stream": false,
+      "stop": "one,"
+    },
+    "response": {
+      "id": "chatcmpl-179403459450073",
+      "object": "chat.completion",
+      "created": 1794034594,
+      "model": "test",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "one"
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 26,
+        "completion_tokens": 2,
+        "total_tokens": 28,
+        "prompt_tokens_details": {
+          "cached_tokens": 19
+        },
+        "kapitsa": {
+          "prefill_ms": 9.0,
+          "kflash": {
+            "source": "DFlash2",
+            "cycles": 1
+          }
+        }
+      }
+    },
+    "content": "one"
+  },
+  "pass": false
+}
+stopped pid 66334
+removed /tmp/verify-kapitsa/state/stop-repro-base-0700; evidence kept in /Users/bytedance/kapitsa-stop-sequence-20261107/evidence/stop-repro-base-0700/b171f983

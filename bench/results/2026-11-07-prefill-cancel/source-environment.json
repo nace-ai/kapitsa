@@ -1,0 +1,26 @@
+{
+  "platform": "macOS-26.4.1-arm64-arm-64bit",
+  "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t26.4.1\nBuildVersion:\t\t25E253\n",
+  "chip": "Apple M3 Ultra",
+  "memory_bytes": "103079215104",
+  "candidate": "kapitsa 0.2.31 (926bce8)",
+  "reference": "kapitsa 0.2.31 (2c41b56)",
+  "metadata": {
+    "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/config.json": {
+      "sha256": "f3efc81b2ea8d96a45301037d3ccccbcccdef44a961845c87f286aaddbc6eaaa",
+      "bytes": 3366
+    },
+    "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/tokenizer.json": {
+      "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+      "bytes": 19989325
+    },
+    "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/tokenizer_config.json": {
+      "sha256": "fa71760892f5c601d345e626ebd602055825a50beed7ee160709c95fffa475f0",
+      "bytes": 9187
+    },
+    "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit/dflash2/config.json": {
+      "sha256": "6fa9ca0d10d2c3f5c93043bdd492e35283e284e4eb6a9e0479ba663609117203",
+      "bytes": 1220
+    }
+  }
+}

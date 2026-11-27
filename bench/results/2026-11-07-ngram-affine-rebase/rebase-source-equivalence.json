@@ -1,0 +1,24 @@
+{
+  "old_source": "8c0a7ec3bf72623f6c7f92524ef229f3643a9e67",
+  "new_source": "6bd1dd1c725f72385f717b467860dab43d9ea0cb",
+  "checks": {
+    "src/model/ngram.cpp": {
+      "region_start": "void NgramTable::row(",
+      "region_end_exclusive": "void NgramTable::gather(",
+      "identical_text": true,
+      "sha256": "e8862d468c9cebeaee2b81c1871cc23c99817580fccd55322eaf074f712469d6"
+    },
+    "tools/fn_store_test.cpp": {
+      "region_start": "void case_ngram_affine_rows(",
+      "region_end_exclusive": "template <typename F>",
+      "identical_text": true,
+      "sha256": "ea389bcbd387dda69ef3d71e030fb99b7d8702bd107e3fd83940aa4332f3d7b8"
+    }
+  },
+  "scope": "Text identity of row arithmetic and its regression; not binary or model output identity",
+  "prefetch_row_gather_tail": {
+    "identical_text": true,
+    "sha256": "cdcf8110db2f5d8ad788a94a0f7564de0b5292984c40b4645de60a8807c52445",
+    "scope": "Existing prefetch, row and gather implementations through end of file"
+  }
+}

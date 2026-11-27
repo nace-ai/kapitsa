@@ -1,0 +1,118 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-11-06T21:36:03Z",
+  "kapitsa": {
+    "version": "0.2.31",
+    "commit": "84249c0"
+  },
+  "mac": {
+    "identifier": "Mac17,15",
+    "name": "Mac Studio (M5 Ultra)",
+    "year": 2026,
+    "chip": "Apple M5 Ultra",
+    "cpu_cores": 30,
+    "gpu_cores": 64,
+    "memory_gb": 96,
+    "macos": "27.2",
+    "macos_build": "26B118"
+  },
+  "model": {
+    "name": "nemotron-3.5-lightning",
+    "title": "Nemotron 3.5 Lightning 30B-A3B",
+    "variant": "nvfp4",
+    "precision": "nvfp4",
+    "catalog": true,
+    "revision": "bee7596",
+    "decoding": "DSpark",
+    "decoding_detail": "DSpark speculative decoding (7-token blocks), KFlash (DSpark)",
+    "drafter": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark@6d127b5",
+    "drafter_kind": "DSpark",
+    "drafter_source": "dflash",
+    "drafter_reason": "found in the model's folder"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 398.64,
+      "runs_tps": [
+        391.41,
+        431.24,
+        448.62,
+        396.55,
+        398.64
+      ],
+      "median_accepted_draft_tps": 271.08,
+      "median_accepted_draft_share": 0.6914
+    },
+    "decode_greedy": {
+      "median_tps": 454.01,
+      "runs_tps": [
+        476.53,
+        461.13,
+        454.01,
+        428.3,
+        445.61
+      ],
+      "median_accepted_draft_tps": 326.32,
+      "median_accepted_draft_share": 0.7188
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4183,
+        "ttft_s": 0.4418,
+        "tps": 9467.1,
+        "followup_s": [
+          0.0462,
+          0.0467,
+          0.0424
+        ],
+        "followup_median_s": 0.0462,
+        "followup_suffix_tps": 475.8
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16519,
+        "ttft_s": 1.7422,
+        "tps": 9481.7,
+        "followup_s": [
+          0.0588,
+          0.0591,
+          0.0551
+        ],
+        "followup_median_s": 0.0588,
+        "followup_suffix_tps": 374.1
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 19.17,
+    "mapped_gb": 0.66
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.0,
+    "gpu_other_max_pct": 0.0,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [],
+  "invalid": []
+}

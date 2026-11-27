@@ -1,0 +1,9 @@
+20:52:21 run1 shader validation
+rc=0
+2026-11-06 20:52:21.901 ni_run[865:66707095] Metal GPU Validation Enabled
+[kapitsa] profile fast: Flash-Next sparse prefill attention on the matrix units (NI_QSA_TATTN) (NI_QSA_TATTN=0 or KAPITSA_PROFILE=precise turns it off)
+[kapitsa] NI_QSA_TATTN: sparse list attention on the matrix units (qattn_t_sparse_g12d2)
+20:53:22 run2 shader validation + debug layer
+/Users/alisheramantay/Documents/nace/k363/tattn_validate.sh: line 9:  1899 Abort trap: 6           "$@" > $out 2>&1
+rc=134
+validateComputeFunctionArguments:1267: failed assertion `Functon(attn_prefill11r): total used threadgroupMemoryLength(40960) must be <= 32768.'

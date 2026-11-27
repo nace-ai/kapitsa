@@ -1,0 +1,143 @@
+{
+  "evidence_kind": "Redacted derived evidence of completed imports/output checks, not raw logs. Native/fixed/HTTP are still running and are not qualified by this file.",
+  "source": {
+    "reference": "4f564ecb87d4ff1375fb72b9d45ae945092cc215",
+    "candidate": "2389fd0459750efbaed1d699bc4c6e62e94de2f6"
+  },
+  "setup": {
+    "chip": "Apple M5 Pro",
+    "memory_GiB": 48,
+    "macos": "26.6.2",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+    "gpu_cores": "20"
+  },
+  "model": {
+    "repo": "Acnoryx/Airy",
+    "revision": "ba4ce94d5e7bcdd4997f4dbf6275848c99c7fbb5",
+    "filename": "Airy-0.8b-Q2_K.gguf",
+    "repository_file": "gguf/Airy-0.8b-Q2_K.gguf",
+    "source_sha256": "aeee3f24905dbff1dac952e1b38ac2377230fc75c82be7ef75808d18a6a9a3fe",
+    "expected_vocab": 248320
+  },
+  "independent_import_executions": 2,
+  "import_files_literal_equal": {
+    "model.safetensors": true,
+    "tokenizer_config.json": true,
+    "config.json": true,
+    "tokenizer.json": true,
+    "generation_config.json": true,
+    "chat_template.jinja": true,
+    "model.safetensors.index.json": true,
+    ".kapitsa/manifest.json": true
+  },
+  "output": {
+    "paths": {
+      "prefill": {
+        "arms": [
+          {
+            "records": 8,
+            "float32_elements": 1986560,
+            "finite_float32_elements": 1986560,
+            "logits_sha256": "b6eaa00c38024716d8e59745b81076dd9fe014d3210a872fa898dd559a010f97",
+            "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          },
+          {
+            "records": 8,
+            "float32_elements": 1986560,
+            "finite_float32_elements": 1986560,
+            "logits_sha256": "b6eaa00c38024716d8e59745b81076dd9fe014d3210a872fa898dd559a010f97",
+            "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          }
+        ],
+        "all_finite": true,
+        "complete_fp32_bytes_equal": true,
+        "recorded_inputs_bytes_equal": true
+      },
+      "step": {
+        "arms": [
+          {
+            "records": 192,
+            "float32_elements": 47677440,
+            "finite_float32_elements": 47677440,
+            "logits_sha256": "234dec0cd6a4749b8a80c86ff3ac8c944250695fb721c54d1b0cb85b78a569cb",
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          },
+          {
+            "records": 192,
+            "float32_elements": 47677440,
+            "finite_float32_elements": 47677440,
+            "logits_sha256": "234dec0cd6a4749b8a80c86ff3ac8c944250695fb721c54d1b0cb85b78a569cb",
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          }
+        ],
+        "all_finite": true,
+        "complete_fp32_bytes_equal": true,
+        "recorded_inputs_bytes_equal": true
+      },
+      "verify": {
+        "arms": [
+          {
+            "records": 192,
+            "float32_elements": 47677440,
+            "finite_float32_elements": 47677440,
+            "logits_sha256": "6bfcfdeea8cf382f7d16186c68df703568e8499e323abcae9a38729c659c4574",
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          },
+          {
+            "records": 192,
+            "float32_elements": 47677440,
+            "finite_float32_elements": 47677440,
+            "logits_sha256": "6bfcfdeea8cf382f7d16186c68df703568e8499e323abcae9a38729c659c4574",
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          }
+        ],
+        "all_finite": true,
+        "complete_fp32_bytes_equal": true,
+        "recorded_inputs_bytes_equal": true
+      },
+      "batch": {
+        "arms": [
+          {
+            "records": 192,
+            "float32_elements": 47677440,
+            "finite_float32_elements": 47677440,
+            "logits_sha256": "4c8f48ed6f394aef188ae4d45a2f061c55efc209519e69eeecf22abcee1c9c8a",
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          },
+          {
+            "records": 192,
+            "float32_elements": 47677440,
+            "finite_float32_elements": 47677440,
+            "logits_sha256": "4c8f48ed6f394aef188ae4d45a2f061c55efc209519e69eeecf22abcee1c9c8a",
+            "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          }
+        ],
+        "all_finite": true,
+        "complete_fp32_bytes_equal": true,
+        "recorded_inputs_bytes_equal": true
+      }
+    },
+    "rows_each_arm": 584,
+    "float32_elements_each_arm": 145018880,
+    "criterion": "Complete fp32 bytes and recorded inputs equal; all values finite; no floor modification.",
+    "prefill_independent_literal_gate": true
+  },
+  "checks": {
+    "report_only": 0,
+    "strict_zero": 0
+  },
+  "verify_mode": "KFlash tree (a chain of 8 live rows)",
+  "limitations": [
+    "Teacher-forced verify is not free-running MTP.",
+    "No inference performance or API pass claim. Runtime checks still running.",
+    "M3 CPU results await collection."
+  ]
+}

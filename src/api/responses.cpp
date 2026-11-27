@@ -90,6 +90,11 @@ ojson user_content(const ojson& c) {
 // The prompt's name for a namespaced tool
 std::string alias(const std::string& ns, const std::string& name) { return ns + "__" + name; }
 
+std::string prompt_name(const ojson& tool) {
+  const std::string ns = str(tool, "namespace"), name = str(tool, "name");
+  return ns.empty() ? name : alias(ns, name);
+}
+
 // The response an output item of ours came from: its id is <kind>_<response>_<index> (see ResponsesStream)
 std::string response_of(const ojson& it) {
   const std::string id = str(it, "id");
@@ -178,13 +183,11 @@ void add_item(const ojson& it, Conv& cv) {
     ojson& a = cv.turn(it);
     a["reasoning_content"] = (a.contains("reasoning_content") ? a["reasoning_content"].get<std::string>() : "") + r;
   } else if (type == "function_call") {
-    std::string name = str(it, "name");
-    if (!str(it, "namespace").empty()) name = alias(str(it, "namespace"), name);
-    cv.call(it, name, arguments_object(it.contains("arguments") ? it["arguments"] : ojson()));
+    cv.call(it, prompt_name(it), arguments_object(it.contains("arguments") ? it["arguments"] : ojson()));
     if (it.contains("arguments") && it["arguments"].is_string())  // the spelling of each value, as the client sent it
       tool_args::note_raw(cv.pending["tool_calls"].back()["function"], it["arguments"].get<std::string>());
   } else if (type == "custom_tool_call") {
-    cv.call(it, str(it, "name"), ojson{{"input", str(it, "input")}});
+    cv.call(it, prompt_name(it), ojson{{"input", str(it, "input")}});
   } else if (type == "function_call_output" || type == "custom_tool_call_output") {
     ojson out = it.contains("output") ? it["output"] : ojson("");
     if (out.is_object() && out.contains("content")) out = out["content"];
@@ -208,14 +211,14 @@ ojson function_tool(const std::string& name, const ojson& t) {
 }
 
 // A freeform tool as a function with one string parameter, `input` (its grammar, if any, in the description)
-ojson custom_tool(const ojson& t) {
+ojson custom_tool(const std::string& name, const ojson& t) {
   std::string about = "The input to the tool, as free text";
   const ojson fmt = t.contains("format") ? t["format"] : ojson();
   if (str(fmt, "type") == "grammar" && !str(fmt, "definition").empty())
     about += ". It must match this " + (str(fmt, "syntax").empty() ? std::string("") : str(fmt, "syntax") + " ") +
              "grammar:\n" + str(fmt, "definition");
   ojson f = ojson::object();
-  f["name"] = str(t, "name");
+  f["name"] = name;
   if (t.contains("description") && t["description"].is_string()) f["description"] = t["description"];
   f["parameters"] = {{"type", "object"},
                      {"properties", {{"input", {{"type", "string"}, {"description", about}}}}},
@@ -266,28 +269,38 @@ ResponsesRequest responses_request(const ojson& body, const ResponseStore& store
   if (!cv.system.empty()) r.messages.push_back({{"role", "system"}, {"content", cv.system}});
   for (auto& m : cv.messages) r.messages.push_back(std::move(m));
 
+  // a tool marked "defer_loading" (OpenAI's tool search: a function, a custom tool, or a namespace's tools) goes to
+  // deferred_tools, out of the prompt
+  auto list = [&](bool d) -> ojson& { return d ? r.deferred_tools : r.tools; };
   if (body.contains("tools") && body["tools"].is_array())
     for (const auto& t : body["tools"]) {
       const std::string type = str(t, "type"), name = str(t, "name");
       if (type == "function" && !name.empty()) {
-        r.tools.push_back(function_tool(name, t));
+        list(deferred(t)).push_back(function_tool(name, t));
       } else if (type == "custom" && !name.empty()) {
-        r.tools.push_back(custom_tool(t));
+        list(deferred(t)).push_back(custom_tool(name, t));
         q.custom.insert(name);
       } else if (type == "namespace" && t.contains("tools") && t["tools"].is_array()) {
-        for (const auto& c : t["tools"])
-          if (str(c, "type") == "function" && !str(c, "name").empty()) {
-            const std::string a = alias(name, str(c, "name"));
-            r.tools.push_back(function_tool(a, c));
-            q.namespaced[a] = {name, str(c, "name")};
+        for (const auto& c : t["tools"]) {
+          const std::string child = str(c, "name"), kind = str(c, "type");
+          if (child.empty() || (kind != "function" && kind != "custom")) continue;
+          const std::string a = alias(name, child);
+          const bool d = deferred(t) || deferred(c);
+          if (kind == "custom") {
+            list(d).push_back(custom_tool(a, c));
+            q.custom.insert(a);
+          } else {
+            list(d).push_back(function_tool(a, c));
           }
+          q.namespaced[a] = {name, child};
+        }
       } else {
         log_once("tool " + type + name, "responses: tool " + (name.empty() ? type : name + " (" + type + ")") +
                                             " left out: a built-in tool this server does not run");
       }
     }
   if (body.contains("tool_choice") && body["tool_choice"].is_string() && body["tool_choice"] == "none")
-    r.tools = ojson::array();
+    r.tools = r.deferred_tools = ojson::array();
   // Structured output (src/engine/grammar.h): text.format, tool_choice required, a named function or custom tool, or
   // allowed_tools, parallel_tool_calls, and strict function tools ("strict": true; one that leaves it out is not strict,
   // where OpenAI defaults it to true: coding agents send their tools without it and stay unconstrained)
@@ -302,10 +315,6 @@ ResponsesRequest responses_request(const ojson& body, const ResponseStore& store
       else if (type == "json_schema") schema_format(f, spec, "text.format");
       else if (type != "text") bad("text.format.type must be \"text\", \"json_object\" or \"json_schema\"", "text.format.type");
     }
-    // a function's name as the prompt declares it (a namespace's functions go by namespace__name)
-    auto prompt_name = [&](const ojson& c) {
-      return str(c, "namespace").empty() ? str(c, "name") : alias(str(c, "namespace"), str(c, "name"));
-    };
     if (body.contains("tool_choice") && !body["tool_choice"].is_null()) {
       const ojson& tc = body["tool_choice"];
       const std::string type = tc.is_string() ? tc.get<std::string>() : str(tc, "type");
@@ -331,7 +340,8 @@ ResponsesRequest responses_request(const ojson& body, const ResponseStore& store
     }
     if (body.contains("parallel_tool_calls") && body["parallel_tool_calls"].is_boolean())
       spec.parallel = body["parallel_tool_calls"].get<bool>();
-    if (!r.tools.empty() && body.contains("tools") && body["tools"].is_array())
+    const ojson call_tools = r.call_tools();
+    if (!call_tools.empty() && body.contains("tools") && body["tools"].is_array())
       for (const auto& t : body["tools"]) {
         auto strict = [](const ojson& x) { return x.contains("strict") && x["strict"].is_boolean() && x["strict"].get<bool>(); };
         if (str(t, "type") == "function" && strict(t)) spec.strict_tools.push_back(str(t, "name"));
@@ -339,23 +349,28 @@ ResponsesRequest responses_request(const ojson& body, const ResponseStore& store
           for (const auto& c : t["tools"])
             if (str(c, "type") == "function" && strict(c)) spec.strict_tools.push_back(alias(str(t, "name"), str(c, "name")));
       }
-    r.grammar = request_grammar(spec, r.tools, "text.format");
+    r.grammar = request_grammar(spec, call_tools, "text.format");
   }
 
   r.max_tokens = 32768;
   if (body.contains("max_output_tokens") && !body["max_output_tokens"].is_null()) {
-    if (!body["max_output_tokens"].is_number_integer() || body["max_output_tokens"].get<int64_t>() < 1)
+    const ojson& mt = body["max_output_tokens"];
+    if (mt.is_number_unsigned() && mt.get<uint64_t>() >= 1)
+      r.max_tokens = int(std::min<uint64_t>(mt.get<uint64_t>(), uint64_t(INT32_MAX)));
+    else if (mt.is_number_integer() && mt.get<int64_t>() >= 1)
+      r.max_tokens = int(std::min<int64_t>(mt.get<int64_t>(), INT32_MAX));
+    else
       bad("max_output_tokens: must be a positive integer", "max_output_tokens");
-    r.max_tokens = int(std::min<int64_t>(body["max_output_tokens"].get<int64_t>(), INT32_MAX));
   }
   if (body.contains("temperature") && body["temperature"].is_number()) r.temperature = body["temperature"];
   if (body.contains("top_p") && body["top_p"].is_number()) r.top_p = body["top_p"];
-  if (body.contains("top_k") && body["top_k"].is_number()) r.top_k = body["top_k"];
+  if (body.contains("top_k") && body["top_k"].is_number()) r.top_k = clamp_top_k(body["top_k"]);
   if (body.contains("prompt_cache_key") && body["prompt_cache_key"].is_string()) r.cache_key = body["prompt_cache_key"];
   const ojson reasoning = body.contains("reasoning") && body["reasoning"].is_object() ? body["reasoning"] : ojson::object();
   apply_effort(str(reasoning, "effort"), r.template_kwargs);
   r.effort = str(reasoning, "effort");   // looped models: the loop count (Engine::request_loops)
   r.loops = request_loops_field(body);
+  request_think_field(body, r);
   if (body.contains("chat_template_kwargs") && body["chat_template_kwargs"].is_object())
     for (auto& [k, v] : body["chat_template_kwargs"].items()) r.template_kwargs[k] = v;
 
@@ -390,7 +405,10 @@ std::pair<int, ojson> responses_failure(const ChatResult& res) {
   if (res.busy) return {503, responses_error(res.error, "server_error", "server_error")};
   if (res.engine_down) return {503, responses_error(res.error, "server_error", "engine_unavailable")};
   if (res.prompt_limit > 0)
-    return {400, responses_error("Your input exceeds the context window of this model (" + std::to_string(res.prompt_tokens) +
+    return {400, responses_error(std::string(res.memory_limit ? "Your input exceeds what this Mac's memory holds for this "
+                                                                 "conversation with this model now ("
+                                                               : "Your input exceeds the context window of this model (") +
+                                     std::to_string(res.prompt_tokens) +
                                      " tokens > " + std::to_string(res.prompt_limit) +
                                      " maximum). Please adjust your input and try again.",
                                  "invalid_request_error", "context_length_exceeded", "input")};
@@ -515,6 +533,8 @@ std::string ResponsesStream::delta(const ChatDelta& d) {
     s += close();
     const int index = int(output_.size());
     ojson item;
+    std::string name = tc.name, ns;
+    if (auto it = namespaced_.find(tc.name); it != namespaced_.end()) ns = it->second.first, name = it->second.second;
     if (custom_.count(tc.name)) {
       // a freeform tool: its input is the call's one string argument
       const ojson args = ojson::parse(tc.arguments, nullptr, false);
@@ -522,14 +542,13 @@ std::string ResponsesStream::delta(const ChatDelta& d) {
       if (args.is_object() && args.contains("input") && args["input"].is_string()) input = args["input"];
       else if (args.is_object() && args.size() == 1 && args.begin()->is_string()) input = args.begin()->get<std::string>();
       const std::string id = item_id("ctc");
-      item = {{"id", id}, {"type", "custom_tool_call"}, {"call_id", tc.id}, {"name", tc.name}, {"input", ""}};
+      item = {{"id", id}, {"type", "custom_tool_call"}, {"call_id", tc.id}, {"name", name}, {"input", ""}};
+      if (!ns.empty()) item["namespace"] = ns;
       s += event("response.output_item.added", {{"output_index", index}, {"item", item}});
       s += event("response.custom_tool_call_input.delta", {{"item_id", id}, {"output_index", index}, {"delta", input}});
       s += event("response.custom_tool_call_input.done", {{"item_id", id}, {"output_index", index}, {"input", input}});
       item["input"] = input;
     } else {
-      std::string name = tc.name, ns;
-      if (auto it = namespaced_.find(tc.name); it != namespaced_.end()) ns = it->second.first, name = it->second.second;
       const std::string id = item_id("fc");
       item = {{"id", id}, {"type", "function_call"}, {"status", "in_progress"}, {"arguments", ""}, {"call_id", tc.id}, {"name", name}};
       if (!ns.empty()) item["namespace"] = ns;
@@ -567,7 +586,7 @@ std::string ResponsesStream::end(const ChatResult& res) {
                  {"output_tokens", res.completion_tokens},
                  {"output_tokens_details", {{"reasoning_tokens", res.reasoning_tokens}}},
                  {"total_tokens", res.prompt_tokens + res.completion_tokens}};
-  if (res.loops > 0) usage["kapitsa"] = kapitsa_usage(res);
+  if (ojson k = kapitsa_usage(res); !k.is_null()) usage["kapitsa"] = k;
   final_ = response(cut ? "incomplete" : "completed", usage, nullptr,
                     cut ? ojson{{"reason", "max_output_tokens"}} : ojson());
   return s + event(cut ? "response.incomplete" : "response.completed", {{"response", final_}});

@@ -3,7 +3,9 @@
 // layers roll back through Qwen35's tape and the n-gram conv window through its position-indexed ring (a rejected
 // row's slot is rewritten when its position is fed again).
 #include "model/kparams.h"
+#include "model/sampler.h"
 #include "model/qwen4_exp.h"
+#include "engine/device_profile.h"
 #include "util/log.h"
 #include "vision/embed.h"
 
@@ -20,6 +22,20 @@ Pipeline pipe4(const std::string& n) {
   auto it = cache.find(n);
   if (it == cache.end()) it = cache.emplace(n, Gpu::get().pipeline(n)).first;
   return it->second;
+}
+
+// NI_MOE4_DX (on by default on the wide class, the 40-core M5 Max; 1 on the other Macs, 0 off): the verify MoE's gate/up
+// and down kernels read their row's input (x, 10 KB at Flash-Next's shape; h, 28 KB) from device memory through the
+// caches (moe4_gate_up_d, moe4_down_d: qmv2_rows_dx) instead of staging it in threadgroup memory, whose 28 KB held the
+// down kernel to one threadgroup a core. The same arithmetic, so bitwise the same (fn_check FN_ROWS). M5 Max,
+// Flash-Next: 101.0 -> 98.6 and 64.2 -> 60.4 us a call, decode 21.88 -> 21.65 ms of GPU a cycle (idle)
+bool moe4_dx() {
+  static const bool on = [] {
+    const char* v = getenv("NI_MOE4_DX");
+    if (v && *v) return atoi(v) > 0;
+    return default_on(Knob::kMoe4Dx, ModelFacts{});
+  }();
+  return on;
 }
 
 struct HcParams {
@@ -119,12 +135,12 @@ void Qwen4Exp::enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer) 
   if (pred) segs.push_back({&layers_[size_t(li + 1)].router, plog_});
   enc_rows(e, segs, xrn_, R);
   kp::Topk tp{uint32_t(cfg_.experts), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
-  e.use(pipe4("moe_topk512"));
+  e.use(pipe4(R > 1 && cfg_.norm_topk ? "moe_topk512_rows" : "moe_topk512"));
   e.buf(0, rlog_); e.buf(1, slog_); e.buf(2, ridx_); e.buf(3, rwts_);
   e.val(4, tp);
   e.dispatch(uint32_t(R), 1, 1, 32);
   if (pred) {
-    e.use(pipe4("moe_topk512"));
+    e.use(pipe4(R > 1 && cfg_.norm_topk ? "moe_topk512_rows" : "moe_topk512"));
     e.buf(0, plog_); e.buf(1, slog_); e.buf(2, pidx_); e.buf(3, pwts_);
     e.val(4, tp);
     e.dispatch(uint32_t(R), 1, 1, 32);
@@ -149,7 +165,7 @@ void Qwen4Exp::enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer) 
     e.buf(0, ridx_); e.buf(1, ue_); e.buf(2, umask); e.buf(3, uslot); e.buf(4, un_);
     e.val(5, rk);
     e.dispatch(1, 1, 1, 32);
-    e.use(pipe4("moe4_gate_up"));
+    e.use(pipe4(moe4_dx() ? "moe4_gate_up_d" : "moe4_gate_up"));
     e.buf(16, umask); e.buf(17, uslot); e.buf(18, un_);
     e.val(19, Ru);
     e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
@@ -193,7 +209,7 @@ void Qwen4Exp::enc_moe_exl3_rows(Encoder& e, const Layer& L, int R) {
   if (cfg_.experts != 512 || cfg_.top_k > 16) fatal("EXL3 experts: the 512-expert top-k of up to 16 is supported");
   enc_rows(e, {{&L.router, rlog_}, {&L.shared_gate, slog_}, {&L.sg, sgb_}, {&L.su, sub_}}, xrn_, R);
   kp::Topk tp{uint32_t(cfg_.experts), uint32_t(cfg_.top_k), cfg_.norm_topk ? 1u : 0u};
-  e.use(pipe4("moe_topk512"));
+  e.use(pipe4(R > 1 && cfg_.norm_topk ? "moe_topk512_rows" : "moe_topk512"));
   e.buf(0, rlog_); e.buf(1, slog_); e.buf(2, ridx_); e.buf(3, rwts_);
   e.val(4, tp);
   e.dispatch(uint32_t(R), 1, 1, 32);
@@ -210,7 +226,7 @@ void Qwen4Exp::enc_moe_exl3_rows(Encoder& e, const Layer& L, int R) {
 void Qwen4Exp::enc_moe4_down(Encoder& e, const Layer& L, int R, const Buffer& idx, const Buffer& wts) {
   const int D = cfg_.hidden, k = cfg_.top_k;
   kp::Moe mp{uint32_t(D), uint32_t(cfg_.moe_I), uint32_t(cfg_.shared_I), uint32_t(k), cfg_.eps};
-  e.use(pipe4("moe4_down"));
+  e.use(pipe4(moe4_dx() ? "moe4_down_d" : "moe4_down"));
   e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
   e.buf(3, L.sd.w->buf); e.buf(4, L.sd.s->buf); e.buf(5, L.sd.b->buf);
   e.buf(6, eh_); e.buf(7, idx); e.buf(8, wts); e.buf(9, yb_);
@@ -319,13 +335,12 @@ void Qwen4Exp::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingP
   enc_gr_rows(e, mix_, R, x_, 0, true, injM_, injA_, xrn_, uint32_t(D));
   // the verify cycle's LM head runs the full 8-row block: the pair kernel takes it (pair8), the sole R=8 caller
   enc_rows(e, {{&lm_head_, logits_}}, xrn_, R, 0, true);
-  const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
-  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
+  const uint32_t V = uint32_t(cfg_.vocab), K = topk_k(sp), chunk = topk_chunk(K), ntg = topk_lists(V, K);
   kp::TopkStage ts{V, K, chunk};
   e.use(pipe4("topk_stage1_rows"));
   e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, uint32_t(R), 1, 256);
+  e.dispatch(ntg, uint32_t(R), 1, topk_threads(K));
   kp::SampleRows sr{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, 0, 0, 0};
   e.use(pipe4("sample_stage2_rows"));
   e.buf(0, cand_v_); e.buf(1, cand_i_); e.buf(2, samp_);

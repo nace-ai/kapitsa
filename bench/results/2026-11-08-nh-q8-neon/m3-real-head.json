@@ -1,0 +1,12 @@
+{
+  "mode": "real_bf16_head",
+  "rows": 131072,
+  "K": 3136,
+  "nonfinite_input_values": 0,
+  "complete_code_and_scale_byte_gate": true,
+  "input_sha256": "40a1768586b316a57a87d694fd93fa08eb41f2e5dba9b9c66c1aa0be510d8feb",
+  "reference_code_sha256": "95ed4bdd2b66236a0a9a5ed8aa4018d6c3b2f712577616e47a8bc8ca8fcd8ac9",
+  "candidate_code_sha256": "95ed4bdd2b66236a0a9a5ed8aa4018d6c3b2f712577616e47a8bc8ca8fcd8ac9",
+  "reference_scale_sha256": "448e5aeb0ef2bc26969bbbc22234bfc7f147d235c5e39e59b0ed2d35b56e2b21",
+  "candidate_scale_sha256": "448e5aeb0ef2bc26969bbbc22234bfc7f147d235c5e39e59b0ed2d35b56e2b21"
+}

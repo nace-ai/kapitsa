@@ -1,0 +1,5 @@
+{
+  "device": "/dev/disk5",
+  "bytes": 7516192768,
+  "purpose": "temporary GGUF storage; held mounted for both engines speed measurements"
+}

@@ -1,0 +1,47 @@
+{
+  "record_kind": "Redacted derived preliminary CPU evidence, not raw logs",
+  "base_source": "888a5679f8871349b509ce7901f3bce9080d6976",
+  "candidate_quant_cpp_sha256": "aee2be62d3fdb9f3f98a808ee368f65f0cd888ca53717e32659f9f10c9052ce4",
+  "reference_quant_cpp_sha256": "f09ffcfccefdb98365a8cdfd6e88fe3dc3bcb5436a729790eb663dcc0d117b59",
+  "setup": {
+    "chip": "M5 Pro",
+    "gpu_cores": 20,
+    "ram_capacity_gib": 48,
+    "macos": "26.6.2",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "build": "clang++ -O3 -std=c++20; standalone quant.cpp with identical type_block/type_name test stubs in both arms; no LTO",
+  "workload": "Synthetic 32768 MXFP4 blocks; bytes[i]=uint8_t(i*17+123); 50 decodes per sample, eight samples per leg. Full scale byte range, not trained weights. Correctness precedes timing in each process.",
+  "runs": [
+    {
+      "label": "A1",
+      "arm": "reference",
+      "rc": 0,
+      "output": "PASS 1048576 exhaustive scale/packed-byte/alignment/rounding cases with tail guards\nns_per_block 10.4492\nns_per_block 9.2848\nns_per_block 8.5994\nns_per_block 8.1755\nns_per_block 7.8419\nns_per_block 7.5504\nns_per_block 7.9217\nns_per_block 7.6788\n"
+    },
+    {
+      "label": "B1",
+      "arm": "candidate",
+      "rc": 0,
+      "output": "PASS 1048576 exhaustive scale/packed-byte/alignment/rounding cases with tail guards\nns_per_block 2.4107\nns_per_block 2.4157\nns_per_block 2.0446\nns_per_block 2.2187\nns_per_block 2.1250\nns_per_block 2.4116\nns_per_block 2.5880\nns_per_block 2.2696\n"
+    },
+    {
+      "label": "A2",
+      "arm": "reference",
+      "rc": 0,
+      "output": "PASS 1048576 exhaustive scale/packed-byte/alignment/rounding cases with tail guards\nns_per_block 7.5848\nns_per_block 7.7342\nns_per_block 7.6037\nns_per_block 7.5468\nns_per_block 7.5842\nns_per_block 7.5331\nns_per_block 7.5957\nns_per_block 7.8675\n"
+    },
+    {
+      "label": "B2",
+      "arm": "candidate",
+      "rc": 0,
+      "output": "PASS 1048576 exhaustive scale/packed-byte/alignment/rounding cases with tail guards\nns_per_block 2.4922\nns_per_block 2.4724\nns_per_block 2.3671\nns_per_block 2.3723\nns_per_block 2.3465\nns_per_block 2.4409\nns_per_block 2.1382\nns_per_block 2.2846\n"
+    }
+  ],
+  "limitations": [
+    "One CPU setup only",
+    "Warmup trend in A1; every sample retained",
+    "Standalone CPU microbenchmark, not CMake library or full import/inference throughput",
+    "No GPU/model output or second-setup qualification yet"
+  ]
+}

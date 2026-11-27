@@ -1,0 +1,7 @@
+[kapitsa] KV cache 3072 -> 15360 positions (566 MB) in 23.8 ms
+[kapitsa] checkpoints: prompt diverges at 2091 of 15223, restored query checkpoint at 2051
+[kapitsa] prefill chunk of 1882 rows: 13172 of 15223 left, chunk 2048 even
+[kapitsa] prefill chunk of 1882 rows: 11290 of 15223 left, chunk 2048 even
+[kapitsa] prefill chunk of 1882 rows: 9408 of 15223 left, chunk 2048 even
+[kapitsa] checkpoints: cancelled prefill kept the completed checkpoint at 2051
+[kapitsa] chat: cancelled during prefill at 7697 of 15223 tokens after 2687 ms

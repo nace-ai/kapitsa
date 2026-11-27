@@ -1,0 +1,18 @@
+{
+  "label": "35b-logits-base",
+  "argv": [
+    "/Users/bytedance/kapitsa-stop-sequence-20261107/base/build/logit_dump",
+    "/Users/bytedance/models/Qwen3.6-35B-A3B-4bit",
+    "/Users/bytedance/kapitsa-stop-sequence-20261107/gpu-results-checked/35b-logits-base",
+    "--corpus",
+    "/Users/bytedance/kapitsa-stop-sequence-20261107/base/bench/corpus.txt"
+  ],
+  "cwd": "/Users/bytedance/kapitsa-stop-sequence-20261107/base",
+  "started_at": "2026-11-07T07:33:16.979978+00:00",
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/kapitsa-stop-sequence-20261107/gpu-results-checked/home-35b-logits-base"
+  }
+}

@@ -1,0 +1,74 @@
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] compiled the tensor kernels in 2 ms
+qmt_m64_n64                M=    9 N= 5120 K=17408     329.2 us  med  4.87  best  4.87 TFLOP/s  err=7.6e-06
+qmr_k64_w14_m16_n64        M=    9 N= 5120 K=17408     287.6 us  med  5.58  best  5.58 TFLOP/s  err=1.1e-05
+qmr_k64_w14_m24_n64        M=    9 N= 5120 K=17408     396.7 us  med  4.04  best  4.05 TFLOP/s  err=1.1e-05
+qmr_k64_w14_m40_n64        M=    9 N= 5120 K=17408     617.9 us  med  2.60  best  2.60 TFLOP/s  err=1.1e-05
+qmt_m64_n64                M=    9 N= 5120 K= 6144     119.7 us  med  4.73  best  4.73 TFLOP/s  err=3.1e-06
+qmr_k64_w14_m16_n64        M=    9 N= 5120 K= 6144      98.7 us  med  5.74  best  5.74 TFLOP/s  err=6.1e-06
+qmr_k64_w14_m24_n64        M=    9 N= 5120 K= 6144     137.6 us  med  4.12  best  4.12 TFLOP/s  err=6.1e-06
+qmr_k64_w14_m40_n64        M=    9 N= 5120 K= 6144     216.6 us  med  2.61  best  2.61 TFLOP/s  err=6.1e-06
+qmt_m64_n64                M=    9 N=16384 K= 5120     257.5 us  med  5.86  best  5.87 TFLOP/s  err=3.6e-06
+qmr_k64_w14_m16_n64        M=    9 N=16384 K= 5120     219.9 us  med  6.87  best  6.87 TFLOP/s  err=3.6e-06
+qmr_k64_w14_m24_n64        M=    9 N=16384 K= 5120     317.8 us  med  4.75  best  4.75 TFLOP/s  err=3.6e-06
+qmr_k64_w14_m40_n64        M=    9 N=16384 K= 5120     515.4 us  med  2.93  best  2.93 TFLOP/s  err=3.6e-06
+qmt_m64_n64                M=   12 N= 5120 K=17408     329.4 us  med  6.49  best  6.50 TFLOP/s  err=5.0e-06
+qmr_k64_w14_m16_n64        M=   12 N= 5120 K=17408     287.7 us  med  7.44  best  7.44 TFLOP/s  err=1.9e-05
+qmr_k64_w14_m24_n64        M=   12 N= 5120 K=17408     396.9 us  med  5.39  best  5.39 TFLOP/s  err=1.9e-05
+qmr_k64_w14_m40_n64        M=   12 N= 5120 K=17408     618.1 us  med  3.46  best  3.46 TFLOP/s  err=1.9e-05
+qmt_m64_n64                M=   12 N= 5120 K= 6144     119.6 us  med  6.31  best  6.31 TFLOP/s  err=1.9e-06
+qmr_k64_w14_m16_n64        M=   12 N= 5120 K= 6144      99.8 us  med  7.56  best  7.57 TFLOP/s  err=4.0e-06
+qmr_k64_w14_m24_n64        M=   12 N= 5120 K= 6144     138.3 us  med  5.46  best  5.46 TFLOP/s  err=4.0e-06
+qmr_k64_w14_m40_n64        M=   12 N= 5120 K= 6144     216.9 us  med  3.48  best  3.48 TFLOP/s  err=4.0e-06
+qmt_m64_n64                M=   12 N=16384 K= 5120     258.1 us  med  7.80  best  7.80 TFLOP/s  err=1.9e-06
+qmr_k64_w14_m16_n64        M=   12 N=16384 K= 5120     220.5 us  med  9.13  best  9.13 TFLOP/s  err=3.2e-06
+qmr_k64_w14_m24_n64        M=   12 N=16384 K= 5120     318.4 us  med  6.32  best  6.32 TFLOP/s  err=3.2e-06
+qmr_k64_w14_m40_n64        M=   12 N=16384 K= 5120     515.6 us  med  3.90  best  3.91 TFLOP/s  err=3.2e-06
+qmt_m64_n64                M=   16 N= 5120 K=17408     329.8 us  med  8.65  best  8.65 TFLOP/s  err=5.7e-06
+qmr_k64_w14_m16_n64        M=   16 N= 5120 K=17408     295.4 us  med  9.66  best  9.67 TFLOP/s  err=1.3e-05
+qmr_k64_w14_m24_n64        M=   16 N= 5120 K=17408     398.9 us  med  7.15  best  7.15 TFLOP/s  err=1.3e-05
+qmr_k64_w14_m40_n64        M=   16 N= 5120 K=17408     619.3 us  med  4.61  best  4.61 TFLOP/s  err=1.3e-05
+qmt_m64_n64                M=   16 N= 5120 K= 6144     119.8 us  med  8.40  best  8.40 TFLOP/s  err=1.9e-06
+qmr_k64_w14_m16_n64        M=   16 N= 5120 K= 6144      99.2 us  med 10.15  best 10.15 TFLOP/s  err=4.6e-06
+qmr_k64_w14_m24_n64        M=   16 N= 5120 K= 6144     137.7 us  med  7.31  best  7.31 TFLOP/s  err=4.6e-06
+qmr_k64_w14_m40_n64        M=   16 N= 5120 K= 6144     217.2 us  med  4.64  best  4.64 TFLOP/s  err=4.6e-06
+qmt_m64_n64                M=   16 N=16384 K= 5120     259.0 us  med 10.36  best 10.37 TFLOP/s  err=2.9e-06
+qmr_k64_w14_m16_n64        M=   16 N=16384 K= 5120     221.4 us  med 12.13  best 12.14 TFLOP/s  err=4.4e-06
+qmr_k64_w14_m24_n64        M=   16 N=16384 K= 5120     318.5 us  med  8.43  best  8.43 TFLOP/s  err=4.4e-06
+qmr_k64_w14_m40_n64        M=   16 N=16384 K= 5120     515.6 us  med  5.21  best  5.21 TFLOP/s  err=4.4e-06
+qmt_m64_n64                M=   24 N= 5120 K=17408     334.1 us  med 12.80  best 12.81 TFLOP/s  err=7.0e-06
+qmr_k64_w14_m16_n64        M=   24 N= 5120 K=17408     456.8 us  med  9.37  best  9.37 TFLOP/s  err=1.4e-05
+qmr_k64_w14_m24_n64        M=   24 N= 5120 K=17408     400.3 us  med 10.69  best 10.69 TFLOP/s  err=1.4e-05
+qmr_k64_w14_m40_n64        M=   24 N= 5120 K=17408     619.8 us  med  6.90  best  6.90 TFLOP/s  err=1.4e-05
+qmt_m64_n64                M=   24 N= 5120 K= 6144     121.9 us  med 12.39  best 12.39 TFLOP/s  err=2.0e-06
+qmr_k64_w14_m16_n64        M=   24 N= 5120 K= 6144     161.5 us  med  9.35  best  9.35 TFLOP/s  err=3.1e-06
+qmr_k64_w14_m24_n64        M=   24 N= 5120 K= 6144     138.3 us  med 10.92  best 10.92 TFLOP/s  err=3.1e-06
+qmr_k64_w14_m40_n64        M=   24 N= 5120 K= 6144     217.7 us  med  6.94  best  6.94 TFLOP/s  err=3.1e-06
+qmt_m64_n64                M=   24 N=16384 K= 5120     265.3 us  med 15.18  best 15.29 TFLOP/s  err=3.0e-06
+qmr_k64_w14_m16_n64        M=   24 N=16384 K= 5120     387.6 us  med 10.39  best 10.39 TFLOP/s  err=4.8e-06
+qmr_k64_w14_m24_n64        M=   24 N=16384 K= 5120     320.5 us  med 12.56  best 12.56 TFLOP/s  err=4.8e-06
+qmr_k64_w14_m40_n64        M=   24 N=16384 K= 5120     516.0 us  med  7.80  best  7.80 TFLOP/s  err=4.8e-06
+qmt_m64_n64                M=   33 N= 5120 K=17408     337.2 us  med 17.45  best 17.46 TFLOP/s  err=7.1e-06
+qmr_k64_w14_m16_n64        M=   33 N= 5120 K=17408     637.1 us  med  9.23  best  9.24 TFLOP/s  err=1.6e-05
+qmr_k64_w14_m24_n64        M=   33 N= 5120 K=17408     660.8 us  med  8.90  best  8.90 TFLOP/s  err=1.6e-05
+qmr_k64_w14_m40_n64        M=   33 N= 5120 K=17408     623.3 us  med  9.44  best  9.44 TFLOP/s  err=1.6e-05
+qmt_m64_n64                M=   33 N= 5120 K= 6144     124.6 us  med 16.66  best 16.85 TFLOP/s  err=3.1e-06
+qmr_k64_w14_m16_n64        M=   33 N= 5120 K= 6144     227.8 us  med  9.11  best  9.18 TFLOP/s  err=4.1e-06
+qmr_k64_w14_m24_n64        M=   33 N= 5120 K= 6144     234.0 us  med  8.87  best  8.87 TFLOP/s  err=4.1e-06
+qmr_k64_w14_m40_n64        M=   33 N= 5120 K= 6144     218.8 us  med  9.49  best  9.49 TFLOP/s  err=4.1e-06
+qmt_m64_n64                M=   33 N=16384 K= 5120     288.0 us  med 19.23  best 20.53 TFLOP/s  err=1.3e-06
+qmr_k64_w14_m16_n64        M=   33 N=16384 K= 5120     623.3 us  med  8.88  best  9.23 TFLOP/s  err=5.3e-06
+qmr_k64_w14_m24_n64        M=   33 N=16384 K= 5120     601.3 us  med  9.21  best  9.36 TFLOP/s  err=5.3e-06
+qmr_k64_w14_m40_n64        M=   33 N=16384 K= 5120     524.5 us  med 10.56  best 10.66 TFLOP/s  err=5.3e-06
+qmt_m64_n64                M=   48 N= 5120 K=17408     360.2 us  med 23.76  best 25.05 TFLOP/s  err=6.4e-06
+qmr_k64_w14_m16_n64        M=   48 N= 5120 K=17408     671.3 us  med 12.75  best 13.34 TFLOP/s  err=6.0e-06
+qmr_k64_w14_m24_n64        M=   48 N= 5120 K=17408     688.6 us  med 12.43  best 12.72 TFLOP/s  err=6.0e-06
+qmr_k64_w14_m40_n64        M=   48 N= 5120 K=17408    1077.0 us  med  7.94  best  8.02 TFLOP/s  err=6.0e-06
+qmt_m64_n64                M=   48 N= 5120 K= 6144     131.6 us  med 22.95  best 24.21 TFLOP/s  err=1.8e-06
+qmr_k64_w14_m16_n64        M=   48 N= 5120 K= 6144     239.3 us  med 12.62  best 13.10 TFLOP/s  err=1.0e-05
+qmr_k64_w14_m24_n64        M=   48 N= 5120 K= 6144     246.0 us  med 12.27  best 12.49 TFLOP/s  err=1.0e-05
+qmr_k64_w14_m40_n64        M=   48 N= 5120 K= 6144     384.7 us  med  7.85  best  7.88 TFLOP/s  err=1.0e-05
+qmt_m64_n64                M=   48 N=16384 K= 5120     304.7 us  med 26.43  best 29.08 TFLOP/s  err=2.5e-06
+qmr_k64_w14_m16_n64        M=   48 N=16384 K= 5120     656.7 us  med 12.26  best 13.06 TFLOP/s  err=4.4e-06
+qmr_k64_w14_m24_n64        M=   48 N=16384 K= 5120     633.9 us  med 12.70  best 13.04 TFLOP/s  err=4.4e-06
+qmr_k64_w14_m40_n64        M=   48 N=16384 K= 5120     985.6 us  med  8.17  best  8.26 TFLOP/s  err=4.4e-06

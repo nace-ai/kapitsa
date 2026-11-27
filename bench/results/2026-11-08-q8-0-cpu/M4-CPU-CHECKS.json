@@ -1,0 +1,66 @@
+{
+  "evidence_kind": "Explicitly filtered and derived public summary; private original commands, logs and archive retained",
+  "source_candidate": "b3fc70d891826296bed72baf16ba2b468f6008e9",
+  "source_reference": "9c97df7c637cdca18b709b9ef5452efba5fc4d76",
+  "environment": {
+    "chip": "M4 Pro",
+    "GPU_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang 17 (clang-1700.0.13.5)"
+  },
+  "checks": {
+    "vk_new_invocations": 21,
+    "vk_new_PASS": 21,
+    "vk_new_FAIL": 0,
+    "completed_exact_binary_oracle_reused": 1,
+    "new_iq_layout_test_invocations": 0,
+    "supplement_native_PASS": 14,
+    "supplement_native_total": 15,
+    "extra_scripts_PASS": 6,
+    "extra_scripts_total": 6,
+    "prek_diff_cleanup_rc": 0
+  },
+  "original_root_binary_digests_before_after": {
+    "kapitsa": {
+      "before": "051525c5bb604fad848f4524fd7703e0f8ba33b76d2cfadb7c1a8a81968573d2",
+      "after": "051525c5bb604fad848f4524fd7703e0f8ba33b76d2cfadb7c1a8a81968573d2"
+    },
+    "iq_layout_test": {
+      "before": "a385acb02dc0c786cee1fdbbcdf0f1f660c777f8f331c1ee89c0c1faf373e2d3",
+      "after": "a385acb02dc0c786cee1fdbbcdf0f1f660c777f8f331c1ee89c0c1faf373e2d3"
+    },
+    "logit_dump": {
+      "before": "3dcf76d675b8e1bccb39c25a4f5652904a49d7831c411263cc1a22eccda12019",
+      "after": "3dcf76d675b8e1bccb39c25a4f5652904a49d7831c411263cc1a22eccda12019"
+    },
+    "libnaceinfer.a": {
+      "before": "8888ca7e48de3650488d8422140001baf3bcf4cfff1874b0e4d1af268763110f",
+      "after": "8888ca7e48de3650488d8422140001baf3bcf4cfff1874b0e4d1af268763110f"
+    }
+  },
+  "actual_compiler_flags": {
+    "O3": true,
+    "arm64": true,
+    "NDEBUG": false,
+    "fast_math": false
+  },
+  "source_manifests_before_after_verified": true,
+  "retained_failure": {
+    "test": "load_error_test",
+    "candidate_rc": 1,
+    "reference_rc": 1,
+    "candidate_executions": 1,
+    "reference_executions": 1,
+    "candidate_binary_sha256": "39dea18877d7ecbca5a79b37d0d54a9d5fb40c6392ab4495add298a7737ed99a",
+    "reference_binary_sha256": "8ea875884b620b24a9b8264b9f7fa709c237d21e57981f4f688060f3c649d93c",
+    "test_source_sha256": "29eb800140aa1e7efaed164e49875ac34e7c33c21457ad8f2c18b2872d700f33",
+    "same_executable": false,
+    "scope": "Both executions failed the unchanged uncached raw-U8 cache threshold assertion. This fixture does not call Q8_0 dequantization; it does not establish a Q8_0 regression. Neither execution is reported as PASS."
+  },
+  "actual_skips": [
+    "Optional reasoning-corpus check/sets --rebuild"
+  ],
+  "build_evidence_limitation": "The subsequent vk build truncated the first inner build.log before it was collected. Its original outer stdout, actual rc 0, target list and binary/flags identities are retained; the later inner log was saved. The missing original log was not reconstructed by rerunning the build.",
+  "whole_model_GPU_checks": "This CPU receipt does not cover the independent model/GPU results; see M4-MODEL-OUTPUT.json."
+}

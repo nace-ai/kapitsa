@@ -1,0 +1,296 @@
+{
+  "format": "Derived privacy-filtered public summary, not a raw execution log",
+  "scope": "Actual full-model FP8 output correctness on M4 Pro; original execution evidence retained privately",
+  "hardware_configuration": {
+    "chip": "Apple M4 Pro",
+    "memory_capacity_gib": 48,
+    "macos": "15.7.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+    "gpu_cores": 20
+  },
+  "model": {
+    "repository": "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8",
+    "revision": "3fe6dab75665a93884214ad4b1b95cf02717d081",
+    "file_identities": {
+      "LICENSE": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "chat_template.jinja": {
+        "bytes": 10504,
+        "sha256": "ab7813c3abdd9cb655905a410728b26c7884eca45ddfab8d9f931553485a7862"
+      },
+      "config.json": {
+        "bytes": 1459,
+        "sha256": "1a0a0703a73600ff4b1042dde35cb2137c7e4d76dadc5a88f6f436f2323aa3e9"
+      },
+      "generation_config.json": {
+        "bytes": 173,
+        "sha256": "fd316076134cbadac02f083463c579b2a3c4a587f51b0855f02202adf2f8a7ce"
+      },
+      "hf_quant_config.json": {
+        "bytes": 2387,
+        "sha256": "2f56ab5f569276bfdb794e057443a83891c2b7c511ddf09d79ddf2446a5959d5"
+      },
+      "model-00001-of-00002.safetensors": {
+        "bytes": 3982036144,
+        "sha256": "a1f56594260896ffcf1c0d0c89da33ebff16dfa978b669fecfd073295ae789f3"
+      },
+      "model-00002-of-00002.safetensors": {
+        "bytes": 1285019664,
+        "sha256": "43dc7b2b59a04140e761020bce62c7307527a22fd5e1d55c44fd3b5f8f98a054"
+      },
+      "model.safetensors.index.json": {
+        "bytes": 34393,
+        "sha256": "6d151c2a33634d62897bce3507ade32155d15680fdfc0326cef43e8f5a4e8026"
+      },
+      "special_tokens_map.json": {
+        "bytes": 420,
+        "sha256": "e3a4f63da745f02317a45e00e6476c17fc66ac41faf14bb1b0be1f3211b0ca53"
+      },
+      "tokenizer.json": {
+        "bytes": 17077484,
+        "sha256": "623c34567aebb18582765289fbe23d901c62704d6518d71866e0e58db892b5b7"
+      },
+      "tokenizer_config.json": {
+        "bytes": 188035,
+        "sha256": "b5b5f4cf5b098cd174b1307c5133d662e7d78cf665d4e184ee0e1c7e15f75e01"
+      }
+    },
+    "actual_loader_coverage": "42 layers: 21 Mamba-2, 4 attention, 17 MLP; loader reports 17 FP8 and 4 BF16 Mamba layers, FP8 MLP, BF16 attention and embeddings, Q8_0 output head"
+  },
+  "source_and_binaries": {
+    "reference": {
+      "commit": "052104f8f9c99edde129415a7384a1a58dc24ae6",
+      "nemotron_h_source_sha256": "5f14e86f96c6fd1431fa2184d113d22b2466c6693b798d7413db53fb31c0b4df",
+      "kapitsa_sha256": "a342fde69ae6d3a2eb23cc7cf615ded60431628c6732febbd16bcd8418e45bde",
+      "logit_dump_sha256": "3e29bae013212657f0e7b934c87dc8b9e98ee7a78893104f8612530667961209",
+      "cmake_cache_sha256": "6bd920baa6a0a0acd4db849612f0df70d8f78537e21972f0c34ff634abba7a89",
+      "archive_sha256": "8536b62704ab1e09a491bdd687ef129e4068a06a6bebca114f51d5b82588199c",
+      "build_type": "Release",
+      "cxx_flags": "-O3 -DNDEBUG",
+      "build_provenance": "Same-commit source archive; explicit CMake configure/build"
+    },
+    "candidate": {
+      "commit": "8f3996fea6f1f44537bee4e789b98cd6a531f347",
+      "nemotron_h_source_sha256": "94e9cf4632e4d63783e9701494a325d6176f321a95fa9b25266b2f571dcd5b40",
+      "kapitsa_sha256": "0e25a651538f82255b413af2835f0177c461300200813f245cefe6ddd5d45c80",
+      "logit_dump_sha256": "5bb0a25e144bf953c78baf418545ad56ea7c531241296916374690c9cc00abdf",
+      "cmake_cache_sha256": "01d673303eaa34536f82638c7dc4c5dd5b3e76841b3ad46b64db8a05a91fd6fe",
+      "archive_sha256": "613112eaa1abbc45e582791cf91ac82bb2bea80180e68953c592c300cc6b7b0f",
+      "build_type": "Release",
+      "cxx_flags": "-O3 -DNDEBUG",
+      "build_provenance": "Immutable binary copy of the explicitly configured candidate Release build; recorded digests verified unchanged"
+    }
+  },
+  "methods": {
+    "profile": "precise",
+    "exclusive_gpu_lock": true,
+    "caller_lock_markers": [
+      "NI_LOCK_HELD=1",
+      "NACE_GPU_LOCK_HELD=1"
+    ],
+    "windows": 8,
+    "records_per_window": 24,
+    "prefill_chunk": 2048,
+    "verify_rows_per_chain": 8,
+    "batch_members": 4,
+    "batch_rows_per_member": 1,
+    "candidate_inputs": "Candidate --from reference records and prefixes, compared against reference on the same Mac",
+    "complete_input_contract": "Identical sequence and record bytes; 8 sequence lines per path and exact recorded row count",
+    "complete_output_contract": "Exact rows \u00d7 131072 \u00d7 4-byte file lengths, every float checked finite, and actual complete bytes compared directly",
+    "comparator": "Own-source tools/logit_compare.py report-only plus explicit zero-drift bounds; no floor modified",
+    "example_commands": [
+      "\"$REF_BUILD/logit_dump\" \"$MODEL\" results/reference --paths step,verify,batch --windows 8 --rows 24 --chunk 2048 --corpus bench/corpus.txt",
+      "\"$CAND_BUILD/logit_dump\" \"$MODEL\" results/candidate --paths step,verify,batch --windows 8 --rows 24 --chunk 2048 --from results/reference",
+      "python3 tools/logit_compare.py results/reference results/candidate --min-top1 1 --max-mean-kl 0 --max-median-kl 0 --max-p99-kl 0 --near-tie 0 --max-far-flips 0 --max-nll-change 0 --json results/strict-zero.json"
+    ],
+    "example_commands_are": "Portable examples with placeholders, not original execution logs"
+  },
+  "result": {
+    "total_rows_each": 584,
+    "finite_elements_each": 76546048,
+    "bytes_each": 306184192,
+    "all_complete_bytes_identical": true,
+    "all_inputs_identical": true,
+    "all_finite": true,
+    "report_only_rc": 0,
+    "strict_zero_rc": 0,
+    "literal_584_audit_rc": 0,
+    "path_results": {
+      "prefill": {
+        "rows_each": 8,
+        "vocab": 131072,
+        "elements_each": 1048576,
+        "finite_elements_each": [
+          1048576,
+          1048576
+        ],
+        "all_finite": true,
+        "literal_complete_bytes_equal": true,
+        "logits_sha256_each": [
+          "d0471d165500e0680b79874c5ff600183adca3b3c7f0c8d6b017b9e300cab659",
+          "d0471d165500e0680b79874c5ff600183adca3b3c7f0c8d6b017b9e300cab659"
+        ],
+        "sequences_sha256_each": [
+          "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+          "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a"
+        ],
+        "records_sha256_each": [
+          "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+          "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d"
+        ],
+        "comparator_metrics": {
+          "records": 8,
+          "bitwise": 8,
+          "top1": 1.0,
+          "flips": 0,
+          "kl_mean": 0.0,
+          "kl_median": 0.0,
+          "kl_p99": 0.0,
+          "kl_max": 0.0,
+          "margin_change_max": 0.0,
+          "nll_change_mean": 0.0,
+          "max_abs_diff": 0.0,
+          "failures": [],
+          "non_finite": []
+        },
+        "verification_time_utc": {
+          "reference": "2026-11-08T07:22:02Z",
+          "candidate": "2026-11-08T07:22:24Z"
+        }
+      },
+      "step": {
+        "rows_each": 192,
+        "vocab": 131072,
+        "elements_each": 25165824,
+        "finite_elements_each": [
+          25165824,
+          25165824
+        ],
+        "all_finite": true,
+        "literal_complete_bytes_equal": true,
+        "logits_sha256_each": [
+          "6e0017eab8bc3de5346e4cef83f49754485cc19779975b493a58d0b9c745459a",
+          "6e0017eab8bc3de5346e4cef83f49754485cc19779975b493a58d0b9c745459a"
+        ],
+        "sequences_sha256_each": [
+          "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+          "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a"
+        ],
+        "records_sha256_each": [
+          "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc"
+        ],
+        "comparator_metrics": {
+          "records": 192,
+          "bitwise": 192,
+          "top1": 1.0,
+          "flips": 0,
+          "kl_mean": 0.0,
+          "kl_median": 0.0,
+          "kl_p99": 0.0,
+          "kl_max": 0.0,
+          "margin_change_max": 0.0,
+          "nll_change_mean": 0.0,
+          "max_abs_diff": 0.0,
+          "failures": [],
+          "non_finite": []
+        },
+        "verification_time_utc": {
+          "reference": "2026-11-08T07:22:02Z",
+          "candidate": "2026-11-08T07:22:24Z"
+        }
+      },
+      "verify": {
+        "rows_each": 192,
+        "vocab": 131072,
+        "elements_each": 25165824,
+        "finite_elements_each": [
+          25165824,
+          25165824
+        ],
+        "all_finite": true,
+        "literal_complete_bytes_equal": true,
+        "logits_sha256_each": [
+          "7e735a7fec3b23dfe70eb6da672c4d19c6473128c9a497f8a49965a6d4cad958",
+          "7e735a7fec3b23dfe70eb6da672c4d19c6473128c9a497f8a49965a6d4cad958"
+        ],
+        "sequences_sha256_each": [
+          "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+          "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a"
+        ],
+        "records_sha256_each": [
+          "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc"
+        ],
+        "comparator_metrics": {
+          "records": 192,
+          "bitwise": 192,
+          "top1": 1.0,
+          "flips": 0,
+          "kl_mean": 0.0,
+          "kl_median": 0.0,
+          "kl_p99": 0.0,
+          "kl_max": 0.0,
+          "margin_change_max": 0.0,
+          "nll_change_mean": 0.0,
+          "max_abs_diff": 0.0,
+          "failures": [],
+          "non_finite": []
+        },
+        "verification_time_utc": {
+          "reference": "2026-11-08T07:22:02Z",
+          "candidate": "2026-11-08T07:22:24Z"
+        }
+      },
+      "batch": {
+        "rows_each": 192,
+        "vocab": 131072,
+        "elements_each": 25165824,
+        "finite_elements_each": [
+          25165824,
+          25165824
+        ],
+        "all_finite": true,
+        "literal_complete_bytes_equal": true,
+        "logits_sha256_each": [
+          "7e735a7fec3b23dfe70eb6da672c4d19c6473128c9a497f8a49965a6d4cad958",
+          "7e735a7fec3b23dfe70eb6da672c4d19c6473128c9a497f8a49965a6d4cad958"
+        ],
+        "sequences_sha256_each": [
+          "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a",
+          "058e980d12bd9d26551f25a144e353ce6b67b465b834045c639adfd3051e4f4a"
+        ],
+        "records_sha256_each": [
+          "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc"
+        ],
+        "comparator_metrics": {
+          "records": 192,
+          "bitwise": 192,
+          "top1": 1.0,
+          "flips": 0,
+          "kl_mean": 0.0,
+          "kl_median": 0.0,
+          "kl_p99": 0.0,
+          "kl_max": 0.0,
+          "margin_change_max": 0.0,
+          "nll_change_mean": 0.0,
+          "max_abs_diff": 0.0,
+          "failures": [],
+          "non_finite": []
+        },
+        "verification_time_utc": {
+          "reference": "2026-11-08T07:22:02Z",
+          "candidate": "2026-11-08T07:22:24Z"
+        }
+      }
+    }
+  },
+  "not_verified_in_this_summary": [
+    "M3 full-model output validation is running separately",
+    "Default HTTP and native inference A/B/A/B validation are running separately",
+    "No inference or complete model-load speedup is established by these output checks"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "engine": "mlx",
+  "build": "mlx-lm 0.32.2 / mlx 0.32.4",
+  "model": "qwen3.5-9b-4bit",
+  "model_dir": "/Users/bytedance/kapitsa-qmm9b-models-20261105/hub/models/qwen3.5-9b-4bit",
+  "path": "batch",
+  "prefill_chunk": 2048,
+  "ane": {
+    "evals": 0
+  },
+  "records": 192,
+  "vocab": 248320,
+  "source": "bench/corpus.txt",
+  "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+  "macos": "26.4.1",
+  "date": "2026-11-06T21:04:01Z",
+  "env": {},
+  "native_path": "single-token teacher forcing; same rows reused for Kapitsa path comparisons"
+}

@@ -1,0 +1,14 @@
+{
+  "command": [
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/.venv/bin/python",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/candidate-current-pr775/tools/logit_compare.py",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-m3-current/logits-precise",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-m3-current-competitors/logits-llama",
+    "--no-gate",
+    "--json",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-m3-current-competitors/compare-llama.json"
+  ],
+  "returncode": 0,
+  "start": 1794000469.8843431,
+  "end": 1794000471.467996
+}

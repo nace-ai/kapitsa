@@ -1,0 +1,8 @@
+{
+  "base": "4d1d744538063a17bc85e88a08c08c8061511c95",
+  "built_implementation": "d871a692b8b09d3515ea748e40d3edf444026ee7",
+  "test_guard_commit": "2e13d7db20334e061da9f6d964a4b4e65c1e2870",
+  "production_unchanged_after_build": true,
+  "final_api_source_sha256": "d3b2e47332115e9f120c2d612ba9f5b04ccd0cb40c63cd0dadd005da1179fbb6",
+  "reason": "The second commit changes only a regression assertion to check type before indexing text on the failing baseline. The final API source is compiled separately against each base/candidate library."
+}

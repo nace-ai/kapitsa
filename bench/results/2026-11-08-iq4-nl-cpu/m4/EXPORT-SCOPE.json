@@ -1,0 +1,50 @@
+{
+  "completed_execution_steps": [
+    "reference_configure",
+    "reference_build",
+    "reference_version",
+    "candidate_configure",
+    "candidate_build",
+    "candidate_version",
+    "reference_import_plan",
+    "reference_import",
+    "candidate_import_plan",
+    "candidate_import",
+    "reference_output",
+    "candidate_output",
+    "report_only",
+    "strict_zero",
+    "native_A1",
+    "native_B1",
+    "native_A2",
+    "native_B2",
+    "fixed_driver_compile",
+    "fixed_A1",
+    "fixed_B1",
+    "fixed_A2",
+    "fixed_B2",
+    "http_reference",
+    "http_candidate"
+  ],
+  "completion_is_not_all_checks_PASS": true,
+  "failed_execution_steps": [],
+  "failed_flag_detail_mapping_count": 0,
+  "privacy": "Only necessary configuration, public model/source/binary identities, methods and actual metrics/statuses retained. Private raw originals and filtering maps remain outside this directory.",
+  "record_kind": "Sanitized derived export, not original logs",
+  "recorded_model_worker_terminal": true,
+  "requested_original_phases": [
+    "build",
+    "import",
+    "output",
+    "native",
+    "fixed",
+    "http"
+  ],
+  "snapshot_status": "All requested original model phases completed; individual failed validation gates remain reported.",
+  "source": {
+    "candidate": "b9c67e691a5669545eca880f3e75111f9ce87dd0",
+    "reference": "f7dc2c0c6c5179bb51db51c6c45b3f2b9a3b8d1f"
+  },
+  "unfinished_execution_steps": [],
+  "validation_scope": "The imported-IQ4_NL numerical runs use literal and explicit-zero gates without modifying a floor. Generic MLX4-bit Qwen3.5 and Qwen3.6MoE recommended setups were not run. Default native/fixed runtime tests exercise embedded MTP depth 4, as recorded; numerical supplied-sequence tree verification is teacher-forced and does not independently qualify freely drafted MTP numerics. Trained PLE and whole import/loading speed remain unverified."
+}

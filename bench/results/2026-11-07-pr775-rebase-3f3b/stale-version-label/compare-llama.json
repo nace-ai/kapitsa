@@ -1,0 +1,639 @@
+{
+  "paths": {
+    "prefill": {
+      "records": 8,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 0.875,
+      "flips": 1,
+      "kl_mean": 0.07864248766140887,
+      "kl_median": 0.005473573738839109,
+      "kl_p99": 0.481746198840813,
+      "kl_max": 0.5138551945808741,
+      "margin_change_max": 3.7352867126464844,
+      "tie_margin": 3.8952884674072266,
+      "nll_change_mean": 0.10340757519271193,
+      "max_abs_diff": 6.815329432487488,
+      "flip_list": [
+        {
+          "record": "sequence 1 prefix 2816",
+          "ref_top": 11870,
+          "cand_top": 369,
+          "margin": 0.07268142700195312
+        }
+      ],
+      "failures": [],
+      "gate": {
+        "source": null
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+        "path": "prefill",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 8,
+        "vocab": 248320,
+        "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T21:56:52Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "KAPITSA_PROFILE": "precise"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]"
+      },
+      "candidate": {
+        "engine": "llama",
+        "build": "llama.cpp b12110 cd959bae9",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "unsloth/Qwen3.5-9B-GGUF@3885219b6810b007914f3a7950a8d1b469d598a5",
+        "path": "prefill",
+        "prefill_chunk": 2048,
+        "ane": {
+          "evals": 0
+        },
+        "records": 8,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T18:56:45Z",
+        "env": {},
+        "native_path": "single-token teacher forcing; same rows reused for Kapitsa path comparisons"
+      }
+    },
+    "batch": {
+      "records": 192,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 0.8958333333333334,
+      "flips": 20,
+      "kl_mean": 0.09693088825492886,
+      "kl_median": 0.009940690671028622,
+      "kl_p99": 1.3394916632931748,
+      "kl_max": 1.875213505912452,
+      "margin_change_max": 6.229766845703125,
+      "tie_margin": 8.546608924865723,
+      "nll_change_mean": -0.030297141607936322,
+      "max_abs_diff": 14.095973372459412,
+      "flip_list": [
+        {
+          "record": "sequence 5 prefix 1286",
+          "ref_top": 2124,
+          "cand_top": 293,
+          "margin": 2.0936737060546875
+        },
+        {
+          "record": "sequence 2 prefix 2455",
+          "ref_top": 16141,
+          "cand_top": 5242,
+          "margin": 0.87420654296875
+        },
+        {
+          "record": "sequence 3 prefix 2072",
+          "ref_top": 198,
+          "cand_top": 25216,
+          "margin": 0.8368625640869141
+        },
+        {
+          "record": "sequence 0 prefix 3220",
+          "ref_top": 198,
+          "cand_top": 1358,
+          "margin": 0.6911201477050781
+        },
+        {
+          "record": "sequence 5 prefix 1287",
+          "ref_top": 56723,
+          "cand_top": 529,
+          "margin": 0.6761856079101562
+        },
+        {
+          "record": "sequence 1 prefix 2825",
+          "ref_top": 68163,
+          "cand_top": 10885,
+          "margin": 0.6187591552734375
+        },
+        {
+          "record": "sequence 3 prefix 2067",
+          "ref_top": 460,
+          "cand_top": 11246,
+          "margin": 0.5802059173583984
+        },
+        {
+          "record": "sequence 1 prefix 2832",
+          "ref_top": 15,
+          "cand_top": 16,
+          "margin": 0.5016632080078125
+        },
+        {
+          "record": "sequence 5 prefix 1284",
+          "ref_top": 11,
+          "cand_top": 2291,
+          "margin": 0.47849082946777344
+        },
+        {
+          "record": "sequence 5 prefix 1294",
+          "ref_top": 32367,
+          "cand_top": 7,
+          "margin": 0.46231842041015625
+        },
+        {
+          "record": "sequence 4 prefix 1667",
+          "ref_top": 4536,
+          "cand_top": 94441,
+          "margin": 0.41489410400390625
+        },
+        {
+          "record": "sequence 4 prefix 1671",
+          "ref_top": 17,
+          "cand_top": 16,
+          "margin": 0.27794456481933594
+        },
+        {
+          "record": "sequence 4 prefix 1665",
+          "ref_top": 20467,
+          "cand_top": 7402,
+          "margin": 0.19034576416015625
+        },
+        {
+          "record": "sequence 0 prefix 3224",
+          "ref_top": 19314,
+          "cand_top": 1123,
+          "margin": 0.1882457733154297
+        },
+        {
+          "record": "sequence 3 prefix 2049",
+          "ref_top": 6411,
+          "cand_top": 553,
+          "margin": 0.1650238037109375
+        },
+        {
+          "record": "sequence 1 prefix 2817",
+          "ref_top": 303,
+          "cand_top": 539,
+          "margin": 0.09063148498535156
+        },
+        {
+          "record": "sequence 1 prefix 2822",
+          "ref_top": 220,
+          "cand_top": 471,
+          "margin": 0.08579063415527344
+        },
+        {
+          "record": "sequence 0 prefix 3211",
+          "ref_top": 42598,
+          "cand_top": 32995,
+          "margin": 0.05203056335449219
+        },
+        {
+          "record": "sequence 0 prefix 3210",
+          "ref_top": 4211,
+          "cand_top": 51319,
+          "margin": 0.03107452392578125
+        },
+        {
+          "record": "sequence 0 prefix 3215",
+          "ref_top": 11,
+          "cand_top": 24354,
+          "margin": 0.014255523681640625
+        }
+      ],
+      "failures": [],
+      "gate": {
+        "source": null
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+        "path": "batch",
+        "batch": {
+          "members": 4,
+          "rows": 2
+        },
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T21:56:52Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "KAPITSA_PROFILE": "precise"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]"
+      },
+      "candidate": {
+        "engine": "llama",
+        "build": "llama.cpp b12110 cd959bae9",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "unsloth/Qwen3.5-9B-GGUF@3885219b6810b007914f3a7950a8d1b469d598a5",
+        "path": "batch",
+        "prefill_chunk": 2048,
+        "ane": {
+          "evals": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T18:56:45Z",
+        "env": {},
+        "native_path": "single-token teacher forcing; same rows reused for Kapitsa path comparisons"
+      }
+    },
+    "step": {
+      "records": 192,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 0.8958333333333334,
+      "flips": 20,
+      "kl_mean": 0.0969622580360982,
+      "kl_median": 0.009886459756942748,
+      "kl_p99": 1.3411312672136315,
+      "kl_max": 1.872616340158965,
+      "margin_change_max": 6.229192733764648,
+      "tie_margin": 8.549033164978027,
+      "nll_change_mean": -0.03023738933324488,
+      "max_abs_diff": 14.085837543010712,
+      "flip_list": [
+        {
+          "record": "sequence 5 prefix 1286",
+          "ref_top": 2124,
+          "cand_top": 293,
+          "margin": 2.093202590942383
+        },
+        {
+          "record": "sequence 2 prefix 2455",
+          "ref_top": 16141,
+          "cand_top": 5242,
+          "margin": 0.8726253509521484
+        },
+        {
+          "record": "sequence 3 prefix 2072",
+          "ref_top": 198,
+          "cand_top": 25216,
+          "margin": 0.8350753784179688
+        },
+        {
+          "record": "sequence 0 prefix 3220",
+          "ref_top": 198,
+          "cand_top": 1358,
+          "margin": 0.6899814605712891
+        },
+        {
+          "record": "sequence 5 prefix 1287",
+          "ref_top": 56723,
+          "cand_top": 529,
+          "margin": 0.6765003204345703
+        },
+        {
+          "record": "sequence 1 prefix 2825",
+          "ref_top": 68163,
+          "cand_top": 10885,
+          "margin": 0.6180572509765625
+        },
+        {
+          "record": "sequence 3 prefix 2067",
+          "ref_top": 460,
+          "cand_top": 11246,
+          "margin": 0.5789661407470703
+        },
+        {
+          "record": "sequence 1 prefix 2832",
+          "ref_top": 15,
+          "cand_top": 16,
+          "margin": 0.501220703125
+        },
+        {
+          "record": "sequence 5 prefix 1284",
+          "ref_top": 11,
+          "cand_top": 2291,
+          "margin": 0.47633934020996094
+        },
+        {
+          "record": "sequence 5 prefix 1294",
+          "ref_top": 32367,
+          "cand_top": 7,
+          "margin": 0.46396827697753906
+        },
+        {
+          "record": "sequence 4 prefix 1667",
+          "ref_top": 4536,
+          "cand_top": 94441,
+          "margin": 0.41707611083984375
+        },
+        {
+          "record": "sequence 4 prefix 1671",
+          "ref_top": 17,
+          "cand_top": 16,
+          "margin": 0.2785320281982422
+        },
+        {
+          "record": "sequence 4 prefix 1665",
+          "ref_top": 20467,
+          "cand_top": 7402,
+          "margin": 0.19219207763671875
+        },
+        {
+          "record": "sequence 0 prefix 3224",
+          "ref_top": 19314,
+          "cand_top": 1123,
+          "margin": 0.190185546875
+        },
+        {
+          "record": "sequence 3 prefix 2049",
+          "ref_top": 6411,
+          "cand_top": 553,
+          "margin": 0.1625041961669922
+        },
+        {
+          "record": "sequence 1 prefix 2817",
+          "ref_top": 303,
+          "cand_top": 539,
+          "margin": 0.09044265747070312
+        },
+        {
+          "record": "sequence 1 prefix 2822",
+          "ref_top": 220,
+          "cand_top": 471,
+          "margin": 0.08448600769042969
+        },
+        {
+          "record": "sequence 0 prefix 3211",
+          "ref_top": 42598,
+          "cand_top": 32995,
+          "margin": 0.05092430114746094
+        },
+        {
+          "record": "sequence 0 prefix 3210",
+          "ref_top": 4211,
+          "cand_top": 51319,
+          "margin": 0.045131683349609375
+        },
+        {
+          "record": "sequence 0 prefix 3215",
+          "ref_top": 11,
+          "cand_top": 24354,
+          "margin": 0.011341094970703125
+        }
+      ],
+      "failures": [],
+      "gate": {
+        "source": null
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T21:56:52Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "KAPITSA_PROFILE": "precise"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]"
+      },
+      "candidate": {
+        "engine": "llama",
+        "build": "llama.cpp b12110 cd959bae9",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "unsloth/Qwen3.5-9B-GGUF@3885219b6810b007914f3a7950a8d1b469d598a5",
+        "path": "step",
+        "prefill_chunk": 2048,
+        "ane": {
+          "evals": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T18:56:45Z",
+        "env": {},
+        "native_path": "single-token teacher forcing; same rows reused for Kapitsa path comparisons"
+      }
+    },
+    "verify": {
+      "records": 192,
+      "bitwise": 0,
+      "non_finite": [],
+      "top1": 0.8958333333333334,
+      "flips": 20,
+      "kl_mean": 0.0970570822137537,
+      "kl_median": 0.009899974602249239,
+      "kl_p99": 1.341226369966098,
+      "kl_max": 1.8697243408030964,
+      "margin_change_max": 6.230201721191406,
+      "tie_margin": 8.552292823791504,
+      "nll_change_mean": -0.03026941736049371,
+      "max_abs_diff": 14.101219534873962,
+      "flip_list": [
+        {
+          "record": "sequence 5 prefix 1286",
+          "ref_top": 2124,
+          "cand_top": 293,
+          "margin": 2.097736358642578
+        },
+        {
+          "record": "sequence 2 prefix 2455",
+          "ref_top": 16141,
+          "cand_top": 5242,
+          "margin": 0.8756198883056641
+        },
+        {
+          "record": "sequence 3 prefix 2072",
+          "ref_top": 198,
+          "cand_top": 25216,
+          "margin": 0.8362655639648438
+        },
+        {
+          "record": "sequence 0 prefix 3220",
+          "ref_top": 198,
+          "cand_top": 1358,
+          "margin": 0.6900463104248047
+        },
+        {
+          "record": "sequence 5 prefix 1287",
+          "ref_top": 56723,
+          "cand_top": 529,
+          "margin": 0.6746044158935547
+        },
+        {
+          "record": "sequence 1 prefix 2825",
+          "ref_top": 68163,
+          "cand_top": 10885,
+          "margin": 0.6183071136474609
+        },
+        {
+          "record": "sequence 3 prefix 2067",
+          "ref_top": 460,
+          "cand_top": 11246,
+          "margin": 0.5791816711425781
+        },
+        {
+          "record": "sequence 1 prefix 2832",
+          "ref_top": 15,
+          "cand_top": 16,
+          "margin": 0.5011711120605469
+        },
+        {
+          "record": "sequence 5 prefix 1284",
+          "ref_top": 11,
+          "cand_top": 2291,
+          "margin": 0.4762001037597656
+        },
+        {
+          "record": "sequence 5 prefix 1294",
+          "ref_top": 32367,
+          "cand_top": 7,
+          "margin": 0.46825218200683594
+        },
+        {
+          "record": "sequence 4 prefix 1667",
+          "ref_top": 4536,
+          "cand_top": 94441,
+          "margin": 0.4209728240966797
+        },
+        {
+          "record": "sequence 4 prefix 1671",
+          "ref_top": 17,
+          "cand_top": 16,
+          "margin": 0.2827301025390625
+        },
+        {
+          "record": "sequence 4 prefix 1665",
+          "ref_top": 20467,
+          "cand_top": 7402,
+          "margin": 0.19136619567871094
+        },
+        {
+          "record": "sequence 0 prefix 3224",
+          "ref_top": 19314,
+          "cand_top": 1123,
+          "margin": 0.19023895263671875
+        },
+        {
+          "record": "sequence 3 prefix 2049",
+          "ref_top": 6411,
+          "cand_top": 553,
+          "margin": 0.15944290161132812
+        },
+        {
+          "record": "sequence 1 prefix 2817",
+          "ref_top": 303,
+          "cand_top": 539,
+          "margin": 0.09007072448730469
+        },
+        {
+          "record": "sequence 1 prefix 2822",
+          "ref_top": 220,
+          "cand_top": 471,
+          "margin": 0.08535194396972656
+        },
+        {
+          "record": "sequence 0 prefix 3210",
+          "ref_top": 4211,
+          "cand_top": 51319,
+          "margin": 0.05923271179199219
+        },
+        {
+          "record": "sequence 0 prefix 3211",
+          "ref_top": 42598,
+          "cand_top": 32995,
+          "margin": 0.05046844482421875
+        },
+        {
+          "record": "sequence 0 prefix 3215",
+          "ref_top": 11,
+          "cand_top": 24354,
+          "margin": 0.015499114990234375
+        }
+      ],
+      "failures": [],
+      "gate": {
+        "source": null
+      },
+      "reference": {
+        "engine": "kapitsa",
+        "build": "0.2.31 (9cca6b0d)",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "/Users/bytedance/.cache/kapitsa/models/qwen3.5-9b-4bit",
+        "path": "verify",
+        "verify": "KFlash tree (a chain of 8 live rows)",
+        "prefill_chunk": 2048,
+        "ane": {
+          "chunks": 0,
+          "evals": 0,
+          "reruns": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/runs/logits-precise/step",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T21:56:52Z",
+        "env": {
+          "NI_ANE_ASYNC": "0",
+          "NI_ANE_KEEP_S": "0",
+          "NI_NO_MTP": "1",
+          "KAPITSA_PROFILE": "precise"
+        },
+        "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512]; GDN: conv f32 [3][8192], state f32 [32][128][128]"
+      },
+      "candidate": {
+        "engine": "llama",
+        "build": "llama.cpp b12110 cd959bae9",
+        "model": "qwen3.5-9b-4bit",
+        "model_dir": "unsloth/Qwen3.5-9B-GGUF@3885219b6810b007914f3a7950a8d1b469d598a5",
+        "path": "verify",
+        "prefill_chunk": 2048,
+        "ane": {
+          "evals": 0
+        },
+        "records": 192,
+        "vocab": 248320,
+        "source": "bench/corpus.txt",
+        "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+        "macos": "15.7.1",
+        "date": "2026-11-06T18:56:45Z",
+        "env": {},
+        "native_path": "single-token teacher forcing; same rows reused for Kapitsa path comparisons"
+      }
+    }
+  }
+}

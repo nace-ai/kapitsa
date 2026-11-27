@@ -1,0 +1,1 @@
+built: kapitsa api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test tokenizer_test iq_layout_test remote_test cluster_test split_place_test gemm_slices_test ws_upgrade_test (log: /Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/final-cpu/evidence/ane-pr775-6327c2/9cca6b0d/build.log)

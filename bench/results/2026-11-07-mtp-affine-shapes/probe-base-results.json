@@ -1,0 +1,126 @@
+{
+  "source": "b171f98363abd5dfd8ae5d24f786ca77b3801a4a",
+  "at": "2026-11-07T05:17:33.998698+00:00",
+  "runs": [
+    {
+      "mode": "head",
+      "case": "scalar",
+      "cmd": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/loader-probe-base",
+        "head",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/fixtures/scalar"
+      ],
+      "exit": -11,
+      "stdout": "",
+      "stderr": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n"
+    },
+    {
+      "mode": "head",
+      "case": "overflow",
+      "cmd": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/loader-probe-base",
+        "head",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/fixtures/overflow"
+      ],
+      "exit": 1,
+      "stdout": "REJECT mtp.fc: a packed weight whose shapes fit no bit width weights are not supported (bf16, 3/4/5/6/8-bit group 64 and 4-bit group 32 are)\n",
+      "stderr": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n"
+    },
+    {
+      "mode": "head",
+      "case": "scale_rows",
+      "cmd": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/loader-probe-base",
+        "head",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/fixtures/scale_rows"
+      ],
+      "exit": 1,
+      "stdout": "REJECT missing tensor mtp.layers.0.input_layernorm.weight\n",
+      "stderr": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n"
+    },
+    {
+      "mode": "linear",
+      "case": "valid",
+      "cmd": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/loader-probe-base",
+        "linear",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/fixtures/valid"
+      ],
+      "exit": 0,
+      "stdout": "ACCEPT N=2 K=64 bits=4\n",
+      "stderr": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n"
+    },
+    {
+      "mode": "linear",
+      "case": "rank1",
+      "cmd": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/loader-probe-base",
+        "linear",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/fixtures/rank1"
+      ],
+      "exit": 0,
+      "stdout": "ACCEPT N=0 K=64 bits=4\n",
+      "stderr": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n"
+    },
+    {
+      "mode": "linear",
+      "case": "scale_rows",
+      "cmd": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/loader-probe-base",
+        "linear",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/fixtures/scale_rows"
+      ],
+      "exit": 0,
+      "stdout": "ACCEPT N=2 K=64 bits=4\n",
+      "stderr": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n"
+    },
+    {
+      "mode": "linear",
+      "case": "bias_groups",
+      "cmd": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/loader-probe-base",
+        "linear",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/fixtures/bias_groups"
+      ],
+      "exit": 0,
+      "stdout": "ACCEPT N=2 K=64 bits=4\n",
+      "stderr": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n"
+    },
+    {
+      "mode": "linear",
+      "case": "weight_dtype",
+      "cmd": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/loader-probe-base",
+        "linear",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/fixtures/weight_dtype"
+      ],
+      "exit": 0,
+      "stdout": "ACCEPT N=2 K=64 bits=4\n",
+      "stderr": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n"
+    },
+    {
+      "mode": "linear",
+      "case": "zero_rows",
+      "cmd": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/loader-probe-base",
+        "linear",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/fixtures/zero_rows"
+      ],
+      "exit": 0,
+      "stdout": "ACCEPT N=0 K=64 bits=4\n",
+      "stderr": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n"
+    },
+    {
+      "mode": "linear",
+      "case": "stacked",
+      "cmd": [
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/loader-probe-base",
+        "linear",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/user-continue-mtp/fixtures/stacked"
+      ],
+      "exit": 0,
+      "stdout": "ACCEPT N=3 K=64 bits=4\n",
+      "stderr": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n"
+    }
+  ]
+}

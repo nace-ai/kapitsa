@@ -1,0 +1,19 @@
+{
+  "format": "Privacy-filtered derived summaries, not raw execution logs.",
+  "source_reference": "66a5f3bc473df9af8b72ded9090c3a8acc16a43e",
+  "source_candidate": "90e10efce8462ede4c756ca77ccdb1510f4e9faf",
+  "arms": {
+    "reference": {
+      "rc": 0,
+      "PASS": 55,
+      "FAIL": 0,
+      "failures": []
+    },
+    "candidate": {
+      "rc": 0,
+      "PASS": 55,
+      "FAIL": 0,
+      "failures": []
+    }
+  }
+}

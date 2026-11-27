@@ -1,0 +1,162 @@
+{
+ "pr": "926",
+ "task": "#343",
+ "machine": "Apple M5 Pro",
+ "macos": "26.5.2",
+ "commits": {
+  "parent": "153dff95",
+  "merge": "af7d7958"
+ },
+ "what_was_timed": "layer-0 EXL3 fixture (beamster/Qwen3.8-Flash-Next-Sushi-2bpw@cb6c85e4, the PR's own real-weight A/B, synthetic activations)",
+ "headline_config_note": "PR headline config (Flash-Next 4-bit) cannot be measured on this Mac: the 4-bit pack is about 100 GB, the internal disk has 55 GiB free and the Mac has 48 GB of RAM",
+ "ab": [],
+ "mlx": "cannot measure on MLX: the changed kernels are Flash-Next/EXL3 specific; no MLX model of it fits here",
+ "realbench": [
+  {
+   "file": "/Users/alisheramantay/Documents/nace/k343/out/exl3-realbench-1/result.json",
+   "timing_eligible": true,
+   "returncode": 0,
+   "command": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/build/exl3_register_check",
+    "/Users/alisheramantay/Documents/nace/k343/exl3_reference.metal",
+    "realbench",
+    "/Volumes/Extreme Pro/downloads/k343-exl3-L0"
+   ],
+   "env": {
+    "NI_LOCK_HELD": "1",
+    "MTL_SHADER_VALIDATION": "0",
+    "MTL_DEBUG_LAYER": "0"
+   },
+   "hashes": {
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/src/kernels/exl3moe.metal": "a85ca4b3c18378551f9f21ea54a2afe3c664ca5223e035b11d490152efd5716b",
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/tools/exl3_check.cpp": "741ab25d66a0c357d56a1f51e27eb67bfce4348aad7a5a7d215b580af911f657",
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/src/model/moe_exl3.cpp": "9f3f876aed0a70601a3853ca9d58ec63722ab08ae574236e77f35ce91aa6daaf",
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/tools/exl3_register_check.cpp": "801f1387cfef122d34aceaaf53ef19879fbed8283e0d16c9dd36e5bb62478667",
+    "/Users/alisheramantay/Documents/nace/k343/exl3_reference.metal": "ee6e631f7809139827013c5b199d41f4dbc545f018da509ba900b212a3e71721",
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/build/exl3_register_check": "a5718e7338fbfa4245d03e9984e2686be66d2b49e0b3f10bbda07d200bb2d811"
+   },
+   "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=7602275)\t100%; charged; 0:00 remaining present: true\n"
+  },
+  {
+   "file": "/Users/alisheramantay/Documents/nace/k343/out/exl3-realbench-2/result.json",
+   "timing_eligible": true,
+   "returncode": 0,
+   "command": [
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/build/exl3_register_check",
+    "/Users/alisheramantay/Documents/nace/k343/exl3_reference.metal",
+    "realbench",
+    "/Volumes/Extreme Pro/downloads/k343-exl3-L0"
+   ],
+   "env": {
+    "NI_LOCK_HELD": "1",
+    "MTL_SHADER_VALIDATION": "0",
+    "MTL_DEBUG_LAYER": "0"
+   },
+   "hashes": {
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/src/kernels/exl3moe.metal": "a85ca4b3c18378551f9f21ea54a2afe3c664ca5223e035b11d490152efd5716b",
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/tools/exl3_check.cpp": "741ab25d66a0c357d56a1f51e27eb67bfce4348aad7a5a7d215b580af911f657",
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/src/model/moe_exl3.cpp": "9f3f876aed0a70601a3853ca9d58ec63722ab08ae574236e77f35ce91aa6daaf",
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/tools/exl3_register_check.cpp": "801f1387cfef122d34aceaaf53ef19879fbed8283e0d16c9dd36e5bb62478667",
+    "/Users/alisheramantay/Documents/nace/k343/exl3_reference.metal": "ee6e631f7809139827013c5b199d41f4dbc545f018da509ba900b212a3e71721",
+    "/Users/alisheramantay/Documents/nace/k343/wt-af7d7958/build/exl3_register_check": "a5718e7338fbfa4245d03e9984e2686be66d2b49e0b3f10bbda07d200bb2d811"
+   },
+   "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=7602275)\t100%; charged; 0:00 remaining present: true\n"
+  }
+ ],
+ "chain_original_vs_registers": {
+  "T=32 uniform_random": {
+   "original_ms": [
+    11.325,
+    11.326
+   ],
+   "registers_ms": [
+    11.073,
+    11.065
+   ],
+   "less_time_pct": [
+    2.22,
+    2.3
+   ],
+   "words": "faster"
+  },
+  "T=128 uniform_random": {
+   "original_ms": [
+    24.089,
+    24.089
+   ],
+   "registers_ms": [
+    23.459,
+    23.441
+   ],
+   "less_time_pct": [
+    2.61,
+    2.69
+   ],
+   "words": "faster"
+  },
+  "T=512 uniform_random": {
+   "original_ms": [
+    27.32,
+    27.326
+   ],
+   "registers_ms": [
+    26.621,
+    26.613
+   ],
+   "less_time_pct": [
+    2.56,
+    2.61
+   ],
+   "words": "faster"
+  },
+  "T=2048 uniform_random": {
+   "original_ms": [
+    55.195,
+    55.198
+   ],
+   "registers_ms": [
+    53.605,
+    53.628
+   ],
+   "less_time_pct": [
+    2.88,
+    2.84
+   ],
+   "words": "faster"
+  },
+  "T=128 concentrated": {
+   "original_ms": [
+    2.605,
+    2.617
+   ],
+   "registers_ms": [
+    2.586,
+    2.597
+   ],
+   "less_time_pct": [
+    0.72,
+    0.77
+   ],
+   "words": "about the same"
+  },
+  "T=512 concentrated": {
+   "original_ms": [
+    9.794,
+    9.797
+   ],
+   "registers_ms": [
+    9.621,
+    9.623
+   ],
+   "less_time_pct": [
+    1.76,
+    1.77
+   ],
+   "words": "faster"
+  }
+ },
+ "m4_pro_pr_claim": "4.3-7.7% less expert-chain GPU time on M4 Pro (PR body); measured here on M5 Pro, original vs register kernel in one executable",
+ "binary_sha256": {
+  "exl3_register_check": "a5718e7338fbfa4245d03e9984e2686be66d2b49e0b3f10bbda07d200bb2d811"
+ }
+}

@@ -1,0 +1,429 @@
+{
+  "source": {
+    "base": {
+      "head": "96d2de68a0799f8c9e5a5b0eec85aa067600881a",
+      "loader_sha256": "7004e63afb9afe6a2e864d803de8985bb55b99ae22b831c7a389e07893602964",
+      "test_sha256": "a56a7b6844eb57f1b704c011b6b1203b91014fc6e0aec57a330bb9bf87f53099"
+    },
+    "candidate": {
+      "head": "61fdbafbea085289bd9a61ebbc56074af4205c6c",
+      "loader_sha256": "feb7310c3f23106d6a652d02542bbbb77e1357856fa13b0f2fe9875d3f993a28",
+      "test_sha256": "fc1ede44951be3128c6cf8fe28a74b8ceeb588cb1308cd6d608a4f90e0fb61df"
+    }
+  },
+  "hardware": {
+    "chip": "Apple M3 Ultra",
+    "gpu_cores": 60,
+    "memory_gib": 96,
+    "macos": "26.4.1 (25E253)"
+  },
+  "model": "Qwen3.5-4B-4bit with its default DFlash2 drafter",
+  "compile": "Release -O3, arm64, minimum macOS14.0; explicit CMake configure at each source commit",
+  "logit_comparison": {
+    "paths": {
+      "prefill": {
+        "records": 8,
+        "bitwise": 8,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": "../candidate/tools/logit_floors/qwen3.5-4b-4bit.json"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (96d2de68)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 8,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T08:54:00Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (61fdbafb)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "prefill",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 8,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-batch2-20261106/dtype-followup/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T08:54:13Z",
+          "env": {}
+        }
+      },
+      "batch": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "../candidate/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (96d2de68)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "batch",
+          "batch": {
+            "members": 4,
+            "rows": 2
+          },
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T08:54:00Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (61fdbafb)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "batch",
+          "batch": {
+            "members": 4,
+            "rows": 2
+          },
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-batch2-20261106/dtype-followup/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T08:54:14Z",
+          "env": {}
+        }
+      },
+      "step": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "../candidate/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (96d2de68)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T08:54:00Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (61fdbafb)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "step",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-batch2-20261106/dtype-followup/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T08:54:13Z",
+          "env": {}
+        }
+      },
+      "verify": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 0.989583,
+          "max_mean_kl": 1.02e-06,
+          "max_p99_kl": 1.06e-05,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "source": "../candidate/tools/logit_floors/qwen3.5-4b-4bit.json: the decode passes' gate (the prefill rows are bitwise the same)"
+        },
+        "reference": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (96d2de68)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "verify",
+          "verify": "KFlash tree (a chain of 8 live rows)",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "bench/corpus.txt",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T08:54:00Z",
+          "env": {}
+        },
+        "candidate": {
+          "engine": "kapitsa",
+          "build": "0.2.31 (61fdbafb)",
+          "model": "qwen3.5-4b-4bit",
+          "model_dir": "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+          "path": "verify",
+          "verify": "KFlash tree (a chain of 8 live rows)",
+          "prefill_chunk": 2048,
+          "ane": {
+            "chunks": 0,
+            "evals": 0,
+            "reruns": 0
+          },
+          "records": 192,
+          "vocab": 248320,
+          "source": "/Users/bytedance/kapitsa-batch2-20261106/dtype-followup/evidence/logits-reference",
+          "mac": "Mac Studio (2025), M3 Ultra (60-core GPU), 96 GB",
+          "macos": "26.4.1",
+          "date": "2026-11-06T08:54:13Z",
+          "env": {}
+        }
+      }
+    }
+  },
+  "http": [
+    {
+      "variant": "base",
+      "head": "96d2de68a0799f8c9e5a5b0eec85aa067600881a",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/dtype-followup/base/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "50617",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "32768",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-batch2-20261106/dtype-followup/evidence/http-home-base"
+      },
+      "exit_code": 1,
+      "passes": 47,
+      "failures": [
+        "FAIL in flight together: a 2K-token request sent during a long reply finishes first  side done 2.4 s, long reply done 0.9 s (693 tokens), side usage {'prompt_tokens': 2976, 'completion_tokens': 4, 'total_tokens': 2980, 'prompt_tokens_details': {'cached_tokens': 0}, 'kapitsa': {'prefill_ms': 1353.1, 'kflash': {'source': 'DFlash2', 'cycles': 2}}}",
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0010139942169189453, {'id': 'chatcmpl-179395527391745', 'object': 'chat.completion.chunk', 'created': 1793955273, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.140818119049072], first token at 17.362765073776245"
+      ]
+    },
+    {
+      "variant": "candidate",
+      "head": "61fdbafbea085289bd9a61ebbc56074af4205c6c",
+      "command": [
+        "/Users/bytedance/kapitsa-batch2-20261106/dtype-followup/candidate/build/kapitsa",
+        "serve",
+        "--model",
+        "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "50719",
+        "--private",
+        "--slots",
+        "2",
+        "--context",
+        "32768",
+        "--disk-cache",
+        "0"
+      ],
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/kapitsa-batch2-20261106/dtype-followup/evidence/http-home-candidate"
+      },
+      "exit_code": 1,
+      "passes": 47,
+      "failures": [
+        "FAIL in flight together: a 2K-token request sent during a long reply finishes first  side done 2.4 s, long reply done 0.9 s (693 tokens), side usage {'prompt_tokens': 2976, 'completion_tokens': 4, 'total_tokens': 2980, 'prompt_tokens_details': {'cached_tokens': 0}, 'kapitsa': {'prefill_ms': 1353.2, 'kflash': {'source': 'DFlash2', 'cycles': 2}}}",
+        "FAIL chat stream: while every slot is busy the stream starts at once, gets an empty chunk every 15 s, and its first token comes once a slot frees  first chunk (0.0009641647338867188, {'id': 'chatcmpl-179395533591745', 'object': 'chat.completion.chunk', 'created': 1793955335, 'model': 'qwen3.5-4b-4bit', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]}), keepalives at [15.135082006454468], first token at 17.375216960906982"
+      ]
+    }
+  ],
+  "load_error_test": {
+    "exit": 1,
+    "status": "same existing page-cache assertion as both baseline runs; NOT a full pass",
+    "log": "candidate-load-errors.log"
+  },
+  "cpu_resolution": {
+    "full_suite_first_run_failures": 1,
+    "failure": "test_update atomic binary replacement observed one blank version",
+    "original_log": "initial-update-failure.log",
+    "isolated_retry_exit": 0,
+    "retry_log": "test-update-retry.log",
+    "other_suite_tests": "passed on full run"
+  },
+  "new_test_on_baseline": {
+    "reference": "96d2de68",
+    "test_from": "61fdbafb",
+    "exit_code": 1,
+    "failure": "FAIL caught: unsupported dtype was not rejected"
+  },
+  "logs": {
+    "cpu.log": "PASS api_test\nPASS prefix_cache_test\nPASS fn_store_test\nPASS fn_dflash_test\nPASS tokenizer_test\nPASS iq_layout_test\nPASS remote_test\nPASS cluster_test\nPASS split_place_test\nPASS gemm_slices_test\nPASS ws_upgrade_test\nPASS test_server_cli\nPASS test_sidecar\nPASS test_bench\nFAIL test_update (/Users/bytedance/kapitsa-batch2-20261106/dtype-followup/evidence/vk-candidate/candidate-8386f1/61fdbafb/cpu-tests/test_update.log)\nPASS test_community\nPASS test_reasoning\nPASS test_pr_size\nPASS test_logit_compare\nPASS test_sampled_tokens_harness\nPASS test_structured_cli\n1 failed\n",
+    "prek.log": "check for merge conflicts................................................Passed\ncheck yaml...............................................................Passed\ncheck for added large files..............................................Passed\ncheck for case conflicts.................................................Passed\ntrim trailing whitespace.................................................Passed\nruff check...............................................................Passed\nshell scripts parse (bash -n)............................................Passed\n",
+    "base-load-errors.log": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 1 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 1 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\nPASS tensor shape/range validation, header-only plans, deferred read guards\npage cache: 3 -> 1474 of 4420 pages\nFAIL after <= before + pages / 10\n",
+    "base-load-errors-retry.log": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\nPASS tensor shape/range validation, header-only plans, deferred read guards\npage cache: 3 -> 897 of 4420 pages\nFAIL after <= before + pages / 10\n",
+    "candidate-load-errors.log": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 1 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\nPASS tensor shape/range validation, header-only plans, deferred read guards\nPASS unsupported dtypes rejected, tensor filters and header-only plans preserved\npage cache: 3 -> 515 of 4420 pages\nFAIL after <= before + pages / 10\n",
+    "probe-base.log": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\nshape/dtype destination bytes=0, declared tensor bytes=8; guard after destination='ABCDEFGH' (expected eight untouched guard bytes)\n",
+    "probe-candidate.log": "rejected before read: /tmp/kapitsa-dtype-probe-68774P/model.safetensors: tensor w has unsupported dtype BOOL\n",
+    "parser.log": "[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (279 ms)\nPASS unchanged stream: think, answer\nPASS unchanged stream: think, call after </think>\nPASS unchanged stream: think, text and call\nPASS unchanged stream: thinking off: call\nPASS unchanged stream: thinking off: answer\nPASS unchanged stream: unterminated call after </think>\nPASS unclosed think, switch off: the call stays reasoning (old behaviour)\nPASS unclosed think, switch on: returned as a tool call\nPASS unclosed think, switch on: reasoning without the markup\nPASS unclosed think, switch on: no call markup streamed as reasoning\nPASS unclosed think + trailing newline: returned as a tool call\nPASS two calls at the end of an unclosed think block\nPASS integer argument typed from the tool schema\nPASS call then </think> then the end, switch off: no call\nPASS call then </think> then the end, switch on: returned as a tool call\nPASS same result as before: draft, more reasoning, real call\nPASS same result as before: draft, </think>, a different real call\nPASS same result as before: draft, </think>, an answer\nPASS same result as before: unknown function at the end\nPASS same result as before: unterminated call at the end\nPASS same result as before: cut by max_tokens after a call\nPASS same result as before: <tool_call> mentioned, reasoning goes on\nPASS same result as before: non-ASCII reasoning after a draft\nPASS same result as before: stray </tool_call> after a call\nPASS request without tools: unchanged\nPASS think_ws: the newline before </think> stays in the reasoning\nPASS deltas add up to the result\nPASS utf8_valid: U+FFFD per maximal subpart, well-formed text unchanged\nPASS a reply cut inside a character ends in U+FFFD\nPASS GLM: string, number, boolean, object and array arguments\nPASS GLM: typing: a string as written, a typed value that is no JSON as text, an untyped one as JSON, an unknown one as text\nPASS GLM: two calls\nPASS GLM: a call without arguments\nPASS GLM: GLM-4.5's newlines between the elements and the calls\nPASS GLM: spaces around the name and a key; the value as written\nPASS GLM: content, then the call\nPASS GLM: reasoning (the model's own <think>), content, then calls\nPASS GLM: reasoning in the prompt's think block, then a call\nPASS GLM: non-ASCII values\nPASS GLM: a string value with the call's tags in it\nPASS GLM: a malformed call, then a good one\nPASS GLM: malformed, a name with a space\nPASS GLM: malformed, no name\nPASS GLM: malformed, an empty call\nPASS GLM: malformed, a value left open\nPASS GLM: malformed, a key without a value\nPASS GLM: malformed, text between a key and its value\nPASS GLM: malformed, text after a value\nPASS GLM: malformed, a tag in a key\nPASS GLM: malformed, Qwen's markup\nPASS GLM: malformed, unterminated at the end of the turn\nPASS GLM: each turn the same a token per byte, cut every 2, 3, 5, 7 bytes, NI_THINK_TOOLCALLS on\nPASS GLM: the default call format reads no GLM call\nPASS GLM: unclosed think, switch off: the call stays reasoning\nPASS GLM: unclosed think, switch on: returned as a tool call\nPASS GLM: unclosed think, switch on: no markup streamed; the same in other tokens\nPASS GLM: same result as before: a draft, more reasoning, a real call\nPASS GLM: same result as before: an unknown function at the end\nPASS GLM: same result as before: a malformed call at the end\nPASS GLM: a draft stays reasoning, the call after </think> is the call\nALL PASSED\n",
+    "structured-tokenizer.log": "PASS grammar_test: grammars, refusals, masks against brute force (mask time per token over 248320 tokens (1786 states, warm): mean 7.8 us, median 3.5, p90 16.7, p99 42.3, max 55.4; 308 passed, 0 failed)\nPASS structured_check answers every request\nPASS chat: json_object: JSON\nPASS chat: json_schema, strict: JSON\nPASS chat: text: no grammar\nPASS chat: no format, tools, auto: no grammar\nPASS chat: json_schema without a schema: any object: JSON\nPASS chat: unknown format type: 400 (response_format.type)\nPASS chat: format not an object: 400 (response_format)\nPASS chat: json_schema missing: 400 (response_format.json_schema)\nPASS chat: schema not a schema: 400 (response_format.json_schema.schema)\nPASS chat: strict not a boolean: 400 (response_format.json_schema.strict)\nPASS chat: unknown type in the schema: 400 (response_format)\nPASS chat: remote $ref: 400 (response_format)\nPASS chat: a schema no value satisfies: 400 (response_format)\nPASS chat: tool_choice required: tool calls (get_weather, run_shell)\nPASS chat: tool_choice named: tool calls (get_weather)\nPASS chat: one call (parallel_tool_calls false): tool calls (get_weather, run_shell; one call)\nPASS chat: a named tool the request lacks: 400 (tool_choice)\nPASS chat: required without tools: 400 (tool_choice)\nPASS chat: unknown tool_choice: 400 (tool_choice)\nPASS chat: tool_choice object without a name: 400 (tool_choice)\nPASS chat: tool_choice none with a format: the format: JSON,\nPASS chat: a strict tool, auto: text or tool calls (get_weather, run_shell free)\nPASS chat: a format beside tools: JSON or tool calls\nPASS chat: a strict tool with a schema it cannot hold: 400 (tools)\nPASS responses: text.format json_schema: JSON\nPASS responses: text.format json_object: JSON\nPASS responses: text.format text: no grammar\nPASS responses: text.format unknown: 400 (text.format.type)\nPASS responses: text.format bad schema: 400 (text.format)\nPASS responses: tool_choice required: tool calls (get_weather)\nPASS responses: tool_choice a function: tool calls (run_shell)\nPASS responses: allowed_tools required: tool calls (run_shell)\nPASS responses: a built-in tool choice: 400 (tool_choice)\nPASS responses: a strict function: text or tool calls (get_weather)\nPASS responses: a function without strict is not strict: no grammar\nPASS responses: a namespace's strict function: text or tool calls (wx__get_weather)\nPASS responses: a custom tool named: tool calls (apply_patch)\nPASS messages: tool_choice any: tool calls (get_weather)\nPASS messages: tool_choice tool, one call: tool calls (run_shell; one call)\nPASS messages: tool_choice tool without a name: 400\nPASS messages: unknown tool_choice: 400\nPASS messages: output_format: JSON\nPASS messages: output_config.format: JSON\nPASS messages: output_format of another type: 400\nPASS messages: a strict tool: text or tool calls (get_weather)\nPASS messages: tool_choice none: no grammar\nALL PASSED\n",
+    "base-configure.log": "-- The C compiler identification is AppleClang 17.0.0.17000604\n-- The CXX compiler identification is AppleClang 17.0.0.17000604\n-- The OBJCXX compiler identification is AppleClang 17.0.0.17000604\n-- Detecting C compiler ABI info\n-- Detecting C compiler ABI info - done\n-- Check for working C compiler: /usr/bin/cc - skipped\n-- Detecting C compile features\n-- Detecting C compile features - done\n-- Detecting CXX compiler ABI info\n-- Detecting CXX compiler ABI info - done\n-- Check for working CXX compiler: /usr/bin/c++ - skipped\n-- Detecting CXX compile features\n-- Detecting CXX compile features - done\n-- Detecting OBJCXX compiler ABI info\n-- Detecting OBJCXX compiler ABI info - done\n-- Check for working OBJCXX compiler: /usr/bin/clang++ - skipped\n-- Performing Test CMAKE_HAVE_LIBC_PTHREAD\n-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success\n-- Found Threads: TRUE\n-- Configuring done (1.5s)\n-- Generating done (0.7s)\n-- Build files have been written to: /Users/bytedance/kapitsa-batch2-20261106/dtype-followup/base/build\n",
+    "candidate-configure.log": "-- The C compiler identification is AppleClang 17.0.0.17000604\n-- The CXX compiler identification is AppleClang 17.0.0.17000604\n-- The OBJCXX compiler identification is AppleClang 17.0.0.17000604\n-- Detecting C compiler ABI info\n-- Detecting C compiler ABI info - done\n-- Check for working C compiler: /usr/bin/cc - skipped\n-- Detecting C compile features\n-- Detecting C compile features - done\n-- Detecting CXX compiler ABI info\n-- Detecting CXX compiler ABI info - done\n-- Check for working CXX compiler: /usr/bin/c++ - skipped\n-- Detecting CXX compile features\n-- Detecting CXX compile features - done\n-- Detecting OBJCXX compiler ABI info\n-- Detecting OBJCXX compiler ABI info - done\n-- Check for working OBJCXX compiler: /usr/bin/clang++ - skipped\n-- Performing Test CMAKE_HAVE_LIBC_PTHREAD\n-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success\n-- Found Threads: TRUE\n-- Configuring done (1.3s)\n-- Generating done (0.7s)\n-- Build files have been written to: /Users/bytedance/kapitsa-batch2-20261106/dtype-followup/candidate/build\n",
+    "base-version.txt": "kapitsa 0.2.31 (96d2de68)\n",
+    "candidate-version.txt": "kapitsa 0.2.31 (61fdbafb)\n",
+    "baseline-new-regression.log": "[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\n[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)\nPASS tensor shape/range validation, header-only plans, deferred read guards\nFAIL caught\n",
+    "initial-update-failure.log": "PASS update_test: versions, release names, kinds of install\nPASS fixture: the 0.2.32 binary is a kapitsa 0.2.32 through and through\nPASS fixture: a kapitsa 0.2.33\nPASS fixture: a kapitsa 0.2.30\nPASS --check, latest 0.2.31: exit 0, nothing downloaded\nPASS --check, latest 0.2.32: exit 100, nothing downloaded\nPASS --check, latest 0.2.30: exit 0, nothing downloaded\nPASS --check, latest 0.2.31-rc.1: exit 0, nothing downloaded\nPASS --check, latest 0.2.32-rc.1: exit 100, nothing downloaded\nPASS --check, latest 0.2.131: exit 100, nothing downloaded\nPASS --check with no release: exit 1\nPASS --check, nothing answering: exit 1\nPASS plain http is refused but to this Mac\nPASS --check changes nothing, not even the state\nPASS kapitsa update installs 0.2.32\nPASS a new file renamed into place; the old binary kept, the same inode, as the rollback copy\nFAIL the binary ran throughout: the old version, then the new one, nothing in between  (seen {'', '0.2.32', '0.2.31'}, bad [''])\nPASS a process holding the old binary keeps it unchanged\nPASS a kapitsa running the old binary keeps running\nPASS the license files updated where install.sh put them\nPASS the benchmark harness updated beside the notices, where bench compare looks for it\nPASS no temporary folder left beside the binary\nPASS the state: updated, from and to, checked now, nothing left to say\nPASS run again: up to date, nothing downloaded\nPASS the harness updated and the user's local.env kept\nPASS an install without a harness gets it on update\nSKIP the Drex companions on update: /Users/bytedance/kapitsa-batch2-20261106/dtype-followup/candidate/build/systemone is not built (cmake --build build --target systemone; nace-ai/kapitsa#422 adds it to CI's build targets)\nPASS refused: a wrong sha256\nPASS refused: an unsigned binary\nPASS refused: a signature broken by a change\nPASS refused: another identifier\nPASS refused: another version inside\nPASS refused: no license files\nPASS refused: kapitsa a symlink\nPASS refused: a download redirected away from GitHub (not followed)\nPASS a release without its tarball: exit 1\nPASS after all of them: the same binary, no rollback copy, the same license files, nothing left over\nPASS the state says why, with nothing left to say (it was said)\nPASS --rollback: back to 0.2.31, 0.2.32 kept in its place\nPASS automatic updates skip 0.2.32 from now on\nPASS --rollback again: forward to the newer one, and nothing skipped\nPASS rolled back from 0.2.32: the automatic update leaves 0.2.32 alone\nPASS and installs the next one, 0.2.33\nPASS --version 0.2.30: an older release when asked for; automatic updates skip 0.2.31\nPASS the 0.2.30 binary knows it is 0.2.30\nPASS latest 0.2.31, the version moved away from: left alone\nPASS --version of no release: exit 1, nothing changed\nPASS --version of the version installed: nothing to do\nPASS usage error: --version x.y\nPASS usage error: --version 1.2.3/../../x\nPASS usage error: --auto maybe\nPASS usage error: --check --rollback\nPASS usage error: --nope\nPASS --rollback with nothing kept: exit 1\nPASS Homebrew --check names brew upgrade\nPASS Homebrew, not in a terminal: says brew upgrade, runs nothing, downloads nothing\nPASS Homebrew in a terminal: runs brew upgrade\nPASS Homebrew: --version 0.2.32 refused\nPASS Homebrew: --rollback refused\nPASS Homebrew's files untouched\nPASS a --HEAD install: brew upgrade --fetch-HEAD\nPASS in an app: the app updates it\nPASS in an app: --check says the same\nPASS in an app: nothing asked of the network, no state, the binary untouched\nPASS a source build: how to rebuild it, never replaced\nPASS a source build's --check\nPASS a source build at the latest: up to date\nPASS the command returns at once (0.01 s; the release page answers in 2 s), its output unchanged\nPASS one child, detached: launchd's, a session of its own, background priority, no terminal\nPASS the child installs 0.2.32, keeping 0.2.31\nPASS a run that is not in a terminal says nothing\nPASS the next run in a terminal: one line, first\nPASS and only once\nPASS checked today: no other check\nPASS 23 hours later: still none\nPASS 25 hours later: a check, which finds it up to date\nPASS a clock set back: a check, which finds it up to date\nPASS KAPITSA_NO_AUTO_UPDATE=1: no check\nPASS CI=true: no check\nPASS CI=1: no check\nPASS --auto off: kept in update.json\nPASS --auto off: no check\nPASS --auto on\nPASS help, the version, bench, update and unknown commands start no check\nPASS CI=false is not CI: a check\nPASS a check that hangs ends at its time limit, silently, nothing changed\nPASS while kapitsa bench holds the binary, kapitsa update leaves it (and downloads nothing)\nPASS and so does the automatic update, which tries again in an hour\nPASS a running kapitsa bench holds its binary\nPASS after it: updated\nPASS a binary replaced meanwhile is not this kapitsa: left as it is\nPASS two installs, one home: only the one that ran is updated\nPASS then the other, when it runs\nPASS run through a symlink: the file it points to is updated, the symlink kept\nPASS a bad sha256 in the background: refused\nPASS the next run in a terminal says why\nPASS nothing answering: recorded\nPASS and never said\nPASS kapitsa update: the sudo command\nPASS not in a terminal: no check (it could only tell)\nPASS in a terminal: a check, which only tells\nPASS the next run says the command\nPASS and the binary is untouched\nPASS brew upgrade nace-ai/tap/kapitsa: not in a terminal, no check\nPASS brew upgrade nace-ai/tap/kapitsa: in a terminal, a check that only records the release\nPASS brew upgrade nace-ai/tap/kapitsa: the next run in a terminal says so\nPASS git -C '/private/var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T/kapitsa-update-test-96y4lb0d/my src' pull && cmake --build '/private/var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T/kapitsa-update-test-96y4lb0d/my src/build': not in a terminal, no check\nPASS git -C '/private/var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T/kapitsa-update-test-96y4lb0d/my src' pull && cmake --build '/private/var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T/kapitsa-update-test-96y4lb0d/my src/build': in a terminal, a check that only records the release\nPASS git -C '/private/var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T/kapitsa-update-test-96y4lb0d/my src' pull && cmake --build '/private/var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T/kapitsa-update-test-96y4lb0d/my src/build': the next run in a terminal says so\nPASS kapitsa update: not in a terminal, no check\nPASS kapitsa update: in a terminal, a check that only records the release\nPASS kapitsa update: the next run in a terminal says so\nPASS none of them replaced\nPASS kapitsa update replaces a binary built from source when asked\nPASS 140 requests: GET or HEAD, no query, User-Agent kapitsa, Accept-Language en, no cookies or anything else\n\nFAILED: 1 (the files are in /private/var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T/kapitsa-update-test-96y4lb0d)\n",
+    "test-update-retry.log": "PASS update_test: versions, release names, kinds of install\nPASS fixture: the 0.2.32 binary is a kapitsa 0.2.32 through and through\nPASS fixture: a kapitsa 0.2.33\nPASS fixture: a kapitsa 0.2.30\nPASS --check, latest 0.2.31: exit 0, nothing downloaded\nPASS --check, latest 0.2.32: exit 100, nothing downloaded\nPASS --check, latest 0.2.30: exit 0, nothing downloaded\nPASS --check, latest 0.2.31-rc.1: exit 0, nothing downloaded\nPASS --check, latest 0.2.32-rc.1: exit 100, nothing downloaded\nPASS --check, latest 0.2.131: exit 100, nothing downloaded\nPASS --check with no release: exit 1\nPASS --check, nothing answering: exit 1\nPASS plain http is refused but to this Mac\nPASS --check changes nothing, not even the state\nPASS kapitsa update installs 0.2.32\nPASS a new file renamed into place; the old binary kept, the same inode, as the rollback copy\nPASS the binary ran throughout: the old version, then the new one, nothing in between\nPASS a process holding the old binary keeps it unchanged\nPASS a kapitsa running the old binary keeps running\nPASS the license files updated where install.sh put them\nPASS the benchmark harness updated beside the notices, where bench compare looks for it\nPASS no temporary folder left beside the binary\nPASS the state: updated, from and to, checked now, nothing left to say\nPASS run again: up to date, nothing downloaded\nPASS the harness updated and the user's local.env kept\nPASS an install without a harness gets it on update\nPASS an update installs kapitsa-systemone and kapitsa-drex-pointer beside the binary\nPASS a kapitsa-systemone signed as another program is not installed, with a warning; kapitsa updates\nPASS refused: a wrong sha256\nPASS refused: an unsigned binary\nPASS refused: a signature broken by a change\nPASS refused: another identifier\nPASS refused: another version inside\nPASS refused: no license files\nPASS refused: kapitsa a symlink\nPASS refused: a download redirected away from GitHub (not followed)\nPASS a release without its tarball: exit 1\nPASS after all of them: the same binary, no rollback copy, the same license files, nothing left over\nPASS the state says why, with nothing left to say (it was said)\nPASS --rollback: back to 0.2.31, 0.2.32 kept in its place\nPASS automatic updates skip 0.2.32 from now on\nPASS --rollback again: forward to the newer one, and nothing skipped\nPASS rolled back from 0.2.32: the automatic update leaves 0.2.32 alone\nPASS and installs the next one, 0.2.33\nPASS --version 0.2.30: an older release when asked for; automatic updates skip 0.2.31\nPASS the 0.2.30 binary knows it is 0.2.30\nPASS latest 0.2.31, the version moved away from: left alone\nPASS --version of no release: exit 1, nothing changed\nPASS --version of the version installed: nothing to do\nPASS usage error: --version x.y\nPASS usage error: --version 1.2.3/../../x\nPASS usage error: --auto maybe\nPASS usage error: --check --rollback\nPASS usage error: --nope\nPASS --rollback with nothing kept: exit 1\nPASS Homebrew --check names brew upgrade\nPASS Homebrew, not in a terminal: says brew upgrade, runs nothing, downloads nothing\nPASS Homebrew in a terminal: runs brew upgrade\nPASS Homebrew: --version 0.2.32 refused\nPASS Homebrew: --rollback refused\nPASS Homebrew's files untouched\nPASS a --HEAD install: brew upgrade --fetch-HEAD\nPASS in an app: the app updates it\nPASS in an app: --check says the same\nPASS in an app: nothing asked of the network, no state, the binary untouched\nPASS a source build: how to rebuild it, never replaced\nPASS a source build's --check\nPASS a source build at the latest: up to date\nPASS the command returns at once (0.01 s; the release page answers in 2 s), its output unchanged\nPASS one child, detached: launchd's, a session of its own, background priority, no terminal\nPASS the child installs 0.2.32, keeping 0.2.31\nPASS a run that is not in a terminal says nothing\nPASS the next run in a terminal: one line, first\nPASS and only once\nPASS checked today: no other check\nPASS 23 hours later: still none\nPASS 25 hours later: a check, which finds it up to date\nPASS a clock set back: a check, which finds it up to date\nPASS KAPITSA_NO_AUTO_UPDATE=1: no check\nPASS CI=true: no check\nPASS CI=1: no check\nPASS --auto off: kept in update.json\nPASS --auto off: no check\nPASS --auto on\nPASS help, the version, bench, update and unknown commands start no check\nPASS CI=false is not CI: a check\nPASS a check that hangs ends at its time limit, silently, nothing changed\nPASS while kapitsa bench holds the binary, kapitsa update leaves it (and downloads nothing)\nPASS and so does the automatic update, which tries again in an hour\nPASS a running kapitsa bench holds its binary\nPASS after it: updated\nPASS a binary replaced meanwhile is not this kapitsa: left as it is\nPASS two installs, one home: only the one that ran is updated\nPASS then the other, when it runs\nPASS run through a symlink: the file it points to is updated, the symlink kept\nPASS a bad sha256 in the background: refused\nPASS the next run in a terminal says why\nPASS nothing answering: recorded\nPASS and never said\nPASS kapitsa update: the sudo command\nPASS not in a terminal: no check (it could only tell)\nPASS in a terminal: a check, which only tells\nPASS the next run says the command\nPASS and the binary is untouched\nPASS brew upgrade nace-ai/tap/kapitsa: not in a terminal, no check\nPASS brew upgrade nace-ai/tap/kapitsa: in a terminal, a check that only records the release\nPASS brew upgrade nace-ai/tap/kapitsa: the next run in a terminal says so\nPASS git -C '/private/var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T/kapitsa-update-test-wqrgr4qk/my src' pull && cmake --build '/private/var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T/kapitsa-update-test-wqrgr4qk/my src/build': not in a terminal, no check\nPASS git -C '/private/var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T/kapitsa-update-test-wqrgr4qk/my src' pull && cmake --build '/private/var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T/kapitsa-update-test-wqrgr4qk/my src/build': in a terminal, a check that only records the release\nPASS git -C '/private/var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T/kapitsa-update-test-wqrgr4qk/my src' pull && cmake --build '/private/var/folders/z3/d4tq3g2d0f999hnp07qrwvnm0000gn/T/kapitsa-update-test-wqrgr4qk/my src/build': the next run in a terminal says so\nPASS kapitsa update: not in a terminal, no check\nPASS kapitsa update: in a terminal, a check that only records the release\nPASS kapitsa update: the next run in a terminal says so\nPASS none of them replaced\nPASS kapitsa update replaces a binary built from source when asked\nPASS 148 requests: GET or HEAD, no query, User-Agent kapitsa, Accept-Language en, no cookies or anything else\n\nok: 0 failed\n"
+  },
+  "benchmarks": [
+    {
+      "file": "bench-01-base.json",
+      "flags": [],
+      "invalid": []
+    },
+    {
+      "file": "bench-02-candidate.json",
+      "flags": [],
+      "invalid": []
+    },
+    {
+      "file": "bench-03-base.json",
+      "flags": [],
+      "invalid": []
+    },
+    {
+      "file": "bench-04-candidate.json",
+      "flags": [],
+      "invalid": []
+    }
+  ],
+  "limits": [
+    "No inference speedup is claimed.",
+    "The existing page-cache residency assertion failed on baseline and candidate; this is not a fully passing load_error_test.",
+    "Other models and GPUs not verified."
+  ]
+}

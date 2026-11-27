@@ -26,11 +26,16 @@ struct LiveDecode {
   std::atomic<int> cycles{0};              // decode cycles: a speculative cycle's verify, or a plain step
   std::atomic<int> last{0};                // tokens the last cycle wrote (its accepted drafts + 1)
   std::atomic<int> spec{0};                // 0 plain decoding, 1 MTP, 2 DFlash2, 3 LiLiCorr
+  std::atomic<int> slot{-1};               // the engine slot it runs on, -1 before it has one
 };
 
 struct ChatRequest {
   ojson messages = ojson::array();
-  ojson tools = ojson::array();
+  ojson tools = ojson::array();           // the tools the prompt declares
+  // Tools marked "defer_loading": true (Anthropic's and OpenAI's tool search): left out of the prompt, which a client
+  // keeps the same as it loads them by putting their definitions in the conversation, so the cached prefix stays.
+  // A call to one is parsed and typed by its schema, and the grammar knows it, as for a declared tool (call_tools).
+  ojson deferred_tools = ojson::array();
   ojson template_kwargs = ojson::object(); // e.g. enable_thinking, reasoning_effort
   int max_tokens = 8192;
   float temperature = 0.6f;
@@ -48,7 +53,8 @@ struct ChatRequest {
   bool ignore_eos = false;
   ojson cache_salt;  // the body's "cache_salt" (null: none); only the Splash backend uses it, as its cache key
   // The body's "prompt_cache_key" (OpenAI's, a conversation's id: chat completions and responses), "" if none. Keys the
-  // conversation a read ahead (POST /v1/draft) continues.
+  // conversation a read ahead (POST /v1/draft) continues, the slot a new conversation takes first (pick_slot), and
+  // the SSD entries that then go first when it needs room (Engine::disk_replaced).
   std::string cache_key;
   std::vector<std::string> stop;
   std::shared_ptr<LiveDecode> live;  // the request's progress for a display, or null
@@ -59,9 +65,23 @@ struct ChatRequest {
   int loops = 0;
   std::string effort;
   int thinking_budget = -1;     // Anthropic thinking.budget_tokens; 0: thinking disabled
+  // The reasoning's hard cap (src/engine/think_control.h): thinking_control.hard_cap, else a positive thinking_budget
+  // (-1: none; 0 forces the close at once); the text forced before </think> at the cap; whether a tool call inside the
+  // reasoning ends the control (-1: when the request has tools, as Splash's thinking budget does)
+  int think_cap = -1;
+  std::string think_close_text;
+  int think_end_on_tool_call = -1;
   // Structured output (src/engine/grammar.h: a JSON schema, any JSON object, tool calls the request forces or strict
   // tools): what the reply must follow after its reasoning, or null. The engine samples each token under its mask.
   std::shared_ptr<const Grammar> grammar;
+
+  // Every tool a call may name: the declared ones, then the deferred ones
+  ojson call_tools() const {
+    if (deferred_tools.empty()) return tools;
+    ojson all = tools;
+    for (const auto& t : deferred_tools) all.push_back(t);
+    return all;
+  }
 };
 
 struct ToolCall {
@@ -91,12 +111,17 @@ struct ChatResult {
   std::string error;
   std::string stop_sequence;  // "stop" at one of the request's stop strings: that string
   bool context_full = false;  // "length" because the context window (or the memory for it) ran out, not max_tokens
-  int prompt_limit = 0;       // "error" because the prompt does not fit: the most prompt tokens that would
+  int prompt_limit = 0;       // "error" because the prompt does not fit: the most prompt tokens that would fit
+  bool memory_limit = false;  // prompt_limit is what this Mac's memory holds for the conversation now, not the context window
   bool busy = false;          // "error" because the engine has no capacity for it now: a 503 with Retry-After, not a 400
   bool invalid_request = false;  // "error" because of the request's content (an image that cannot be read, a video)
-  bool engine_down = false;   // "error" because the engine process has exited: a 503 without Retry-After (nothing relaunches it)
+  bool engine_down = false;   // "error" because the engine is unavailable: a 503, without Retry-After if permanently dead
+  bool engine_restarting = false;  // a local cancellation deadline is replacing the child: a 503 with Retry-After
   int prompt_tokens = 0, cached_tokens = 0, completion_tokens = 0;
   int reasoning_tokens = 0;   // completion tokens inside the think block
+  int think_cap = -1;         // the reasoning's hard cap the request ran with (-1: none)
+  bool think_forced = false;  // the cap was reached: the close was forced
+  int think_tokens = 0;       // the capped (first) reasoning block's tokens, its </think> included: at most think_cap
   double prefill_ms = 0, decode_ms = 0;
   // prefill_ms is the time to read the uncached prompt tokens: no image rows (their encoder runs before the clock
   // starts) and no turn given to another request in between (--slots > 1); a rate from it is shown only then
@@ -111,6 +136,8 @@ struct ChatResult {
   int yields = 0;
   int batched = 0;  // decode cycles it ran in one pass with other requests' (batched decode)
   int loops = 0;    // looped models: the loop count the request ran (0: not a looped model)
+  // resolved thinking level / effort for logging and results ("low", "medium", "high", "xhigh", "on", "off", "budget N")
+  std::string thinking_level;
   // KFlash around the decode (src/model/kflash_wrap.h): the proposal source ("DFlash2", "MTP", "prompt lookup", "none":
   // plain decoding, 1 row per cycle) and the cycles it ran; empty source: the wrapper is off (NI_KFLASH=0)
   std::string kflash_source;

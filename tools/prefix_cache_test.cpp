@@ -4,13 +4,16 @@
 // the quota (least recently used entries go first, pieces shared by entries stay while one needs them, an entry whose
 // restore points a newer one has goes, a pinned entry stays, a piece larger than the limit is refused); the volume
 // filling up; namespaces (one unused for 14 days removed at open, another counted against the limit and removed before
-// this one's entries, one another process holds left alone, other folders untouched); the namespace's lock.
+// this one's entries, one another process holds left alone, other folders untouched); the namespace's lock; the
+// entries of a prompt_cache_key a new conversation replaced going first (and their key taken back after a restart).
 // Works in a temporary folder it removes.
 //   prefix_cache_test        exit status 1 if any check fails
 #include "engine/prefix_cache.h"
 
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/xattr.h>
@@ -19,6 +22,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <string>
@@ -194,6 +198,7 @@ void sizes() {
 void write_read_restart(const std::string& root) {
   const std::string ns = ns_name(1);
   Conv c = make_conv(11, 100, 1000, {48, 100}, 40000, 70000);
+  c.e.snaps[0].flags = Snap::kPrefix;
   {
     Store st;
     std::string why;
@@ -224,9 +229,10 @@ void write_read_restart(const std::string& root) {
     check(ok && all, "read back: every piece's bytes and header data as written");
     Entry e;
     check(st.pin(st.lookup(full.data(), int(full.size()), int(full.size())).entry, &e) && e.tokens == c.e.tokens &&
-              e.vocab == c.e.vocab && e.vocab_scanned == 100 && e.snaps.size() == 2 && e.snaps[1].dctx == 101 &&
+              e.vocab == c.e.vocab && e.vocab_scanned == 100 && e.snaps.size() == 2 &&
+              e.snaps[0].flags == Snap::kPrefix && e.snaps[1].flags == Snap::kQuery && e.snaps[1].dctx == 101 &&
               e.fills == c.e.fills,
-          "the entry's record: tokens, fills, restore points, draft rows");
+          "the entry's record: tokens, fills, restore points (including kPrefix), draft rows");
     st.unpin(e.key, true);
     const auto s = st.stats();
     check(s.entries == 2 && s.pieces == 15 && s.held == dir_bytes(st.dir() + "/kv") + dir_bytes(st.dir() + "/st") +
@@ -246,6 +252,64 @@ void write_read_restart(const std::string& root) {
       all = all && read_piece(st, kKv, c.e.blocks[i], &r) == c.blocks[i] && r;
     }
     check(all, "its pieces read back as written after the restart");
+    // F_NOCACHE on Apple silicon's 16 KiB pages: check page-cache residency on page-aligned (256 KiB),
+    // non-page-multiple (100 KB), and small (~1 KB entry) files when page size is 16 KiB.
+    if (getpagesize() == 16384) {
+      auto count_resident = [](const std::string& path, int* total_out = nullptr) -> int {
+        const int fd = open(path.c_str(), O_RDONLY);
+        if (fd < 0) return -1;
+        struct stat st_buf;
+        if (fstat(fd, &st_buf) != 0 || st_buf.st_size <= 0) {
+          close(fd);
+          return -1;
+        }
+        const size_t len = size_t(st_buf.st_size);
+        const size_t pg = 16384;
+        const int npages = int((len + pg - 1) / pg);
+        if (total_out) *total_out = npages;
+        void* map = mmap(nullptr, len, PROT_READ, MAP_SHARED, fd, 0);
+        close(fd);
+        if (map == MAP_FAILED) return -1;
+        std::vector<char> vec(size_t(npages), 0);
+        int res = -1;
+        if (mincore(map, len, vec.data()) == 0) {
+          res = 0;
+          for (char c0 : vec)
+            if (c0 & MINCORE_INCORE) ++res;
+        }
+        munmap(map, len);
+        return res;
+      };
+      const Key aligned_key = Hasher().u64(9999).done();
+      const Key unaligned_key = Hasher().u64(9998).done();
+      const std::vector<uint8_t> aligned_data = pattern(9999, 16 * 16384);
+      const std::vector<uint8_t> unaligned_data = pattern(9998, 100000);
+      auto job = st.begin({{kKv, aligned_key}, {kKv, unaligned_key}});
+      check(write_piece(st, *job, kKv, aligned_key, aligned_data) &&
+                write_piece(st, *job, kKv, unaligned_key, unaligned_data),
+            "write 256 KiB aligned and 100 KB unaligned KV pieces");
+      job.reset();
+      Conv small_e = make_conv(9997, 200, 50000, {64}, 1024, 1024);
+      check(save_conv(st, small_e), "write a conversation with a ~1 KB entry record");
+      const Key small_ek = st.lookup(tokens_of(small_e, 200).data(), 200, 200).entry;
+      int tot_aligned = 0, tot_unaligned = 0, tot_entry = 0;
+      const int res_aligned = count_resident(st.dir() + "/kv/" + aligned_key.hex(), &tot_aligned);
+      const int res_unaligned = count_resident(st.dir() + "/kv/" + unaligned_key.hex(), &tot_unaligned);
+      const int res_entry = count_resident(st.dir() + "/e/" + small_ek.hex(), &tot_entry);
+      // On filesystems that honor F_NOCACHE, full 16 KiB pages are evicted (0/17 on 256 KiB; at most the 1 partial tail
+      // page on 100 KB = 1/8, and at most the 1 partial tail page on a ~1 KB entry file = 1/2).
+      if (res_aligned >= 0 && res_aligned <= 1) {
+        check(res_aligned == 0 && tot_aligned == 17,
+              "16 KiB header aligns F_NOCACHE writes: 0 of 17 pages cached on 256 KiB payload",
+              std::to_string(res_aligned) + "/" + std::to_string(tot_aligned));
+        check(res_unaligned <= 1 && tot_unaligned == 8,
+              "100 KB payload: 0 of 7 full pages cached (at most 1 partial tail page resident)",
+              std::to_string(res_unaligned) + "/" + std::to_string(tot_unaligned));
+        check(res_entry <= 1 && tot_entry == 2,
+              "~1 KB entry file: 0 of 1 header page cached (at most 1 partial payload page resident)",
+              std::to_string(res_entry) + "/" + std::to_string(tot_entry));
+      }
+    }
     st.clear();
   }
 }
@@ -262,10 +326,11 @@ void damage(const std::string& root) {
     st.open(opts(root, ns, 64 * kMiB), &why);
     dir = st.dir();
     check(save_conv(st, c) && save_conv(st, d) && save_conv(st, f), "three entries written");
-    flip_byte(dir + "/kv/" + c.e.blocks[2].hex(), 4096 + 777);  // one payload byte of one block
+    const std::string c_blk2 = dir + "/kv/" + c.e.blocks[2].hex();
+    flip_byte(c_blk2, off_t(fs::file_size(c_blk2)) - 777);  // one payload byte of one block
     bool r = true;
     read_piece(st, kKv, c.e.blocks[2], &r);
-    check(!r && hit_pos(st, tokens_of(c, 80)) == 0 && !fs::exists(dir + "/kv/" + c.e.blocks[2].hex()),
+    check(!r && hit_pos(st, tokens_of(c, 80)) == 0 && !fs::exists(c_blk2),
           "a damaged piece fails its CRC: the entry that needs it is dropped with it");
     check(hit_pos(st, tokens_of(d, 80)) == 64, "the other entries stay");
   }
@@ -273,7 +338,8 @@ void damage(const std::string& root) {
   const std::string tmp = dir + "/kv/" + d.e.blocks[0].hex() + ".tmp.999.1";
   if (FILE* t = fopen(tmp.c_str(), "w")) fputs("partial", t), fclose(t);
   truncate((dir + "/st/" + d.e.snaps[0].state.hex()).c_str(), 100);
-  truncate((dir + "/kv/" + f.e.blocks[1].hex()).c_str(), 4096 + 1000);
+  const std::string f_blk1 = dir + "/kv/" + f.e.blocks[1].hex();
+  truncate(f_blk1.c_str(), off_t(fs::file_size(f_blk1)) - 1000);
   {
     Store st;
     std::string why;
@@ -291,7 +357,7 @@ void damage(const std::string& root) {
   {
     std::string rec;
     for (const auto& de : fs::directory_iterator(dir + "/e")) rec = de.path();
-    flip_byte(rec, 4096 + 5);
+    flip_byte(rec, off_t(fs::file_size(rec)) - 5);
     Store st;
     std::string why;
     st.open(opts(root, ns, 64 * kMiB), &why);
@@ -299,11 +365,134 @@ void damage(const std::string& root) {
   }
 }
 
+void pinned_damage(const std::string& root) {
+  for (Kind kind : {kKv, kState, kEntry}) {
+    for (bool missing : {false, true}) {
+      Store st;
+      std::string why;
+      Conv c = make_conv(26, 64, 7000, {64}, 1000, 2000);
+      check(st.open(opts(root, ns_name(260 + kind * 2 + missing), 64 * kMiB), &why) && save_conv(st, c),
+            "prepare pinned damage case", why);
+      const auto prompt = tokens_of(c, 80);
+      const Key entry = st.lookup(prompt.data(), 80, 80).entry;
+      Entry first, second;
+      check(st.pin(entry, &first) && st.pin(entry, &second), "two restores pin the same entry");
+      const Key key = kind == kKv ? c.e.blocks.front() : kind == kState ? c.e.snaps.front().state : entry;
+      const std::string file = st.dir() + (kind == kKv ? "/kv/" : kind == kState ? "/st/" : "/e/") + key.hex();
+      if (missing) check(unlink(file.c_str()) == 0, "remove the pinned file");
+      else flip_byte(file, off_t(fs::file_size(file)) - 5);
+      bool ok = true;
+      read_piece(st, kind, key, &ok);
+      check(!ok, "a pinned missing or corrupt file fails to read");
+      check(hit_pos(st, prompt) == 0 && !st.has(kEntry, entry) && !st.has(kind, key),
+            "damage immediately hides the pinned entry and damaged file");
+      Entry again;
+      const bool pinned_again = st.pin(entry, &again);
+      check(!pinned_again, "a damaged entry accepts no new restore");
+      if (pinned_again) st.unpin(entry, false);
+      check(!save_conv(st, c), "a save cannot reuse damage while restores still hold it");
+      st.unpin(entry, false);
+      check(st.stats().entries == 1, "the first restore leaves the second pin intact");
+      st.unpin(entry, true);  // another reader completing must not revive the failed entry
+      check(st.stats().entries == 0 && st.stats().pieces == 0 && st.stats().held == 0,
+            "the last restore discards the damaged entry and its references");
+      check(save_conv(st, c) && hit_pos(st, prompt) == 64, "the same conversation can be saved again");
+      check(read_piece(st, kKv, c.e.blocks.front(), &ok) == c.blocks.front() && ok,
+            "repaired KV is byte-identical");
+      check(read_piece(st, kState, c.e.snaps.front().state, &ok) == c.states.front() && ok,
+            "repaired state is byte-identical");
+      st.clear();
+    }
+  }
+}
+
+void damaged_job(const std::string& root) {
+  for (Kind kind : {kKv, kState}) {
+    Store st;
+    std::string why;
+    Conv a = make_conv(27, 64, 8000, {32}, 1000, 2000);
+    Conv b = make_conv(27, 64, 9000, {64}, 1000, 2000);
+    if (kind == kState) b.e.snaps.front().state = a.e.snaps.front().state, b.states = a.states;
+    // An extra restore point keeps the second entry when the first is written.
+    b.e.snaps.push_back({48, Snap::kQuery, 0, 0, Hasher().u64(280).done()});
+    b.states.push_back(pattern(280, 2000));
+    check(st.open(opts(root, ns_name(280 + kind), 64 * kMiB), &why) && save_conv(st, b) && save_conv(st, a),
+          "prepare shared damage and a pending writer", why);
+    const auto pa = tokens_of(a, 80), pb = tokens_of(b, 80);
+    Entry ea, eb;
+    check(st.pin(st.lookup(pa.data(), 80, 80).entry, &ea) && st.pin(st.lookup(pb.data(), 80, 80).entry, &eb),
+          "pin both entries sharing the piece");
+    const Key key = kind == kKv ? a.e.blocks.front() : a.e.snaps.front().state;
+    auto job = st.begin({{kind, key}});
+    const std::string file = st.dir() + (kind == kKv ? "/kv/" : "/st/") + key.hex();
+    check(truncate(file.c_str(), 100) == 0, "truncate the shared file header");
+    bool ok = true;
+    read_piece(st, kind, key, &ok);
+    check(!ok && hit_pos(st, pa) == 0 && hit_pos(st, pb) == 0,
+          "shared damage hides every dependent entry");
+    check(!st.put(*job, a.e), "an existing writer cannot publish a damaged piece");
+    st.unpin(ea.key, false);
+    st.unpin(eb.key, false);
+    check(st.stats().entries == 0 && st.stats().pieces == 1 && !st.has(kind, key),
+          "the writer retains only the invalid piece record");
+    const auto& data = kind == kKv ? a.blocks.front() : a.states.front();
+    check(!write_piece(st, *job, kind, key, data), "the writer cannot report an invalid piece as written");
+    auto late = st.begin({{kind, key}});
+    job.reset();
+    check(st.stats().pieces == 0 && st.stats().held == 0,
+          "the last old writer releases damage; a new job does not extend its lifetime");
+    check(save_conv(st, a), "a new save repairs the conversation after the writer ends");
+    check(read_piece(st, kind, key, &ok) == data && ok, "repaired shared piece has the complete original bytes");
+    late.reset();
+    st.clear();
+  }
+}
+
+void read_open_error(const std::string& root) {
+  Store st;
+  std::string why;
+  Conv c = make_conv(25, 64, 6000, {64}, 1000, 2000);
+  if (!st.open(opts(root, ns_name(25), 64 * kMiB), &why) || !save_conv(st, c)) {
+    check(false, "prepare a saved conversation for the open-error test", why);
+    return;
+  }
+  const Key key = c.e.blocks.front();
+  const auto prompt = tokens_of(c, 80);
+  Entry e;
+  if (!st.pin(st.lookup(prompt.data(), 80, 80).entry, &e)) {
+    check(false, "pin the conversation for a restore");
+    return;
+  }
+  struct rlimit saved;
+  if (getrlimit(RLIMIT_NOFILE, &saved) != 0) {
+    check(false, "read the descriptor limit");
+    st.unpin(e.key, false);
+    return;
+  }
+  const struct rlimit limited{0, saved.rlim_max};
+  if (setrlimit(RLIMIT_NOFILE, &limited) != 0) {
+    check(false, "set the temporary descriptor limit");
+    st.unpin(e.key, false);
+    return;
+  }
+  bool ok = true;
+  read_piece(st, kKv, key, &ok);
+  if (setrlimit(RLIMIT_NOFILE, &saved) != 0) std::abort();
+  st.unpin(e.key, false);
+  check(!ok, "the read fails while the process cannot open a descriptor");
+  check(hit_pos(st, prompt) == 64 && read_piece(st, kKv, key, &ok) == c.blocks.front() && ok,
+        "the same checkpoint is readable after descriptor capacity returns");
+  const std::string file = st.dir() + "/kv/" + key.hex();
+  check(unlink(file.c_str()) == 0, "remove the piece to exercise a missing file");
+  read_piece(st, kKv, key, &ok);
+  check(!ok && hit_pos(st, prompt) == 0, "a missing piece still drops its dependent entry");
+}
+
 void quota(const std::string& root) {
   const std::string ns = ns_name(3);
   Store st;
   std::string why;
-  // one conversation: 4 blocks of 60000 + a state of 100000 (+ 4 KiB headers, a small record): ~0.37 MB
+  // one conversation: 4 blocks of 60000 + a state of 100000 (+ 16 KiB headers on 6 files, a small record): ~0.44 MB
   check(st.open(opts(root, ns, 1 * kMiB), &why) && st.limit() == kMiB, "a quota of 1 MiB", why);
   Conv a = make_conv(31, 64, 100, {64}, 60000, 100000), b = make_conv(32, 64, 200, {64}, 60000, 100000),
        c = make_conv(33, 64, 300, {64}, 60000, 100000);
@@ -331,7 +520,7 @@ void quota(const std::string& root) {
   st.set_test_space(10 * kGiB + 2 * kMiB, 2000 * kGiB);  // the volume filled: 2 MiB free beyond the floor
   check(st.limit() == std::min(kMiB, (2 * kMiB + h0) / 4),
         "the volume fills: the limit shrinks to a quarter of what is left beyond the floor (its own files counted)");
-  check(hit_pos(st, tokens_of(a, 70)) == 64 && st.held() <= st.limit() + 400000,
+  check(hit_pos(st, tokens_of(a, 70)) == 64 && st.held() <= st.limit() + 450000,
         "entries go to fit, least recently used first; a pinned one stays");
   st.unpin(pinned.key, false);
   st.measure();
@@ -359,6 +548,79 @@ void quota(const std::string& root) {
   job.reset();
   check(st.has(kKv, Hasher().u64(6).done()), "kept after its job ends without an entry");
   st.clear();
+}
+
+// A new conversation under a prompt_cache_key replaced that key's conversation (Engine::disk_replaced): its entries go
+// before any other when room is needed, until one is restored or written again; the key is in the entry file's header
+// data, so it comes back after a restart (the order does not), and an entry without one (as written before keys were
+// kept) loads as before.
+void replaced_first(const std::string& root) {
+  const std::string ns = ns_name(5);
+  const Key ka = conversation_key("chat-A"), kb = conversation_key("chat-B");
+  check(!conversation_key("") && ka && ka == conversation_key("chat-A") && ka != kb,
+        "conversation_key: none for \"\", the same for the same key, another for another");
+  // conversations of ~0.37 MB (as in quota()): two fit in 1 MiB
+  auto conv = [](uint64_t id, int base, const Key& k) {
+    Conv c = make_conv(id, 64, base, {64}, 60000, 100000);
+    c.e.conv = k;
+    return c;
+  };
+  Conv b = conv(51, 100, kb), a = conv(52, 200, ka), c = conv(53, 300, conversation_key("chat-C"));
+  Conv n = conv(54, 400, ka), old = conv(55, 500, Key());
+  {
+    Store st;
+    std::string why;
+    check(st.open(opts(root, ns, 1 * kMiB), &why), "replaced: a quota of 1 MiB", why);
+    auto in = [&](const Conv& x) { return hit_pos(st, tokens_of(x, 70)) == 64; };
+    auto later = [&](const Conv& x) {  // written after what was written before it (the order of use)
+      usleep(2000);
+      return save_conv(st, x);
+    };
+    check(save_conv(st, b), "replaced: B written");
+    check(later(a), "replaced: A written after it (B is the least recently used)");
+    check(st.demote(Key()) == 0 && st.demote(conversation_key("chat-Z")) == 0,
+          "replaced: the empty key and a key no entry has mark nothing");
+    check(st.demote(ka) == 1 && st.demote(ka) == 0, "replaced: a new conversation under chat-A marks A's entry (once)");
+    check(save_conv(st, c) && in(b) && in(c) && !in(a),
+          "replaced: room for C takes A, the replaced one, not B (least recently used)");
+    // a wrong guess: a marked entry restored is back in the usual order
+    st.clear();
+    check(save_conv(st, b) && later(a) && st.demote(ka) == 1, "replaced: B, A again, A marked");
+    Entry e;
+    usleep(2000);
+    check(st.pin(st.lookup(tokens_of(a, 70).data(), 70, 70).entry, &e) && e.conv == ka,
+          "replaced: the pinned record has its key");
+    st.unpin(e.key, true);
+    check(save_conv(st, c) && !in(b) && in(a) && in(c), "replaced: restored, A is back in the order: B goes, as before");
+    // an entry written as its slot is replaced (put with replaced) goes first, newest as it is
+    st.clear();
+    Conv a2 = a;
+    a2.e.replaced = true;
+    check(save_conv(st, b) && later(a2) && later(c) && in(b) && in(c) && !in(a),
+          "replaced: an entry written as replaced goes first, though newer than B");
+    // the new conversation's own entries under the key are not marked: only those there when it replaced the old one
+    st.clear();
+    check(save_conv(st, a) && st.demote(ka) == 1 && later(b) && later(n) && later(c) && !in(a) && in(n) && in(c) && !in(b),
+          "replaced: A's old entry goes first; the new conversation under chat-A is in the usual order (B goes next)");
+    // the same conversation written again under another key: the same entry (its key is its record's digest)
+    const size_t n0 = st.stats().entries;
+    Conv n2 = n;
+    n2.e.conv = kb;
+    check(save_conv(st, n2) && st.stats().entries == n0, "replaced: the key is not part of the entry's identity");
+    // an entry without a key (as every entry was written before keys were kept: no header data)
+    st.clear();
+    check(save_conv(st, a) && save_conv(st, old) && st.demote(Key()) == 0, "replaced: an entry without a key, beside A's");
+    check(st.demote(ka) == 1, "replaced: A marked before the restart");
+  }
+  {
+    Store st;  // the server restarts
+    std::string why;
+    check(st.open(opts(root, ns, 1 * kMiB), &why) && st.stats().entries == 2, "replaced: both taken back by the next open",
+          why);
+    check(hit_pos(st, tokens_of(old, 70)) == 64, "replaced: the entry without a key loads and is found as before");
+    check(st.demote(ka) == 1, "replaced: A's key came back from its file (the mark did not: it marks again)");
+    st.clear();
+  }
 }
 
 // Threads at once, as the engine's are (its writer thread, requests reading what they pinned, lookups) while the volume's
@@ -440,6 +702,12 @@ void namespaces(const std::string& root) {
     set_mtime(lock, days);
   };
   const std::string old = ns_name(40), recent = ns_name(41), held = ns_name(42), mine = ns_name(43);
+  const std::string unreadable = r + "/" + ns_name(44), changed = r + "/" + ns_name(45);
+  make_ns(ns_name(44), 20, 1000);
+  fs::remove(unreadable + "/lock");
+  fs::create_directory(unreadable + "/lock");  // opening this path read/write fails even when run as root
+  set_mtime(unreadable, 20);
+  make_ns(ns_name(45), 2, 1000);
   make_ns(old, 15, 1000);
   make_ns(recent, 1, 3 * kMiB);
   make_ns(held, 30, 1000);
@@ -456,9 +724,13 @@ void namespaces(const std::string& root) {
     check(fs::exists(r + "/" + held), "one another server holds is left alone, however old");
     check(fs::exists(r + "/not-a-cache"), "a folder that is not a namespace is left alone");
     // the root's limit holds this namespace and the others nobody holds: the others go first, the oldest first
+    check(fs::exists(unreadable + "/kv/data"), "stale cleanup preserves a namespace whose lock cannot be opened");
+    fs::remove(changed + "/lock");
+    fs::create_directory(changed + "/lock");
     Conv a = make_conv(51, 64, 100, {64}, 60000, 100000);
     check(save_conv(st, a), "an entry in the new namespace");
     st.set_test_space(10 * kGiB + 8 * kMiB, 2000 * kGiB);  // a 2 MiB limit: the other namespace's 3 MiB do not fit
+    check(fs::exists(changed + "/kv/data"), "quota cleanup preserves a namespace whose lock became inaccessible");
     check(!fs::exists(r + "/" + recent) && hit_pos(st, tokens_of(a, 70)) == 64,
           "over the limit: another model's cache nobody holds goes before this one's entries");
     st.clear();
@@ -480,6 +752,104 @@ void namespaces(const std::string& root) {
   check(getxattr(r.c_str(), root_attr.c_str(), nullptr, 0, 0, 0) > 0, "the root is kept out of Time Machine");
 }
 
+// Convert a v2 file on disk into a v1 file (version = 1, 4,096-byte header with its CRC, payload at offset 4,096).
+bool downgrade_file_to_v1(const std::string& path) {
+  struct FileHdr {
+    char magic[8];
+    uint32_t version, kind;
+    uint64_t ns_hi, ns_lo, key_hi, key_lo;
+    uint64_t payload;
+    uint32_t payload_crc;
+    uint32_t meta_bytes;
+    uint32_t header_crc;
+    uint32_t pad;
+  };
+  const int fd = open(path.c_str(), O_RDWR);
+  if (fd < 0) return false;
+  struct stat st;
+  if (fstat(fd, &st) != 0 || st.st_size < 16384) {
+    close(fd);
+    return false;
+  }
+  std::vector<uint8_t> buf(size_t(st.st_size));
+  if (pread(fd, buf.data(), buf.size(), 0) != ssize_t(buf.size())) {
+    close(fd);
+    return false;
+  }
+  const size_t payload_len = buf.size() - 16384;
+  std::vector<uint8_t> v1(4096 + payload_len, 0);
+  memcpy(v1.data(), buf.data(), 4096);
+  FileHdr h;
+  memcpy(&h, v1.data(), sizeof h);
+  h.version = 1;
+  h.header_crc = 0;
+  memcpy(v1.data(), &h, sizeof h);
+  h.header_crc = crc32c(0, v1.data(), 4096);
+  memcpy(v1.data(), &h, sizeof h);
+  if (payload_len > 0) memcpy(v1.data() + 4096, buf.data() + 16384, payload_len);
+  const bool ok = pwrite(fd, v1.data(), v1.size(), 0) == ssize_t(v1.size()) && ftruncate(fd, off_t(v1.size())) == 0;
+  close(fd);
+  return ok;
+}
+
+void v1_compat(const std::string& root) {
+  const std::string ns = ns_name(60);
+  // v1 conversation with 2,000-byte KV pieces (each v1 file is 6,096 bytes: between 4,096 and 16,383 bytes)
+  // and a 20,000-byte state piece (24,096 bytes).
+  Conv c_v1 = make_conv(601, 64, 10000, {64}, 2000, 20000);
+  Conv c_v2 = make_conv(602, 64, 20000, {64}, 30000, 40000);
+  std::string dir;
+  {
+    Store st;
+    std::string why;
+    check(st.open(opts(root, ns, 64 * kMiB), &why) && save_conv(st, c_v1), "prepare v1 conversation files", why);
+    dir = st.dir();
+  }
+  bool converted = true;
+  for (const char* sub : {"/kv", "/st", "/e"}) {
+    for (const auto& de : fs::directory_iterator(dir + sub)) {
+      converted = converted && downgrade_file_to_v1(de.path().string());
+    }
+  }
+  const std::string v1_kv0 = dir + "/kv/" + c_v1.e.blocks[0].hex();
+  check(converted && fs::file_size(v1_kv0) == 4096 + 2000,
+        "v1 piece has 4 KiB header and total size between 4,096 and 16,383 bytes (6,096 B)",
+        std::to_string(fs::file_size(v1_kv0)));
+  {
+    Store st;
+    std::string why;
+    check(st.open(opts(root, ns, 64 * kMiB), &why) && st.stats().entries == 1,
+          "open() keeps v1 entry and v1 pieces (including < 16 KiB files)", why);
+    check(hit_pos(st, tokens_of(c_v1, 80)) == 64, "v1 entry is found by lookup()");
+    bool ok_kv = false, ok_st = false;
+    std::string meta_kv, meta_st;
+    check(read_piece(st, kKv, c_v1.e.blocks[0], &ok_kv, &meta_kv) == c_v1.blocks[0] && ok_kv && meta_kv == "meta",
+          "read() returns exact bytes and metadata for v1 KV piece (< 16 KiB)");
+    check(read_piece(st, kState, c_v1.e.snaps[0].state, &ok_st, &meta_st) == c_v1.states[0] && ok_st && meta_st == "state",
+          "read() returns exact bytes and metadata for v1 state piece (> 16 KiB)");
+    // Write a v2 conversation alongside the v1 conversation in the same namespace directory.
+    check(save_conv(st, c_v2) && st.stats().entries == 2, "save a v2 conversation into the same directory as v1");
+  }
+  {
+    Store st;
+    std::string why;
+    check(st.open(opts(root, ns, 64 * kMiB), &why) && st.stats().entries == 2,
+          "reopen mixed v1/v2 directory: both entries and their pieces survive", why);
+    bool ok1 = false, ok2 = false;
+    check(hit_pos(st, tokens_of(c_v1, 80)) == 64 && hit_pos(st, tokens_of(c_v2, 80)) == 64 &&
+              read_piece(st, kKv, c_v1.e.blocks[1], &ok1) == c_v1.blocks[1] && ok1 &&
+              read_piece(st, kKv, c_v2.e.blocks[1], &ok2) == c_v2.blocks[1] && ok2,
+          "mixed v1/v2 directory: both v1 and v2 pieces read back byte-for-byte");
+    // Flip a payload byte in a v1 piece (offset 4096 + 123) and verify CRC check catches it.
+    flip_byte(v1_kv0, 4096 + 123);
+    bool ok_corrupt = true;
+    read_piece(st, kKv, c_v1.e.blocks[0], &ok_corrupt);
+    check(!ok_corrupt && hit_pos(st, tokens_of(c_v1, 80)) == 0 && hit_pos(st, tokens_of(c_v2, 80)) == 64,
+          "flipped payload byte in v1 piece is caught by CRC and drops v1 entry while v2 stays");
+    st.clear();
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -498,9 +868,14 @@ int main() {
   sizes();
   write_read_restart(root);
   damage(root);
+  pinned_damage(root);
+  damaged_job(root);
+  read_open_error(root);
   quota(root);
   concurrency(root);
   namespaces(root);
+  replaced_first(root);
+  v1_compat(root);
   std::error_code ec;
   fs::remove_all(root, ec);
   printf("%d passed, %d failed\n", passes, fails);

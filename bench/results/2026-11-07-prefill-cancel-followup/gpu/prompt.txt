@@ -1,0 +1,4 @@
+<|im_start|>user
+Write a detailed tutorial explaining how a compiler transforms a small programming language into machine code. Cover lexical analysis, parsing, type checking, optimization, register allocation, and code generation. Include examples and explain each stage in depth. Write at least 2000 words.
+<|im_end|>
+<|im_start|>assistant

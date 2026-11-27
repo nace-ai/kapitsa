@@ -1,0 +1,123 @@
+{
+ "date": "2026-11-20",
+ "mac": "MacBook Pro (16-inch, 2026), Apple M5 Max, 40-core GPU, 128 GB, macOS 26.4 (25E246), AC power, display asleep",
+ "prompts": "one short coding question (512 tokens out), then the first 4K, 16K and 32K tokens of bench/corpus.txt (Hy4's tokenizer) with 'Summarize the text above in one paragraph.' (256 tokens out); thinking off (reasoning_effort no_think), temperature 0.6, top-p 0.95; every prompt cold, each engine alone under the GPU lock",
+ "kapitsa": {
+  "build": "b5536ba8 (#1361's head, merged as 179c099f)",
+  "pack": "nace-ai/Hy4-flash-MLX-4bit (8-bit trunk, 4-bit group-64 experts, every expert in memory)",
+  "timings": "the server log's: prompt ms (every prefill pass, template and tokenizing excluded) and decode tok/s",
+  "precise": [
+   {
+    "prompt_tokens": 51,
+    "prompt_ms": 244,
+    "gen_tokens": 512,
+    "gen_tps": 36.4,
+    "name": "short",
+    "prompt_tps": 209.0
+   },
+   {
+    "prompt_tokens": 4045,
+    "prompt_ms": 6157,
+    "gen_tokens": 185,
+    "gen_tps": 35.2,
+    "name": "4K",
+    "prompt_tps": 657.0
+   },
+   {
+    "prompt_tokens": 16061,
+    "prompt_ms": 22987,
+    "gen_tokens": 235,
+    "gen_tps": 35.1,
+    "name": "16K",
+    "prompt_tps": 698.7
+   },
+   {
+    "prompt_tokens": 32131,
+    "prompt_ms": 47475,
+    "gen_tokens": 256,
+    "gen_tps": 34.6,
+    "name": "32K",
+    "prompt_tps": 676.8
+   }
+  ],
+  "fast": [
+   {
+    "prompt_tokens": 51,
+    "prompt_ms": 227,
+    "gen_tokens": 512,
+    "gen_tps": 35.9,
+    "name": "short",
+    "prompt_tps": 224.7
+   },
+   {
+    "prompt_tokens": 4045,
+    "prompt_ms": 4179,
+    "gen_tokens": 256,
+    "gen_tps": 34.9,
+    "name": "4K",
+    "prompt_tps": 967.9
+   },
+   {
+    "prompt_tokens": 16061,
+    "prompt_ms": 16544,
+    "gen_tokens": 251,
+    "gen_tps": 34.1,
+    "name": "16K",
+    "prompt_tps": 970.8
+   },
+   {
+    "prompt_tokens": 32131,
+    "prompt_ms": 33089,
+    "gen_tokens": 256,
+    "gen_tps": 34.8,
+    "name": "32K",
+    "prompt_tps": 971.0
+   }
+  ]
+ },
+ "mlx_lm_4bit": {
+  "versions": "mlx 0.32.4, mlx-lm 0.32.2",
+  "pack": "nace-ai/Hy4-flash-MLX-4bit",
+  "result": "does not run: mlx-lm warns the model 'requires 126731 MB which is close to the maximum recommended size of 110100 MB', then the first prompt fails with '[METAL] Command buffer execution failed: Insufficient Memory'. mlx_lm.server also fails on this pack (the pack's model file reads a scalar cache offset; the server's batch cache passes an array)."
+ },
+ "mlx_lm_3_1bit": {
+  "versions": "mlx 0.32.4, mlx-lm 0.32.2",
+  "pack": "nace-ai/Hy4-flash-MLX-3.1bit (85.5 GB, 3.12 effective bits a weight), loaded by the pack's run_mlx.load()",
+  "timings": "stream_generate's own prompt_tps and generation_tps",
+  "load_s": 7.7,
+  "results": [
+   {
+    "name": "short",
+    "prompt_tokens": 49,
+    "prompt_tps": 125.4,
+    "gen_tokens": 512,
+    "gen_tps": 20.77,
+    "peak_gb": 63.9
+   },
+   {
+    "name": "4K",
+    "prompt_tokens": 4035,
+    "prompt_tps": 227.7,
+    "gen_tokens": 141,
+    "gen_tps": 13.22,
+    "peak_gb": 69.8
+   },
+   {
+    "name": "16K",
+    "prompt_tokens": 16035,
+    "prompt_tps": 299.7,
+    "gen_tokens": 189,
+    "gen_tps": 6.95,
+    "peak_gb": 80.9
+   },
+   {
+    "name": "32K",
+    "prompt_tokens": 32035,
+    "prompt_tps": 304.2,
+    "gen_tokens": 256,
+    "gen_tps": 4.39,
+    "peak_gb": 100.0
+   }
+  ]
+ }
+}

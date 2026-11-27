@@ -1,0 +1,686 @@
+{
+ "schema": 2,
+ "label": "flash-kapitsa",
+ "model": "flash-next",
+ "base_url": "http://127.0.0.1:8280/v1",
+ "when": "2026-11-04 07:44:28",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8280/v1",
+  "model": "flash-next",
+  "label": "flash-kapitsa",
+  "pid": 6584,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000,16000",
+  "corpus": null,
+  "ref_prompt_tokens": "4000:4133,16000:16286",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "always_reasons": false,
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,tools,agent",
+  "cached_increment": false,
+  "increment_prefixes": "8000",
+  "increment_tokens": 8000,
+  "increment_turns": 2,
+  "increment_repeats": 2,
+  "agentic": false,
+  "sweep_sizes": "1000,2000,4000,8000,16000,max",
+  "sweep_repeats": 2,
+  "sweep_task": "summary",
+  "max_ctx": 32768,
+  "cache_tokens": 8000,
+  "server_slots": 1,
+  "sustain_s": 300,
+  "agent_trace": "",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "<out-new>/results/flash-kapitsa-20261104-074339.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "c90acf65d78937bb0af07a1df83195b0f1bad4bd",
+  "dirty": false
+ },
+ "phases": {
+  "prefill_4000": [
+   1793807068.841,
+   1793807077.784
+  ],
+  "prefill_16000": [
+   1793807077.928,
+   1793807095.148
+  ]
+ },
+ "memory": {
+  "prefill_4000": {
+   "pids": [
+    {
+     "pid": 6584,
+     "name": "kapitsa",
+     "phys_footprint": 75369785864,
+     "phys_footprint_peak": 75370277384,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 2857189376,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 71878.2,
+   "phys_footprint_peak_mb": 71878.7,
+   "mapped_file_clean_mb": 2724.8,
+   "swap_used_mb": 2765.38,
+   "memorystatus_level": 39,
+   "swapouts_delta": 0
+  },
+  "prefill_16000": {
+   "pids": [
+    {
+     "pid": 6584,
+     "name": "kapitsa",
+     "phys_footprint": 75791297032,
+     "phys_footprint_peak": 75838466568,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 4854185984,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 72280.2,
+   "phys_footprint_peak_mb": 72325.2,
+   "mapped_file_clean_mb": 4629.3,
+   "swap_used_mb": 2765.38,
+   "memorystatus_level": 39,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "/tmp/kapitsa-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0,
+  "harness_held_s": 81.1,
+  "harness_lock": "held by the caller, NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1"
+ },
+ "vm_start": {
+  "swap_used_mb": 2765.38,
+  "swapouts": 6877685,
+  "swapins": 1454937,
+  "pageouts": 2710800,
+  "memorystatus_level": 40
+ },
+ "prefill": [
+  {
+   "target": 4000,
+   "invalid": [],
+   "flags": [],
+   "prompt_tokens": 4132,
+   "expected_prompt_tokens": 4133,
+   "ttft_s": 2.85242225,
+   "prefill_tps": 1448.5933840966218,
+   "cold_cached_tokens": 0,
+   "first_event_chars": 3,
+   "timings": null,
+   "finish": "stop",
+   "answer": "The file `modeling_granite_speech.py` defines the PyTorch model architecture for the Granite Speech model, including its conformer-based encoder, projection layer, and language model integration.",
+   "reasoning_chars": 0,
+   "cached": {
+    "samples": [
+     {
+      "ttft_s": 0.0764069170000008,
+      "prompt_tokens": 4195,
+      "cached_tokens": 4172,
+      "finish": "stop",
+      "answer": "`get_audio_features`"
+     },
+     {
+      "ttft_s": 0.09325029100000037,
+      "prompt_tokens": 4228,
+      "cached_tokens": 4200,
+      "finish": "stop",
+      "answer": "`GraniteSpeechModel`"
+     },
+     {
+      "ttft_s": 0.07051129199999995,
+      "prompt_tokens": 4255,
+      "cached_tokens": 4234,
+      "finish": "length",
+      "answer": "The file imports the following modules:\n\n*   **Standard libraries:** `math`, `dataclasses`\n*   **PyTorch:** `torch`, `torch.nn.functional`, `torch.nn`\n*   **HuggingFace Transformers (internal):**\n    *   `initialization` (as `init`)\n    *   `cache_utils` (specifically `Cache`)\n    *   `generation` (specifically `GenerationMixin`)\n    *   `modeling_outputs` (specifically `BaseModelOutputWithPast`, `BaseModelOutputWithPooling`, `ModelOutput`)\n    *   `modeling_utils` (specifically `PreTrainedModel`)\n    *   `processing_utils` (specifically `Unpack`)\n    *   `utils` (specifically `TransformersKwargs`, `auto_docstring`, `can_return_tuple`, `is_peft_available`, `logging`, `torch_compilable_check`)\n    *   `utils.generic` (specifically `merge_with_config_defaults`)\n    *   `utils.output_capturing` (specifically `capture_outputs`)\n    *   `auto` (specifically `AutoModel`)\n*   **Local package:** `.configuration"
+     }
+    ],
+    "invalid": [],
+    "flags": [],
+    "median_ttft_s": 0.0764
+   },
+   "turn2_ttft_s": 0.0764,
+   "turn2_cached_tokens": 4172,
+   "turn2_prompt_tokens": 4195,
+   "turn1_finish": "stop"
+  },
+  {
+   "target": 16000,
+   "invalid": [],
+   "flags": [],
+   "prompt_tokens": 16287,
+   "expected_prompt_tokens": 16286,
+   "ttft_s": 11.038120457999998,
+   "prefill_tps": 1475.5229445059933,
+   "cold_cached_tokens": 0,
+   "first_event_chars": 3,
+   "timings": null,
+   "finish": "stop",
+   "answer": "The first file, `modeling_granite_speech.py`, implements the Granite Speech model architecture, which includes a Conformer-based speech encoder, a QFormer-based projector, and a language model for audio-text multimodal tasks.",
+   "reasoning_chars": 0,
+   "cached": {
+    "samples": [
+     {
+      "ttft_s": 0.07703562500000061,
+      "prompt_tokens": 16357,
+      "cached_tokens": 16334,
+      "finish": "stop",
+      "answer": "`GraniteSpeechEncoderProjector.forward`"
+     },
+     {
+      "ttft_s": 0.09411929100000194,
+      "prompt_tokens": 16394,
+      "cached_tokens": 16366,
+      "finish": "stop",
+      "answer": "`GraniteSpeechCTCEncoder`"
+     },
+     {
+      "ttft_s": 0.07811191700000109,
+      "prompt_tokens": 16423,
+      "cached_tokens": 16402,
+      "finish": "length",
+      "answer": "The file imports the following modules:\n\n*   `math`\n*   `dataclasses`\n*   `torch`\n*   `torch.nn.functional` (as `F`)\n*   `torch.nn` (as `nn`)\n*   `...initialization` (as `init`)\n*   `...cache_utils` (specifically `Cache`)\n*   `...generation` (specifically `GenerationMixin`)\n*   `...modeling_outputs` (specifically `BaseModelOutputWithPast`, `BaseModelOutputWithPooling`, `ModelOutput`)\n*   `...modeling_utils` (specifically `PreTrainedModel`)\n*   `...processing_utils` (specifically `Unpack`)\n*   `...utils` (specifically `TransformersKwargs`, `auto_docstring`, `can_return_tuple`, `is_peft_available`, `logging`, `torch_compilable_check`)\n*   `...utils.generic` (specifically `merge_with_config_defaults`)\n*   `...utils.output_capturing` (specifically `capture_outputs`)\n*   `..auto` (specifically `AutoModel`)\n*   `.configuration_granite_speech"
+     }
+    ],
+    "invalid": [],
+    "flags": [],
+    "median_ttft_s": 0.0781
+   },
+   "turn2_ttft_s": 0.0781,
+   "turn2_cached_tokens": 16334,
+   "turn2_prompt_tokens": 16357,
+   "turn1_finish": "stop"
+  }
+ ],
+ "peak_rss_mb": 34811,
+ "peak_footprint_mb": 72309,
+ "power_info": [
+  "POWER-INFO: High Power Mode (pmset powermode 2)"
+ ],
+ "invalid": [],
+ "flags": [],
+ "peak_memory_mb": 72325.2,
+ "mapped_file_clean_mb": 4629.3,
+ "vm_end": {
+  "swap_used_mb": 2765.38,
+  "swapouts": 6877685,
+  "swapins": 1454937,
+  "pageouts": 2710801,
+  "memorystatus_level": 39
+ },
+ "when_end": "2026-11-04 07:44:55",
+ "warmup": {
+  "adaptive": false,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 3.09,
+    "prompt_tokens": 2925,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 0.81,
+    "prompt_tokens": 430,
+    "completion_tokens": 27,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "contention": {
+  "overall": {
+   "samples": 13,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "phases": {
+   "prefill_4000": {
+    "samples": 5,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   },
+   "prefill_16000": {
+    "samples": 9,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  "samples": [
+   [
+    1793807070.754,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1793807072.809,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1793807074.855,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1793807076.886,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1793807078.933,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1793807080.974,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1793807083.016,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1793807085.052,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1793807087.092,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1793807089.131,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1793807091.169,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1793807093.214,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1793807095.257,
+    0,
+    "-",
+    0.0,
+    0.0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "flash-kapitsa",
+ "display": "Kapitsa (MTP, default depth)",
+ "engine": "kapitsa",
+ "version": "c90acf6",
+ "version_config": "auto",
+ "model_name": "Qwen3.8-Flash-Next",
+ "model_path": "{models}/qwen3.8-flash-next-4bit",
+ "note": "Kapitsa's default settings for this model: the model's own MTP head at Kapitsa's default depth for Flash-Next (2 from 95fbcd6, 1 before; --spec not passed), --dflash none naming the absence of a block drafter (none exists for this model). The folder is Nace AI's MLX pack of Qwen/Qwen3.8-Flash-Next @ de4b8e4d (nace-ai/Qwen3.8-Flash-Next-MLX-4bit: routed experts, GDN, shared experts and LM head 4-bit g64, hyper-connections and attention 6-bit g64, router, indexer, n-gram projections and embedding 8-bit g64; 71.4 GB on the GPU, 1.5 GB MTP head, the 32.0 GB n-gram table 4-bit g32 in ple.safetensors, memory-mapped and read from the SSD row by row, not in GPU memory). --slots 1 for parity with the others' single sequence. Reference prompt lengths 4133 / 16286: the corpus prompts through this model's tokenizer and chat template (transformers apply_chat_template, enable_thinking false, 8 nonces each: 4132-4135 / 16283-16288), the same as Qwen3.6 / Qwen3.8's.",
+ "config": {
+  "label": "flash-kapitsa",
+  "display": "Kapitsa (MTP, default depth)",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Qwen3.8-Flash-Next",
+  "model_path": "{models}/qwen3.8-flash-next-4bit",
+  "cmd": [
+   "{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}",
+   "serve",
+   "--model",
+   "{models}/qwen3.8-flash-next-4bit",
+   "--model-id",
+   "flash-next",
+   "--dflash",
+   "none",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8280",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "cleanup": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8280/v1",
+  "model": "flash-next",
+  "ready_timeout": 900,
+  "requires_paths": [
+   "{models}/qwen3.8-flash-next-4bit/model.safetensors.index.json",
+   "{models}/qwen3.8-flash-next-4bit/mtp.safetensors"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4133,16000:16286"
+  ],
+  "note": "Kapitsa's default settings for this model: the model's own MTP head at Kapitsa's default depth for Flash-Next (2 from 95fbcd6, 1 before; --spec not passed), --dflash none naming the absence of a block drafter (none exists for this model). The folder is Nace AI's MLX pack of Qwen/Qwen3.8-Flash-Next @ de4b8e4d (nace-ai/Qwen3.8-Flash-Next-MLX-4bit: routed experts, GDN, shared experts and LM head 4-bit g64, hyper-connections and attention 6-bit g64, router, indexer, n-gram projections and embedding 8-bit g64; 71.4 GB on the GPU, 1.5 GB MTP head, the 32.0 GB n-gram table 4-bit g32 in ple.safetensors, memory-mapped and read from the SSD row by row, not in GPU memory). --slots 1 for parity with the others' single sequence. Reference prompt lengths 4133 / 16286: the corpus prompts through this model's tokenizer and chat template (transformers apply_chat_template, enable_thinking false, 8 nonces each: 4132-4135 / 16283-16288), the same as Qwen3.6 / Qwen3.8's."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "26.4",
+    "BuildVersion": "25E246"
+   },
+   "hw_model": "Mac17,6",
+   "cpu": "Apple M5 Max",
+   "memsize": "137438953472",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "2",
+   "low_power": false,
+   "vm": {
+    "swap_used_mb": 2757.75,
+    "swapouts": 6877197,
+    "swapins": 1454937,
+    "pageouts": 2710754,
+    "memorystatus_level": 93
+   },
+   "gpu_mem": {
+    "in_use": 20578304,
+    "alloc": 3014049792,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 616234913792,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "<repo>/build/kapitsa",
+   "serve",
+   "--model",
+   "~/models/qwen3.8-flash-next-4bit",
+   "--model-id",
+   "flash-next",
+   "--dflash",
+   "none",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8280",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "cmd_shell": "<repo>/build/kapitsa serve --model ~/models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --host 127.0.0.1 --port 8280 --ctx 32768 --slots 1",
+  "env": {
+   "NI_DISK_CACHE_DIR": "<out-new>/state/kapitsa/prefix-cache"
+  },
+  "env_cleared": [
+   "KAPITSA_BIN"
+  ],
+  "weights": {
+   "model_path": "{models}/qwen3.8-flash-next-4bit",
+   "safetensors_bytes": 105834937496,
+   "safetensors_files": [
+    "model-00001-of-00050.safetensors",
+    "model-00002-of-00050.safetensors",
+    "model-00003-of-00050.safetensors",
+    "model-00004-of-00050.safetensors",
+    "model-00005-of-00050.safetensors",
+    "model-00006-of-00050.safetensors",
+    "model-00007-of-00050.safetensors",
+    "model-00008-of-00050.safetensors",
+    "model-00009-of-00050.safetensors",
+    "model-00010-of-00050.safetensors",
+    "model-00011-of-00050.safetensors",
+    "model-00012-of-00050.safetensors",
+    "model-00013-of-00050.safetensors",
+    "model-00014-of-00050.safetensors",
+    "model-00015-of-00050.safetensors",
+    "model-00016-of-00050.safetensors",
+    "model-00017-of-00050.safetensors",
+    "model-00018-of-00050.safetensors",
+    "model-00019-of-00050.safetensors",
+    "model-00020-of-00050.safetensors",
+    "model-00021-of-00050.safetensors",
+    "model-00022-of-00050.safetensors",
+    "model-00023-of-00050.safetensors",
+    "model-00024-of-00050.safetensors",
+    "model-00025-of-00050.safetensors",
+    "model-00026-of-00050.safetensors",
+    "model-00027-of-00050.safetensors",
+    "model-00028-of-00050.safetensors",
+    "model-00029-of-00050.safetensors",
+    "model-00030-of-00050.safetensors",
+    "model-00031-of-00050.safetensors",
+    "model-00032-of-00050.safetensors",
+    "model-00033-of-00050.safetensors",
+    "model-00034-of-00050.safetensors",
+    "model-00035-of-00050.safetensors",
+    "model-00036-of-00050.safetensors",
+    "model-00037-of-00050.safetensors",
+    "model-00038-of-00050.safetensors",
+    "model-00039-of-00050.safetensors",
+    "model-00040-of-00050.safetensors",
+    "model-00041-of-00050.safetensors",
+    "model-00042-of-00050.safetensors",
+    "model-00043-of-00050.safetensors",
+    "model-00044-of-00050.safetensors",
+    "model-00045-of-00050.safetensors",
+    "model-00046-of-00050.safetensors",
+    "model-00047-of-00050.safetensors",
+    "model-00048-of-00050.safetensors",
+    "model-00049-of-00050.safetensors",
+    "model-00050-of-00050.safetensors",
+    "mtp.safetensors",
+    "ple.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "c90acf65d78937bb0af07a1df83195b0f1bad4bd",
+   "dirty": false
+  },
+  "config_file": "configs/flash-next.json",
+  "env_file_keys": [],
+  "gpu_lock_path": "/tmp/kapitsa-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "kapitsa_git": {
+   "head": "c90acf65d78937bb0af07a1df83195b0f1bad4bd",
+   "head_time": "2026-11-04T06:55:11-08:00",
+   "branch": "HEAD",
+   "diff_head_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "diff_bytes": 0,
+   "dirty": false,
+   "diff_stat": "",
+   "untracked_files": 0,
+   "excluded": [
+    "bench",
+    "docs"
+   ]
+  },
+  "binary": {
+   "sha256": "b40ccd221290aff3cf9ec555da4dc8af85f86f5d67889cba5e52f05b149fdcb0",
+   "mtime": "2026-11-04T07:08:39"
+  },
+  "prepare": [
+   "empty <out-new>/state/kapitsa/prefix-cache (harness-owned cache dir)"
+  ],
+  "env_relevant": {
+   "BENCH_OUT": "<out-new>",
+   "NI_DISK_CACHE_DIR": "<out-new>/state/kapitsa/prefix-cache"
+  },
+  "ready_s": 26.1,
+  "server_pid": 6584,
+  "listener_pid": 6584,
+  "gpu_quiet_wait_s": 18.7,
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 262881280,
+   "alloc": 3210395648,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 2765.38,
+   "swapouts": 6877685,
+   "swapins": 1454937,
+   "pageouts": 2710801,
+   "memorystatus_level": 93
+  },
+  "cleanup": [
+   "empty <out-new>/state/kapitsa/prefix-cache (harness-owned cache dir)"
+  ],
+  "disk_free_bytes": 616219553792
+ },
+ "server_log": [
+  "[kapitsa] read 72.94 GB of weights in 10104 ms (7.2 GB/s)",
+  "[kapitsa] MTP head loaded in 0 ms (drafts over ids < 32768 + specials)",
+  "[kapitsa] loaded ~/models/qwen3.8-flash-next-4bit: Qwen3.8-Flash-Next, 48 layers (12 attention), 72.9 GB of weights in 24462 ms; 4-bit group 64 97%, 6-bit group 64 1%, 8-bit group 64 1%, bf16 0%; n-gram table 320001536 x 160, 4-bit group 32, 32.0 GB mapped",
+  "[kapitsa] images: Qwen3.5 ViT (27 blocks, width 1152, 16-pixel patches; images of 65536 to 1200000 pixels), 0.90 GB loaded on the first image",
+  "[kapitsa] drafter: MTP (this model takes no block drafter, MTP head drafts depth 2)",
+  "[kapitsa] engine ready: flash-next, context 32768, 1 slots, MTP speculative decoding depth 2, KFlash (MTP), images on",
+  "[kapitsa] chat: prompt 2925 (cached 0) in 2239 ms (+3.8 ms template/tokenize; last chunk: encoded by 1075.3 ms, GPU start +1095.4 ms, GPU 64.8 ms, wake +3.2 ms), 64 tokens in 846 ms (74.5 tok/s), length, KFlash (MTP): 30 cycles",
+  "[kapitsa] chat: prompt 430 (cached 0) in 519 ms (+2.8 ms template/tokenize; last chunk: encoded by 57.4 ms, GPU start +389.5 ms, GPU 68.9 ms, wake +2.9 ms), 27 tokens in 285 ms (91.1 tok/s), tool_calls, KFlash (MTP): 10 cycles",
+  "[kapitsa] chat: prompt 4132 (cached 0) in 2834 ms (+13.0 ms template/tokenize; last chunk: encoded by 1408.8 ms, GPU start +1351.4 ms, GPU 74.0 ms, wake +0.2 ms), 41 tokens in 490 ms (81.7 tok/s), stop, KFlash (MTP): 18 cycles",
+  "[kapitsa] chat: prompt 4195 (cached 4172) in 75 ms (+0.7 ms template/tokenize; last chunk: encoded by 4.2 ms, GPU start +3.9 ms, GPU 64.0 ms, wake +2.9 ms), 6 tokens in 47 ms (107.4 tok/s), stop, KFlash (MTP): 2 cycles",
+  "[kapitsa] chat: prompt 4228 (cached 4200) in 89 ms (+2.4 ms template/tokenize; last chunk: encoded by 7.3 ms, GPU start +6.8 ms, GPU 74.8 ms, wake +0.2 ms), 7 tokens in 72 ms (83.4 tok/s), stop, KFlash (MTP): 3 cycles",
+  "[kapitsa] chat: prompt 4255 (cached 4234) in 69 ms (+0.9 ms template/tokenize; last chunk: encoded by 4.1 ms, GPU start +1.1 ms, GPU 63.4 ms, wake +0.2 ms), 256 tokens in 2229 ms (114.4 tok/s), length, KFlash (MTP): 100 cycles",
+  "[kapitsa] chat: prompt 16287 (cached 0) in 11022 ms (+15.3 ms template/tokenize; last chunk: encoded by 9459.5 ms, GPU start +1487.9 ms, GPU 74.0 ms, wake +0.2 ms), 48 tokens in 585 ms (80.3 tok/s), stop, KFlash (MTP): 22 cycles",
+  "[kapitsa] chat: prompt 16357 (cached 16334) in 72 ms (+3.5 ms template/tokenize; last chunk: encoded by 3.6 ms, GPU start +4.1 ms, GPU 64.5 ms, wake +0.1 ms), 10 tokens in 115 ms (78.3 tok/s), stop, KFlash (MTP): 5 cycles",
+  "[kapitsa] chat: prompt 16394 (cached 16366) in 84 ms (+7.6 ms template/tokenize; last chunk: encoded by 1.8 ms, GPU start +7.4 ms, GPU 74.4 ms, wake +0.2 ms), 9 tokens in 115 ms (69.3 tok/s), stop, KFlash (MTP): 5 cycles",
+  "[kapitsa] chat: prompt 16423 (cached 16402) in 71 ms (+5.3 ms template/tokenize; last chunk: encoded by 1.7 ms, GPU start +6.1 ms, GPU 62.7 ms, wake +0.2 ms), 256 tokens in 2098 ms (121.6 tok/s), length, KFlash (MTP): 93 cycles"
+ ],
+ "server_log_path": "logs/flash-kapitsa-20261104-074339.log"
+}

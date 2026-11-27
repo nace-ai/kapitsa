@@ -1,0 +1,16 @@
+[
+  {
+    "argv": [
+      "/Users/bytedance/kapitsa-mtp-affine-20261107/base/build/load_error_test"
+    ],
+    "exit": 1,
+    "log": "base-load-error-cpu.log"
+  },
+  {
+    "argv": [
+      "/Users/bytedance/kapitsa-mtp-affine-20261107/candidate/build/load_error_test"
+    ],
+    "exit": 0,
+    "log": "candidate-load-error-cpu.log"
+  }
+]

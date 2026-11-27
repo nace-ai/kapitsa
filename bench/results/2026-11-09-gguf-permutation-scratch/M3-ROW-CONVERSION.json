@@ -1,0 +1,228 @@
+{
+  "format": "Privacy-filtered derived summary, not raw execution logs.",
+  "source_candidate": "9493a437a823343a2b257767c45eae9a98e7827c",
+  "source_reference": "39446144b7f181eeecaf4bdf5a4ddb34bb5dd104",
+  "setup": {
+    "chip": "M3 Ultra",
+    "gpu_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "same_source_and_driver_as_M4": true,
+  "row_results": [
+    {
+      "arm": "reference",
+      "rc": 0,
+      "result": {
+        "rows": 1024,
+        "columns": 4096,
+        "passes": 2048,
+        "ns_per_row": 11658.2,
+        "complete_code_scale_offset_oracle": true
+      },
+      "binary_sha256": "ff49fc10f3d67788997b940590bec684a8e3571c65587762ea4585046e2aa3af",
+      "driver_sha256": "e7ead3e8ba420f9fb595a6c9b433a4cd98abb2a9483542f759c371f2de52b51e",
+      "input_sha256": "f79ca2154e4532090a5ecfbe6bed3e36bd97fa609b5bae628474009d42062f93",
+      "output_sha256": "1e022fa48bdb6be3e91f7bd7727fa04b22ca2d42aa749080a968ad90a1132845",
+      "complete_bytes_equal_first": true
+    },
+    {
+      "arm": "candidate",
+      "rc": 0,
+      "result": {
+        "rows": 1024,
+        "columns": 4096,
+        "passes": 2048,
+        "ns_per_row": 10466.3,
+        "complete_code_scale_offset_oracle": true
+      },
+      "binary_sha256": "72c5b46c210e3b76d42ad92b48ff98d843df563fcaec62208f355436c5645513",
+      "driver_sha256": "e7ead3e8ba420f9fb595a6c9b433a4cd98abb2a9483542f759c371f2de52b51e",
+      "input_sha256": "f79ca2154e4532090a5ecfbe6bed3e36bd97fa609b5bae628474009d42062f93",
+      "output_sha256": "1e022fa48bdb6be3e91f7bd7727fa04b22ca2d42aa749080a968ad90a1132845",
+      "complete_bytes_equal_first": true
+    },
+    {
+      "arm": "reference",
+      "rc": 0,
+      "result": {
+        "rows": 1024,
+        "columns": 4096,
+        "passes": 2048,
+        "ns_per_row": 11236.5,
+        "complete_code_scale_offset_oracle": true
+      },
+      "binary_sha256": "ff49fc10f3d67788997b940590bec684a8e3571c65587762ea4585046e2aa3af",
+      "driver_sha256": "e7ead3e8ba420f9fb595a6c9b433a4cd98abb2a9483542f759c371f2de52b51e",
+      "input_sha256": "f79ca2154e4532090a5ecfbe6bed3e36bd97fa609b5bae628474009d42062f93",
+      "output_sha256": "1e022fa48bdb6be3e91f7bd7727fa04b22ca2d42aa749080a968ad90a1132845",
+      "complete_bytes_equal_first": true
+    },
+    {
+      "arm": "candidate",
+      "rc": 0,
+      "result": {
+        "rows": 1024,
+        "columns": 4096,
+        "passes": 2048,
+        "ns_per_row": 10493.2,
+        "complete_code_scale_offset_oracle": true
+      },
+      "binary_sha256": "72c5b46c210e3b76d42ad92b48ff98d843df563fcaec62208f355436c5645513",
+      "driver_sha256": "e7ead3e8ba420f9fb595a6c9b433a4cd98abb2a9483542f759c371f2de52b51e",
+      "input_sha256": "f79ca2154e4532090a5ecfbe6bed3e36bd97fa609b5bae628474009d42062f93",
+      "output_sha256": "1e022fa48bdb6be3e91f7bd7727fa04b22ca2d42aa749080a968ad90a1132845",
+      "complete_bytes_equal_first": true
+    },
+    {
+      "arm": "reference",
+      "rc": 0,
+      "result": {
+        "rows": 1024,
+        "columns": 4096,
+        "passes": 2048,
+        "ns_per_row": 11211.5,
+        "complete_code_scale_offset_oracle": true
+      },
+      "binary_sha256": "ff49fc10f3d67788997b940590bec684a8e3571c65587762ea4585046e2aa3af",
+      "driver_sha256": "e7ead3e8ba420f9fb595a6c9b433a4cd98abb2a9483542f759c371f2de52b51e",
+      "input_sha256": "f79ca2154e4532090a5ecfbe6bed3e36bd97fa609b5bae628474009d42062f93",
+      "output_sha256": "1e022fa48bdb6be3e91f7bd7727fa04b22ca2d42aa749080a968ad90a1132845",
+      "complete_bytes_equal_first": true
+    },
+    {
+      "arm": "candidate",
+      "rc": 0,
+      "result": {
+        "rows": 1024,
+        "columns": 4096,
+        "passes": 2048,
+        "ns_per_row": 10507.7,
+        "complete_code_scale_offset_oracle": true
+      },
+      "binary_sha256": "72c5b46c210e3b76d42ad92b48ff98d843df563fcaec62208f355436c5645513",
+      "driver_sha256": "e7ead3e8ba420f9fb595a6c9b433a4cd98abb2a9483542f759c371f2de52b51e",
+      "input_sha256": "f79ca2154e4532090a5ecfbe6bed3e36bd97fa609b5bae628474009d42062f93",
+      "output_sha256": "1e022fa48bdb6be3e91f7bd7727fa04b22ca2d42aa749080a968ad90a1132845",
+      "complete_bytes_equal_first": true
+    },
+    {
+      "arm": "reference",
+      "rc": 0,
+      "result": {
+        "rows": 1024,
+        "columns": 4096,
+        "passes": 2048,
+        "ns_per_row": 11226.4,
+        "complete_code_scale_offset_oracle": true
+      },
+      "binary_sha256": "ff49fc10f3d67788997b940590bec684a8e3571c65587762ea4585046e2aa3af",
+      "driver_sha256": "e7ead3e8ba420f9fb595a6c9b433a4cd98abb2a9483542f759c371f2de52b51e",
+      "input_sha256": "f79ca2154e4532090a5ecfbe6bed3e36bd97fa609b5bae628474009d42062f93",
+      "output_sha256": "1e022fa48bdb6be3e91f7bd7727fa04b22ca2d42aa749080a968ad90a1132845",
+      "complete_bytes_equal_first": true
+    },
+    {
+      "arm": "candidate",
+      "rc": 0,
+      "result": {
+        "rows": 1024,
+        "columns": 4096,
+        "passes": 2048,
+        "ns_per_row": 10459.6,
+        "complete_code_scale_offset_oracle": true
+      },
+      "binary_sha256": "72c5b46c210e3b76d42ad92b48ff98d843df563fcaec62208f355436c5645513",
+      "driver_sha256": "e7ead3e8ba420f9fb595a6c9b433a4cd98abb2a9483542f759c371f2de52b51e",
+      "input_sha256": "f79ca2154e4532090a5ecfbe6bed3e36bd97fa609b5bae628474009d42062f93",
+      "output_sha256": "1e022fa48bdb6be3e91f7bd7727fa04b22ca2d42aa749080a968ad90a1132845",
+      "complete_bytes_equal_first": true
+    }
+  ],
+  "cases": {
+    "count_each": 960,
+    "bytes_equal": true,
+    "bytes_each": 7334400,
+    "sha256": "99c02682447b0c76096f746183668c534907250f675290337e91bcd80ce84c41"
+  },
+  "pair_latency_percent_changes": [
+    -10.223705203204625,
+    -6.615049170115239,
+    -6.277482941622436,
+    -6.830328511366057
+  ],
+  "scope": "Full official convert_rows, each call covers1024rows K4096,2048passes/leg,eight alternating AB legs. Complete per-arm bytes and independent Q4_0 oracle pass. Warm CPU conversion component only, not complete import/inference. No cross-chip absolute-speed comparison.",
+  "commands": [
+    {
+      "label": "reference_rows_build",
+      "rc": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "reference_cases_build",
+      "rc": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "reference_cases",
+      "rc": 0,
+      "log_sha256": "26cfe800fd45ecdd7ee75a4cb56c4a234cc41e5202bca83ef01483b2ec75b6b6"
+    },
+    {
+      "label": "candidate_rows_build",
+      "rc": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "candidate_cases_build",
+      "rc": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "candidate_cases",
+      "rc": 0,
+      "log_sha256": "26cfe800fd45ecdd7ee75a4cb56c4a234cc41e5202bca83ef01483b2ec75b6b6"
+    },
+    {
+      "label": "row-leg-1",
+      "rc": 0,
+      "log_sha256": "503d14bdf336c35bac2944e98ba23e1c54dfa5ae75dce1444bdf178ee3faab2c"
+    },
+    {
+      "label": "row-leg-2",
+      "rc": 0,
+      "log_sha256": "d87bfd26f29f35f94458c9418ca40b98f30c95006d3aa9447bc412177516096e"
+    },
+    {
+      "label": "row-leg-3",
+      "rc": 0,
+      "log_sha256": "86c7f4cf2117ccfb0db296327106c1645b3fd538ab85eabb5d69621d57b45920"
+    },
+    {
+      "label": "row-leg-4",
+      "rc": 0,
+      "log_sha256": "deccba1cec43c4cbe2e2e8730f96773ae30301c111fe09d5f2d3d54fba621639"
+    },
+    {
+      "label": "row-leg-5",
+      "rc": 0,
+      "log_sha256": "66cc7820df8626e15bd5b1b8b221feb54d17295f1ab4f1768c4d698abbe627bf"
+    },
+    {
+      "label": "row-leg-6",
+      "rc": 0,
+      "log_sha256": "99ce00cad9a57b0085f6b3e7912647486e62fb3c30feed0a45da4654418c7a8b"
+    },
+    {
+      "label": "row-leg-7",
+      "rc": 0,
+      "log_sha256": "e5002dbf762cb903e6947bd89bd510b9e9cce296a5e762aa2801fa02301cbb28"
+    },
+    {
+      "label": "row-leg-8",
+      "rc": 0,
+      "log_sha256": "6a3d6e15ac5b42385d90a09d42b37ff2c011259ff2c7d2a1ff6f5890232141b7"
+    }
+  ]
+}

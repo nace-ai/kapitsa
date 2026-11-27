@@ -46,6 +46,7 @@ struct Install {
   std::string app;      // kApp: the .app
   std::string brew;     // kHomebrew: that Homebrew's brew command
   bool head = false;    // kHomebrew: installed with --HEAD
+  bool core = false;    // kHomebrew: from homebrew-core (brew upgrade kapitsa) vs tap (brew upgrade nace-ai/tap/kapitsa)
   std::string source, build;  // kSource: the source tree and the build folder
   bool git = false;           // kSource: the source tree is a git work tree
   // Signed as release binaries are (identifier ai.nace.kapitsa). A binary built from source and copied here (./install.sh

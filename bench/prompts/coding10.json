@@ -1,0 +1,133 @@
+[
+  {
+    "id": "p01_fizzbuzz",
+    "entry": "fizzbuzz",
+    "prompt": "Write a Python function `fizzbuzz(n)` that returns a list of strings for the numbers 1..n: \"Fizz\" for multiples of 3, \"Buzz\" for multiples of 5, \"FizzBuzz\" for multiples of both, otherwise the number as a string.",
+    "examples": ["assert fizzbuzz(5) == ['1', '2', 'Fizz', '4', 'Buzz']"],
+    "tests": [
+      "assert fizzbuzz(0) == []",
+      "assert fizzbuzz(1) == ['1']",
+      "assert fizzbuzz(15)[-1] == 'FizzBuzz'",
+      "assert fizzbuzz(15)[8] == 'Fizz' and fizzbuzz(15)[9] == 'Buzz'",
+      "assert len(fizzbuzz(100)) == 100 and fizzbuzz(100).count('FizzBuzz') == 6"
+    ]
+  },
+  {
+    "id": "p02_palindrome",
+    "entry": "is_palindrome",
+    "prompt": "Write a Python function `is_palindrome(s)` that returns True if the string reads the same forwards and backwards when you ignore case and every character that is not a letter or a digit, else False.",
+    "examples": ["assert is_palindrome('A man, a plan, a canal: Panama') is True"],
+    "tests": [
+      "assert is_palindrome('') is True",
+      "assert is_palindrome('race a car') is False",
+      "assert is_palindrome('No lemon, no melon') is True",
+      "assert is_palindrome('0P') is False",
+      "assert is_palindrome('12321') is True"
+    ]
+  },
+  {
+    "id": "p03_word_count",
+    "entry": "word_count",
+    "prompt": "Write a Python function `word_count(text)` that returns a dict mapping each word to how many times it occurs. Words are maximal runs of letters, digits or apostrophes; compare them lowercased.",
+    "examples": ["assert word_count('The cat and the hat.') == {'the': 2, 'cat': 1, 'and': 1, 'hat': 1}"],
+    "tests": [
+      "assert word_count('') == {}",
+      "assert word_count('Hello, hello! HELLO?') == {'hello': 3}",
+      "assert word_count(\"don't stop, don't\") == {\"don't\": 2, 'stop': 1}",
+      "assert word_count('a1 b2 a1') == {'a1': 2, 'b2': 1}",
+      "assert word_count('one\\ntwo\\tthree  one') == {'one': 2, 'two': 1, 'three': 1}"
+    ]
+  },
+  {
+    "id": "p04_flatten",
+    "entry": "flatten",
+    "prompt": "Write a Python function `flatten(items)` that takes a list that may contain nested lists to any depth and returns a flat list of all non-list elements in order.",
+    "examples": ["assert flatten([1, [2, [3, 4]], 5]) == [1, 2, 3, 4, 5]"],
+    "tests": [
+      "assert flatten([]) == []",
+      "assert flatten([[[]]]) == []",
+      "assert flatten([[1], [[2]], [[[3]]]]) == [1, 2, 3]",
+      "assert flatten(['ab', ['cd', ['ef']]]) == ['ab', 'cd', 'ef']",
+      "assert flatten([1, [2, (3, 4)], None]) == [1, 2, (3, 4), None]"
+    ]
+  },
+  {
+    "id": "p05_roman",
+    "entry": "roman_to_int",
+    "prompt": "Write a Python function `roman_to_int(s)` that converts a Roman numeral string (I, V, X, L, C, D, M, with subtractive forms like IV and CM) to an integer.",
+    "examples": ["assert roman_to_int('XIV') == 14"],
+    "tests": [
+      "assert roman_to_int('I') == 1",
+      "assert roman_to_int('IX') == 9",
+      "assert roman_to_int('LVIII') == 58",
+      "assert roman_to_int('MCMXCIV') == 1994",
+      "assert roman_to_int('MMMCMXCIX') == 3999"
+    ]
+  },
+  {
+    "id": "p06_merge_intervals",
+    "entry": "merge_intervals",
+    "prompt": "Write a Python function `merge_intervals(intervals)` that takes a list of [start, end] pairs (in any order) and returns a list of merged, non-overlapping [start, end] pairs sorted by start. Intervals that touch (end == next start) are merged.",
+    "examples": ["assert merge_intervals([[1, 3], [2, 6], [8, 10]]) == [[1, 6], [8, 10]]"],
+    "tests": [
+      "assert merge_intervals([]) == []",
+      "assert merge_intervals([[1, 4], [4, 5]]) == [[1, 5]]",
+      "assert merge_intervals([[5, 6], [1, 2]]) == [[1, 2], [5, 6]]",
+      "assert merge_intervals([[1, 10], [2, 3], [4, 5]]) == [[1, 10]]",
+      "assert merge_intervals([[3, 4], [1, 2], [2, 3]]) == [[1, 4]]"
+    ]
+  },
+  {
+    "id": "p07_two_sum",
+    "entry": "two_sum",
+    "prompt": "Write a Python function `two_sum(nums, target)` that returns a tuple (i, j) with i < j such that nums[i] + nums[j] == target, choosing the pair with the smallest j (and then the smallest i). Return None if there is no such pair.",
+    "examples": ["assert two_sum([2, 7, 11, 15], 9) == (0, 1)"],
+    "tests": [
+      "assert two_sum([], 3) is None",
+      "assert two_sum([1, 2], 5) is None",
+      "assert two_sum([3, 3], 6) == (0, 1)",
+      "assert two_sum([1, 5, 3, 4, 2], 6) == (0, 1)",
+      "assert two_sum([4, 1, 9, 2, 5], 7) == (3, 4)"
+    ]
+  },
+  {
+    "id": "p08_caesar",
+    "entry": "caesar",
+    "prompt": "Write a Python function `caesar(text, shift)` that shifts every ASCII letter by `shift` positions in the alphabet, wrapping around and keeping its case; other characters stay unchanged. `shift` may be negative or larger than 26.",
+    "examples": ["assert caesar('Hello, World!', 3) == 'Khoor, Zruog!'"],
+    "tests": [
+      "assert caesar('', 5) == ''",
+      "assert caesar('xyz', 3) == 'abc'",
+      "assert caesar('ABC', -1) == 'ZAB'",
+      "assert caesar('abc', 52) == 'abc'",
+      "assert caesar('Zebra-123', 27) == 'Afcsb-123'"
+    ]
+  },
+  {
+    "id": "p09_balanced",
+    "entry": "is_balanced",
+    "prompt": "Write a Python function `is_balanced(s)` that returns True if every bracket in the string ((), [], {}) is closed by the matching bracket in the right order; other characters are ignored.",
+    "examples": ["assert is_balanced('a(b[c]{d}e)f') is True"],
+    "tests": [
+      "assert is_balanced('') is True",
+      "assert is_balanced('(]') is False",
+      "assert is_balanced('([)]') is False",
+      "assert is_balanced('((') is False",
+      "assert is_balanced('}{') is False",
+      "assert is_balanced('{[()()]}x') is True"
+    ]
+  },
+  {
+    "id": "p10_rle",
+    "entry": "rle_encode",
+    "prompt": "Write a Python function `rle_encode(s)` that run-length encodes a string: each maximal run of the same character becomes the character followed by the run length.",
+    "examples": ["assert rle_encode('aaabcc') == 'a3b1c2'"],
+    "tests": [
+      "assert rle_encode('') == ''",
+      "assert rle_encode('a') == 'a1'",
+      "assert rle_encode('aaaaaaaaaaaa') == 'a12'",
+      "assert rle_encode('abab') == 'a1b1a1b1'",
+      "assert rle_encode('  xx') == ' 2x2'"
+    ]
+  }
+]

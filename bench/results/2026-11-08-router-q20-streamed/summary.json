@@ -1,0 +1,370 @@
+{
+  "publication": "Privacy-filtered derived evidence; original execution records retained privately. Not a verbatim execution log.",
+  "run": {
+    "chip": "Apple M3 Ultra",
+    "gpu_cores": 60,
+    "memory_capacity_gib": 96,
+    "macos": "26.4.1 (25E253)",
+    "compiler": "Apple clang 17",
+    "configuration": "CMake Release, -O3",
+    "exclusive_gpu_lock": true,
+    "caller_lock_markers": [
+      "NI_LOCK_HELD=1",
+      "NACE_GPU_LOCK_HELD=1"
+    ]
+  },
+  "source_and_binary": [
+    {
+      "arm": "reference",
+      "source": "f22effb9bdda7fa17be5e4ce614383a35e1cc62a",
+      "logit_dump_sha256": "8e04569d5b693c45c5a685fc477ee5698bb44dcb1373e9d335fe92858a69472a",
+      "explicit_release_configure_rc": 0,
+      "release_build_rc": 0
+    },
+    {
+      "arm": "candidate",
+      "source": "dc82cf0f39b942157e86b0cd5e518e5caed17e61",
+      "logit_dump_sha256": "8afc6bee48c571f5ae016668fc0643da6bd01048209987e8b01ca8b167fedb3a",
+      "explicit_release_configure_rc": 0,
+      "release_build_rc": 0
+    }
+  ],
+  "model": {
+    "dense_and_mtp_pack": "nace-ai/Qwen3.8-Flash-Next-MLX-4bit@5d423f9f563c1f1b7ca7945b268e65c0b92b0eae",
+    "routed_experts": "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF@ed59f92082b1e93c0e96d60a8b11aab089b52f09:Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf",
+    "format": "Hybrid dense affine and Q2_0 streamed routed experts",
+    "converted_payloads": 51,
+    "trunk_layers": 48,
+    "experts_per_layer": 512,
+    "top_k": 10,
+    "normalized_top_k": true,
+    "complete_trained_ngram_table_sha256": "c8ab74bc343408cf3923d7d64b3698fbeb3e78c07ce7f85a650a8278731251d2",
+    "table_identity": "Complete Sushi trained table; compatible metadata verified. Not asserted byte-equivalent to original Nace table. Converter sparse staging table removed before either model load.",
+    "tokenizer_sha256": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3",
+    "actual_test_parameter_expert_store_gb": 4.0,
+    "total_model_expert_gb": 34.2,
+    "loaded_expert_slots": 2872,
+    "total_expert_slots": 24576,
+    "store_scope": "Deliberately incomplete expert store; both regular and next-layer prediction branches enabled. This is a test parameter, not host memory usage."
+  },
+  "method": {
+    "tool": "tools/logit_dump.cpp",
+    "paths": [
+      "step",
+      "verify"
+    ],
+    "spec": 2,
+    "windows": 8,
+    "rows_per_window": 24,
+    "prefill_chunk": 2048,
+    "prefilled_tokens_each": 14848,
+    "candidate_inputs": "--from reference; sequences and records byte-identical",
+    "verify": "Teacher-forced three-row trunk verify on the recorded tokens. No free-running MTP drafter check.",
+    "environment": {
+      "NI_EXPERT_STORE": "4",
+      "NI_ROWS_OLD": "0",
+      "NI_LOG": "1"
+    }
+  },
+  "completed_commands": [
+    {
+      "label": "convert",
+      "rc": 0,
+      "finished_at": "2026-11-08T05:56:56.147337+00:00"
+    },
+    {
+      "label": "q20_exact_plane_check",
+      "rc": 0,
+      "finished_at": "2026-11-08T06:12:05.586045+00:00"
+    },
+    {
+      "label": "reference_output",
+      "rc": 0,
+      "finished_at": "2026-11-08T06:16:36.971461+00:00"
+    },
+    {
+      "label": "candidate_output",
+      "rc": 0,
+      "finished_at": "2026-11-08T06:20:20.149920+00:00"
+    },
+    {
+      "label": "compare",
+      "rc": 0,
+      "finished_at": "2026-11-08T06:20:30.620627+00:00"
+    }
+  ],
+  "rows": {
+    "prefill": {
+      "records": 8,
+      "vocab": 248320,
+      "bytes_each": 7946240,
+      "elements_each": [
+        1986560,
+        1986560
+      ],
+      "finite_elements_each": [
+        1986560,
+        1986560
+      ],
+      "fully_finite_rows_each": [
+        8,
+        8
+      ],
+      "all_finite": true,
+      "all_rows_bitwise_identical": true,
+      "logits_sha256_each": [
+        "8757865cd9ef31d225a784a05e4ce1e49e5e9da05c3219ae3e1f5ad492707275",
+        "8757865cd9ef31d225a784a05e4ce1e49e5e9da05c3219ae3e1f5ad492707275"
+      ],
+      "same_inputs": {
+        "sequences.txt": {
+          "byte_identical": true,
+          "sha256": [
+            "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+            "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          ],
+          "bytes": [
+            68379,
+            68379
+          ],
+          "lines": [
+            8,
+            8
+          ]
+        },
+        "records.txt": {
+          "byte_identical": true,
+          "sha256": [
+            "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+            "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d"
+          ],
+          "bytes": [
+            54,
+            54
+          ],
+          "lines": [
+            8,
+            8
+          ]
+        }
+      },
+      "strict_compare_metrics": {
+        "records": 8,
+        "bitwise": 8,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "failures": [],
+        "gate": {
+          "source": "flags"
+        }
+      }
+    },
+    "step": {
+      "records": 192,
+      "vocab": 248320,
+      "bytes_each": 190709760,
+      "elements_each": [
+        47677440,
+        47677440
+      ],
+      "finite_elements_each": [
+        47677440,
+        47677440
+      ],
+      "fully_finite_rows_each": [
+        192,
+        192
+      ],
+      "all_finite": true,
+      "all_rows_bitwise_identical": true,
+      "logits_sha256_each": [
+        "f6d1de78bc8ee69fc976ea1da94877cd956e84710353a5ccce01c6bf41e506e0",
+        "f6d1de78bc8ee69fc976ea1da94877cd956e84710353a5ccce01c6bf41e506e0"
+      ],
+      "same_inputs": {
+        "sequences.txt": {
+          "byte_identical": true,
+          "sha256": [
+            "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+            "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          ],
+          "bytes": [
+            68379,
+            68379
+          ],
+          "lines": [
+            8,
+            8
+          ]
+        },
+        "records.txt": {
+          "byte_identical": true,
+          "sha256": [
+            "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc"
+          ],
+          "bytes": [
+            1296,
+            1296
+          ],
+          "lines": [
+            192,
+            192
+          ]
+        }
+      },
+      "strict_compare_metrics": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        }
+      }
+    },
+    "verify": {
+      "records": 192,
+      "vocab": 248320,
+      "bytes_each": 190709760,
+      "elements_each": [
+        47677440,
+        47677440
+      ],
+      "finite_elements_each": [
+        47677440,
+        47677440
+      ],
+      "fully_finite_rows_each": [
+        192,
+        192
+      ],
+      "all_finite": true,
+      "all_rows_bitwise_identical": true,
+      "logits_sha256_each": [
+        "f6d1de78bc8ee69fc976ea1da94877cd956e84710353a5ccce01c6bf41e506e0",
+        "f6d1de78bc8ee69fc976ea1da94877cd956e84710353a5ccce01c6bf41e506e0"
+      ],
+      "same_inputs": {
+        "sequences.txt": {
+          "byte_identical": true,
+          "sha256": [
+            "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+            "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6"
+          ],
+          "bytes": [
+            68379,
+            68379
+          ],
+          "lines": [
+            8,
+            8
+          ]
+        },
+        "records.txt": {
+          "byte_identical": true,
+          "sha256": [
+            "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+            "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc"
+          ],
+          "bytes": [
+            1296,
+            1296
+          ],
+          "lines": [
+            192,
+            192
+          ]
+        }
+      },
+      "strict_compare_metrics": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        }
+      }
+    }
+  },
+  "all_finite": true,
+  "all_rows_bitwise_identical": true,
+  "same_input_files": true,
+  "total_rows_each": 392,
+  "sampled_plane_check": {
+    "rc": 0,
+    "draws": 288,
+    "sampling": "48 trunk layers x gate/up/down x 2 seeded expert draws with replacement; not every expert and not MTP expert planes",
+    "comparison": "Sampled converted Q2_0 planes equal source packed planes",
+    "converter_row_correlation": "Not a model-output correctness gate"
+  },
+  "original_compare": {
+    "rc": 0,
+    "noise_floor": "No floor matches this hybrid model identity; original invocation reported only; preserved privately. No floor created or modified."
+  },
+  "additional_strict_compare": {
+    "tool_sha256": "dcfb5ba8c4dbca1f2e02e7f34c179290f0577f0ab0c611bba9f2e3da61a3de4e",
+    "rc": 0,
+    "scope": "Analysis of the same completed raw files; no new GPU or inference run. Explicit zero-drift flags, not a measured noise-floor gate.",
+    "flags": [
+      "--min-top1",
+      "1",
+      "--max-mean-kl",
+      "0",
+      "--max-median-kl",
+      "0",
+      "--max-p99-kl",
+      "0",
+      "--near-tie",
+      "0",
+      "--max-far-flips",
+      "0",
+      "--max-nll-change",
+      "0"
+    ]
+  },
+  "limitations": [
+    "No free-running Q2_0 MTP continuation, acceptance-rate or inference-speed claim.",
+    "No second full-model run on M4 Pro; hardware supports the path, that validation is not completed.",
+    "No class-wide inference performance qualification.",
+    "Finite/byte comparison covers the recorded rows only, not every possible input."
+  ]
+}

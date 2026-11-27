@@ -1,0 +1,458 @@
+{
+  "format": "Derived privacy-filtered export of actual kapitsa bench results; not raw kapitsa bench JSON",
+  "hardware_configuration": {
+    "chip": "Apple M4 Pro",
+    "memory_capacity_gib": 48,
+    "macos": "15.7.1",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+    "gpu_cores": 20
+  },
+  "model": {
+    "repository": "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8",
+    "revision": "3fe6dab75665a93884214ad4b1b95cf02717d081",
+    "actual_loader_coverage": "42 layers: 21 Mamba-2, 4 attention, 17 MLP; loader reports 17 FP8 and 4 BF16 Mamba layers, FP8 MLP, BF16 attention and embeddings, Q8_0 output head"
+  },
+  "source_and_binaries": {
+    "reference": {
+      "commit": "052104f8f9c99edde129415a7384a1a58dc24ae6",
+      "nemotron_h_source_sha256": "5f14e86f96c6fd1431fa2184d113d22b2466c6693b798d7413db53fb31c0b4df",
+      "kapitsa_sha256": "a342fde69ae6d3a2eb23cc7cf615ded60431628c6732febbd16bcd8418e45bde",
+      "logit_dump_sha256": "3e29bae013212657f0e7b934c87dc8b9e98ee7a78893104f8612530667961209",
+      "cmake_cache_sha256": "6bd920baa6a0a0acd4db849612f0df70d8f78537e21972f0c34ff634abba7a89",
+      "archive_sha256": "8536b62704ab1e09a491bdd687ef129e4068a06a6bebca114f51d5b82588199c",
+      "build_type": "Release",
+      "cxx_flags": "-O3 -DNDEBUG",
+      "build_provenance": "Same-commit source archive; explicit CMake configure/build"
+    },
+    "candidate": {
+      "commit": "8f3996fea6f1f44537bee4e789b98cd6a531f347",
+      "nemotron_h_source_sha256": "94e9cf4632e4d63783e9701494a325d6176f321a95fa9b25266b2f571dcd5b40",
+      "kapitsa_sha256": "0e25a651538f82255b413af2835f0177c461300200813f245cefe6ddd5d45c80",
+      "logit_dump_sha256": "5bb0a25e144bf953c78baf418545ad56ea7c531241296916374690c9cc00abdf",
+      "cmake_cache_sha256": "01d673303eaa34536f82638c7dc4c5dd5b3e76841b3ad46b64db8a05a91fd6fe",
+      "archive_sha256": "613112eaa1abbc45e582791cf91ac82bb2bea80180e68953c592c300cc6b7b0f",
+      "build_type": "Release",
+      "cxx_flags": "-O3 -DNDEBUG",
+      "build_provenance": "Immutable binary copy of the explicitly configured candidate Release build; recorded digests verified unchanged"
+    }
+  },
+  "native_command_example": "\"$BUILD/kapitsa\" bench --model \"$MODEL\" --quick --json --out results/native.json",
+  "native_command_example_is": "Portable example using placeholders, not original execution log",
+  "cohort_order": [
+    "A1",
+    "B1",
+    "A2",
+    "B2"
+  ],
+  "runs": [
+    {
+      "label": "A1",
+      "arm": "reference",
+      "source": "052104f8f9c99edde129415a7384a1a58dc24ae6",
+      "cli_sha256": "a342fde69ae6d3a2eb23cc7cf615ded60431628c6732febbd16bcd8418e45bde",
+      "rc": 0,
+      "flags": [],
+      "invalid": [],
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "math_results": {
+        "decode": {
+          "median_tps": 58.58,
+          "runs_tps": [
+            58.58,
+            54.77,
+            59.12
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 55.98,
+          "runs_tps": [
+            56.01,
+            55.87,
+            55.98
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4182,
+            "ttft_s": 4.3317,
+            "tps": 965.4,
+            "followup_s": [
+              0.0675,
+              0.0733,
+              0.0599
+            ],
+            "followup_median_s": 0.0675,
+            "followup_suffix_tps": 334.1
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "decode_output_gates": [
+        {
+          "temperature": 0.6,
+          "rate_tps": 58.58,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 54.77,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 59.12,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 56.01,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 55.87,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 55.98,
+          "tokens": 512,
+          "finish": "length"
+        }
+      ],
+      "emitted_metadata": {
+        "precision": "bf16",
+        "revision": null,
+        "decoding": "prompt-lookup",
+        "drafter_kind": "none"
+      },
+      "raw_result_sha256": "f815952ef6567faf6c6c4f0347900e29ac9b984f6ca90eb19e5b16b1ffc59bb6",
+      "raw_log_sha256": "7e8dd8b1ae3954b8284242b0e7e87b8d4d8f3bd69b98089420de78920a00fa8d"
+    },
+    {
+      "label": "B1",
+      "arm": "candidate",
+      "source": "8f3996fea6f1f44537bee4e789b98cd6a531f347",
+      "cli_sha256": "0e25a651538f82255b413af2835f0177c461300200813f245cefe6ddd5d45c80",
+      "rc": 1,
+      "flags": [
+        "decode: completion_tokens=13 != 512",
+        "decode: finish_reason=stop (expected length)"
+      ],
+      "invalid": [
+        "decode: too few streamed events for a middle-window rate"
+      ],
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "math_results": {
+        "decode": {
+          "median_tps": 57.76,
+          "runs_tps": [
+            57.01,
+            58.52
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 55.85,
+          "runs_tps": [
+            56.08,
+            55.83,
+            55.85
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4184,
+            "ttft_s": 4.3347,
+            "tps": 965.2,
+            "followup_s": [
+              0.0653,
+              0.0739,
+              0.0742
+            ],
+            "followup_median_s": 0.0739,
+            "followup_suffix_tps": 337.1
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "decode_output_gates": [
+        {
+          "temperature": 0.6,
+          "rate_tps": null,
+          "tokens": 13,
+          "finish": "stop"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 57.01,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 58.52,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 56.08,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 55.83,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 55.85,
+          "tokens": 512,
+          "finish": "length"
+        }
+      ],
+      "emitted_metadata": {
+        "precision": "bf16",
+        "revision": null,
+        "decoding": "prompt-lookup",
+        "drafter_kind": "none"
+      },
+      "raw_result_sha256": "ae1ace2167363e1cf7a1c90e1d43f93e85ea08430b9ba0f45899b4e353a6e22b",
+      "raw_log_sha256": "10448dde17b16bcc05e98cac0e3985121d83116260b309a22aaed88d88463c24"
+    },
+    {
+      "label": "A2",
+      "arm": "reference",
+      "source": "052104f8f9c99edde129415a7384a1a58dc24ae6",
+      "cli_sha256": "a342fde69ae6d3a2eb23cc7cf615ded60431628c6732febbd16bcd8418e45bde",
+      "rc": 0,
+      "flags": [],
+      "invalid": [],
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "math_results": {
+        "decode": {
+          "median_tps": 58.02,
+          "runs_tps": [
+            56.9,
+            58.02,
+            58.21
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 55.87,
+          "runs_tps": [
+            55.36,
+            55.99,
+            55.87
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4185,
+            "ttft_s": 4.336,
+            "tps": 965.2,
+            "followup_s": [
+              0.07,
+              0.0951,
+              0.0685
+            ],
+            "followup_median_s": 0.07,
+            "followup_suffix_tps": 292.2
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "decode_output_gates": [
+        {
+          "temperature": 0.6,
+          "rate_tps": 56.9,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 58.02,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 58.21,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 55.36,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 55.99,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 55.87,
+          "tokens": 512,
+          "finish": "length"
+        }
+      ],
+      "emitted_metadata": {
+        "precision": "bf16",
+        "revision": null,
+        "decoding": "prompt-lookup",
+        "drafter_kind": "none"
+      },
+      "raw_result_sha256": "42b0cc989c156b29069e67fe77145123380579e0da55413782812e7c2d689abc",
+      "raw_log_sha256": "5a5c173a293eec83d0bfabcaf702247b8d5b426bde2bb419a7f2e59a5fbb5579"
+    },
+    {
+      "label": "B2",
+      "arm": "candidate",
+      "source": "8f3996fea6f1f44537bee4e789b98cd6a531f347",
+      "cli_sha256": "0e25a651538f82255b413af2835f0177c461300200813f245cefe6ddd5d45c80",
+      "rc": 0,
+      "flags": [],
+      "invalid": [],
+      "protocol": {
+        "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+        "decode_tokens": 512,
+        "decode_runs": 3,
+        "greedy_runs": 3,
+        "sizes": [
+          4000
+        ],
+        "temperature": 0.6
+      },
+      "math_results": {
+        "decode": {
+          "median_tps": 59.53,
+          "runs_tps": [
+            59.53,
+            57.09,
+            77.0
+          ]
+        },
+        "decode_greedy": {
+          "median_tps": 56.02,
+          "runs_tps": [
+            56.04,
+            56.02,
+            55.99
+          ]
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4185,
+            "ttft_s": 4.3353,
+            "tps": 965.3,
+            "followup_s": [
+              0.0694,
+              0.0826,
+              0.069
+            ],
+            "followup_median_s": 0.0694,
+            "followup_suffix_tps": 317.1
+          }
+        ],
+        "tool_calls": "pass"
+      },
+      "decode_output_gates": [
+        {
+          "temperature": 0.6,
+          "rate_tps": 59.53,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 57.09,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.6,
+          "rate_tps": 77.0,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 56.04,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 56.02,
+          "tokens": 512,
+          "finish": "length"
+        },
+        {
+          "temperature": 0.0,
+          "rate_tps": 55.99,
+          "tokens": 512,
+          "finish": "length"
+        }
+      ],
+      "emitted_metadata": {
+        "precision": "bf16",
+        "revision": null,
+        "decoding": "prompt-lookup",
+        "drafter_kind": "none"
+      },
+      "raw_result_sha256": "372d8d92a4cbc0049415cdc5b42c968ff7da1d1ab5df2ec715edf1a28e1dbff8",
+      "raw_log_sha256": "e3bfbfca3663a69f7113c7328ef63a50a39090ec74e278e591a73af66040cb3d"
+    }
+  ],
+  "native_gate": {
+    "all_four_rc0": false,
+    "all_four_flags_empty": false,
+    "all_four_invalid_empty": false,
+    "scope": "ActualnativeA/B/A/B defaultbench; per-runoutputs/latencies mustbe analyzed. No inference speedup claim."
+  },
+  "interpretation": "The native A/B/A/B cohort completed. Candidate B1 had a13-token sampled stop and is invalid for sampled throughput; preserveit. Otherthree arms unflagged. Greedyrows retained. Nooverall inferencegain or allnativepassedclaim.",
+  "metadata_caveat": "The unlisted model-folder native metadata reported precision=bf16 and revision=null. The pinned upstream file digests and actual loader identify FP8 Mamba/MLP weights; that original metadata remains preserved.",
+  "followup": "A separate fixed-request, fixed-seed cohort addresses incomparable sampled requests. It does not replace or erase this native cohort."
+}

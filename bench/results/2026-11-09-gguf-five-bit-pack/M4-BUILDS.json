@@ -1,0 +1,36 @@
+{
+  "format": "Privacy-filtered derived source/binary identities; actual target flags inspected, private include/SDK paths omitted.",
+  "build_type": "Release",
+  "architecture": "arm64",
+  "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)",
+  "arms": {
+    "reference": {
+      "source": "66a5f3bc473df9af8b72ded9090c3a8acc16a43e",
+      "binaries_sha256": {
+        "kapitsa": "d1a80493404dc07645671dedc6f434071bd7ba3ce8a5bee2a3a6041018c7f6f7",
+        "logit_dump": "dd74390872e042e4bf8af575943bab98731d78a6e7af95c528181abda3ddb7d8",
+        "ni_run": "512ca7ebc84ba0b626bf19696a614e01fd43e5bbba7b568bf2299e4d25cda275",
+        "libnaceinfer.a": "d4108c38ec69ab150091fc49edc8656c5500b7cc8b8ef9bec27b3ffcd4827a94"
+      },
+      "target_optimization": "-O3",
+      "NDEBUG": false,
+      "configure_rc": 0,
+      "build_rc": 0,
+      "version_rc": 0
+    },
+    "candidate": {
+      "source": "90e10efce8462ede4c756ca77ccdb1510f4e9faf",
+      "binaries_sha256": {
+        "kapitsa": "142d1dec7e15c8101a44221db173d6c7dd57cfafe5120f20e14d1859a6e6b6ae",
+        "logit_dump": "112f99bfcfcd4bb1e2ba9ca1b689babd24280f1e1f9067d65baa6d7e813bdf75",
+        "ni_run": "c36ab37ec1793d8cc357c23bd0b0bf868a013565c6529c82b24318459dc429a7",
+        "libnaceinfer.a": "639831cabeeabdb7ea5a4bc9e6d7996ce8ac8dc3ca3f0b9c455b16e77d885291"
+      },
+      "target_optimization": "-O3",
+      "NDEBUG": false,
+      "configure_rc": 0,
+      "build_rc": 0,
+      "version_rc": 0
+    }
+  }
+}

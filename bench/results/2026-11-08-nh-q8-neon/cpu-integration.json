@@ -1,0 +1,65 @@
+{
+  "source": "7ece78ea37e6f68a2d35ff8fa5e20753645b84c7",
+  "source_unchanged": true,
+  "vk": {
+    "pass": 22,
+    "fail": 0,
+    "rc": 0
+  },
+  "supplemental_native": {
+    "load_error_test": 1,
+    "affine_pack_test": 0,
+    "json_file_test": 0,
+    "qwen4_config_test": 0,
+    "device_profile_test": 0,
+    "drafter_attach_test": 0,
+    "exl3_test": 0,
+    "systemone_test": 0,
+    "systemone_codes_probe_test": 0,
+    "execution_session_test": 0,
+    "http_stream_test": 0,
+    "splash_protocol_test": 0,
+    "splash_runtime_test": 0,
+    "splash_discover_test": 0,
+    "splash_plan_test": 0
+  },
+  "cpu_scripts": {
+    "qwen4-exp-pack": 0,
+    "profile-gates": 0,
+    "comment-gates": 0,
+    "logit-dump-harness": 0,
+    "drex-max-cpu": 0,
+    "systemone-codes-harness": 0
+  },
+  "prek_rc": 0,
+  "diff_rc": 0,
+  "cleanup_rc": 0,
+  "record_kind": "Privacy-filtered derived completed own-source CPU results",
+  "baseline_control": {
+    "schema_version": 1,
+    "record_type": "privacy-filtered derived summary; not a raw execution log",
+    "reference_commit": "95a0a552fab5c359dd91b716e9936918d436d713",
+    "candidate_commit": "7ece78ea37e6f68a2d35ff8fa5e20753645b84c7",
+    "test": "load_error_test (default CPU mode)",
+    "test_source_sha256": "29eb800140aa1e7efaed164e49875ac34e7c33c21457ad8f2c18b2872d700f33",
+    "test_source_identical": true,
+    "reference_test_binary_sha256": "8ea875884b620b24a9b8264b9f7fa709c237d21e57981f4f688060f3c649d93c",
+    "candidate_executed_test_binary_sha256": "8ea875884b620b24a9b8264b9f7fa709c237d21e57981f4f688060f3c649d93c",
+    "test_binaries_identical": true,
+    "reference_test_build_rc": 0,
+    "candidate_cpu_execution_count": 1,
+    "candidate_cpu_rc": 1,
+    "separate_reference_cpu_execution_count": 0,
+    "separate_reference_cpu_rc": null,
+    "reference_production_binaries_unchanged": true,
+    "guard_outcomes": {
+      "tensor_shape_range_header_only_deferred_guards": "PASS",
+      "unsupported_dtype_admission_and_filters": "PASS",
+      "gguf_file_read_bounds_fd_cleanup_valid_reads": "PASS"
+    },
+    "uncached_read_payload_and_destination_canaries": "PASS before cache-residency assertion",
+    "failed_test": "load_error_test / uncached_reads cache-residency assertion",
+    "failed_assertion": "after <= before + pages / 10",
+    "interpretation": "The immutable reference test was rebuilt and has the same complete executable SHA256 as the executable that returned 1 in the candidate CPU validation. No separate reference CPU run was performed. The existing failed execution is retained; this control does not turn the test into a pass or establish that it passes in another environment."
+  }
+}

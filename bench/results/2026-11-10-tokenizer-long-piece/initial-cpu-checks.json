@@ -1,0 +1,121 @@
+{
+  "derivation": "Redacted derived summary; original command logs and first failures retained privately.",
+  "source": "801527c8cd0c2cf55413c38a5a9a2f7ba6315802",
+  "kapitsa_sha256": "d25a72736582b059f8791bb037e5716ed22cecd2c7747558bcffa93a2ddb4238",
+  "commands": [
+    {
+      "command": "api_test",
+      "initial": "PASS"
+    },
+    {
+      "command": "prefix_cache_test",
+      "initial": "PASS"
+    },
+    {
+      "command": "fn_store_test",
+      "initial": "PASS"
+    },
+    {
+      "command": "fn_dflash_test",
+      "initial": "PASS"
+    },
+    {
+      "command": "tokenizer_test",
+      "initial": "PASS"
+    },
+    {
+      "command": "iq_layout_test",
+      "initial": "PASS"
+    },
+    {
+      "command": "nh_quant_q8_test",
+      "initial": "PASS"
+    },
+    {
+      "command": "remote_test",
+      "initial": "PASS"
+    },
+    {
+      "command": "cluster_test",
+      "initial": "PASS"
+    },
+    {
+      "command": "split_place_test",
+      "initial": "PASS"
+    },
+    {
+      "command": "gemm_slices_test",
+      "initial": "PASS"
+    },
+    {
+      "command": "ffn_share_test",
+      "initial": "PASS"
+    },
+    {
+      "command": "ws_upgrade_test",
+      "initial": "PASS"
+    },
+    {
+      "command": "test_server_cli",
+      "initial": "PASS"
+    },
+    {
+      "command": "test_sidecar",
+      "initial": "PASS"
+    },
+    {
+      "command": "test_bench",
+      "initial": "FAIL",
+      "targeted_repeat": "PASS"
+    },
+    {
+      "command": "test_update",
+      "initial": "FAIL",
+      "targeted_repeat": "PASS"
+    },
+    {
+      "command": "test_community",
+      "initial": "FAIL",
+      "targeted_repeat": "PASS"
+    },
+    {
+      "command": "test_reasoning",
+      "initial": "PASS"
+    },
+    {
+      "command": "test_pr_size",
+      "initial": "PASS"
+    },
+    {
+      "command": "test_logit_compare",
+      "initial": "PASS"
+    },
+    {
+      "command": "test_sampled_tokens_harness",
+      "initial": "PASS"
+    },
+    {
+      "command": "test_structured_cli",
+      "initial": "PASS"
+    }
+  ],
+  "repeat_reasons": {
+    "test_bench": "jsonschema missing from initial Python environment; existing dependency reused, full targeted repeat passed.",
+    "test_community": "jsonschema missing from initial Python environment; existing dependency reused, full targeted repeat passed.",
+    "test_update": "Concurrent fixture binary probe observed one empty output initially; independent repeat passed 114 checks."
+  },
+  "skipped": [
+    "optional reasoning dataset rebuild",
+    "Drex companion update cases (systemone executable not built)"
+  ],
+  "additional_passed": [
+    "profile gates",
+    "comment gates",
+    "prek --all-files",
+    "ABAB harness failure injection"
+  ],
+  "qwen_parser": "PASS",
+  "qwen_structured": "PASS",
+  "flint_parser": "PASS",
+  "other_tokenizer_limits": "See integration-baseline.json; not counted as passing integration checks."
+}

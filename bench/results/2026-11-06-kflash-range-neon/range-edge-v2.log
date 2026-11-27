@@ -1,0 +1,1 @@
+PASS 2161664 W/S/B comparisons: every BF16 pattern constant/in mixed groups; zero ties at every lane; 4 fenv modes; 4/8-bit and both rounding modes

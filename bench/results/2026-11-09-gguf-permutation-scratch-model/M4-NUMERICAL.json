@@ -1,0 +1,392 @@
+{
+  "format": "Explicitly privacy-filtered derived summary, not raw execution logs.",
+  "source_reference": "39446144b7f181eeecaf4bdf5a4ddb34bb5dd104",
+  "source_candidate": "9493a437a823343a2b257767c45eae9a98e7827c",
+  "setup": {
+    "chip": "M4 Pro",
+    "gpu_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "15.7.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.0.13.5)"
+  },
+  "model": {
+    "repository": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+    "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+    "file": "Qwen_Qwen3.5-4B-Q4_0.gguf",
+    "bytes": 2776033248,
+    "sha256": "3e977de32dfb9377ff827f210091cce5d3c05c7b0f0b9b0c8005df7c0677a49b"
+  },
+  "rows_each_arm": 584,
+  "vocab": 248320,
+  "float32_each_arm": 145018880,
+  "output_bytes_each_arm": 580075520,
+  "paths": {
+    "prefill": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 8,
+          "float32_elements": 1986560,
+          "finite_float32_elements": 1986560,
+          "logits_sha256": "d0576c5227ed443ed74ded73fff4e1d9fa4d93460aeb8e7eed2106ee262135fc",
+          "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "build": "0.2.31 (39446144b7f181eeecaf4bdf5a4ddb34bb5dd104)",
+            "path": "prefill",
+            "records": 8,
+            "vocab": 248320,
+            "prefill_chunk": 2048,
+            "date": "2026-11-08T20:11:37Z"
+          }
+        },
+        {
+          "records": 8,
+          "float32_elements": 1986560,
+          "finite_float32_elements": 1986560,
+          "logits_sha256": "d0576c5227ed443ed74ded73fff4e1d9fa4d93460aeb8e7eed2106ee262135fc",
+          "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "build": "0.2.31 (9493a437a823343a2b257767c45eae9a98e7827c)",
+            "path": "prefill",
+            "records": 8,
+            "vocab": 248320,
+            "prefill_chunk": 2048,
+            "date": "2026-11-08T20:12:06Z"
+          }
+        }
+      ]
+    },
+    "step": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "a49af66b0e84570198e0a2140e953355fefad646533932c26096a1c0e47918f1",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "build": "0.2.31 (39446144b7f181eeecaf4bdf5a4ddb34bb5dd104)",
+            "path": "step",
+            "records": 192,
+            "vocab": 248320,
+            "prefill_chunk": 2048,
+            "date": "2026-11-08T20:11:37Z"
+          }
+        },
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "a49af66b0e84570198e0a2140e953355fefad646533932c26096a1c0e47918f1",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "build": "0.2.31 (9493a437a823343a2b257767c45eae9a98e7827c)",
+            "path": "step",
+            "records": 192,
+            "vocab": 248320,
+            "prefill_chunk": 2048,
+            "date": "2026-11-08T20:12:06Z"
+          }
+        }
+      ]
+    },
+    "verify": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "277458686da438ed1c5783b4454b8d67de1e183c52e0c63fc3801bc081ab2b47",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "build": "0.2.31 (39446144b7f181eeecaf4bdf5a4ddb34bb5dd104)",
+            "path": "verify",
+            "records": 192,
+            "vocab": 248320,
+            "prefill_chunk": 2048,
+            "verify": "KFlash tree (a chain of 8 live rows)",
+            "date": "2026-11-08T20:11:37Z"
+          }
+        },
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "277458686da438ed1c5783b4454b8d67de1e183c52e0c63fc3801bc081ab2b47",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "build": "0.2.31 (9493a437a823343a2b257767c45eae9a98e7827c)",
+            "path": "verify",
+            "records": 192,
+            "vocab": 248320,
+            "prefill_chunk": 2048,
+            "verify": "KFlash tree (a chain of 8 live rows)",
+            "date": "2026-11-08T20:12:06Z"
+          }
+        }
+      ]
+    },
+    "batch": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "79304f80a0cb42585226c7631102ed01eeb18d634dd7a494218b3fa6b70b3efa",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "build": "0.2.31 (39446144b7f181eeecaf4bdf5a4ddb34bb5dd104)",
+            "path": "batch",
+            "records": 192,
+            "vocab": 248320,
+            "prefill_chunk": 2048,
+            "batch": {
+              "members": 4,
+              "rows": 2
+            },
+            "date": "2026-11-08T20:11:37Z"
+          }
+        },
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "79304f80a0cb42585226c7631102ed01eeb18d634dd7a494218b3fa6b70b3efa",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "build": "0.2.31 (9493a437a823343a2b257767c45eae9a98e7827c)",
+            "path": "batch",
+            "records": 192,
+            "vocab": 248320,
+            "prefill_chunk": 2048,
+            "batch": {
+              "members": 4,
+              "rows": 2
+            },
+            "date": "2026-11-08T20:12:06Z"
+          }
+        }
+      ]
+    }
+  },
+  "comparison": {
+    "report_only": {
+      "prefill": {
+        "records": 8,
+        "bitwise": 8,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": null
+        }
+      },
+      "batch": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": null
+        }
+      },
+      "step": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": null
+        }
+      },
+      "verify": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": null
+        }
+      }
+    },
+    "strict_zero": {
+      "prefill": {
+        "records": 8,
+        "bitwise": 8,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "failures": [],
+        "gate": {
+          "source": "flags"
+        }
+      },
+      "batch": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        }
+      },
+      "step": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        }
+      },
+      "verify": {
+        "records": 192,
+        "bitwise": 192,
+        "non_finite": [],
+        "top1": 1.0,
+        "flips": 0,
+        "kl_mean": 0.0,
+        "kl_median": 0.0,
+        "kl_p99": 0.0,
+        "kl_max": 0.0,
+        "margin_change_max": 0.0,
+        "tie_margin": 0.0,
+        "nll_change_mean": 0.0,
+        "max_abs_diff": 0.0,
+        "flip_list": [],
+        "near_tie": 0.0,
+        "near_tie_flips": 0,
+        "failures": [],
+        "gate": {
+          "min_top1": 1.0,
+          "max_mean_kl": 0.0,
+          "max_median_kl": 0.0,
+          "max_p99_kl": 0.0,
+          "near_tie": 0.0,
+          "max_far_flips": 0,
+          "max_nll_change": 0.0,
+          "source": "flags"
+        }
+      }
+    }
+  },
+  "command_rc": {
+    "reference_output": 0,
+    "candidate_output": 0,
+    "report_only": 0,
+    "strict_zero": 0
+  },
+  "threshold_scope": "Strict-zero thresholds apply to step/verify/batch. Prefill independently passes finite and complete literal byte/input checks; prefill is not thresholded by these flags. No floor was changed.",
+  "method": "Teacher-forced trunk; verify is a KFlash tree with a chain of eight live rows. This does not qualify free-generating MTP numerical behavior."
+}

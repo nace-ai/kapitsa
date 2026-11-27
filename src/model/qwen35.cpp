@@ -1,11 +1,17 @@
+#include "ane/input_profile.h"
+#include "model/sampler.h"
 #include "util/load_threads.h"
 #include "model/qwen35.h"
+#include "ane/proj_split.h"
+#include "engine/device_profile.h"
 #include "model/affine_pack.h"
+#include "model/gemm_slices.h"
 #include "ane/ffn_split.h"
 #include "ane/slabs.h"
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
 #include "model/kparams.h"
+#include "model/kv_grow.h"
 #include "util/bf16.h"
 #include "util/json_file.h"
 #include "util/log.h"
@@ -123,10 +129,6 @@ size_t QLinear::row_bytes() const {
 }
 static bool gdn_par();
 static bool qmm8_on();
-static int env_int(const char* n, int def) {
-  const char* v = getenv(n);
-  return v && *v ? atoi(v) : def;
-}
 
 // The large prefill tiles with M tiles along grid x for the formats other than bf16 (enc_qrf: 3/5/6-bit and 4-bit
 // group 32; enc_qmm_large: 8-bit), the M1's default (NI_QRF_MF=0/1 overrides): the threadgroups running together
@@ -134,9 +136,9 @@ static int env_int(const char* n, int def) {
 // M1 Pro, 2048 x 8192 x 2048 alone: 6-bit group 64 25.3 -> 23.8 ms, 5-bit 24.9 -> 23.8, 3-bit 27.3 -> 25.8, 4-bit
 // group 32 59.5 -> 21.4, 8-bit 26.6 -> 24.9; a 40-layer stand-in of Qwen3.6-35B-A3B UD-IQ2_XXS (6-bit projections from
 // Q5_K, 8-bit from Q6_K) reads 4096 tokens in 8.15 instead of 9.07 s (6-bit alone: 8.28). The other chips keep the
-// N-fast order until measured there.
+// N-fast order today.
 static bool prefill_mfast() {
-  static const bool v = env_int("NI_QRF_MF", Gpu::get().apple_family() <= 7 ? 1 : 0) != 0;
+  static const bool v = env_int("NI_QRF_MF", legacy_gpu() ? 1 : 0) != 0;
   return v;
 }
 
@@ -175,10 +177,11 @@ static int moe_qmr() {
 // simdgroup qrm kernels. On where the tensor units are usable (the M5 family on macOS 26, the same condition as the
 // dense NI_QMT path) and the model keeps the 35B's shapes (below): 4K prefill 2,135 -> 1,574 ms and 16K 10,810 ->
 // 8,570 ms on the M5 Pro. `NI_MOE_QTM=0` keeps the qrm path; every other Mac defaults to qrm.
-static bool qmt_on();
+bool qmt_on();  // declared in qwen35.h: DFlash2's context commit takes the same tile
 // NI_QMT6 (read once; default on where the dense NI_QMT path is): the 6-bit group-64 dense weights' prefill GEMMs
 // at M >= 64 on tensor_ops (qmt6_m64_n64, qmt.metal's tile with qrf_f6g64's exact weight decode) instead of
 // qrf_f6g64_m32_n128.
+static bool qmtf_on(int bits, int gs);  // NI_QMTF: the 3-bit, 5-bit, 8-bit and 4-bit g32 tensor_ops tile (by enc_qmm_large)
 bool qmt6_on();  // declared in qwen35.h: Qwen4Exp's NI_HC_FUSE mix fold shares this kill switch
 // NI_MOE_STAGE (default on, 0 = off): the qmtm tiles write their outputs as whole rows staged through threadgroup
 // memory instead of one element store per accumulator element (scattered, ~35% of qmtm_dn's time). Same values,
@@ -204,7 +207,7 @@ static bool moe_qtm() {
 }
 
 // The 35B's grouped prefill on the 32-core M1 Max benefits from staging a full
-// 64-input group per step. Other measured devices keep their 32-input tiles.
+// 64-input group per step. Other devices keep their 32-input tiles today.
 static int moe_qmr_k(int hidden, int intermediate) {
   static const int override_k = [] {
     const int v = getenv("NI_MOE_QMR_K") ? atoi(getenv("NI_MOE_QMR_K")) : 0;
@@ -212,8 +215,7 @@ static int moe_qmr_k(int hidden, int intermediate) {
     return v;
   }();
   if (override_k) return override_k;
-  return hidden == 2048 && intermediate == 512 && Gpu::get().name() == "Apple M1 Max" &&
-                 Gpu::get().core_count() == 32 ? 64 : 32;
+  return hidden == 2048 && intermediate == 512 && m1_max_32() ? 64 : 32;  // guard: measured on M1 Max 32
 }
 
 // NI_QMM (read once): dense prefill GEMM family for 4-bit, group-64 weights.
@@ -239,7 +241,7 @@ static const QmrSel& qmr_sel() {
     // Qwen3.5-4B's and 9B's projections: 3.07-3.17 TFLOP/s against 2.53-2.69 for qmr_k32_w14_m32_n128, on all 9
     // shapes (4B: 8192x2560 28.7 vs 33.9 ms, 2560x9216 30.6 vs 36.2; 9B: 8192x4096 43.4 vs 51.5, 4096x12288 65.2
     // vs 77.2), the fastest of the 7 qmr tiles on each
-    if (Gpu::get().apple_family() <= 7) q.name = "qmr_k64_w12_m32_n64", q.bn = 64, q.threads = 64;
+    if (legacy_gpu()) q.name = "qmr_k64_w12_m32_n64", q.bn = 64, q.threads = 64;
     if (v && *v && strcmp(v, "1") != 0) {
       unsigned bm = 0, bn = 0, wm = 0, wn = 0;
       const char* w = strstr(v, "_w");
@@ -362,17 +364,19 @@ static bool exact_qmms(double bytes, bool multi, uint32_t K) {
   return bytes < 32e6 && (multi || K < 12288);
 }
 
-// A chunk of M >= 64 new rows whose GEMM this matrix's tensor_ops tile can serve (qmtg_m64_n64 / qmt_m64_n64: qmt_on, 4-bit
-// group 64, K a multiple of 64, M >= 64) is faster there than in the short-prefill families, which are sized for the
+// A chunk of M >= qmt_min_rows() new rows whose GEMM this matrix's tensor_ops tile can serve (qmtg_m64_n64 / qmt_m64_n64:
+// qmt_on, 4-bit group 64, K a multiple of 64) is faster there than in the short-prefill families, which are sized for the
 // chunks under 64 rows (NI_SHORTPF's own comment). qmr_sel().on is checked too: the qmt tile is only reached behind it,
 // so NI_QMM=0 keeps the short-prefill path the chunk had. Measured on the M5 Pro, 27B, 16K cached prefix, one chunk of new
-// rows, short-prefill against tensor_ops: 73 rows 679 -> 399 ms, 124 rows 1005 -> 483 ms. The short-prefill staging
-// bound (one weight read, fewer blocks) only wins below 64 rows, where qmt does not run; 8-bit and unaligned
-// projections, and every MoE expert GEMM, keep the short path they have.
+// rows, short-prefill against tensor_ops: 73 rows 679 -> 399 ms, 124 rows 1005 -> 483 ms. 5-bit group 64 from 64 rows
+// takes NI_QMTF's tile the same way (enc_qmm_large, enc_qmm_gu): on the 9B Nace Q4 pack, an 85-row chunk ran its 5-bit
+// down and z projections on qmmsf_f5g64_t6 at 1.11 ms a call, against 0.23 ms for the 4-bit pack's qmt_m64_n64.
+// 3-bit, 8-bit and unaligned projections, and every MoE expert GEMM, keep the short path they have.
 bool Qwen35::sp_qmt_pref(const QLinear& L, int M) const {
   static const bool on = env_int("NI_SP_QMT", 1) != 0;  // 0 restores the pre-change short-prefill preference
   if (!on || cfg_.moe) return false;  // a MoE model's chunk keeps the short-prefill / qmtm split it had
-  return M >= 64 && qmt_on() && qmr_sel().on && L.bits == 4 && L.gs == 64 && L.K % 64 == 0;
+  if (M < qmt_min_rows() || !qmt_on() || !qmr_sel().on || L.gs != 64 || L.K % 64 != 0) return false;
+  return L.bits == 4 || (L.bits == 5 && M >= 64 && qmtf_on(5, 64));
 }
 
 // Short-prefill qmr tile for M <= 128 rows: R row tiles (1 up to 48 rows, 2 above; fused gate/up
@@ -396,7 +400,7 @@ static ShortTile short_tile(int M, bool gu, bool seg) {
 // Projections sharing the half input xh (same K): one short-prefill dispatch where the kernels
 // allow it, else one enc_qmm per projection.
 void Qwen35::enc_proj(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M) {
-  bool qmt = M >= 64 && qmt_on();
+  bool qmt = M >= qmt_min_rows() && qmt_on();
   for (auto& s : segs) qmt = qmt && sp_qmt_pref(*s.L, M);
   if (!qmt && small_t(M) && sp_gemm() != SpGemm::Qmr && segs.size() <= 4) {
     bool all_qmr = true, all_qmms = true;
@@ -427,8 +431,12 @@ void Qwen35::enc_proj(Encoder& e, const std::vector<SegQ>& segs, const Buffer& x
       return;
     }
   }
-  // one projection: the large-prefill kernels (enc_qmm would come back here)
+  // one projection: the large-prefill kernels (enc_qmm would come back here); several, one dispatch each, as one group
+  // on a grouped prefill (each writes its own output from the same input)
+  const bool grp = segs.size() > 1 && e.grouped() && grouped_prefill();
+  if (grp) e.group_begin();
   for (auto& s : segs) segs.size() > 1 ? enc_qmm(e, *s.L, xh, s.y, M, s.add) : enc_qmm_large(e, *s.L, xh, s.y, M, s.add);
+  if (grp) e.group_end();
 }
 
 // Short-prefill qmr: one projection on qmr_k64_*, several on the qmrs_k64_* form (short_tile()).
@@ -491,7 +499,9 @@ void Qwen35::prewarm_pipelines() {
     for (const char* n : {"qmr8_k32_w14_m32_n128", "qmr8_k32_w14_m16_n64", "qmr8_gu_k32_w14_m32_n64", "qmr8_gu_k32_w14_m16_n64"})
       names.insert(n);
   if (qmm8_on() && prefill_mfast()) names.insert("qmr8_k32_w14_m32_n128_mf");
-  if (Gpu::get().apple_family() <= 7)  // the M1's prefill attention and tiles (enc_attn_prefill, qmr_sel, enc_qmm_gu)
+  if (qmm8_on() && qmtf_on(8, 64) && !cfg_.moe)
+    for (const char* n : {"qmtf_f8g64_m128_n64", "qmtfg_f8g64_m128_n64", "qmtf_f8g64_m128_n64_ld"}) names.insert(n);
+  if (legacy_gpu())  // the M1's prefill attention and tiles (enc_attn_prefill, qmr_sel, enc_qmm_gu)
     for (const char* n : {"attn_prefill11_k16xr", "qmr_k64_w12_m32_n64", "qmr_gu_k64_w14_m32_n64"}) names.insert(n);
   if (cfg_.moe && moe_qmr()) {
     const std::string k = std::to_string(moe_qmr_k(cfg_.hidden, cfg_.moe_I));
@@ -564,6 +574,10 @@ void Qwen35::prewarm_pipelines() {
       for (const char* t : {"_m32_n128", "_m16_n64", "_m8_n64"}) names.insert("qrf_" + f + t);
       for (const char* t : {"_m32_n64", "_m16_n64", "_m8_n32"}) names.insert("qrf_gu_" + f + t);
       if (f == "f6g64" && qmt6_on()) names.insert("qmt6_m64_n64");  // enc_qmm_large's 6-bit tensor tile
+      if (!cfg_.moe && ((f == "f3g64" && qmtf_on(3, 64)) || (f == "f5g64" && qmtf_on(5, 64)) || (f == "f4g32" && qmtf_on(4, 32)))) {  // enc_qmm_large, enc_qmm_gu, the split
+        for (const char* t : {"qmtf_", "qmtfg_"}) names.insert(t + f + "_m128_n64");
+        names.insert("qmtf_" + f + "_m128_n64_ld");
+      }
       if (f == "f16") {
         names.insert("qrf_f16_m32_n128_mf");
         names.insert("qrf_gu_f16_m32_n64_mf");
@@ -668,6 +682,12 @@ Qwen35Config Qwen35::read_config(const std::string& dir) {
   Qwen35Config c;
   parse_config(read_json(dir + "/config.json"), c);
   return c;
+}
+
+void Qwen35::load_quant_config(const std::string& dir) {
+  json root = read_json(dir + "/config.json");
+  quant_cfg_ = root.contains("quantization") ? root["quantization"] : json::object();
+  expert_quant_ = root.contains("expert_quant") ? root["expert_quant"] : json::object();
 }
 
 void Qwen35::load_config(const std::string& dir) {
@@ -1091,9 +1111,9 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   prewarm_pipelines();
   logi("loaded %s: %d layers, %s, %.1f GB mapped in %.0f ms; weights %s", dir.c_str(), cfg_.layers,
        cfg_.moe ? "MoE" : "dense", ws_.total_bytes() / 1e9, now_ms() - t0, formats_summary().c_str());
-  // GPU + Neural Engine split of the dense prefill FFN: on by default for dense models with a
-  // calibration or a default share for this chip (27B 4k prefill ~2.8x); NI_ANE=0 keeps the GPU alone.
-  if (!cfg_.moe && !(getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0"))) init_ane();
+  // Dense ANE FFN: legacy 2560-channel inputs keep their defaults; new 2048-channel inputs
+  // follow fast on non-matrix Macs. init_ane still requires calibration or a chip share and runtime guards.
+  if (!cfg_.moe && ane::input_profile_enabled(ane::FfnSplit::input_segment(uint32_t(cfg_.hidden)))) init_ane();
 }
 
 Qwen35::Qwen35(const std::string& dir, int prefill_chunk, NoLoad) : dir_(dir), tmax_(prefill_chunk) {}
@@ -1357,6 +1377,7 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
                                  : size_t(c.hidden) + size_t(c.hidden / 64) * 4;
   if (packed) {
     auto add_image = [&](const std::string& name, uint32_t K) {
+      if (c.hidden == 4096 && !name.ends_with(".mlp.down_proj")) return;
       auto w = metas.find(name + ".weight"), s = metas.find(name + ".scales");
       if (!K || K % 64 || w == metas.end() || s == metas.end() || w->second.dtype != "U32" ||
           w->second.shape.size() != 2 || s->second.shape.size() != 2 || w->second.shape[0] <= 0 ||
@@ -1408,16 +1429,24 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
     const auto ff = fmt_of("layers.0.mlp.gate_proj.weight", "layers.0.mlp.gate_proj.scales");
     m.ffn_ane = format_supported(ff.first, ff.second);
     // the split's GPU share on the matrix units (enc_mlp_gpu_part_qmt): every layer's gate, up and down 4-bit g64, on
-    // a model the M5 share was measured on, as init_ane decides it, so the planned and the loaded default share agree
+    // a model with an M5 share (mma_share_measured), as init_ane decides it, so the planned and the loaded default share agree
     m.ffn_mma = qmt_on() && mma_share_measured(c);
-    for (int i = 0; i < c.layers && m.ffn_mma; ++i)
-      for (const char* t : {"gate_proj", "up_proj", "down_proj"}) {
-        const std::string pre = "layers." + std::to_string(i) + ".mlp." + t;
-        auto iw = metas.find(pre + ".weight"), is = metas.find(pre + ".scales");
-        const int64_t K = t[0] == 'd' ? c.dense_I : c.hidden;  // input width: 4 bits = K / 8 words, g64 = K / 64
-        m.ffn_mma = m.ffn_mma && iw != metas.end() && is != metas.end() && iw->second.dtype == "U32" &&
-                    iw->second.shape.back() == K / 8 && is->second.shape.back() == K / 64;
+    // and every layer with a matrix-unit GPU part (ffn_share::matrix_unit_share, as init_ane decides it from the loaded
+    // projections and enc_mlp_gpu_part_qmt dispatches by gpu_part), its formats read from the shapes
+    if (m.ffn_mma) {
+      std::vector<ffn_share::LayerFmt> layers(size_t(c.layers));
+      for (int i = 0; i < c.layers; ++i) {
+        auto fmt = [&](const char* t) {
+          const std::string pre = "layers." + std::to_string(i) + ".mlp." + t;
+          auto iw = metas.find(pre + ".weight"), is = metas.find(pre + ".scales");
+          const int64_t K = t[0] == 'd' ? c.dense_I : c.hidden;  // input width: F bits = K F / 32 words
+          const bool q = iw != metas.end() && is != metas.end() && iw->second.dtype == "U32";
+          return q ? ffn_share::from_shape(K, iw->second.shape.back(), is->second.shape.back()) : ffn_share::Fmt{};
+        };
+        layers[size_t(i)] = {fmt("gate_proj"), fmt("up_proj"), fmt("down_proj")};
       }
+      m.ffn_mma = ffn_share::matrix_unit_share(layers, qmtf_formats());
+    }
   }
   // weights one plain decode step multiplies (the prefill estimate's FLOPs): from the architecture
   {
@@ -1456,7 +1485,7 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
 void Qwen35::alloc_state() {
   Gpu& g = Gpu::get();
   // Match Nemotron's default; older Macs can opt in for measured comparisons.
-  sample_sg_ = g.apple10();
+  sample_sg_ = matrix_units();
   if (const char* v = getenv("NI_QWEN_SAMPLE_SG")) sample_sg_ = atoi(v) != 0;
   for (const ActBuf& a : act_layout(cfg_, tmax_, kMaxVerify, mtp_loaded_, dense_hgu_rows()))
     this->*(a.member) = g.alloc(a.bytes, a.label);
@@ -1516,6 +1545,18 @@ size_t Qwen35::kv_bytes_per_pos() const {
   return size_t(att + (mtp_loaded_ ? 1 : 0)) * 2 * cfg_.hkv * kv_row_bytes(cfg_.head_dim);
 }
 
+size_t Qwen35::kv_unit_bytes_per_pos() const { return size_t(cfg_.hkv) * kv_row_bytes(cfg_.head_dim); }
+
+size_t Qwen35::kv_room() const {
+  if (!mem_budget_) return SIZE_MAX;
+  const size_t used = Gpu::get().allocated_bytes();
+  return mem_budget_ > used ? mem_budget_ - used : 0;
+}
+
+size_t Qwen35::kv_grow_held(const Seq& s) const {
+  return kvgrow::held(s.cap, kv_bytes_per_pos(), kv_unit_bytes_per_pos());
+}
+
 // Copies positions [0, old_cap) of every kv head of a [Hkv, old_cap, D] cache into a [Hkv, new_cap, D] one.
 void Qwen35::enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int old_cap, int new_cap) {
   const uint32_t n16 = uint32_t(kv_row_bytes(cfg_.head_dim)) / 16;  // 16-byte words per position
@@ -1527,7 +1568,7 @@ void Qwen35::enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int
   e.dispatch((p[0] + 255) / 256, uint32_t(cfg_.hkv), 1, 256);
 }
 
-void Qwen35::grow_kv(Seq& s, int cap) {
+void Qwen35::grow_kv(Seq& s, int cap, size_t batch_max) {
   Gpu& g = Gpu::get();
   const int old = s.cap;
   std::vector<std::pair<Buffer*, const char*>> bufs;  // every attention cache of the sequence
@@ -1541,12 +1582,13 @@ void Qwen35::grow_kv(Seq& s, int cap) {
     bufs.push_back({&s.mtp_vc, "mtp_v_cache"});
   }
   const size_t nb = size_t(cfg_.hkv) * cap * kv_row_bytes(cfg_.head_dim);
-  // In batches of ~256 MB: a batch's new buffers are filled from the old ones, then the old ones are
-  // released, so growing never holds two copies of the whole cache.
+  // In batches of at most batch_max bytes of new buffers (and at least one buffer): a batch's new buffers are filled
+  // from the old ones, then the old ones are released, so growing never holds two copies of the whole cache, only
+  // one batch's old buffers (kv_grow.h)
   for (size_t i = 0; i < bufs.size();) {
     std::vector<Buffer> olds;
     std::unique_ptr<Encoder> e;
-    for (size_t batch = 0; i < bufs.size() && (batch == 0 || batch + nb <= (size_t(256) << 20)); ++i, batch += nb) {
+    for (size_t batch = 0; i < bufs.size() && (batch == 0 || batch + nb <= batch_max); ++i, batch += nb) {
       Buffer& b = *bufs[i].first;
       Buffer nbuf = g.alloc(nb, bufs[i].second);
       if (old > 0 && b) {
@@ -1566,20 +1608,12 @@ bool Qwen35::reserve(Seq& s, int need) {
   if (need <= s.cap) return true;
   if (need > s.limit) return false;
   const size_t per = kv_bytes_per_pos();
-  auto round_up = [](int v, int m) { return (v + m - 1) / m * m; };
-  auto fits = [&](int c) {
-    // final size; the batched copy holds a batch's old buffers a moment longer (at most ~256 MB, and at most the old
-    // cache: nothing when the cache starts empty)
-    const size_t copy = std::min(size_t(256) << 20, size_t(s.cap) * per);
-    return !mem_budget_ || Gpu::get().allocated_bytes() + size_t(c - s.cap) * per + copy <= mem_budget_;
-  };
-  // at least a quarter more (fewer copies while a conversation fills), in 1024-position steps
-  int target = std::min(s.limit, round_up(std::max(need, s.cap + s.cap / 4), 1024));
-  if (!fits(target)) target = std::min(s.limit, round_up(need, 256));
-  if (!fits(target)) return false;
+  const kvgrow::Plan p = kvgrow::plan(s.cap, need, s.limit, per, kv_unit_bytes_per_pos(), kv_room());
+  if (!p.target) return false;
+  const int target = p.target;
   const double t0 = now_ms();
   const int old = s.cap;
-  grow_kv(s, target);
+  grow_kv(s, target, p.batch);
   logd("KV cache %d -> %d positions (%.0f MB) in %.1f ms", old, target, double(per) * target / 1e6, now_ms() - t0);
   return true;
 }
@@ -1637,6 +1671,7 @@ void Qwen35::enc_mrope_args(Encoder& e, const Seq& s) {
 
 void Qwen35::reset(Seq& s) {
   s.n_pend = 0;
+  s.n_back = 0;
   s.pend_tree = false;
   for (auto& b : s.conv)
     if (b) memset(b.ptr(), 0, b.size);
@@ -1695,6 +1730,7 @@ void Qwen35::save(Encoder& e, const Seq& s, Checkpoint& c, int pos) {
 }
 
 void Qwen35::restore(Encoder& e, Seq& s, const Checkpoint& c) {
+  s.n_back = 0;  // (the checkpoint's states are complete)
   for (int i = lo_; i < hi_; ++i)
     if (cfg_.is_linear[i]) {
       enc_copy(e, c.conv[i], s.conv[i]);
@@ -1713,7 +1749,13 @@ std::string Qwen35::disk_format() const {
            kinds.c_str(), kv_i8() ? "i8" : "f16", cfg_.hkv, int(kv_row_bytes(cfg_.head_dim)),
            kv_i8() ? " (int8 codes, an f32 scale a row)" : "", mtp_loaded_ ? " (MTP head too)" : "",
            2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv, cfg_.lin_hv, cfg_.lin_dv, cfg_.lin_dk);
-  return b;
+  std::string format = b;
+  // Newly supported widths can leave different KV/recurrent values after W8A8 prefill. Separate
+  // their prefixes from pre-support binaries and NI_ANE=0, even if a particular chunk stays on the GPU.
+  if (!cfg_.moe && ane::FfnSplit::input_segment(uint32_t(cfg_.hidden)) == 2048 &&
+      ane::input_profile_enabled(2048))
+    format += "; prefill: ANE W8A8 segmented input";
+  return format;
 }
 
 void Qwen35::disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const {
@@ -2288,15 +2330,15 @@ bool Qwen35::enc_qmvf(Encoder& e, const std::vector<Seg>& segs, const Buffer& x,
   // M1 Pro: 12352 x 2048 (qkv | z) 144 instead of 172 us (qmvg_multi_f6g64, which normalizes x again in every
   // threadgroup), 8192 x 2048 100 / 118. Verify / batched rows keep the X8 GEMMs (two rows here cost 1.75x one: the
   // dequantization is per row), so a single pass stays bit-identical to a batched one; the other 6-bit models keep
-  // qmvg_multi (sums reassociated: not the same bits), the other chips until measured there. NI_QMVF6=0 turns it off.
+  // qmvg_multi (sums reassociated: not the same bits), the other chips today. NI_QMVF6=0 turns it off.
   static const bool b6_on = env_int("NI_QMVF6", 1) != 0;
-  const bool b6 = b6_ok && b6_on && bits == 6 && R == 1 && !gu && cfg_.iq && Gpu::get().apple_family() <= 7;
+  const bool b6 = b6_ok && b6_on && bits == 6 && R == 1 && !gu && cfg_.iq && legacy_gpu();
   if (bits != 4 && bits != 8 && !b6) return false;
   // 4-bit group 32 (GGUF imports' Q4_K LM heads), one matrix, on the M1 (Apple7): its 248K-row head on
-  // qmvf_b4g32 2.6 instead of 3.1 ms (qmvg_f4g32_r4_norm, Qwen3.6-35B-A3B UD-IQ2_XXS on the M1 Pro); not yet
-  // measured on the other chips
+  // qmvf_b4g32 2.6 instead of 3.1 ms (qmvg_f4g32_r4_norm, Qwen3.6-35B-A3B UD-IQ2_XXS on the M1 Pro); the other
+  // chips keep the existing path today
   const bool g32 = segs.size() == 1 && !gu && bits == 4 && segs[0].L->gs == 32 && !segs[0].L->iq &&
-                   Gpu::get().apple_family() <= 7;
+                   legacy_gpu();
   for (const Seg& s : segs)
     if (!(s.L->q4() || s.L->q8() || g32 || (b6 && s.L->gs == 64 && !s.L->iq)) || s.L->bits != bits || s.L->K != K)
       return false;
@@ -2484,6 +2526,7 @@ void Qwen35::enc_mlp_prefill(Encoder& e, const Layer& L, int T, const Buffer& xb
 void Qwen35::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample) {
   if (!cfg_.causal) fatal("noncausal Qwen3.5 requires a whole-prompt prefill, not decode");
   if (pos + 1 >= s.cap) fatal("context full (%d)", s.cap);
+  flush_backlog(e, s);
   enc_embed(e, s.tok, pos, 1, x_);
   static int dbg_layers = getenv("NI_DEBUG_LAYERS") ? atoi(getenv("NI_DEBUG_LAYERS")) : -1;
   // profiling aid: NI_SKIP bitmask 1=moe 2=gdn 4=attn 8=head (output becomes garbage)
@@ -2511,16 +2554,20 @@ void Qwen35::enc_sample(Encoder& e, Seq& s, const Buffer& xrow, int out_index, c
   static Pipeline st2 = Gpu::get().pipeline("sample_stage2");
   enc_qmv(e, lm_head_, xrow, logits_, nullptr, final_norm_);
   enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);  // structured output (nothing without masks)
-  // stage 2 holds 4 candidates per thread (4096): 122 threadgroups x 32 fits
-  uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
-  kp::TopkStage ts{uint32_t(cfg_.vocab), K, 2048};
-  uint32_t ntg = (cfg_.vocab + 2047) / 2048;
+  if (full_vocab(sp)) {  // top_k <= 0 or above the two passes' 64 (sampler.h)
+    enc_sample_full(e, logits_, uint32_t(cfg_.vocab), s.tok, out_index, sprob_, sp, step);
+    return;
+  }
+  // stage 2 holds 4 candidates per thread (4096): 122 lists x 32, or 61 x 64 (topk_chunk)
+  const uint32_t K = topk_k(sp);
+  kp::TopkStage ts{uint32_t(cfg_.vocab), K, topk_chunk(K)};
+  uint32_t ntg = topk_lists(uint32_t(cfg_.vocab), K);
   // Independent SIMD selection and a merge avoid a threadgroup barrier per top-k rank.
   // Keep the small-k path; both kernels emit the same sorted lists.
   e.use(sample_sg_ && K >= 8 ? pipe("topk_stage1_rows_sg") : st1);
   e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, 1, 1, 256);
+  e.dispatch(ntg, 1, 1, topk_threads(K));
   kp::Sample sp2{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, uint32_t(out_index)};
   e.use(st2);
   e.buf(0, cand_v_); e.buf(1, cand_i_); e.buf(2, s.tok); e.buf(3, sprob_);
@@ -2542,16 +2589,102 @@ static Pipeline pipe(const std::string& n) {
 // NI_QMT (read once; default on, 0 = off): the dense 4-bit prefill GEMMs (M >= 64, group 64) on Metal 4's tensor_ops
 // (qmt.metal: the M5's matrix units; bench_qmm on the M5 Pro, 2048-row chunks of Qwen3.5-4B's projections: 21-23
 // TFLOP/s against qmr's 7.4-7.6, the fused gate/up 22.8 against 7.5). Needs macOS 26 and an Apple10 GPU.
-static bool qmt_on() {
+bool qmt_on() {
   static const bool on = [] {
     if (env_int("NI_QMT", 1) == 0) return false;
-    if (Gpu::get().apple_family() < 10) return false;
+    if (!matrix_units()) return false;
     bool ok = false;
     if (__builtin_available(macOS 26.0, *)) ok = true;
     if (ok) logi("NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64");
     return ok;
   }();
   return on;
+}
+
+// NI_QMT128 (read once; default on, 0 = off): the qmt GEMMs of 96 rows or more on the 128-row tile (qmt.metal's qmt128_tile:
+// 4 simdgroups of 32 rows over 64 weight rows, X read by the matmul from device memory, only the dequantized weights in
+// threadgroup memory), the same 32 x 32 x 32 matmuls on the same elements in the same K order as the 64-row tile, so the
+// same bits (bench_qmm QMM_CMP: every output element of every shape below identical). A weight is dequantized once per
+// 128 rows instead of 64: bench_qmm on the M5 Max, M 2048, 64-row vs 128-row tile: the 27B's gate/up 49.8 -> 59.5
+// TFLOP/s, down 48.1 -> 53.5, out_proj 47.8 -> 53.4, GDN in_proj 47.1 -> 55.1; the 35B's 8192 x 2048 45.3 -> 52.5,
+// 2048 x 4096 43.8 -> 50.7, shared expert gate/up (N 512) 37.6 -> 48.8; 4K prefill on ni_run -5.2% (35B-A3B), -7.3%
+// (27B), bench/results/2026-11-04-m5-max-qmt-128. Below 96 rows the 64-row tile stays (M 33, N 512: 39 vs 48 us).
+// NI_QMT_MIN (read once; 1-64): the fewest rows of a dense 4-bit g64 GEMM on the tensor_ops tile (qmt_m64_n64,
+// qmtg_m64_n64, whose rows past M load as zeros and store nothing); a GEMM of fewer rows runs the short-prefill or qmr
+// kernels. A chunk's last rows and a short turn's message are such GEMMs. Default 17 for every dense model; MoE models
+// keep 64 (not measured). M5 Pro, ni_run, interleaved 3 x 2 (#393): a 40-token prefill on the 4B 47.3 -> 28.8 ms, the 9B
+// 99.5 -> 46.6, the 27B 320.0 -> 144.6; a 4,129-token prefill on the 4B 952.6 -> 932.8 ms and the 9B 2,370 -> 2,316, the
+// same greedy text. The 27B shape (hidden 5120, FFN 17408, 64 layers) kept 64 on the M5 Pro after #393 (its 4,129-token
+// prefill with its Neural Engine split read 5,577 -> 5,851 ms, slower in 3 of 3 pairs) and takes 17 there too since it
+// was measured again (M5 Pro, macOS 26.5.2, ni_run, 8 rounds in rotated order with 64 run twice as the control): 4,096
+// tokens 5,076 / 5,091 ms with 64, 5,082 with 17; 4,129 tokens (a 33-row tail chunk) 5,400 / 5,401 against 5,425, each
+// inside the spread of the two 64 runs; a cached turn's suffix of 26 / 45 / 63 rows 212 / 251 / 301 -> 155 / 163 / 173 ms.
+// The M5 Max measurements below are for that shape and a Mac mini M6 (12 cores, the KQuant pack, ni_run, interleaved)
+// reads the same 4,129 tokens in
+// 8,682 / 8,658 / 8,876 ms against 8,866 / 8,891 / 8,921, and a cached turn's suffix of 28 / 45 / 56 rows (an in-pass
+// checkpoint, a 2,000-token prefix, 5 passes a setting twice) in 221 / 232 / 265 ms against 370 / 545 / 706.
+// bench_qmm on the M5 Max, the 27B's shapes, the 64-row tile against the short-prefill tile the pass takes: gate/up
+// (17408 x 5120) at 17 rows 514 against 638 us, at 33 527 against 1,215; down (5120 x 17408) at 24 rows 334 against
+// 400, at 33 337 against 623; GDN in_proj (16384 x 5120) at 33 288 against 525. At 16 rows and fewer the short tiles
+// win (gate/up 509 against 611 us, down 295 against 330), and the 16-row verify runs qmm8 anyway.
+// bench/results/2026-11-05-m5-max-qmt-short.
+int Qwen35::qmt_min_rows() const {
+  static const int env = std::clamp(env_int("NI_QMT_MIN", 0), 0, 64);
+  if (env) return env;
+  return cfg_.moe ? 64 : 17;
+}
+
+bool Qwen35::tile_pass(int rows) const {
+  if (cfg_.moe || !qmt_on() || rows < qmt_min_rows()) return false;
+  // The tile takes 4-bit group-64 matrices only (enc_qmm_large, enc_qmm_gu: qmr_ok). A pack with any dense projection in
+  // another format (the 27B's Q5, 5-bit, 6-bit, 8-bit and bf16 packs, a mixed pack) runs part of its suffix on the staged
+  // short-prefill GEMMs, where the passes were the faster path, so it keeps them: only the all-4-bit-group-64 case
+  // (the Q4 and plain 4-bit 27B packs) was measured with the tile. Every projection a prefill pass reads counts, the
+  // token mixer's as well as the FFN's.
+  for (const Layer& L : layers_)
+    for (const QLinear* q : {&L.qkv, &L.z, &L.a, &L.b, &L.out, &L.q, &L.k, &L.v, &L.o, &L.mg, &L.mu, &L.md})
+      if (*q && !qmr_ok(*q)) return false;
+  return true;
+}
+
+bool qmt128_for(int M) {
+  static const bool on = [] {
+    const bool o = qmt_on() && env_int("NI_QMT128", 1) != 0;
+    if (o) logi("NI_QMT128: qmt GEMMs of 96+ rows on the 128-row tile (qmt_m128_n64, qmtg_m128_n64)");
+    return o;
+  }();
+  return on && M >= 96;
+}
+
+static bool qmt_i8_on();
+
+// NI_GEMM_SLICES (read once): Drex Max v1's dense qmt / qmtg prefill GEMMs of more than 2048 rows run as 2048-row
+// dispatches (src/model/gemm_slices.h); bitwise the same outputs. Default on the M5 class (matrix units), measured on the M5 Pro;
+// 1 = on any Mac on the dense QMT path, 0 = off.
+static bool gemm_slices_on() {
+  static const bool on = [] {
+    const int v = env_int("NI_GEMM_SLICES", -1);
+    return v < 0 ? default_on(Knob::kGemmSlices, ModelFacts{}) : v > 0;
+  }();
+  return on;
+}
+
+// NI_PF_GROUPED (read once): a prefill pass on a grouped encoder, its independent dispatches side by side - enc_proj's
+// projections (DeltaNet's four, attention's q / k / v, the router and the shared-expert gate) and the routed and shared
+// experts' GEMMs - while the rest keep a barrier between them. The same kernels on the same data: bitwise the same
+// outputs. Default on where the tensor-unit prefill is (qmt_on(): the M5 family on macOS 26), measured on the M5 Max
+// (4K prefill, ni_run, old and new builds interleaved): the 35B-A3B 671.7 -> 657.9 ms (-2.1%), Clover -2.2%, the 4B
+// -2.0%, Flash-Next -1.1%, the 9B -0.5%, the 27B level (its prefill waits on the Neural Engine split). 0 = off (a
+// serial encoder, as before), 1 = on on any Mac.
+// Off whenever NI_QMT_I8 is on: its GEMMs are two dependent dispatches.
+bool Qwen35::grouped_prefill() const {
+  static const bool on = [] {
+    const int v = env_int("NI_PF_GROUPED", -1);
+    const bool o = v < 0 ? qmt_on() : v > 0;
+    if (o) logi("NI_PF_GROUPED: prefill on a grouped encoder (independent projections and expert GEMMs overlap)");
+    return o;
+  }();
+  return on && !qmt_i8_on();
 }
 
 // NI_QMT6 (read once): the 6-bit group-64 dense weights' large-prefill GEMMs on qmt6_m64_n64 (tensor_ops/qmt6.metal)
@@ -2567,6 +2700,26 @@ bool qmt6_on() {
     return true;
   }();
   return on;
+}
+
+// NI_QMTF (read once; default on where qmt_on() is, 0 = off): the dense prefill GEMMs of 64 rows or more in the MLX
+// affine formats without a tensor_ops tile of their own (3-bit, 5-bit and 8-bit group 64; 4-bit group 32, what kapitsa import
+// makes of a GGUF's Q4_K), plain, the fused gate/up/SwiGLU and the Neural Engine split's GPU share, on
+// tensor_ops/qmtf.metal's 128-row tile (qmt_m128_n64's tile with the format's weight decode) instead of the simdgroup
+// kernels (wfmt.metal's qrf_* / qrf_gu_*; 8-bit: qmm3.metal's qmr8 / qmr8_gu). The tile dequantizes to the bits those
+// kernels feed their MMAs (the same half-domain decode, one half fma each), so the change is the K reduction's
+// association order only.
+static bool qmtf_on(int bits, int gs) {
+  static const bool on = [] {
+    if (env_int("NI_QMTF", 1) == 0) return false;
+    if (!qmt_on()) return false;
+    logi("NI_QMTF: 3-bit / 5-bit / 8-bit g64 and 4-bit g32 dense prefill GEMMs on tensor_ops (qmtf_*_m128_n64), M >= 64");
+    return true;
+  }();
+  return on && (((bits == 3 || bits == 5 || bits == 8) && gs == 64) || (bits == 4 && gs == 32));
+}
+static bool qmtf_for(const QLinear& L, int M) {
+  return M >= 64 && qmtf_on(L.bits, L.gs) && L.K % 64 == 0 && (L.bits != 8 || qmm8_for(L));
 }
 
 // Exported for Qwen4Exp's NI_HC_FUSE gate (declared in qwen35.h): enc_qmm_large's tensor-tile branches run only
@@ -2670,6 +2823,14 @@ std::pair<Buffer, Buffer> Qwen35::qmt_i8_scratch(size_t m, size_t k) {
 
 void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
   const QmrSel& q = qmr_sel();
+  if (q.on && !cfg_.moe && qmtf_for(L, M)) {
+    e.use(pipe("qmtf_" + L.fmt() + "_m128_n64"));
+    kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
+    e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
+    e.val(5, p);
+    e.dispatch((L.N + 63) / 64, (uint32_t(M) + 127) / 128, 1, 128);
+    return;
+  }
   if (q.on && qmm8_for(L) && L.bits == 8 && L.gs == 64 && L.K % 64 == 0) {
     const bool small = M < 64 || L.N <= 64, mfast = !small && prefill_mfast();
     const char* n = small ? "qmr8_k32_w14_m16_n64" : mfast ? "qmr8_k32_w14_m32_n128_mf" : "qmr8_k32_w14_m32_n128";
@@ -2697,12 +2858,24 @@ void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const
     e.dispatch((L.N + 127) / 128, (uint32_t(M) + 63) / 64, 1, 256);
     return;
   }
-  if (q.on && qmt_on() && M >= 64 && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
-    e.use(pipe("qmt_m64_n64"));
-    kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
-    e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
-    e.val(5, p);
-    e.dispatch((L.N + 63) / 64, (uint32_t(M) + 63) / 64, 1, 128);
+  if (q.on && qmt_on() && M >= qmt_min_rows() && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
+    auto run = [&](const Buffer& x, const Buffer& out, int rows) {
+      const uint32_t bm = qmt128_for(rows) ? 128 : 64;
+      e.use(pipe(bm == 128 ? "qmt_m128_n64" : "qmt_m64_n64"));
+      kp::Qmm p{uint32_t(rows), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
+      e.buf(0, x); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, out);
+      e.val(5, p);
+      e.dispatch((L.N + 63) / 64, (uint32_t(rows) + bm - 1) / bm, 1, 128);
+    };
+    if (gemm_slices::eligible(gemm_slices_on(), cfg_.causal, cfg_.moe, cfg_.layers, cfg_.hidden, cfg_.dense_I, M)) {
+      const gemm_slices::Plan plan(size_t(M), L.K, L.N, xh, y, sizeof(float));
+      for (size_t i = 0; i < plan.count(); ++i) {
+        const auto sl = plan.slice(i);
+        run(sl.input, sl.output, int(sl.rows));
+      }
+    } else {
+      run(xh, y, M);
+    }
     return;
   }
   if (q.on && qmt6_on() && M >= 64 && L.bits == 6 && L.gs == 64 && L.K % 64 == 0) {
@@ -2996,11 +3169,20 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
 }
 
 bool Qwen35::qmt_ready() { return qmt_on(); }
+ffn_share::Qmtf Qwen35::qmtf_formats() {
+  // 8-bit: enc_qmm_large's qmm8 condition too (qmtf_for), for a dense FFN projection (never a router gate)
+  return {qmtf_on(3, 64), qmtf_on(8, 64) && qmm8_on(), qmtf_on(4, 32), qmtf_on(5, 64)};
+}
+ffn_share::Fmt Qwen35::ffn_fmt(const QLinear& q) {
+  return q.iq || q.q20 || q.exl3 ? ffn_share::Fmt{} : ffn_share::Fmt{q.bits, q.gs};
+}
+ffn_share::Path Qwen35::ffn_gpu_part(const Layer& L) {
+  return ffn_share::gpu_part(ffn_fmt(L.mg), ffn_fmt(L.mu), ffn_fmt(L.md), qmtf_formats());
+}
 
-// The M5 default share of the Neural Engine split (default_units' gpu_mma, #318) only on the models it was measured
-// and output-checked on: Qwen3.5 4B (hidden 2560, FFN 9216, 32 layers) and Qwen3.8 27B (5120, 17408, 64). Another
+// The M5 default share of the Neural Engine split (default_units' gpu_mma, #318) is on today for these shapes only: Qwen3.5 4B (hidden 2560, FFN 9216, 32 layers) and Qwen3.8 27B (5120, 17408, 64). Another
 // 4-bit group-64 dense model (the 9B) keeps the old default share, the whole FFN on the Neural Engine at 20 GPU cores,
-// until it is measured. NI_ANE_MMA=1 takes the M5 share on any such model (to measure one), 0 the old share on these.
+// today. NI_ANE_MMA=1 takes the M5 share on any such model, 0 the old share on these.
 bool Qwen35::mma_share_measured(const Qwen35Config& c) {
   if (const char* v = getenv("NI_ANE_MMA")) return atoi(v) != 0;
   return (c.hidden == 2560 && c.dense_I == 9216 && c.layers == 32) ||
@@ -3014,20 +3196,35 @@ bool Qwen35::mma_share_measured(const Qwen35Config& c) {
 // the GPU keeps to 0. The gate/up products are the GPU-alone FFN's (same kernel, tile and K order).
 bool Qwen35::enc_mlp_gpu_part_qmt(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x) {
   const QLinear &G = L.mg, &U = L.mu, &Dn = L.md;
-  auto ok = [](const QLinear& q) { return q.bits == 4 && q.gs == 64 && q.K % 64 == 0; };
-  if (!qmt_on() || T < 64 || g % 64 || !ok(G) || !ok(U) || !ok(Dn) || G.N != U.N || G.K != U.K) return false;
-  const uint32_t D = uint32_t(cfg_.hidden), I = G.N;
-  e.use(pipe("qmtg_m64_n64"));
+  const ffn_share::Path path = ffn_gpu_part(L);  // the formats' rule, as plan() and init_ane() chose the share by
+  if (path == ffn_share::Path::generic || T < 64 || g % 64 || G.N != U.N || G.K != U.K || G.K % 64 || Dn.K % 64)
+    return false;
+  if (path == ffn_share::Path::qmtf) {
+    // the 3-bit / 8-bit g64 FFN: qmtfg over the leading g gate/up rows (enc_qmm_gu's tile), qmtf_ld for the down
+    QLinear Gg = G, Ug = U;
+    Gg.N = Ug.N = g;
+    if (!enc_qmm_gu(e, Gg, Ug, xh_, hhalf_, T)) return false;
+    const uint32_t D = uint32_t(cfg_.hidden), I = G.N;
+    e.use(pipe("qmtf_" + Dn.fmt() + "_m128_n64_ld"));
+    kp::QmmLd pd{{uint32_t(T), D, g, g, D, 1u, uint32_t(Dn.gs), 0, 0}, I * uint32_t(Dn.bits) / 32, I / uint32_t(Dn.gs)};
+    e.buf(0, hhalf_); e.buf(1, Dn.w->buf); e.buf(2, Dn.s->buf); e.buf(3, Dn.b->buf); e.buf(4, x);
+    e.val(5, pd);
+    e.dispatch((D + 63) / 64, (uint32_t(T) + 127) / 128, 1, 128);
+    return true;
+  }
+  if (!qmt_on()) return false;  // Path::qmt
+  const uint32_t D = uint32_t(cfg_.hidden), I = G.N, bm = qmt128_for(T) ? 128 : 64;
+  e.use(pipe(bm == 128 ? "qmtg_m128_n64" : "qmtg_m64_n64"));
   kp::Qmm pg{uint32_t(T), g, G.K, G.K, g, 0, uint32_t(G.gs), 0, 0};
   e.buf(0, xh_); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, hhalf_);
   e.val(5, pg);
   e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
-  e.dispatch((g + 31) / 32, (uint32_t(T) + 63) / 64, 1, 128);
-  e.use(pipe("qmt_m64_n64_ld"));
+  e.dispatch((g + 31) / 32, (uint32_t(T) + bm - 1) / bm, 1, 128);
+  e.use(pipe(bm == 128 ? "qmt_m128_n64_ld" : "qmt_m64_n64_ld"));
   kp::QmmLd pd{{uint32_t(T), D, g, g, D, 1u, uint32_t(Dn.gs), 0, 0}, I / 8, I / 64};
   e.buf(0, hhalf_); e.buf(1, Dn.w->buf); e.buf(2, Dn.s->buf); e.buf(3, Dn.b->buf); e.buf(4, x);
   e.val(5, pd);
-  e.dispatch((D + 63) / 64, (uint32_t(T) + 63) / 64, 1, 128);
+  e.dispatch((D + 63) / 64, (uint32_t(T) + bm - 1) / bm, 1, 128);
   return true;
 }
 
@@ -3058,7 +3255,7 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
   }
   // the M1 (Apple7): 64-deep K steps (bench_qmm on the M1 Pro, 2048 rows: 4B 9216x2560 3.25 vs 3.02 TFLOP/s, 9B
   // 12288x4096 3.27 vs 3.03, the faster of the 3 qmr_gu tiles on both)
-  static const char* const gu = Gpu::get().apple_family() <= 7 ? "qmr_gu_k64_w14_m32_n64" : "qmr_gu_k32_w14_m32_n64";
+  static const char* const gu = legacy_gpu() ? "qmr_gu_k64_w14_m32_n64" : "qmr_gu_k32_w14_m32_n64";
   static const bool on = [] {
     const char* g = getenv("NI_QMM_GU");
     const bool v = !(g && !strcmp(g, "0")) && qmr_sel().on;
@@ -3068,6 +3265,15 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
   auto ok8 = [](const QLinear& q) { return q.bits == 8 && q.gs == 64 && q.K % 64 == 0; };
   const bool b8 = on && qmm8_for(G) && qmm8_for(U) && ok8(G) && ok8(U) && G.N == U.N && G.K == U.K;
   auto ok = [](const QLinear& q) { return q.bits == 4 && q.gs == 64 && q.K % 64 == 0; };
+  if (on && !cfg_.moe && G.same_format(U) && G.N == U.N && G.K == U.K && qmtf_for(G, M) && qmtf_for(U, M)) {
+    e.use(pipe("qmtfg_" + G.fmt() + "_m128_n64"));  // qmtg_m128_n64's grid: 32 columns a tile
+    kp::Qmm p{uint32_t(M), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};
+    e.buf(0, xh); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, h);
+    e.val(5, p);
+    e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
+    e.dispatch((G.N + 31) / 32, (uint32_t(M) + 127) / 128, 1, 128);
+    return true;
+  }
   if (on && !G.q4() && !G.q8() && G.same_format(U) && G.N == U.N && G.K == U.K) {
     // wfmt.metal's fused gate/up for the other formats (qrf_gu_*; bf16 large tiles with M along grid x)
     static const bool mf = env_int("NI_QRF16_MF", 1) != 0;
@@ -3089,13 +3295,25 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
     return true;
   }
   if (!b8 && (!on || !ok(G) || !ok(U) || G.N != U.N || G.K != U.K)) return false;
-  if (!b8 && qmt_on() && M >= 64) {
-    e.use(pipe("qmtg_m64_n64"));
-    kp::Qmm p{uint32_t(M), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};
-    e.buf(0, xh); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, h);
-    e.val(5, p);
-    e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
-    e.dispatch((G.N + 31) / 32, (uint32_t(M) + 63) / 64, 1, 128);
+  if (!b8 && qmt_on() && M >= qmt_min_rows()) {
+    auto run = [&](const Buffer& x, const Buffer& out, int rows) {
+      const uint32_t bm = qmt128_for(rows) ? 128 : 64;
+      e.use(pipe(bm == 128 ? "qmtg_m128_n64" : "qmtg_m64_n64"));
+      kp::Qmm p{uint32_t(rows), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};
+      e.buf(0, x); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, out);
+      e.val(5, p);
+      e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
+      e.dispatch((G.N + 31) / 32, (uint32_t(rows) + bm - 1) / bm, 1, 128);
+    };
+    if (gemm_slices::eligible(gemm_slices_on(), cfg_.causal, cfg_.moe, cfg_.layers, cfg_.hidden, cfg_.dense_I, M)) {
+      const gemm_slices::Plan plan(size_t(M), G.K, G.N, xh, h, sizeof(uint16_t));
+      for (size_t i = 0; i < plan.count(); ++i) {
+        const auto sl = plan.slice(i);
+        run(sl.input, sl.output, int(sl.rows));
+      }
+    } else {
+      run(xh, h, M);
+    }
     return true;
   }
   const char* n = gu;
@@ -3305,6 +3523,10 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     const q20::Experts X = q20_fetch(e, L, ridx_, uint32_t(P), T, enc_shared);
     q20::enc_prefill(e, X, q20_shape(), bm, max_tiles, xh_, hhalf_, yd_, tiles_, ntiles_, stok_, spair_);
   }
+  // a grouped prefill runs the shared expert beside the routed one: its gate / up (one dispatch) in the routed gate /
+  // up's group, its down projection in the routed down's
+  const bool side = !fold && !q20 && e.grouped() && grouped_prefill();
+  if (side) e.group_begin();
   // gate + up + SwiGLU: hhalf_ row r = sorted row r (pairs grouped by expert, then shared rows)
   if (!q20) {
     // expert matrices are stacked [E, N, K]: strides in words / groups
@@ -3324,6 +3546,20 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     e.buf(15, SU.w->buf); e.buf(16, SU.s->buf); e.buf(17, SU.b->buf);
     e.dispatch(G.N / kBnGu, max_tiles, 1, 128);
   }
+  bool shared_gu = false;
+  if (side) {
+    shared_gu = enc_qmm_gu(e, L.sg, L.su, xh_, hh_, T);
+    e.group_end();
+    if (!shared_gu) {  // three dependent dispatches: after the group
+      enc_qmm(e, L.sg, xh_, sgb_, T, false);
+      enc_qmm(e, L.su, xh_, sub_, T, false);
+      uint32_t ns = uint32_t(T * cfg_.shared_I);
+      e.use(pipe("swiglu_half"));
+      e.buf(0, sgb_); e.buf(1, sub_); e.buf(2, hh_); e.val(3, ns);
+      e.dispatch((ns + 255) / 256, 1, 1, 256);
+    }
+    e.group_begin();
+  }
   // down: yd_ row = pair id (shared rows: P + token)
   if (!q20) {
     kp::Qmm2 p{Dn.N, Dn.K, Dn.K, Dn.N, uint32_t(Dn.gs), uint32_t(size_t(Dn.N) * Dn.row_bytes() / 4),
@@ -3340,7 +3576,12 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     e.buf(9, SD.w->buf); e.buf(10, SD.s->buf); e.buf(11, SD.b->buf);
     e.dispatch(Dn.N / kBnDn, max_tiles, 1, 128);
   }
-  if (!fold && !q20) enc_shared();
+  if (side) {
+    enc_qmm(e, L.sd, hh_, ys_, T, false);
+    e.group_end();
+  } else if (!fold && !q20) {
+    enc_shared();
+  }
   if (precomb_arm_) {  // NI_HC_PRECOMB: the next hc_pre_comb computes this sum; no dispatch, no xbuf write
     comb_pending_ = {yd_, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_, uint32_t(D), uint32_t(k), true};
   } else {
@@ -3421,9 +3662,21 @@ void Qwen35::enc_gdn_prefill_par(Encoder& e, Seq& s, int li, const Layer& L, int
 // attn_prefill11 (default): MLX-style layout, 32 queries of one query head per threadgroup,
 // fragments in registers (2.1x v10 on the 35B shape, 3.1x on the 27B's G=6). NI_ATTN overrides.
 void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, int T, int pos0, int cap) {
+  if (T == 0) return;
+  static const bool qattn = !(getenv("NI_ATTN") && *getenv("NI_ATTN")) && env_int("NI_QATTN", 1) != 0 && qmt_on();
+  static const bool d2_on = env_int("NI_QATTN_D2", 1) != 0;
+  static const bool g6_on = env_int("NI_QATTN_G6", 1) != 0;
   kp::AttnPref fp{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(pos0), uint32_t(cap),
                   1.0f / std::sqrt(float(cfg_.head_dim))};
   if (!cfg_.causal) {
+    if (qattn && d2_on && g6_on && cfg_.head_dim == 256 && cfg_.hkv > 0 && cfg_.hq == 6 * cfg_.hkv &&
+        T > 0 && pos0 >= 0 && pos0 <= cap && T <= cap - pos0 && uint64_t(T) * 6 + 63 <= 0xffffffffu) {
+      e.use(pipe("qattn_t_g6d2s8_bidi"));
+      e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
+      e.val(5, fp);
+      e.dispatch(uint32_t((uint64_t(T) * 6 + 63) / 64), cfg_.hkv, 1, 256);
+      return;
+    }
     e.use(pipe("attn_prefill11_bidi_k16"));
     e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
     e.val(5, fp);
@@ -3508,7 +3761,7 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   // 309.2 for attn_prefill11r. The 16-key tiles' online softmax rounds differently: outputs are not bit-identical to
   // 11r's, error against an fp64 reference the same (2.1-2.4e-4).
   static const std::string full = getenv("NI_ATTN") && *getenv("NI_ATTN") ? an
-                                  : Gpu::get().apple_family() <= 7 ? "attn_prefill11_k16xr" : an;
+                                  : legacy_gpu() ? "attn_prefill11_k16xr" : an;
   uint32_t qb = 4, th = 256, gy = cfg_.hkv;
   // NI_QATTN (default on, 0 = off): D 256, 4 or 8 query heads per KV head, on tensor_ops (qattn_t.metal) on the M5.
   // G = 8 (the 35B) runs qattn_t_g8s4k16: 2 tokens x the KV head's 8 heads per 16-row tile, 8 tokens per
@@ -3526,17 +3779,14 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   // M5 Pro, T 4224 against 8448 keys / T 3328 against 16000: 24.22 / 44.42 ms vs g8s4k16's 44.08 / 78.23 (1.82x /
   // 1.76x), error against the fp64 reference the same (2.58e-4 / 3.09e-4 vs 2.60e-4 / 3.08e-4). The scores add the
   // two halves of the head dim separately, so logits are not bit-identical to g8s4k16's.
-  static const bool qattn = !(getenv("NI_ATTN") && *getenv("NI_ATTN")) && env_int("NI_QATTN", 1) != 0 && qmt_on();
   // Only the environment is read once: the head ratios depend on cfg_, which changes when the server swaps models
   // (--allow-switch), and function-local statics survive the swap.
   static const bool g8_on = env_int("NI_QATTN_G8", 1) != 0;
-  static const bool d2_on = env_int("NI_QATTN_D2", 1) != 0;
   // NI_QATTN_G6 (default on, 0 = off): G = 6 (the 27B, 24 query heads over 4 KV heads) runs qattn_t_g6d2s8, the d2
   // kernel over (token, head) rows, 64 rows (10 2/3 tokens) per threadgroup; off, it stays on attn_prefill11r.
   // bench_attn on the M5 Pro, the 27B's heads: T 141 / 512 against a 16K prefix 4.16 / 12.76 ms vs 11r's 10.93 /
   // 30.77; T 2048 against 4096 / 16384 keys 8.85 / 44.23 ms vs 22.21 / 111.64 (2.4-2.6x). Error against the fp64
   // reference 2.6-3.1e-4 (11r 1.9-2.6e-4; the shipped G = 4 and G = 8 qattn kernels sit the same distance above it).
-  static const bool g6_on = env_int("NI_QATTN_G6", 1) != 0;
   // NI_QATTN_G4D2 (default on, 0 = off): G = 4 (the 4B and 9B, 16 query heads over 4 KV heads) runs qattn_t_g4d2s8, the
   // same d2 kernel over (token, head) rows, 64 rows (16 tokens) per threadgroup; off, qattn_t_s8k16 as before.
   // bench_attn on the M5 Max (40 cores, macOS 25E246), the 4B's heads, T 2048 against 4096 / 8192 / 16384 keys: 3.09 /
@@ -3575,6 +3825,30 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   e.dispatch((T + qb - 1) / qb, gy, 1, th);
 }
 
+bool Qwen35::gdn_par_on() const { return gdn_par(); }
+
+// NI_ANE_PROJ (enc_prefill_wave2): layer li's token mixer around its input projections on the Neural Engine
+void Qwen35::enc_mixer_in(Encoder& e, int li, const Layer& L, int T, const Buffer& x, int lane) {
+  enc_rows_half(e, x, L.in_norm, xh_, T, cfg_.hidden);
+  ane_proj_->pack(e, lane, xh_, T);
+  ane_proj_->launch(e, lane, li, T);
+}
+
+void Qwen35::enc_gdn_ab(Encoder& e, const Layer& L, int T) {
+  enc_proj(e, {{&L.b, bb_, false}, {&L.a, ab_, false}}, xh_, T);
+}
+
+void Qwen35::enc_mixer_out(Encoder& e, Seq& s, int li, const Layer& L, int T, const Buffer& x, int lane, int pos0) {
+  if (L.linear) {
+    ane_proj_->unpack(e, lane, li, {qkv_, zb_}, T);
+    enc_gdn_prefill_par(e, s, li, L, T);
+    enc_qmm(e, L.out, hh_, x, T, true);
+    return;
+  }
+  ane_proj_->unpack(e, lane, li, {qg_, kr_, vr_}, T);
+  enc_attn_post(e, s, li, L, pos0, T, x);
+}
+
 // The token mixer (GDN or attention) of layer i for T rows at positions pos0.., residual rows x.
 // snap / snap_row: capture the recurrent state after row snap_row (NI_SHORTPF in-pass checkpoint).
 void Qwen35::enc_mixer_prefill(Encoder& e, Seq& s, int i, const Layer& L, int pos0, int T, const Buffer& xbuf,
@@ -3606,6 +3880,13 @@ void Qwen35::enc_mixer_prefill(Encoder& e, Seq& s, int i, const Layer& L, int po
     enc_qmm(e, L.out, hh_, xbuf, T, true);
   } else {
     enc_proj(e, {{&L.q, qg_, false}, {&L.k, kr_, false}, {&L.v, vr_, false}}, xh_, T);
+    enc_attn_post(e, s, i, L, pos0, T, xbuf);
+  }
+}
+
+// attention after its q / k / v projections (qg_, kr_, vr_): norms and rope into the cache, attention, o
+void Qwen35::enc_attn_post(Encoder& e, Seq& s, int i, const Layer& L, int pos0, int T, const Buffer& xbuf) {
+  {
     kp::AttnPrep ap{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim),
                     uint32_t(cfg_.rot_dims), uint32_t(pos0), uint32_t(s.cap), cfg_.eps, cfg_.theta};
     e.use(pipe(mrope(s) ? "attn_prep_m" : "attn_prep"));
@@ -3625,8 +3906,10 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   if (!cfg_.causal && (pos0 != 0 || sample || snap))
     fatal("noncausal Qwen3.5 requires one whole-prompt prefill at position 0 without sampling or snapshots");
   if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
+  flush_backlog(e, s);
   if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
   if (snap && (!can_snapshot() || snap_row <= 0 || snap_row >= T)) fatal("prefill snapshot at row %d of %d", snap_row, T);
+  const GroupedPass gp(e, grouped_prefill());
   draft_vocab_rewind(s, pos0);  // tokens from pos0 on may be new
   const int D = cfg_.hidden;
   enc_embed(e, s.tok, pos0, T, x_);
@@ -3637,11 +3920,32 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   const bool slabs = ane_slabs(T);
   ane_chunk_ = slabs || (cfg_.causal && !snap && ane_splits(T));
   if (ane_chunk_) ane_begin_chunk(slabs ? ane::slab_rows(T, int(ane::FfnSplit::kMaxRows)) : T);
-  if (ane_chunk_ && !slabs && ane_wave_rows(T)) {
+  if (ane_chunk_ && !slabs && ane_wave_rows(T) && ane_proj_ && !ane_proj_->retired()) {
+    enc_prefill_wave2(e, s, pos0, T, ane_wave_rows(T));
+  } else if (ane_chunk_ && !slabs && ane_wave_rows(T)) {
     enc_prefill_wave(e, s, pos0, T, ane_wave_rows(T));
+  } else if (!ane_chunk_ && !snap && e.grouped() && gpu_wave_rows(T)) {
+    enc_prefill_gpu_wave(e, s, pos0, T, gpu_wave_rows(T));
   } else {
+    const bool cap_last = cap_ && (cfg_.layers - 1) < int(cap_->slot.size()) && cap_->slot[cfg_.layers - 1] >= 0;
+    const bool kv_only_last = !ane_chunk_ && !sample && !mtp_loaded_ && !snap && cfg_.causal && !cap_last &&
+                              !layers_[cfg_.layers - 1].linear && local(cfg_.layers - 1);
     for (int i = 0; i < cfg_.layers; ++i) {
       const Layer& L = layers_[i];
+      if (kv_only_last && i == cfg_.layers - 1) {
+        // Non-sampling chunk: nothing reads x_ after the last layer, so write only its K/V cache rows.
+        enc_rows_half(e, x_, L.in_norm, xh_, T, D);
+        enc_proj(e, {{&L.k, kr_, false}, {&L.v, vr_, false}}, xh_, T);
+        kp::AttnPrep ap{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim),
+                        uint32_t(cfg_.rot_dims), uint32_t(pos0), uint32_t(s.cap), cfg_.eps, cfg_.theta};
+        e.use(pipe(mrope(s) ? "attn_prep_m" : "attn_prep"));
+        e.buf(0, qg_); e.buf(1, kr_); e.buf(2, vr_); e.buf(3, L.q_norm->buf); e.buf(4, L.k_norm->buf);
+        e.buf(5, qo_); e.buf(6, s.kc[i]); e.buf(7, s.vc[i]);
+        e.val(8, ap);
+        if (mrope(s)) enc_mrope_args(e, s);
+        e.dispatch(cfg_.hq + 2 * cfg_.hkv, T, 1, cfg_.head_dim);
+        continue;
+      }
       enc_mixer_prefill(e, s, i, L, pos0, T, x_, snap, snap_row);
       if (cfg_.moe) enc_moe_prefill(e, L, T, x_);
       else if (slabs) enc_mlp_prefill_slabs(e, i, L, T, x_);
@@ -3652,6 +3956,90 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   }
   if (sample) enc_sample(e, s, x_.view(size_t(T - 1) * D * 4, size_t(D) * 4), pos0 + T, sp, step);
   if (snap) snap->pos = pos0 + snap_row;
+}
+
+// NI_PF_WAVE (read once; 0 off): a MoE prefill chunk of at least 4,096 rows as a two-half wavefront on the GPU alone.
+// Layer by layer, half B's token mixer (DeltaNet or attention, its rows after A's) runs beside half A's MoE, then half
+// A's next mixer beside half B's MoE, each pair on one grouped encoder (Encoder::play_pair): a DeltaNet scan or an
+// attention pass, which leaves the GPU's cores half busy, overlaps the other half's expert GEMMs. Each half's rows go
+// through the kernels a chunk of that size would, the second half after the first as a next chunk would, so the
+// logits are those of half-size chunks. Default on for the Qwen3.6 35B-A3B shape (hidden 2048, 40 layers, 4-bit experts;
+// Clover too) on the M5 class (matrix units), with 8,192-row chunks (auto_chunk), so each half's MoE has as many
+// rows as the 4,096-row chunk it replaces: M5 Max, ni_run, 16,288 ids in 8,192-row chunks 2,767 -> 2,620 ms (-5.3%; in
+// 4,096-row chunks, the default before, 2,777); 4,129 ids in one chunk level (592 -> 590). Halves of 2,048 rows lose
+// what the overlap gains (16K in 4,096-row chunks 2,777 -> 2,767): the experts' weights are read once per half.
+// Below 4,096 rows they lose outright: M5 Pro, Clover, one chunk, A B B A A B, 2,000 ids 590 -> 640 ms (3 of 3 pairs
+// slower), 1,200 ids 373 -> 447 (#1097); 4,129 ids level (1,210 -> 1,212). Shorter chunks keep the plain prefill.
+bool Qwen35::gpu_wave_default(int hidden, int layers, bool moe) {
+  if (const char* v = getenv("NI_PF_WAVE")) return atoi(v) != 0;
+  ModelFacts f;
+  f.moe = moe;
+  f.hidden = hidden;
+  f.layers = layers;
+  return default_on(Knob::kPfWave, f);
+}
+int Qwen35::gpu_wave_rows(int T) const {
+  static const bool on = gpu_wave_default(cfg_.hidden, cfg_.layers, cfg_.moe);
+  if (!on || !cfg_.moe || !cfg_.causal || T < 4096 || !Encoder::tapes_ok() || !grouped_prefill() || precomb_arm_) return 0;
+  for (const Layer& L : layers_)
+    if (L.eg.exl3 || L.eg.iq || L.eg.q20 || L.eg.bits != 4) return 0;
+  return (T / 2 + 63) / 64 * 64;
+}
+
+void Qwen35::enc_prefill_gpu_wave(Encoder& e, Seq& s, int pos0, int T, int h) {
+  const int D = cfg_.hidden, TA = h, TB = T - h;
+  const Buffer xA = x_.view(0, size_t(TA) * D * 4), xB = x_.view(size_t(TA) * D * 4, size_t(TB) * D * 4);
+  if (!xh2_ || xh2_.size < size_t(TB) * xh_.size / size_t(tmax_)) {  // the MoE's rows: at most the larger half's
+    const size_t rows = size_t(tmax_) / 2 + 64;
+    xh2_ = Gpu::get().alloc(rows * (xh_.size / size_t(tmax_)), "xh2");
+    hh2_ = Gpu::get().alloc(rows * (hh_.size / size_t(tmax_)), "hh2");
+    owned_bufs_.push_back(xh2_);
+    owned_bufs_.push_back(hh2_);
+  }
+  Encoder::Tape ta, tb;
+  // half rows' MoE layer i (and the drafter's capture of its rows, which then hold layer i's output), on xh2_ / hh2_
+  auto moe = [&](Encoder::Tape& t, int i, int p, int rows, const Buffer& x) {
+    t.clear();
+    e.record(&t);
+    std::swap(xh_, xh2_);
+    std::swap(hh_, hh2_);
+    try {
+      enc_moe_prefill(e, layers_[i], rows, x);
+      if (cap_) enc_capture(e, i, p, rows, &x);
+    } catch (...) {
+      std::swap(xh_, xh2_);
+      std::swap(hh_, hh2_);
+      e.record(nullptr);
+      throw;
+    }
+    std::swap(xh_, xh2_);
+    std::swap(hh_, hh2_);
+    e.record(nullptr);
+  };
+  auto mixer = [&](Encoder::Tape& t, int i, int p, int rows, const Buffer& x) {
+    t.clear();
+    e.record(&t);
+    try {
+      enc_mixer_prefill(e, s, i, layers_[i], p, rows, x);
+    } catch (...) {
+      e.record(nullptr);
+      throw;
+    }
+    e.record(nullptr);
+  };
+  enc_mixer_prefill(e, s, 0, layers_[0], pos0, TA, xA);
+  for (int i = 0; i < cfg_.layers; ++i) {
+    moe(ta, i, pos0, TA, xA);
+    mixer(tb, i, pos0 + TA, TB, xB);
+    e.play_pair(ta, tb);
+    moe(ta, i, pos0 + TA, TB, xB);
+    if (i + 1 < cfg_.layers) {
+      mixer(tb, i + 1, pos0, TA, xA);
+      e.play_pair(ta, tb);
+    } else {
+      e.play(ta);
+    }
+  }
 }
 
 void Qwen35::enc_capture(Encoder& e, int layer, int pos0, int T, const Buffer* x) {

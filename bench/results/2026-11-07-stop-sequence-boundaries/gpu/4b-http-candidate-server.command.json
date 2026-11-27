@@ -1,0 +1,25 @@
+{
+  "argv": [
+    "/Users/bytedance/kapitsa-stop-sequence-20261107/candidate/build/kapitsa",
+    "serve",
+    "--model",
+    "/Users/bytedance/pr934-m3-validation-20261105/modelhome/models/qwen3.5-4b-4bit",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "53237",
+    "--private",
+    "--slots",
+    "2",
+    "--ctx",
+    "32768",
+    "--disk-cache",
+    "0"
+  ],
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/kapitsa-stop-sequence-20261107/gpu-results-checked/home-4b-http-candidate"
+  }
+}

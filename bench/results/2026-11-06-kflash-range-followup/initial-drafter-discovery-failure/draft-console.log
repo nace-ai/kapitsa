@@ -1,0 +1,6 @@
+START draft-4b-q4-base
+Traceback (most recent call last):
+  File "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/followup-1250/draft-check.py", line 41, in <module>
+    assert cp.returncode == 0, label
+           ^^^^^^^^^^^^^^^^^^
+AssertionError: draft-4b-q4-base

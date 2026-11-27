@@ -2,6 +2,16 @@
 
 <!-- One change per PR. -->
 
+## Default for
+
+<!-- A new feature (kernel path, decode/draft/verify strategy, cache or memory policy, flag or env variable) is on by default
+     for the whole class it targets: name the class (e.g. "every Mac with matrix units", "every MoE model") and the 2 setups
+     that differ in chip class or model family that ran the A/B and output check (1 if only one exists for the class).
+     A narrow gate (exact chip, core count, RAM size, one model) needs a win of at least 10% on the target that is slower or
+     broken on the wider class: cite it. Off on every model and Mac does not merge. Not a feature (kill switch, debug
+     switch, measuring tool, docs): write "not a feature". A feature that moves outputs within docs/profiles.md's bar
+     may take its class in the fast profile only: write "fast profile: <class>". -->
+
 ## Measured
 
 <!-- Before/after numbers, interleaved A/B on an idle GPU (A B A B), with a `Runs:` line: Mac, macOS, model, commit.

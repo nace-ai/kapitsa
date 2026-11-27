@@ -12,6 +12,7 @@
 #include <IOKit/ps/IOPowerSources.h>
 #include <libproc.h>
 #include <mach/mach.h>
+#include <netinet/in.h>
 #include <spawn.h>
 #include <sys/file.h>
 #include <sys/resource.h>
@@ -323,6 +324,30 @@ std::set<int> process_tree(const std::vector<int>& roots) {
     for (int k : kids[x]) st.push_back(k);
   }
   return res;
+}
+
+int listening_pid(int port) {
+  const int bytes = proc_listpids(PROC_ALL_PIDS, 0, nullptr, 0);
+  if (bytes <= 0) return 0;
+  std::vector<pid_t> pids(bytes / sizeof(pid_t) + 64);  // room for processes started in between
+  const int n = proc_listpids(PROC_ALL_PIDS, 0, pids.data(), int(pids.size() * sizeof(pid_t))) / int(sizeof(pid_t));
+  for (int i = 0; i < n; ++i) {
+    const pid_t pid = pids[i];
+    if (pid <= 0) continue;
+    const int fb = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nullptr, 0);  // fails for another user's process
+    if (fb <= 0) continue;
+    std::vector<proc_fdinfo> fds(fb / sizeof(proc_fdinfo) + 16);
+    const int nf = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, fds.data(), int(fds.size() * sizeof(proc_fdinfo))) / int(sizeof(proc_fdinfo));
+    for (int j = 0; j < nf; ++j) {
+      if (fds[j].proc_fdtype != PROX_FDTYPE_SOCKET) continue;
+      socket_fdinfo si{};
+      if (proc_pidfdinfo(pid, fds[j].proc_fd, PROC_PIDFDSOCKETINFO, &si, sizeof si) != int(sizeof si)) continue;
+      if (si.psi.soi_kind != SOCKINFO_TCP) continue;
+      const tcp_sockinfo& t = si.psi.soi_proto.pri_tcp;
+      if (t.tcpsi_state == TSI_S_LISTEN && ntohs(uint16_t(t.tcpsi_ini.insi_lport)) == port) return pid;
+    }
+  }
+  return 0;
 }
 
 std::set<int> ancestors() {

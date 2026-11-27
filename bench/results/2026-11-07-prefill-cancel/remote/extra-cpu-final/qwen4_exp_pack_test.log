@@ -1,0 +1,19 @@
+  ok    Flash-Next's multipliers from its seed
+  ok    Flash-Next's 16 head sizes: the primes from 20,000,000
+  ok    the heads' rows end to end
+  ok    320,001,536 rows in 128 shards of 2,500,012, rows of 160 values
+  ok    Flash-Next's ids as before
+  ok    Flash-Next's ids as ngram.cpp's
+  ok    5-grams of 3 heads: 12 heads of 40 values
+  ok    odd multipliers below 2^63 / vocab
+  ok    rows padded to 64, in 4 shards
+  ok    5-grams of 3 heads as ngram.cpp's
+  ok    Flash-Next's table: layer 1, its spec
+  ok    table_specs: 128 shards of 4-bit group-32 rows of 160 in layer 1
+  ok    a shard of another width is refused
+  ok    a missing shard is refused
+  ok    a shard past split_ngram_parts is refused
+  ok    the table in layer 5 (one-indexed) is read from layer 4's names, not layer 1's
+  ok    two n-gram layers are refused
+  ok    a hidden size the heads do not divide is refused
+PASS (0 failed)

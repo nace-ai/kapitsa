@@ -1,0 +1,17 @@
+PASS profile=None, NI_ANE=None
+PASS profile=None, NI_ANE=''
+PASS profile=None, NI_ANE='0'
+PASS profile=None, NI_ANE='1'
+PASS profile='precise', NI_ANE=None
+PASS profile='precise', NI_ANE=''
+PASS profile='precise', NI_ANE='0'
+PASS profile='precise', NI_ANE='1'
+PASS profile='fast', NI_ANE=None
+PASS profile='fast', NI_ANE=''
+PASS profile='fast', NI_ANE='0'
+PASS profile='fast', NI_ANE='1'
+PASS profile='invalid', NI_ANE=None
+PASS profile='invalid', NI_ANE=''
+PASS profile='invalid', NI_ANE='0'
+PASS profile='invalid', NI_ANE='1'
+16 profile/override cases passed; no GPU or model loaded

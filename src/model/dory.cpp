@@ -1,5 +1,7 @@
 #include "util/load_threads.h"
+#include "model/sampler.h"
 #include "model/dory.h"
+#include "engine/device_profile.h"
 #include "util/bf16.h"
 #include "util/json_file.h"
 #include "util/log.h"
@@ -15,7 +17,6 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
@@ -83,16 +84,6 @@ Pipeline pipe(const std::string& n) {
   auto it = cache.find(n);
   if (it == cache.end()) it = cache.emplace(n, Gpu::get().pipeline(n)).first;
   return it->second;
-}
-
-nlohmann::json read_json(const std::string& path) {
-  std::ifstream f(path);
-  if (!f) return {};
-  try {
-    return nlohmann::json::parse(f);
-  } catch (...) {
-    return {};
-  }
 }
 
 uint32_t gpu_cores() {
@@ -202,7 +193,7 @@ DoryConfig Dory::read_config(const std::string& dir) {
       for (auto& x : v)
         if (x.is_number_integer() && std::find(out.begin(), out.end(), x.get<int>()) == out.end()) out.push_back(x.get<int>());
   };
-  const nlohmann::json g = read_json(dir + "/generation_config.json");
+  const nlohmann::json g = *json_file(dir + "/generation_config.json");
   if (g.is_object() && g.contains("eos_token_id")) add_ids(g["eos_token_id"], c.eos);
   if (c.eos.empty() && t.contains("eos_token_id")) add_ids(t["eos_token_id"], c.eos);
   c.bos = int(num("bos_token_id", -1));
@@ -243,7 +234,7 @@ Dory::Dory(const std::string& path, int prefill_chunk, int loops, LoopKv kv) {
   // (tensor/nh_dory_attn_t.metal against dory_attn_prefill, NI_DORY_ATTN_T=0).
   const bool tg_on = !(getenv("NI_DORY_TG") && atoi(getenv("NI_DORY_TG")) == 0);
   const bool at_on = !(getenv("NI_DORY_ATTN_T") && atoi(getenv("NI_DORY_ATTN_T")) == 0);
-  if (Gpu::get().apple_family() >= 10 && (tg_on || at_on))
+  if (matrix_units() && (tg_on || at_on))
     if (__builtin_available(macOS 26.0, *)) {
       Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
       if (tg_on) tg_ = Gpu::get().pipeline("nh_gemm_t_fp4_m64", false).pso != nullptr;
@@ -263,7 +254,7 @@ Dory::Dory(const std::string& path, int prefill_chunk, int loops, LoopKv kv) {
     }
   {
     const char* w = getenv("NI_DORY_DRAFT_WIN");
-    draft_out_window_ = w && *w ? std::max(0, atoi(w)) : Gpu::get().apple_family() >= 10 ? 4096 : 0;
+    draft_out_window_ = w && *w ? std::max(0, atoi(w)) : matrix_units() ? 4096 : 0;
   }
   load(prefill_chunk);
 }
@@ -280,7 +271,7 @@ void Dory::load(int prefill_chunk) {
   // 106.8 us, o 41.4 / 47.5, gate|up 122.7 / 146.6, down 68.4 / 77.3), L0 elsewhere as before
   const char* fv = getenv("NI_DORY_FP4");
   if (fv && *fv && strcmp(fv, "l0") && strcmp(fv, "l2")) fatal("NI_DORY_FP4=%s: expected l0 or l2", fv);
-  fp4_l2_ = fv && *fv ? !strcmp(fv, "l2") : g.apple_family() <= 7;
+  fp4_l2_ = fv && *fv ? !strcmp(fv, "l2") : legacy_gpu();
   st_ = std::make_unique<SafetensorsIndex>(path_);
   const SafetensorsIndex& idx = *st_;
   // matrices: one GPU buffer for the codes and one for the scales each, filled by parallel row jobs
@@ -1037,12 +1028,12 @@ void Dory::enc_layer_rows(Encoder& e, Seq& s, const DoryLayer& L, int loop, int 
   // read once, the same partials bit for bit); NI_DORY_ATTN_ROWS=0: a threadgroup per row (dory_attn_partial)
   static const bool rows_tg = !(getenv("NI_DORY_ATTN_ROWS") && atoi(getenv("NI_DORY_ATTN_ROWS")) == 0);
   const bool rt = rows_tg && R >= 2 && R * (c.hq / c.hkv) <= 32;
-  // NI_DORY_ATTN_K8 (default on an M5-class GPU, where it was measured; 1 = on elsewhere too, 0 = off): a row's keys 8
+  // NI_DORY_ATTN_K8 (default on an M5-class GPU, a narrower gate than the class; 1 = on elsewhere too, 0 = off): a row's keys 8
   // at a time (dory_attn_k8: 8 scores, one running max and one rescale for them) instead of one: a 3-row verify's
   // attention after 262K positions 3.77 -> 3.0 ms, one row 2.19 -> 2.03
   static const bool k8 = [] {
     const char* v = getenv("NI_DORY_ATTN_K8");
-    return v && *v ? atoi(v) != 0 : Gpu::get().apple_family() >= 10;
+    return v && *v ? atoi(v) != 0 : matrix_units();
   }();
   e.use(pipe(rt ? (k8 ? "dory_attn_partial_rows_k8" : "dory_attn_partial_rows")
                 : (k8 ? "dory_attn_partial_k8" : "dory_attn_partial")));
@@ -1059,7 +1050,7 @@ void Dory::enc_layer_rows(Encoder& e, Seq& s, const DoryLayer& L, int loop, int 
     float sg;
   } rg{uint32_t(c.hq), nch, NQ, L.sg};
   // combined, gated, not normalized (o_proj is linear and the residual's justnorm of its output cancels the norm)
-  e.use(pipe("dory_attn_reduce_gate"));
+  e.use(pipe(nch >= 16 && nch <= 64 ? "dory_attn_reduce_gate_shared" : "dory_attn_reduce_gate"));
   e.buf(0, part_o_);
   e.buf(1, part_ml_);
   e.buf(2, qkvg_, size_t(QD + 2 * KD) * 4);
@@ -1332,15 +1323,19 @@ void Dory::enc_head(Encoder& e, const Buffer& x, int R, const Buffer& out, size_
 
 void Dory::enc_sample(Encoder& e, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
                       uint32_t step) {
-  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
-  const TopkStageP ts{uint32_t(cfg_.vocab), K, 2048};
-  const uint32_t ntg = (uint32_t(cfg_.vocab) + 2047) / 2048;
+  if (full_vocab(sp)) {  // top_k <= 0 or above the two passes' 64 (sampler.h)
+    enc_sample_full(e, lrow, uint32_t(cfg_.vocab), tokens, out_index, sprob_, sp, step);
+    return;
+  }
+  const uint32_t K = topk_k(sp);
+  const TopkStageP ts{uint32_t(cfg_.vocab), K, topk_chunk(K)};
+  const uint32_t ntg = topk_lists(uint32_t(cfg_.vocab), K);
   e.use(pipe("topk_stage1"));
   e.buf(0, lrow);
   e.buf(1, cand_v_);
   e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, 1, 1, 256);
+  e.dispatch(ntg, 1, 1, topk_threads(K));
   const SampleP p2{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, uint32_t(out_index)};
   e.use(pipe("sample_stage2"));
   e.buf(0, cand_v_);

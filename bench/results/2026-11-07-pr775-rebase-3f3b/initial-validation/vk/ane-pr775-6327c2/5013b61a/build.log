@@ -1,0 +1,57 @@
+[  0%] Embedding Metal kernels
+[  0%] Building CXX object CMakeFiles/naceinfer.dir/src/ane/ffn_split.cpp.o
+[  0%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/device_profile.cpp.o
+[  0%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/device_profile_live.cpp.o
+[  0%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/doctor.cpp.o
+[  3%] Building CXX object CMakeFiles/naceinfer.dir/src/engine/engine.cpp.o
+[  3%] Building OBJCXX object CMakeFiles/naceinfer.dir/src/metal/gpu.mm.o
+[  6%] Building CXX object CMakeFiles/naceinfer.dir/src/model/dflash2.cpp.o
+[  6%] Building CXX object CMakeFiles/naceinfer.dir/src/model/dory.cpp.o
+[  6%] Building CXX object CMakeFiles/naceinfer.dir/src/model/dspark.cpp.o
+[  6%] Building CXX object CMakeFiles/naceinfer.dir/src/model/flint.cpp.o
+[  6%] Building CXX object CMakeFiles/naceinfer.dir/src/model/lilicorr.cpp.o
+[  6%] Building CXX object CMakeFiles/naceinfer.dir/src/model/nemotron_h.cpp.o
+[  6%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen35.cpp.o
+[  6%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen35_ane.cpp.o
+[  6%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen35_spec.cpp.o
+[  6%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen4_exp.cpp.o
+[  6%] Building CXX object CMakeFiles/naceinfer.dir/src/vision/vit_common.cpp.o
+[  6%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen35_v8.cpp.o
+[  6%] Building CXX object CMakeFiles/naceinfer.dir/generated/kernels_embed.cpp.o
+[ 10%] Building CXX object CMakeFiles/naceinfer.dir/src/vision/qwen_vit.cpp.o
+[ 10%] Building CXX object CMakeFiles/naceinfer.dir/src/model/qwen4_exp_spec.cpp.o
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/engine/device_profile.cpp:41:28: error: cannot initialize a member subobject of type 'Knob' with an rvalue of type 'ni::ModelClass'
+   41 |     {"ane_segmented_fast", ModelClass::kOther, DefaultScope::kAneNonMatrix, nullptr, "fast profile", 24, 63, false,
+      |                            ^~~~~~~~~~~~~~~~~~
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/engine/device_profile.cpp:41:48: error: cannot initialize a member subobject of type 'ModelClass' with an rvalue of type 'ni::DefaultScope'
+   41 |     {"ane_segmented_fast", ModelClass::kOther, DefaultScope::kAneNonMatrix, nullptr, "fast profile", 24, 63, false,
+      |                                                ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/engine/device_profile.cpp:41:77: error: cannot initialize a member subobject of type 'DefaultScope' with an rvalue of type 'std::nullptr_t'
+   41 |     {"ane_segmented_fast", ModelClass::kOther, DefaultScope::kAneNonMatrix, nullptr, "fast profile", 24, 63, false,
+      |                                                                             ^~~~~~~
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/engine/device_profile.cpp:41:102: error: cannot initialize a member subobject of type 'const char *' with an rvalue of type 'int'
+   41 |     {"ane_segmented_fast", ModelClass::kOther, DefaultScope::kAneNonMatrix, nullptr, "fast profile", 24, 63, false,
+      |                                                                                                      ^~
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/engine/device_profile.cpp:42:6: error: type 'const char[109]' cannot be narrowed to 'bool' in initializer list [-Wc++11-narrowing]
+   42 |      "M4 built-in share; non-matrix Macs with calibrated share (M3 Ultra); #775 review 6690600497; matrix excluded", false},
+      |      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/engine/device_profile.cpp:42:6: note: insert an explicit cast to silence this issue
+   42 |      "M4 built-in share; non-matrix Macs with calibrated share (M3 Ultra); #775 review 6690600497; matrix excluded", false},
+      |      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |      static_cast<bool>(                                                                                            )
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/engine/device_profile.cpp:42:118: error: cannot initialize a member subobject of type 'const char *' with an rvalue of type 'bool'
+   42 |      "M4 built-in share; non-matrix Macs with calibrated share (M3 Ultra); #775 review 6690600497; matrix excluded", false},
+      |                                                                                                                      ^~~~~
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/engine/device_profile.cpp:156:40: error: invalid application of 'sizeof' to an incomplete type 'const DefaultRow[]'
+  156 | int default_count() { return int(sizeof(kDefaults) / sizeof(kDefaults[0])); }
+      |                                        ^~~~~~~~~~~
+7 errors generated.
+make[3]: *** [CMakeFiles/naceinfer.dir/src/engine/device_profile.cpp.o] Error 1
+make[3]: *** Waiting for unfinished jobs....
+/Users/bytedance/Documents/ChatGPT/kapitsa/ane-pr775/src/model/nemotron_h.cpp:478:10: warning: __builtin_available does not guard availability here; use if (__builtin_available) instead [-Wunsupported-availability-guard]
+  478 |     if (!__builtin_available(macOS 15.0, *)) return true;
+      |          ^
+1 warning generated.
+make[2]: *** [CMakeFiles/naceinfer.dir/all] Error 2
+make[1]: *** [CMakeFiles/kapitsa.dir/rule] Error 2
+make: *** [kapitsa] Error 2

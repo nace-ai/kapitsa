@@ -1,0 +1,302 @@
+{
+  "evidence_kind": "Redacted derived evidence, not a raw log. Original execution records retained privately.",
+  "configuration": {
+    "chip": "Apple M5 Pro",
+    "gpu_cores": 20,
+    "memory_GiB": 48,
+    "macOS": "26.6.2",
+    "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)"
+  },
+  "source": {
+    "reference_commit": "7a6067f37038317c26aae1abd1a9327dd21ff9ab",
+    "candidate_commit": "8c70594e281e7b18b2aae6184b021d641069c4d2",
+    "note": "Measurements preceded the commit; all three changed source SHA256 values were verified identical after commit.",
+    "source_sha256": {
+      "src/gguf/quant.cpp": "eb389e903ac83f8ec90fcf23c42d915aec5f710d20e2d31cf514a67b9449f2c5",
+      "tools/gguf_iq2_xs_test.h": "a7401705d5fd2d2fd624307acabb33d9c9ede0e35d88b8e5bf3e12cea2af6f34",
+      "tools/iq_layout_test.cpp": "11d5fda0b62df7b7e17af7cd6be7b11e2c4ef77e90edd59b007f3752b7045fd3"
+    },
+    "reference_quant_sha256": "3163f5377fa2242a267300547a41a37cf6b9f7e10192d5c510b75ea390a4a200"
+  },
+  "checks": {
+    "oracle_cases": 1597642,
+    "reference": "PASS",
+    "candidate": "PASS",
+    "ubsan_candidate": "PASS",
+    "deliberate_grid_index_mutant": "Caught with expected nonzero exit",
+    "vk_cpu_tests": {
+      "pass": 23,
+      "fail": 0
+    },
+    "release_build": "PASS",
+    "prek": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "synthetic": {
+    "method": "Fixed-seed IQ2_XS; 1024 rows, K=2048, 16 samples per leg, 64 full decodes per sample; exclusive GPU lock, A/B/A/B; CPU timing only.",
+    "runs": {
+      "A1": {
+        "input_kind": "fixed-seed synthetic IQ2_XS blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          475.179031372,
+          476.03225708,
+          474.537536621,
+          474.750518799,
+          474.58140564,
+          474.855422974,
+          475.23626709,
+          474.617004395,
+          474.59475708,
+          474.524810791,
+          474.816635132,
+          494.270324707,
+          493.535995483,
+          485.235855103,
+          493.584320068,
+          493.148178101
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true,
+        "median_ns_per_row": 475.01722717300004
+      },
+      "B1": {
+        "input_kind": "fixed-seed synthetic IQ2_XS blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          256.053283691,
+          241.031646729,
+          234.184890747,
+          234.211593628,
+          235.932678223,
+          236.471817017,
+          236.853927612,
+          235.729217529,
+          236.57862854,
+          235.690429688,
+          235.387802124,
+          235.555648804,
+          235.329956055,
+          236.262008667,
+          236.079528809,
+          237.416595459
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true,
+        "median_ns_per_row": 236.006103516
+      },
+      "A2": {
+        "input_kind": "fixed-seed synthetic IQ2_XS blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          479.944229126,
+          474.599197388,
+          474.488586426,
+          470.972061157,
+          469.532653809,
+          467.74609375,
+          466.932937622,
+          467.610046387,
+          467.559814453,
+          466.864257812,
+          467.243835449,
+          467.439651489,
+          467.201858521,
+          467.492416382,
+          466.904953003,
+          467.25718689
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true,
+        "median_ns_per_row": 467.5261154175
+      },
+      "B2": {
+        "input_kind": "fixed-seed synthetic IQ2_XS blocks",
+        "rows": 1024,
+        "width": 2048,
+        "complete_output_bytes": 8388608,
+        "ns_per_row": [
+          231.496810913,
+          231.418609619,
+          231.564834595,
+          231.058761597,
+          231.634780884,
+          231.536865234,
+          232.440307617,
+          231.68119812,
+          231.78163147,
+          231.725067139,
+          231.911972046,
+          230.967208862,
+          232.39390564,
+          231.044128418,
+          234.038024902,
+          229.981750488
+        ],
+        "complete_output_matches_reference": true,
+        "input_unchanged": true,
+        "finite": true,
+        "guards_intact": true,
+        "median_ns_per_row": 231.59980773950002
+      }
+    },
+    "all_saved_complete_files_literal_equal": true,
+    "binary_sha256": {
+      "reference": "100faae09505671627c7dfa5c0407c0422fff6d3fd07a9959454e4f14d910ce0",
+      "candidate": "eed83247a84d783e59b7f4cd0ca1943ef6897676b9f29509a3971ac54fbf21f2"
+    }
+  },
+  "trained": {
+    "model": {
+      "repo": "Acnoryx/Airy",
+      "revision": "ba4ce94d5e7bcdd4997f4dbf6275848c99c7fbb5",
+      "repository_file": "gguf/Airy-0.8b-IQ2_XS.gguf",
+      "sha256": "6a2f60ff8eacddc6aeeaa385cc2000dee64f1e686fbcf65d160d7fc7370fc4bb"
+    },
+    "tensor": "blk.0.attn_gate.weight",
+    "rows": 1024,
+    "width": 1024,
+    "input_bytes": 303104,
+    "input_sha256": "0a878187f3380b557fd616604d41e04adbeb923a0b4d5d74be10d1d6e84c1345",
+    "method": "Sixteen full decodes per A/B/A/B leg after one untimed decode under the exclusive GPU lock; complete 4194304 output bytes compared each pass.",
+    "runs": {
+      "A1": {
+        "ns_per_row": [
+          240.966797,
+          513.264648,
+          515.90918,
+          497.354492,
+          229.451172,
+          443.400391,
+          443.359375,
+          443.359375,
+          446.248047,
+          443.481445,
+          443.359375,
+          393.839844,
+          393.839844,
+          393.838867,
+          393.798828,
+          399.006836
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 443.359375
+      },
+      "B1": {
+        "ns_per_row": [
+          218.301758,
+          217.204102,
+          217.041016,
+          219.888672,
+          193.277344,
+          193.44043,
+          195.556641,
+          195.841797,
+          196.166992,
+          192.830078,
+          198.811523,
+          193.075195,
+          196.003906,
+          193.603516,
+          192.749023,
+          199.421875
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 195.9228515
+      },
+      "A2": {
+        "ns_per_row": [
+          278.930664,
+          280.923828,
+          281.045898,
+          265.542969,
+          265.50293,
+          265.461914,
+          265.707031,
+          265.666016,
+          265.583984,
+          265.583984,
+          255.126953,
+          255.126953,
+          255.331055,
+          257.893555,
+          255.126953,
+          257.894531
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 265.5229495
+      },
+      "B2": {
+        "ns_per_row": [
+          120.361328,
+          115.803711,
+          113.363281,
+          114.095703,
+          114.094727,
+          115.803711,
+          116.455078,
+          117.959961,
+          118.327148,
+          116.128906,
+          118.408203,
+          115.844727,
+          115.519531,
+          118.408203,
+          115.844727,
+          118.652344
+        ],
+        "passes": 16,
+        "complete_bytes_per_pass": 4194304,
+        "finite": true,
+        "input_unchanged": true,
+        "canary": true,
+        "equal_to_reference": true,
+        "median_ns_per_row": 115.9868165
+      }
+    },
+    "all_saved_complete_files_literal_equal": true,
+    "binary_sha256": {
+      "reference": "e22b7fe0512b303a6b977f33348c1b476100c1cf8f975c19bf90aa6f6b051856",
+      "candidate": "e5cc91995515113869cdf4ebde400dcc04c551512ea5cdea5d9f3839092c1124"
+    }
+  },
+  "driver_sha256": {
+    "benchmark-driver.cpp": "7cce044363192acadaaddd36426141c9869e52c6270c5bca5e58cbe885dbe090",
+    "trained-driver.cpp": "249e3c619f3fa63c441b1b944dec8bd222b5a16c7829c7a2c42700e86b9e3ed3",
+    "stubs.cpp": "9fe405b0ac48a94e00b12756d617ae16dc91c10a47455ddb9aa1724181ee125e"
+  },
+  "limitations": [
+    "Large trained-run timing variation is retained in all samples; no universal timing stability claim.",
+    "Single-chip CPU evidence only; M3 validation pending.",
+    "No complete-model imports, GPU logits, native or fixed inference A/B, or HTTP checks for this change yet.",
+    "No inference or import speedup claimed.",
+    "ASan, non-AArch64 execution, other chip classes and model families not run."
+  ]
+}

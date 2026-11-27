@@ -1,0 +1,26 @@
+[
+  {
+    "id": "test/counting_and_probability/181.json",
+    "prompt_tokens": 720,
+    "sequence_tokens": 970,
+    "ids_file": "case-0.txt"
+  },
+  {
+    "id": "test/geometry/702.json",
+    "prompt_tokens": 520,
+    "sequence_tokens": 1059,
+    "ids_file": "case-1.txt"
+  },
+  {
+    "id": "test/counting_and_probability/282.json",
+    "prompt_tokens": 760,
+    "sequence_tokens": 914,
+    "ids_file": "case-2.txt"
+  },
+  {
+    "id": "test/prealgebra/1044.json",
+    "prompt_tokens": 857,
+    "sequence_tokens": 1025,
+    "ids_file": "case-3.txt"
+  }
+]

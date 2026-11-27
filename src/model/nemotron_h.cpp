@@ -1,5 +1,7 @@
 #include "util/load_threads.h"
+#include "model/sampler.h"
 #include "model/nemotron_h.h"
+#include "engine/device_profile.h"
 #include "model/kflash_budget.h"
 #include "ane/ffn_split.h"
 #include "util/bf16.h"
@@ -15,10 +17,10 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <arm_neon.h>
 #include <atomic>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
@@ -136,16 +138,6 @@ size_t align_up(size_t v, size_t a) { return (v + a - 1) / a * a; }
 
 // ---- discovery ----
 namespace {
-
-nlohmann::json read_json(const std::string& path) {
-  std::ifstream f(path);
-  if (!f) return {};
-  try {
-    return nlohmann::json::parse(f);
-  } catch (...) {
-    return {};
-  }
-}
 
 // The language model's part of a checkpoint's config.json: llm_config (Nemotron Omni releases), text_config, or the
 // whole file (text-only releases).
@@ -277,7 +269,7 @@ static NhConfig read_config(const std::string& dir) {
       for (auto& x : v)
         if (x.is_number_integer() && std::find(out.begin(), out.end(), x.get<int>()) == out.end()) out.push_back(x.get<int>());
   };
-  const nlohmann::json g = read_json(dir + "/generation_config.json");
+  const nlohmann::json g = *json_file(dir + "/generation_config.json");
   if (g.is_object() && g.contains("eos_token_id")) add_ids(g["eos_token_id"], c.eos);
   if (c.eos.empty() && t.contains("eos_token_id")) add_ids(t["eos_token_id"], c.eos);
   if (j.contains("eos_token_id")) add_ids(j["eos_token_id"], c.eos);
@@ -407,15 +399,10 @@ void nh_repack_rows(NhFmt f, int64_t K, const uint8_t* src, int64_t rows, uint8_
       case NhFmt::FP8:
         // 16-element groups: byte 4 m + (0, 1, 2, 3) = elements 2 m, 2 m + 1, 2 m + 8, 2 m + 9, so the bytes 0, 2 /
         // 1, 3 of a word are the pairs (i, i + 8) the multi-row kernels' operands take (nh_x_fp8.metal)
-        for (int64_t i = 0; i < K / 16; ++i)
-          for (int m = 0; m < 4; ++m) {
-            const uint8_t* g = b + i * 16;
-            uint8_t* o = qr + i * 16 + 4 * m;
-            o[0] = g[2 * m];
-            o[1] = g[2 * m + 1];
-            o[2] = g[2 * m + 8];
-            o[3] = g[2 * m + 9];
-          }
+        for (int64_t i = 0; i < K / 16; ++i) {
+          const uint8x16_t order = {0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15};
+          vst1q_u8(qr + i * 16, vqtbl1q_u8(vld1q_u8(b + i * 16), order));
+        }
         break;
       case NhFmt::BF16:
       case NhFmt::F32: memcpy(qr, b, qb); break;
@@ -425,14 +412,58 @@ void nh_repack_rows(NhFmt f, int64_t K, const uint8_t* src, int64_t rows, uint8_
 
 void nh_quant_q8(const float* x, int64_t K, uint8_t* q, uint8_t* s) {
   for (int64_t b = 0; b < K / 32; ++b) {
-    float amax = 0.0f;
-    for (int i = 0; i < 32; ++i) amax = std::max(amax, std::fabs(x[b * 32 + i]));
+    const float* block = x + b * 32;
+    auto scalar = [&] {
+      float amax = 0.0f;
+      for (int i = 0; i < 32; ++i) amax = std::max(amax, std::fabs(x[b * 32 + i]));
+      const float d = amax / 127.0f, id = d > 0.0f ? 1.0f / d : 0.0f;
+      const __fp16 dh = __fp16(d);
+      memcpy(s + b * 2, &dh, 2);
+      for (int i = 0; i < 32; ++i) {
+        const int v = int(std::lround(x[b * 32 + i] * id));
+        q[b * 32 + i] = uint8_t(int8_t(std::clamp(v, -127, 127)));
+      }
+    };
+    // Keep sequential source reads when a destination overlaps this input block.
+    auto overlaps = [](const void* a, size_t an, const void* c, size_t cn) {
+      const uintptr_t av = reinterpret_cast<uintptr_t>(a), cv = reinterpret_cast<uintptr_t>(c);
+      return av <= cv ? cv - av < an : av - cv < cn;
+    };
+    if (overlaps(block, 32 * sizeof(float), q + b * 32, 32) ||
+        overlaps(block, 32 * sizeof(float), s + b * 2, 2)) {
+      scalar();
+      continue;
+    }
+    float32x4_t values[8];
+    uint32x4_t nonfinite = vdupq_n_u32(0);
+    const uint32x4_t exponent = vdupq_n_u32(0x7f800000u);
+    for (int i = 0; i < 8; ++i) {
+      values[i] = vld1q_f32(block + i * 4);
+      const uint32x4_t bits = vreinterpretq_u32_f32(values[i]);
+      nonfinite = vorrq_u32(nonfinite, vceqq_u32(vandq_u32(bits, exponent), exponent));
+    }
+    // Classify with integer bits before any floating operations, including for signaling NaNs.
+    if (vmaxvq_u32(nonfinite)) {
+      scalar();
+      continue;
+    }
+    float32x4_t maximum = vdupq_n_f32(0.0f);
+    for (const float32x4_t v : values) maximum = vmaxq_f32(maximum, vabsq_f32(v));
+    const float amax = vmaxvq_f32(maximum);
     const float d = amax / 127.0f, id = d > 0.0f ? 1.0f / d : 0.0f;
+    if (!std::isfinite(id)) {
+      scalar();
+      continue;
+    }
     const __fp16 dh = __fp16(d);
     memcpy(s + b * 2, &dh, 2);
-    for (int i = 0; i < 32; ++i) {
-      const int v = int(std::lround(x[b * 32 + i] * id));
-      q[b * 32 + i] = uint8_t(int8_t(std::clamp(v, -127, 127)));
+    for (int i = 0; i < 8; i += 2) {
+      int32x4_t lo = vcvtaq_s32_f32(vmulq_n_f32(values[i], id));
+      int32x4_t hi = vcvtaq_s32_f32(vmulq_n_f32(values[i + 1], id));
+      lo = vminq_s32(vmaxq_s32(lo, vdupq_n_s32(-127)), vdupq_n_s32(127));
+      hi = vminq_s32(vmaxq_s32(hi, vdupq_n_s32(-127)), vdupq_n_s32(127));
+      const int16x8_t pair = vcombine_s16(vmovn_s32(lo), vmovn_s32(hi));
+      vst1_s8(reinterpret_cast<int8_t*>(q + b * 32 + i * 4), vmovn_s16(pair));
     }
   }
 }
@@ -470,14 +501,70 @@ bool nh_describe(const SafetensorsIndex::Entry& w, const SafetensorsIndex::Entry
   return false;
 }
 
+NhMat nh_load_mat(const SafetensorsIndex& idx, const std::string& path, const std::string& name,
+                  std::vector<Buffer>& owned, size_t& weight_bytes) {
+  const SafetensorsIndex::Entry& t = idx.get(name);
+  const std::string base = name.size() > 7 && name.compare(name.size() - 7, 7, ".weight") == 0 ? name.substr(0, name.size() - 7) : name;
+  const SafetensorsIndex::Entry* sc = idx.find(base + ".weight_scale");
+  Gpu& g = Gpu::get();
+  NhMat m;
+  uint32_t N = 0, K = 0;
+  if (!nh_describe(t, sc, m.fmt, N, K) || (m.fmt != NhFmt::FP4 && m.fmt != NhFmt::BF16))
+    fatal("%s: tensor %s has a format the drafter does not run", path.c_str(), name.c_str());
+  m.N = N;
+  m.K = K;
+  std::vector<uint8_t> raw(t.len);
+  idx.read(t, 0, raw.data(), t.len);
+  if (m.fmt == NhFmt::FP4) {
+    nh_row_bytes(m.fmt, m.K, m.q_row, m.s_row);
+    m.q = g.alloc(m.q_row * N, name.c_str(), false);
+    m.s = g.alloc(m.s_row * N, "scales", false);
+    nh_repack_rows(m.fmt, m.K, raw.data(), N, m.q.as<uint8_t>(), nullptr);
+    idx.read(*sc, 0, m.s.ptr(), m.s_row * N);
+    if (const SafetensorsIndex::Entry* s2 = idx.find(base + ".weight_scale_2")) idx.read(*s2, 0, &m.gs, 4);
+  } else {
+    if (m.K % 32) fatal("%s: %s cannot be quantized (K = %u)", path.c_str(), name.c_str(), m.K);
+    m.fmt = NhFmt::Q8;
+    nh_row_bytes(m.fmt, m.K, m.q_row, m.s_row);
+    m.q = g.alloc(m.q_row * N, name.c_str(), false);
+    m.s = g.alloc(m.s_row * N, "scales", false);
+    std::vector<float> row(m.K);
+    const uint16_t* src = reinterpret_cast<const uint16_t*>(raw.data());
+    for (uint32_t r = 0; r < N; ++r) {
+      for (uint32_t i = 0; i < m.K; ++i) row[i] = bf16_to_f32(src[size_t(r) * m.K + i]);
+      nh_quant_q8(row.data(), m.K, m.q.as<uint8_t>() + size_t(r) * m.q_row, m.s.as<uint8_t>() + size_t(r) * m.s_row);
+    }
+  }
+  owned.push_back(m.q);
+  owned.push_back(m.s);
+  weight_bytes += m.q.size + m.s.size;
+  return m;
+}
+
+std::vector<float> nh_host_f32(const SafetensorsIndex& idx, const std::string& path, const std::string& name) {
+  const SafetensorsIndex::Entry& t = idx.get(name);
+  if (t.dtype != DType::BF16 && t.dtype != DType::F32)
+    fatal("%s: %s is neither BF16 nor F32", path.c_str(), name.c_str());
+  std::vector<uint8_t> raw(t.len);
+  idx.read(t, 0, raw.data(), t.len);
+  std::vector<float> v(size_t(t.numel()));
+  for (size_t i = 0; i < v.size(); ++i) {
+    if (t.dtype == DType::F32) {
+      memcpy(&v[i], raw.data() + 4 * i, 4);
+    } else {
+      uint16_t h;
+      memcpy(&h, raw.data() + 2 * i, 2);
+      v[i] = bf16_to_f32(h);
+    }
+  }
+  return v;
+}
+
 bool NemotronH::split_merges() {
-  static const bool split = [] {
-    // macOS 14 always splits: its library is compiled without the merges (NH_FENCES 0), so NI_NH_SPLIT=0 may only
-    // turn the split off where the fences exist (Gpu::compile_library: Metal 3.2+, macOS 15)
-    if (!__builtin_available(macOS 15.0, *)) return true;
-    if (const char* v = getenv("NI_NH_SPLIT")) return atoi(v) != 0;
-    return false;
-  }();
+  // macOS 14 always splits: its library is compiled without the merges (NH_FENCES 0), so NI_NH_SPLIT=0 may only turn
+  // the split off where the fences exist (Gpu::compile_library: Metal 3.2+, macOS 15). An Ultra splits too: Super-VL's
+  // fused merges answered garbage on an M5 Ultra and NI_NH_SPLIT=1 fixed it (kapitsa#1301; nh_merge_path)
+  static const bool split = nh_merge_path().split;
   return split;
 }
 
@@ -489,7 +576,7 @@ NemotronH::NemotronH(const std::string& path, int prefill_chunk) {
   dense_ = dense_model(cfg_);
   Gpu::get().compile_extra("Nemotron-H", kNhKernelSource);
   // the M5's matrix units (Apple10, Metal 4 on macOS 26) for the 8-row NVFP4 GEMMs
-  if (Gpu::get().apple_family() >= 10 && !(getenv("NI_NH_V8T") && atoi(getenv("NI_NH_V8T")) == 0))
+  if (matrix_units() && !(getenv("NI_NH_V8T") && atoi(getenv("NI_NH_V8T")) == 0))
     if (__builtin_available(macOS 26.0, *)) {
       Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
       v8t_ = true;
@@ -515,7 +602,7 @@ void NemotronH::prewarm_pipelines() {
   // the kernels only a dense model runs (the tail variants, head dim 80's scan, 5-head prefill attention, layout L2's
   // relu^2 decode, the short scans of several rows per simdgroup but the M5's nh_ssm1r4): not created for the MoE
   // models, whose prewarm stays as it was
-  const bool m5 = g.apple10();
+  const bool m5 = matrix_units();
   auto dense_only = [m5](const std::string& n) {
     return (n.size() > 2 && n.compare(n.size() - 2, 2, "_t") == 0) || n == "nh_ssm_h80" ||
            n == "nh_attn_pf2_q1_h5_k32" || n == "nh_x4_mv_relu2" ||
@@ -753,7 +840,7 @@ void NemotronH::load(int prefill_chunk) {
       return !v || atoi(v) != 0;
     };
     fp4_l2_ = dense_model(cfg_) && on("NI_NH_X4") && on("NI_NH_V8") && on("NI_NH_ROWS_GEMM") &&
-              (fv && *fv ? !strcmp(fv, "l2") : g.apple_family() <= 7);
+              (fv && *fv ? !strcmp(fv, "l2") : legacy_gpu());
     // NVFP4 routed experts without latent projections (Lightning): L2 on the M5, where a verify's expert products
     // (per pair, nh_x4_moe_up / _dn) were bound by L0's table decode, not by memory: up + down + sum 196.4 against
     // 223.0 us per layer (548 / 483 GB/s of distinct experts, tools/nh_moe_bench; a read-only pass of the same
@@ -761,7 +848,7 @@ void NemotronH::load(int prefill_chunk) {
     // L2 twins with the same outputs to the bit; the latent models' (nh_x4_moe_dn_sum) do not, nor the IQ2 ones
     const char* ev = getenv("NI_NH_FP4_EXPERTS");
     if (ev && *ev && strcmp(ev, "l0") && strcmp(ev, "l2")) fatal("NI_NH_FP4_EXPERTS=%s: expected l0 or l2", ev);
-    experts_l2_ = ev && *ev ? !strcmp(ev, "l2") : g.apple10();
+    experts_l2_ = ev && *ev ? !strcmp(ev, "l2") : matrix_units();
   }
   // 1. what goes where: every tensor's converted size, placed in 1 GB weight buffers (bigger tensors get their own)
   struct Want {
@@ -1153,7 +1240,7 @@ void NemotronH::alloc_buffers() {
   if (const char* v = getenv("NI_NH_V8")) v8_ = atoi(v) != 0;
   // attention's keys per chunk (threadgroup) before the 64-chunk cap doubles it: on the M5 64 (Lightning's verify at
   // ~600 positions: partial + reduce 27.0 against 36.8 us per layer with 256, NI_PROFILE; 32: 26.9)
-  attn_chunk_ = Gpu::get().apple10() ? 64 : 256;
+  attn_chunk_ = matrix_units() ? 64 : 256;
   if (const char* v = getenv("NI_NH_ATTN_CHUNK")) attn_chunk_ = std::max(32, atoi(v));
   if (const char* v = getenv("NI_NH_ATTN_TV")) attn_tv_ = atoi(v) != 0;
   if (const char* v = getenv("NI_NH_ATTN_TS")) attn_ts_ = atoi(v) != 0;
@@ -1168,25 +1255,30 @@ void NemotronH::alloc_buffers() {
   sd_ = g.alloc(size_t(cfg_.hidden) * 4, "nh_shared_down");
   if (const char* v = getenv("NI_NH_FUSE")) fuse_dec_ = atoi(v) != 0;
   if (split_) fuse_dec_ = false;  // (its routing merges in the last router threadgroup)
+  {
+    const NhMergePath mp = nh_merge_path();
+    logi("Nemotron-H: %s (%s)", mp.split ? "merges in dispatches of their own, one-token MoE not fused" : "fused merges",
+         mp.why);
+  }
   if (const char* v = getenv("NI_NH_ROUTE_BUCKET")) route_bucket_ = atoi(v) != 0;
   // a verify's IQ2 routed experts' down projection: 4 simdgroups per threadgroup on the M5 (16 rows of a tile; tools/
   // nh_x2moe_bench, a 5-row harness verify's 29 experts: 52.0 against 59.1 us with 1, 52.8 with 2, 52.0 with 8; the
   // up projection 46.4-46.6 with 1-4: left at 1), the same outputs to the bit. NI_NH_X2_SGD (1-8) overrides.
-  x2_sgd_ = g.apple10() ? 4u : 1u;
+  x2_sgd_ = matrix_units() ? 4u : 1u;
   if (const char* v = getenv("NI_NH_X2_SGD")) x2_sgd_ = uint32_t(std::clamp(atoi(v), 1, 8));
   // a verify's NVFP4 routed experts without latent projections (Lightning): 4 simdgroups per threadgroup on the M5
   // (tools/nh_moe_bench: up + down + sum 223 against 230 us per layer with 8; the same outputs to the bit)
-  moe_thr_ = g.apple10() ? 128u : 256u;
+  moe_thr_ = matrix_units() ? 128u : 256u;
   if (const char* v = getenv("NI_NH_MOE_THR")) moe_thr_ = std::clamp(uint32_t(atoi(v)) / 32u * 32u, 32u, 1024u);
   if (const char* v = getenv("NI_NH_GROUP")) group_ = atoi(v) != 0;
   // the M5's verify (Lightning): router and routing beside the shared expert (enc_moe)
   rsu_ = true;
   if (const char* v = getenv("NI_NH_RSU")) rsu_ = atoi(v) != 0;
   // the routed experts' indirect grids of a dynamic verify (NVFP4 experts, no latent projections, one shape); on the
-  // M5, where it was measured
+  // M5
   moe_args_ = g.alloc(32, "nh_moe_pair_args");
   memset(moe_args_.ptr(), 0, 32);
-  pair_ind_ = g.apple10();
+  pair_ind_ = matrix_units();
   if (const char* v = getenv("NI_NH_PAIR_IND")) pair_ind_ = atoi(v) != 0;
   moe_lightning_ = true;
   for (const NhLayer& L : layers_) {
@@ -1198,12 +1290,12 @@ void NemotronH::alloc_buffers() {
     moe_k_ = uint32_t(L.k_used);
   }
   if (!moe_I_) moe_lightning_ = false;
-  sample_sg_ = g.apple10();
+  sample_sg_ = matrix_units();
   if (const char* v = getenv("NI_NH_SAMPLE_SG")) sample_sg_ = atoi(v) != 0;
   sdv_ = g.alloc(size_t(kMaxRows) * cfg_.hidden * 4, "nh_shared_down_rows");
   // the M5: a verify's 8-row FP8 / BF16 products and the drafter's Q8 at 8 weight rows per threadgroup (nh_*_v8_n1),
   // twice the threadgroups of 16 (each row's sums as before)
-  v8_n1_ = g.apple10();
+  v8_n1_ = matrix_units();
   if (const char* v = getenv("NI_NH_V8_N1")) v8_n1_ = atoi(v) != 0;
   live_ = g.alloc(16, "nh_live_rows");
   live_all_ = g.alloc(16, "nh_live_all");
@@ -1219,7 +1311,7 @@ void NemotronH::alloc_buffers() {
   if (const char* v = getenv("NI_NH_X2")) x2_ = atoi(v) != 0;
   tg_ = [] {
     if (const char* v = getenv("NI_NH_TG"); v && !atoi(v)) return false;
-    if (Gpu::get().apple_family() < 10) return false;
+    if (!matrix_units()) return false;
     if (__builtin_available(macOS 26.0, *)) {
       Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
       return Gpu::get().pipeline("nh_gemm_t_fp8_m64", false).pso != nullptr;
@@ -1249,7 +1341,7 @@ int NemotronH::wide_chunk(const std::string& path) {
   // rows 3113 at 16K; NI_NH_WIDE_CHUNK=0: 2048. The MoE models whose prefill stays on the GPU alone (Lightning).
   if (const char* v = getenv("NI_NH_WIDE_CHUNK"); v && !atoi(v)) return 0;
   if (const char* v = getenv("NI_NH_TG"); v && !atoi(v)) return 0;
-  if (Gpu::get().apple_family() < 10) return 0;
+  if (!matrix_units()) return 0;
   if (__builtin_available(macOS 26.0, *)) {
     // not where the Neural Engine split runs the prefill (Bolt, Super-VL): it takes chunks of up to 2048 rows
     const NhConfig c = read_config(path);
@@ -1590,7 +1682,7 @@ void NemotronH::enc_mv(Encoder& e, const NhMat& W, const Buffer& x, const Buffer
                                           : "f32";
   // BF16 for 2-8 rows on the M5 (the router in verify): nh_mv_bf16_rt, the same outputs to the bit, 2 weight rows x 2
   // activation rows per simdgroup (Bolt's router 12.2 against 46 us per layer)
-  if (W.fmt == NhFmt::BF16 && R >= 2 && epi == 0 && W.K % 256 == 0 && Gpu::get().apple10()) {
+  if (W.fmt == NhFmt::BF16 && R >= 2 && epi == 0 && W.K % 256 == 0 && matrix_units()) {
     const MvP p{W.N, W.K, xs ? xs : W.K, ys ? ys : W.N, W.gs, uint32_t(R)};
     e.use(pipe("nh_mv_bf16_rt"));
     e.buf(0, W.q);
@@ -1704,7 +1796,7 @@ void NemotronH::enc_ssm(Encoder& e, Seq& s, int li, const Buffer& zx, int T, int
   // threadgroup): Lightning's 8-row verify 22.7 against 35.3 us per layer (NI_PROFILE; 2 rows 27.8, 8 rows 24.8).
   // NI_NH_SSM1R=0 / 2 / 4 / 5 / 8 / 10 picks nh_ssm1 / nh_ssm1r<n>.
   static const int rps_env = getenv("NI_NH_SSM1R") ? atoi(getenv("NI_NH_SSM1R")) : -1;
-  const int rps_want = rps_env >= 0 ? rps_env : dense_ ? 5 : Gpu::get().apple10() ? 4 : 0;
+  const int rps_want = rps_env >= 0 ? rps_env : dense_ ? 5 : matrix_units() ? 4 : 0;
   const int rps = short_pass && !tree && (rps_want == 2 || rps_want == 4 || rps_want == 5 || rps_want == 8 || rps_want == 10) &&
                           cfg_.head_dim % (8 * rps_want) == 0
                       ? rps_want
@@ -2145,7 +2237,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
     uint32_t P, E, BM, k, up_x, dn_x;
   } bp{uint32_t(R) * k, uint32_t(L.E), 2, k, (uint32_t(L.I) + (up8 ? 7 : 3)) / (up8 ? 8 : 4),
        (uint32_t(cfg_.latent) + 4 * x2_sgd_ - 1) / (4 * x2_sgd_)};
-  const bool fused_bucket = x2e && R >= 2 && route1 && Gpu::get().apple10() && route_bucket_;
+  const bool fused_bucket = x2e && R >= 2 && route1 && matrix_units() && route_bucket_;
   if (fused_bucket) {
     e.use(pipe("nh_x2_route_bucket"));
     e.buf(0, rl_);
@@ -2399,11 +2491,14 @@ void NemotronH::enc_rows(Encoder& e, Seq& s, int pos0, int R, bool commit) {
       e.buf(2, gm ? xnh_ : yn_);
       e.val(3, gp);
       if (ring_gn) {
+        // (pending rows that are a tree verify's accepted path are its rows s.pend_path[0 .. n_pend), as for
+        // nh_conv_ring: kapitsa#1150, the tree's first rows went into the ring when a later sibling was accepted)
         const RingP rp{uint32_t(s.n_pend), uint32_t(pos0 - s.n_pend), uint32_t(cfg_.in_proj()), uint32_t(cfg_.d_inner),
-                       uint32_t(cfg_.conv_ch())};
+                       uint32_t(cfg_.conv_ch()), s.pend_tree ? 1u : 0u};
         e.buf(4, zp);
         e.buf(5, s.conv[size_t(i)]);
         e.val(6, rp);
+        e.buf(7, s.pend_path);
       }
       e.dispatch(uint32_t(R * cfg_.n_group), 1, 1, 256);
       if (gm) enc_gemm(e, L.out, xnh_, x_, R, 1);
@@ -2455,15 +2550,21 @@ void NemotronH::enc_head(Encoder& e, int R, const Buffer& out, size_t out_row_st
 
 void NemotronH::enc_sample(Encoder& e, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
                            uint32_t step, const Buffer* dstep, size_t dstep_off) {
-  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
-  const TopkStageP ts{uint32_t(cfg_.vocab), K, 2048};
-  const uint32_t ntg = (uint32_t(cfg_.vocab) + 2047) / 2048;
+  // top_k <= 0 or above the two passes' 64 (sampler.h): the whole vocabulary (a tree verify's rows: encode_accept_tree
+  // samples them in one dispatch)
+  if (full_vocab(sp) && !dstep) {
+    enc_sample_full(e, lrow, uint32_t(cfg_.vocab), tokens, out_index, sprob_, sp, step);
+    return;
+  }
+  const uint32_t K = topk_k(sp);
+  const TopkStageP ts{uint32_t(cfg_.vocab), K, topk_chunk(K)};
+  const uint32_t ntg = topk_lists(uint32_t(cfg_.vocab), K);
   e.use(pipe("topk_stage1"));
   e.buf(0, lrow);
   e.buf(1, cand_v_);
   e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, 1, 1, 256);
+  e.dispatch(ntg, 1, 1, topk_threads(K));
   const SampleP p2{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, uint32_t(out_index)};
   e.use(pipe(dstep ? "sample_stage2_dstep" : "sample_stage2"));
   e.buf(0, cand_v_);
@@ -2706,9 +2807,9 @@ void NemotronH::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& 
 void NemotronH::encode_accept(Encoder& e, Seq& s, int pos, int R, int K, const SamplingParams& sp) {
   // the R rows' samples in two passes (topk_stage1_rows, sample_stage2_rows: each row's candidates and RNG step pos + r
   // as enc_sample's two passes per row give them)
-  const uint32_t Kc = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
-  const TopkStageP ts{uint32_t(cfg_.vocab), Kc, 2048};
-  const uint32_t ntg = (uint32_t(cfg_.vocab) + 2047) / 2048;
+  const uint32_t Kc = topk_k(sp);
+  const TopkStageP ts{uint32_t(cfg_.vocab), Kc, topk_chunk(Kc)};
+  const uint32_t ntg = topk_lists(uint32_t(cfg_.vocab), Kc);
   // (the M5: on simdgroup reductions, the same candidates and samples: topk_stage1_rows_sg, sample_stage2_rows_sg)
   const bool sg = sample_sg_ && ntg <= 64 && Kc <= 32;
   e.use(pipe(sg ? "topk_stage1_rows_sg" : "topk_stage1_rows"));
@@ -2716,7 +2817,7 @@ void NemotronH::encode_accept(Encoder& e, Seq& s, int pos, int R, int K, const S
   e.buf(1, cand_v_);
   e.buf(2, cand_i_);
   e.val(3, ts);
-  e.dispatch(ntg, uint32_t(R), 1, 256);
+  e.dispatch(ntg, uint32_t(R), 1, topk_threads(Kc));
   const SampleRowsP p2{ntg * Kc, Kc, sp.temperature, sp.top_p, sp.seed, uint32_t(pos), 0, 0, 0, 0};
   e.use(pipe(sg ? "sample_stage2_rows_sg" : "sample_stage2_rows"));
   e.buf(0, cand_v_);
@@ -2738,10 +2839,15 @@ void NemotronH::encode_accept(Encoder& e, Seq& s, int pos, int R, int K, const S
 }
 
 void NemotronH::encode_accept_tree(Encoder& e, Seq& s, int pos, const SamplingParams& sp) {
-  // row r draws at position pos + depth(r): the tree buffer's depths
-  for (int r = 0; r < kMaxRows; ++r)
-    enc_sample(e, logits_.view(size_t(r) * cfg_.vocab * 4, size_t(cfg_.vocab) * 4), samp_, r, sp, uint32_t(pos), &tree_,
-               size_t(kf::kDep) * 4);
+  // row r draws at position pos + depth(r): the tree buffer's depths. A full-vocabulary request (sampler.h): every row in
+  // one sample_full dispatch, each at the RNG step its position's plain step takes (kapitsa#1286)
+  if (full_vocab(sp))
+    enc_sample_full_rows(e, logits_, uint32_t(cfg_.vocab), kMaxRows, samp_, 0, sprob_, sp, uint32_t(pos), tree_,
+                         size_t(kf::kDep) * 4);
+  else
+    for (int r = 0; r < kMaxRows; ++r)
+      enc_sample(e, logits_.view(size_t(r) * cfg_.vocab * 4, size_t(cfg_.vocab) * 4), samp_, r, sp, uint32_t(pos),
+                 &tree_, size_t(kf::kDep) * 4);
   const struct {
     uint32_t P, R, gst, pad;
   } ap{uint32_t(pos), uint32_t(kMaxRows), 0u, 0u};

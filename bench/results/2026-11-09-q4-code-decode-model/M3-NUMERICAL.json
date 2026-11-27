@@ -1,0 +1,440 @@
+{
+  "export": "Explicitly redacted derived evidence; not an original execution log. Private originals retained. Numeric results and source/binary identities unchanged.",
+  "environment": {
+    "chip": "M3 Ultra",
+    "GPU_cores": 60,
+    "memory_GiB": 96,
+    "macOS": "26.4.1",
+    "compiler": "Apple clang 17.0.0 (clang-1700.6.4.2)"
+  },
+  "source_commits": {
+    "reference": "87c105238186beadb375805e47a89791a499319a",
+    "candidate": "5bcbe7e2069f55485473ba45755ab4c65a3c44c5"
+  },
+  "rows_each_arm": 584,
+  "float32_elements_each_arm": 145018880,
+  "criterion": "Complete fp32 bytes and recorded inputs equal; all values finite; no floor modification.",
+  "prefill_independent_literal_gate": true,
+  "paths": {
+    "prefill": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 8,
+          "float32_elements": 1986560,
+          "finite_float32_elements": 1986560,
+          "logits_sha256": "b3e69e54e6c9e4047a1a1238800d7f6cc8face6508c7f51256a3a51f15d44080",
+          "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "engine": "kapitsa",
+            "build": "0.2.32 (87c105238186beadb375805e47a89791a499319a)",
+            "path": "prefill",
+            "prefill_chunk": 2048,
+            "ane": {
+              "chunks": 0,
+              "evals": 0,
+              "reruns": 0
+            },
+            "records": 8,
+            "vocab": 248320,
+            "date": "2026-11-09T02:39:19Z",
+            "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]"
+          }
+        },
+        {
+          "records": 8,
+          "float32_elements": 1986560,
+          "finite_float32_elements": 1986560,
+          "logits_sha256": "b3e69e54e6c9e4047a1a1238800d7f6cc8face6508c7f51256a3a51f15d44080",
+          "records_sha256": "d88a452e2225770cf22d79152b7393595032f9bdc754d7532e190c082ec2834d",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "engine": "kapitsa",
+            "build": "0.2.32 (5bcbe7e2069f55485473ba45755ab4c65a3c44c5)",
+            "path": "prefill",
+            "prefill_chunk": 2048,
+            "ane": {
+              "chunks": 0,
+              "evals": 0,
+              "reruns": 0
+            },
+            "records": 8,
+            "vocab": 248320,
+            "date": "2026-11-09T02:40:58Z",
+            "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]"
+          }
+        }
+      ]
+    },
+    "step": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "16ca658315d791294ff2cd2ddf3385713acbf7a32ec4fc90008450d1334f3230",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "engine": "kapitsa",
+            "build": "0.2.32 (87c105238186beadb375805e47a89791a499319a)",
+            "path": "step",
+            "prefill_chunk": 2048,
+            "ane": {
+              "chunks": 0,
+              "evals": 0,
+              "reruns": 0
+            },
+            "records": 192,
+            "vocab": 248320,
+            "date": "2026-11-09T02:39:19Z",
+            "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]"
+          }
+        },
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "16ca658315d791294ff2cd2ddf3385713acbf7a32ec4fc90008450d1334f3230",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "engine": "kapitsa",
+            "build": "0.2.32 (5bcbe7e2069f55485473ba45755ab4c65a3c44c5)",
+            "path": "step",
+            "prefill_chunk": 2048,
+            "ane": {
+              "chunks": 0,
+              "evals": 0,
+              "reruns": 0
+            },
+            "records": 192,
+            "vocab": 248320,
+            "date": "2026-11-09T02:40:58Z",
+            "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]"
+          }
+        }
+      ]
+    },
+    "verify": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "28d1d58281be6e9b1f7fad3f051d87c1fdf570329f1edd530aa447b4785f0b59",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "engine": "kapitsa",
+            "build": "0.2.32 (87c105238186beadb375805e47a89791a499319a)",
+            "path": "verify",
+            "prefill_chunk": 2048,
+            "ane": {
+              "chunks": 0,
+              "evals": 0,
+              "reruns": 0
+            },
+            "records": 192,
+            "vocab": 248320,
+            "verify": "KFlash tree (a chain of 8 live rows)",
+            "date": "2026-11-09T02:39:19Z",
+            "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]"
+          }
+        },
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "28d1d58281be6e9b1f7fad3f051d87c1fdf570329f1edd530aa447b4785f0b59",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "engine": "kapitsa",
+            "build": "0.2.32 (5bcbe7e2069f55485473ba45755ab4c65a3c44c5)",
+            "path": "verify",
+            "prefill_chunk": 2048,
+            "ane": {
+              "chunks": 0,
+              "evals": 0,
+              "reruns": 0
+            },
+            "records": 192,
+            "vocab": 248320,
+            "verify": "KFlash tree (a chain of 8 live rows)",
+            "date": "2026-11-09T02:40:58Z",
+            "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]"
+          }
+        }
+      ]
+    },
+    "batch": {
+      "all_finite": true,
+      "complete_fp32_bytes_equal": true,
+      "recorded_inputs_bytes_equal": true,
+      "arms": [
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "0f8f0018332c1de3f614c829593ad2c7bf0da391f11f97063c74869c7b3b2a1d",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "engine": "kapitsa",
+            "build": "0.2.32 (87c105238186beadb375805e47a89791a499319a)",
+            "path": "batch",
+            "prefill_chunk": 2048,
+            "ane": {
+              "chunks": 0,
+              "evals": 0,
+              "reruns": 0
+            },
+            "records": 192,
+            "vocab": 248320,
+            "batch": {
+              "members": 4,
+              "rows": 2
+            },
+            "date": "2026-11-09T02:39:19Z",
+            "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]"
+          }
+        },
+        {
+          "records": 192,
+          "float32_elements": 47677440,
+          "finite_float32_elements": 47677440,
+          "logits_sha256": "0f8f0018332c1de3f614c829593ad2c7bf0da391f11f97063c74869c7b3b2a1d",
+          "records_sha256": "0b5d61b94a224bcee89f16dd288865c5c1023b745e6bb677913ab666d3a496dc",
+          "sequences_sha256": "c1bf15d26cd329e77bd9931248961155921e320627e50f1ef22c8d4efe45b1d6",
+          "metadata": {
+            "engine": "kapitsa",
+            "build": "0.2.32 (5bcbe7e2069f55485473ba45755ab4c65a3c44c5)",
+            "path": "batch",
+            "prefill_chunk": 2048,
+            "ane": {
+              "chunks": 0,
+              "evals": 0,
+              "reruns": 0
+            },
+            "records": 192,
+            "vocab": 248320,
+            "batch": {
+              "members": 4,
+              "rows": 2
+            },
+            "date": "2026-11-09T02:40:58Z",
+            "disk_format": "qwen35 GGGAGGGAGGGAGGGAGGGAGGGAGGGAGGGA; attention: K, V f16 [4][cap][512] (MTP head too); GDN: conv f32 [3][8192], state f32 [32][128][128]"
+          }
+        }
+      ]
+    }
+  },
+  "reports": {
+    "report-only": {
+      "paths": {
+        "prefill": {
+          "records": 8,
+          "bitwise": 8,
+          "non_finite": [],
+          "top1": 1.0,
+          "flips": 0,
+          "kl_mean": 0.0,
+          "kl_median": 0.0,
+          "kl_p99": 0.0,
+          "kl_max": 0.0,
+          "margin_change_max": 0.0,
+          "tie_margin": 0.0,
+          "nll_change_mean": 0.0,
+          "max_abs_diff": 0.0,
+          "flip_list": [],
+          "failures": [],
+          "gate": {
+            "source": null
+          }
+        },
+        "batch": {
+          "records": 192,
+          "bitwise": 192,
+          "non_finite": [],
+          "top1": 1.0,
+          "flips": 0,
+          "kl_mean": 0.0,
+          "kl_median": 0.0,
+          "kl_p99": 0.0,
+          "kl_max": 0.0,
+          "margin_change_max": 0.0,
+          "tie_margin": 0.0,
+          "nll_change_mean": 0.0,
+          "max_abs_diff": 0.0,
+          "flip_list": [],
+          "failures": [],
+          "gate": {
+            "source": null
+          }
+        },
+        "step": {
+          "records": 192,
+          "bitwise": 192,
+          "non_finite": [],
+          "top1": 1.0,
+          "flips": 0,
+          "kl_mean": 0.0,
+          "kl_median": 0.0,
+          "kl_p99": 0.0,
+          "kl_max": 0.0,
+          "margin_change_max": 0.0,
+          "tie_margin": 0.0,
+          "nll_change_mean": 0.0,
+          "max_abs_diff": 0.0,
+          "flip_list": [],
+          "failures": [],
+          "gate": {
+            "source": null
+          }
+        },
+        "verify": {
+          "records": 192,
+          "bitwise": 192,
+          "non_finite": [],
+          "top1": 1.0,
+          "flips": 0,
+          "kl_mean": 0.0,
+          "kl_median": 0.0,
+          "kl_p99": 0.0,
+          "kl_max": 0.0,
+          "margin_change_max": 0.0,
+          "tie_margin": 0.0,
+          "nll_change_mean": 0.0,
+          "max_abs_diff": 0.0,
+          "flip_list": [],
+          "failures": [],
+          "gate": {
+            "source": null
+          }
+        }
+      }
+    },
+    "strict-zero": {
+      "paths": {
+        "prefill": {
+          "records": 8,
+          "bitwise": 8,
+          "non_finite": [],
+          "top1": 1.0,
+          "flips": 0,
+          "kl_mean": 0.0,
+          "kl_median": 0.0,
+          "kl_p99": 0.0,
+          "kl_max": 0.0,
+          "margin_change_max": 0.0,
+          "tie_margin": 0.0,
+          "nll_change_mean": 0.0,
+          "max_abs_diff": 0.0,
+          "flip_list": [],
+          "failures": [],
+          "gate": {
+            "source": "flags"
+          }
+        },
+        "batch": {
+          "records": 192,
+          "bitwise": 192,
+          "non_finite": [],
+          "top1": 1.0,
+          "flips": 0,
+          "kl_mean": 0.0,
+          "kl_median": 0.0,
+          "kl_p99": 0.0,
+          "kl_max": 0.0,
+          "margin_change_max": 0.0,
+          "tie_margin": 0.0,
+          "nll_change_mean": 0.0,
+          "max_abs_diff": 0.0,
+          "flip_list": [],
+          "near_tie": 0.0,
+          "near_tie_flips": 0,
+          "failures": [],
+          "gate": {
+            "min_top1": 1.0,
+            "max_mean_kl": 0.0,
+            "max_median_kl": 0.0,
+            "max_p99_kl": 0.0,
+            "near_tie": 0.0,
+            "max_far_flips": 0,
+            "max_nll_change": 0.0,
+            "source": "flags"
+          }
+        },
+        "step": {
+          "records": 192,
+          "bitwise": 192,
+          "non_finite": [],
+          "top1": 1.0,
+          "flips": 0,
+          "kl_mean": 0.0,
+          "kl_median": 0.0,
+          "kl_p99": 0.0,
+          "kl_max": 0.0,
+          "margin_change_max": 0.0,
+          "tie_margin": 0.0,
+          "nll_change_mean": 0.0,
+          "max_abs_diff": 0.0,
+          "flip_list": [],
+          "near_tie": 0.0,
+          "near_tie_flips": 0,
+          "failures": [],
+          "gate": {
+            "min_top1": 1.0,
+            "max_mean_kl": 0.0,
+            "max_median_kl": 0.0,
+            "max_p99_kl": 0.0,
+            "near_tie": 0.0,
+            "max_far_flips": 0,
+            "max_nll_change": 0.0,
+            "source": "flags"
+          }
+        },
+        "verify": {
+          "records": 192,
+          "bitwise": 192,
+          "non_finite": [],
+          "top1": 1.0,
+          "flips": 0,
+          "kl_mean": 0.0,
+          "kl_median": 0.0,
+          "kl_p99": 0.0,
+          "kl_max": 0.0,
+          "margin_change_max": 0.0,
+          "tie_margin": 0.0,
+          "nll_change_mean": 0.0,
+          "max_abs_diff": 0.0,
+          "flip_list": [],
+          "near_tie": 0.0,
+          "near_tie_flips": 0,
+          "failures": [],
+          "gate": {
+            "min_top1": 1.0,
+            "max_mean_kl": 0.0,
+            "max_median_kl": 0.0,
+            "max_p99_kl": 0.0,
+            "near_tie": 0.0,
+            "max_far_flips": 0,
+            "max_nll_change": 0.0,
+            "source": "flags"
+          }
+        }
+      }
+    }
+  },
+  "limitation": "Teacher-forced trunk verify with the recorded KFlash chain/tree, not free-generating MTP. Explicit zero-drift thresholds apply to step/verify/batch; prefill has a separate finite and complete-byte check. No floor was changed."
+}

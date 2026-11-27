@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/.venv/bin/python",
+    "bench/reasoning/reasoning.py",
+    "run",
+    "--problems",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/m4-long-inputs/long-reasoning.jsonl",
+    "--max-tokens",
+    "32768",
+    "--samples",
+    "1",
+    "--label",
+    "bf16-m3",
+    "--base",
+    "http://127.0.0.1:18778/v1",
+    "--out",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/evidence-m4-long-bf16-resume/bf16-reasoning.jsonl",
+    "--serve",
+    "/Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/.venv/bin/python -m mlx_lm.server --model /Users/bytedance/Documents/ChatGPT/ane-pr775-20261106/models/qwen3.5-9b-bf16 --host 127.0.0.1 --port 18778"
+  ],
+  "returncode": 0
+}

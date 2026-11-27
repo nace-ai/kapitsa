@@ -1,0 +1,23 @@
+{
+  "notice": "Explicitly redacted derived summary; not a raw execution log. Original records retained privately.",
+  "source_versions": {
+    "reference": "ee8ce8c8f6e3a5a1e4461015bdc2f2653f6d7b11",
+    "candidate": "5229f9c59dbf76d76f335175f4982ba77c0afb77"
+  },
+  "focused_oracle_cases": 614602,
+  "focused_oracle_M3": "PASS",
+  "focused_oracle_M5_candidate_and_reference": "PASS",
+  "mutants_rejected": 2,
+  "M5_UBSan": "614602 cases PASS; standalone driver/oracle/quant.cpp/gguf.cpp, not the entire engine",
+  "M5_ASan": "Compiled, but runtime initialization stalled before main. No ASan test executed; not PASS.",
+  "M5_vk_CPU": "22/22 PASS",
+  "M5_prek": "PASS",
+  "M5_diff_check": "PASS",
+  "model_worker_rc": 0,
+  "all_tests_passed": null,
+  "historical_harness_correction": "Initial special-value scalar control used volatile/optnone and changed floating-point exception semantics. Both reference and candidate failed that control. Corrected unchanged-production scalar helper passed on both.",
+  "copied_driver_sha256": {
+    "iq3_s_rows.cpp": "42d35428d6f2f6af7ddf6f04f0718a5fa405f068e8f46420041fb2f943851763",
+    "fixed_seed_driver.cpp": "6b022a4791ac656f74ca84dc7b2090e7bfd34e5ad0e7a1c6bc1197e8adcd8310"
+  }
+}

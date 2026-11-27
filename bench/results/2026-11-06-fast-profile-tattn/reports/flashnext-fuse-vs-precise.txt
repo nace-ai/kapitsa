@@ -1,0 +1,4 @@
+step: 72 records (flash-next-q20)
+  reference: 0.2.30 (4d9a9ec8), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_EXPERT_STORE":"24"}
+  candidate: 0.2.30 (4d9a9ec8), prefill_chunk 2048, ane {"chunks":0,"evals":0,"reruns":0}, env {"NI_EXPERT_STORE":"24","NI_QSA_FUSE":"1"}
+  every row bitwise identical

@@ -1,0 +1,17 @@
+Looking in indexes: https://bytedpypi.byted.org/simple/
+Collecting jsonschema
+  Using cached https://bytedpypi.byted.org/packages/jsonschema/jsonschema-4.26.0-py3-none-any.whl (90 kB)
+Collecting attrs>=22.2.0 (from jsonschema)
+  Using cached https://bytedpypi.byted.org/packages/attrs/attrs-26.1.0-py3-none-any.whl (67 kB)
+Collecting jsonschema-specifications>=2023.03.6 (from jsonschema)
+  Using cached https://bytedpypi.byted.org/packages/jsonschema-specifications/jsonschema_specifications-2025.9.1-py3-none-any.whl (18 kB)
+Collecting referencing>=0.28.4 (from jsonschema)
+  Using cached https://bytedpypi.byted.org/packages/referencing/referencing-0.37.0-py3-none-any.whl (26 kB)
+Collecting rpds-py>=0.25.0 (from jsonschema)
+  Downloading https://bytedpypi.byted.org/packages/rpds-py/rpds_py-2026.9.1-cp313-cp313-macosx_11_0_arm64.whl (340 kB)
+Installing collected packages: rpds-py, attrs, referencing, jsonschema-specifications, jsonschema
+
+Successfully installed attrs-26.1.0 jsonschema-4.26.0 jsonschema-specifications-2025.9.1 referencing-0.37.0 rpds-py-2026.9.1
+
+[notice] A new release of pip is available: 25.2 -> 26.3
+[notice] To update, run: /Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python -m pip install --upgrade pip

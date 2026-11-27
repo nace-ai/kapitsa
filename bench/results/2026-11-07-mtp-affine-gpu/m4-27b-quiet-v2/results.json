@@ -1,0 +1,253 @@
+{
+  "pid": 83167,
+  "started_at": "2026-11-07T06:14:34.078635+00:00",
+  "status": "complete; inspect both replacement arms and retain original flagged pair",
+  "reason": "Original 27B A2 native bench flagged sustained foreign GPU activity during prefill; retain it and repeat its A/B pair under a fresh label.",
+  "runs": [
+    {
+      "label": "27b-repeat-base",
+      "argv": [
+        "/tmp/verify-kapitsa/ref/b171f983/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b-quiet-v2/27b-repeat-base.json"
+      ],
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b-quiet-v2/home-27b-repeat-base"
+      },
+      "kapitsa": {
+        "version": "0.2.31",
+        "commit": "b171f983"
+      },
+      "model": {
+        "name": "qwen3.8-27b-4bit",
+        "title": "qwen3.8-27b-4bit",
+        "variant": null,
+        "precision": "4-bit",
+        "catalog": false,
+        "revision": null,
+        "decoding": "KFlash",
+        "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+        "drafter": "dflash2",
+        "drafter_kind": "DFlash2",
+        "drafter_source": "dflash2",
+        "drafter_reason": "found in the model's folder"
+      },
+      "results": {
+        "decode": {
+          "median_tps": 60.63,
+          "runs_tps": [
+            61.19,
+            60.63,
+            55.58
+          ],
+          "median_accepted_draft_tps": 48.19,
+          "median_accepted_draft_share": 0.7949
+        },
+        "decode_greedy": {
+          "median_tps": 65.3,
+          "runs_tps": [
+            63.97,
+            65.85,
+            65.3
+          ],
+          "median_accepted_draft_tps": 52.93,
+          "median_accepted_draft_share": 0.8105
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4131,
+            "ttft_s": 10.5261,
+            "tps": 392.5,
+            "followup_s": [
+              0.251,
+              0.3014,
+              0.236
+            ],
+            "followup_median_s": 0.251,
+            "followup_suffix_tps": 91.6
+          }
+        ],
+        "tool_calls": "pass",
+        "peak_memory_gb": 19.17
+      },
+      "conditions": {
+        "power_source": "ac",
+        "power_mode": "automatic",
+        "low_power_mode": false,
+        "thermal_state": "nominal",
+        "swapouts": 0,
+        "gpu_quiet_wait_s": 94.4,
+        "gpu_other_mean_pct": 0.87,
+        "gpu_other_max_pct": 10.02,
+        "gpu_ambient_mean_pct": 0.0,
+        "gpu_users": [
+          "Google Chrome"
+        ],
+        "contention": []
+      },
+      "flags": [],
+      "invalid": []
+    },
+    {
+      "label": "27b-repeat-candidate",
+      "argv": [
+        "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/build/kapitsa",
+        "bench",
+        "--model",
+        "/Users/bytedance/.cache/kapitsa/models/qwen3.8-27b-4bit",
+        "--quick",
+        "--json",
+        "--out",
+        "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b-quiet-v2/27b-repeat-candidate.json"
+      ],
+      "exit": 0,
+      "environment": {
+        "NI_LOCK_HELD": "1",
+        "KAPITSA_NO_AUTO_UPDATE": "1",
+        "KAPITSA_NO_PROMPT": "1",
+        "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b-quiet-v2/home-27b-repeat-candidate"
+      },
+      "kapitsa": {
+        "version": "0.2.31",
+        "commit": "02e53017"
+      },
+      "model": {
+        "name": "qwen3.8-27b-4bit",
+        "title": "qwen3.8-27b-4bit",
+        "variant": null,
+        "precision": "4-bit",
+        "catalog": false,
+        "revision": null,
+        "decoding": "KFlash",
+        "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+        "drafter": "dflash2",
+        "drafter_kind": "DFlash2",
+        "drafter_source": "dflash2",
+        "drafter_reason": "found in the model's folder"
+      },
+      "results": {
+        "decode": {
+          "median_tps": 47.97,
+          "runs_tps": [
+            67.7,
+            45.63,
+            47.97
+          ],
+          "median_accepted_draft_tps": 38.32,
+          "median_accepted_draft_share": 0.7988
+        },
+        "decode_greedy": {
+          "median_tps": 51.65,
+          "runs_tps": [
+            51.65,
+            50.99,
+            54.82
+          ],
+          "median_accepted_draft_tps": 41.97,
+          "median_accepted_draft_share": 0.8105
+        },
+        "prefill": [
+          {
+            "size": 4000,
+            "prompt_tokens": 4134,
+            "ttft_s": 12.4507,
+            "tps": 332.0,
+            "followup_s": [
+              0.2675,
+              0.3334,
+              0.2567
+            ],
+            "followup_median_s": 0.2675,
+            "followup_suffix_tps": 84.0
+          }
+        ],
+        "tool_calls": "pass",
+        "peak_memory_gb": 19.17
+      },
+      "conditions": {
+        "power_source": "ac",
+        "power_mode": "automatic",
+        "low_power_mode": false,
+        "thermal_state": "fair",
+        "swapouts": 0,
+        "gpu_quiet_wait_s": 50.2,
+        "gpu_other_mean_pct": 77.32,
+        "gpu_other_max_pct": 98.54,
+        "gpu_ambient_mean_pct": 0.0,
+        "gpu_users": [
+          "Google Chrome",
+          "Lark",
+          "python3.13"
+        ],
+        "contention": [
+          "decode",
+          "decode_greedy",
+          "prefill_4000",
+          "tools"
+        ]
+      },
+      "flags": [
+        "CONTENTION: sustained foreign GPU load > 5% in ['decode', 'decode_greedy', 'prefill_4000', 'tools'] (mean 77.32%, top ['Google Chrome'])"
+      ],
+      "invalid": []
+    }
+  ],
+  "identities": {
+    "base": {
+      "head": "b171f98363abd5dfd8ae5d24f786ca77b3801a4a",
+      "version": "kapitsa 0.2.31 (b171f983)",
+      "binaries": {
+        "kapitsa": "3f1f56dea2c64deff131f80a79d0eb4456d192500b8d31af791f476502af6b8c",
+        "ni_run": "25e08a5c2946d3b8c6e3ff14cb323f2d92e49705551d074b27a1403d16ca0c60",
+        "logit_dump": "4acec4e43c9d136e1fdb48776fda1cda64d17c6588ac24b8e6aad6d0a029110f"
+      },
+      "sources": {
+        "src/model/affine_pack.h": "bde8632354ce54e1ee40ebb30f2df2da1abe5569928991ffe84129de065d85dd",
+        "src/model/qwen35_spec.cpp": "5ca89d5a1823d2bf31d9656ff949f6758a0c9aead368455b2a58cf59d46009e2"
+      }
+    },
+    "candidate": {
+      "head": "02e53017f19aaac71d4f64795ec55d0fb4c12d0e",
+      "version": "kapitsa 0.2.31 (02e53017)",
+      "binaries": {
+        "kapitsa": "e295493fd8767de21f1099feebdf7b5062d966428f793f5958571fecd25120a1",
+        "ni_run": "7ee96f6a1efb132e6ec7dec6eef8b13ac2e6beefa6c18b78ce489c21fa9939d3",
+        "logit_dump": "98e962e01fd68977fb133d49e7ed646c3a398680de32a8f384789b2215c5d29b"
+      },
+      "sources": {
+        "src/model/affine_pack.h": "c008bcbacf24ab0c137312027960101386e5a60e8285ae0a19ed7608966f20c6",
+        "src/model/qwen35_spec.cpp": "b1b7df3ebc16e3b25ead07429303706505aef36d707d235cab8d9fc644258331"
+      }
+    }
+  },
+  "quiet_checks": [
+    {
+      "arm": "base",
+      "result": [
+        true,
+        82.89993286132812,
+        []
+      ],
+      "note": "gpu_hogs.diff_rows reports foreign processes above 0.5%; configured maxpct is 0.1%"
+    },
+    {
+      "arm": "candidate",
+      "result": [
+        true,
+        33.00020790100098,
+        []
+      ],
+      "note": "gpu_hogs.diff_rows reports foreign processes above 0.5%; configured maxpct is 0.1%"
+    }
+  ]
+}

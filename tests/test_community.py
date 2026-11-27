@@ -9,14 +9,16 @@ them and refuse each kind of implausible one; the labels must follow; the table 
 precision, with units and the contention marks; and the pull request check must work end to end against a stand-in
 GitHub API: the files read as data at the head commit, the labels set, the report in the job summary.
 """
-import copy, http.server, json, os, shutil, socketserver, subprocess, sys, tempfile, threading, urllib.parse
+import copy, glob, http.server, json, os, re, shutil, socketserver, subprocess, sys, tempfile, threading, urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, ".."))
 BUILD = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO, "build"))
 sys.path.insert(0, os.path.join(REPO, "tools"))
+import build_leaderboard_data as lb  # noqa: E402
 import community_check as cc  # noqa: E402
 import community_table as ct  # noqa: E402
+import models_table as mt  # noqa: E402
 
 FAILS = []
 
@@ -41,15 +43,25 @@ cat, macs, versions = cc.catalog(), cc.mac_models(), cc.known_versions(use_git=F
 # ---------------------------------------------------------------- what the checker knows
 check(list(cat) == ["qwen3.5-4b", "qwen3.5-9b", "qwen3.8-27b", "qwen3.6-35b-a3b", "qwen3.8-flash-next", "nemotron-labs-dory1.0-4b",
                    "nemotron-3-nano-4b", "nemotron-nano-9b-v2", "nemotron-3.5-lightning", "nemotron-3.5-bolt", "nemotron-3.5-super-vl", "flint",
-                   "clover-35b-a3b"], "the catalog's models, in order",
+                   "ornith-1.5-35b-a3b", "clover-35b-a3b", "hy4-flash", "inkling-2-mini"], "the catalog's models, in order",
       str(list(cat)))
 check(cat["qwen3.6-35b-a3b"]["variants"] == {"4bit": "4-bit", "5bit": "5-bit", "6bit": "6-bit", "8bit": "8-bit", "bf16": "bf16",
-                                                   "16gb": "2-bit experts"},
+                                                   "16gb": "2-bit experts", "q5": "Nace Q5"},
       "the 35B's precisions", str(cat["qwen3.6-35b-a3b"]["variants"]))
+# every variant in catalog.cpp is found by the checker: a comment between a variant's `{.name` and its `.quant` hid the 4B's and the 9B's 4-bit
+# (and the 35B's) from it, and a result for them was refused (kapitsa#1149, 10 Nov 2026)
+_src = open(os.path.join(REPO, "src", "hub", "catalog.cpp")).read()
+_n_variants = len(re.findall(r"^\s*\.quant\s*=", _src, re.M))
+check(sum(len(m["variants"]) for m in cat.values()) == _n_variants, "the checker finds every variant of catalog.cpp",
+      f"{sum(len(m['variants']) for m in cat.values())} found, {_n_variants} `.quant =` initializer fields in the source")
+_model9 = next(m for m in mt.parse_catalog(_src) if m["name"] == "qwen3.5-9b")
+check(cat["qwen3.5-9b"] == {"title": _model9["title"], "variants": {"4bit": "4-bit", "q4": "Nace Q4", "q5": "Nace Q5"}}
+      and [v["name"] for v in _model9["variants"]] == ["4bit", "q4", "q5"],
+      "the community checker and models table read the same 9B row through catalog overloads")
 check(cat["nemotron-3.5-bolt"]["variants"] == {"24gb": "NVIDIA 24 GB"} and cat["qwen3.5-4b"]["title"] == "Qwen3.5-4B",
       "Bolt's precision and the 4B's title")
 check(macs["Mac16,7"]["name"] == "MacBook Pro (16-inch, 2024)" and len(macs) >= 58, "the Mac table")
-check(cat["qwen3.8-flash-next"]["variants"] == {"4bit": "4-bit", "64gb": "2-bit experts"},
+check(cat["qwen3.8-flash-next"]["variants"] == {"4bit": "4-bit", "q4": "4-bit Nace", "64gb": "2-bit experts"},
       "a variant whose .quant string spans several lines is still read", str(cat["qwen3.8-flash-next"]["variants"]))
 check(versions, "a known version from CMakeLists.txt", str(versions))
 
@@ -101,12 +113,26 @@ for name, r in (("KFlash decoding with its drafter", kflash), ("prompt-lookup de
     e = cc.check_result(r, cat, macs, versions)[0]
     check(not errs and not any("decoding" in x or "drafter" in x for x in e), f"{name} passes", str(errs + e)[:300])
 refused(lambda r: r["model"].update(decoding="KFlash", drafter=None), "KFlash decoding without its drafter", "drafter")
+# The engine writes this shape for Flint self-speculation, and at its own defaults (engine.h: 4096, 180000) it runs to 145-158
+# characters; the schema's 120 cap refused every such result, including kapitsa#1203's M5 Pro Flint result. The cap is 200, and
+# the string below is that result's own, so this case would fail at 120 and passes at 200.
+selfspec = copy.deepcopy(full)
+_detail = ("plain decoding, self-speculative from 180000-token prompts (2 drafts per cycle, their full attention over the last "
+           "4096 positions), KFlash (none)")
+selfspec["model"].update(decoding="plain", decoding_detail=_detail, drafter=None)
+check(len(_detail) > 120, "the Flint self-speculative detail is longer than the old 120 cap", str(len(_detail)))
+errs = [x.message for x in jsonschema.Draft202012Validator(schema).iter_errors(selfspec)]
+e = cc.check_result(selfspec, cat, macs, versions)[0]
+check(not errs and not any("decoding" in x or "drafter" in x for x in e),
+      "a Flint result whose detail is 145 characters passes (kapitsa#1203)", str(errs + e)[:300])
 refused(lambda r: r["model"].update(decoding="KFlash (DFlash2)"), "a decoding name outside the schema's", "", schema_only=True)
 for detail, want in (("KFlash speculative decoding (DFlash2 lattice, tree verify)", "KFlash"),
                      ("KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)", "KFlash"),
                      ("prompt-lookup speculative decoding (up to 4 drafts per cycle)", "prompt-lookup"),
                      ("a server kapitsa bench did not start (KAPITSA_BENCH_SERVER)", "unknown")):
-    got = ct.decoding({"decoding": "unknown", "decoding_detail": detail})
+    model = {"decoding": "unknown", "decoding_detail": detail}
+    got = ct.decoding(model)
+    check(lb.trim({"model": model})["model"]["decoding"] == want, f"the leaderboard labels the same run {want}")
     check(got == want, f"the table names a result 0.2.0-0.2.14 recorded as unknown by its detail: {want}", got)
 check(ct.decoding({"decoding": "DFlash2", "decoding_detail": "KFlash speculative decoding"}) == "DFlash2",
       "the table keeps a recorded decoding as it is")
@@ -117,6 +143,26 @@ e = cc.check_result(dory, cat, macs, versions)[0]
 check(not any("title" in x for x in e), "a title from an earlier release passes (Dory's, until 0.1.35)", str(e))
 check(ct.model_name(dory["model"]) == "Nemotron Dory1.0 4B", "the table names a model as the catalog does now",
       ct.model_name(dory["model"]))
+
+# The 0.2.35 release made two results under the variants `kquant` and `kquant5`, which the catalog now calls q4 and q5. Those
+# published files are read as they are (never rewritten): the checker maps the old names, the table keeps what they say.
+_RES = os.path.join(REPO, "bench", "community", "results")
+for _name, _old, _precision in (("kapitsa-bench-2026-11-12-m2-max-qwen3.8-27b-kquant-22d879.json", "kquant", "kquant"),
+                                ("kapitsa-bench-2026-11-12-m5-pro-qwen3.6-35b-a3b-kquant5-b460e8.json", "kquant5", "KQuant Q5")):
+    _r = json.load(open(os.path.join(_RES, _name), encoding="utf-8"))
+    check(_r["model"]["variant"] == _old and _r["model"]["precision"] == _precision,
+          f"{_name} is the published file, with its original variant and precision", str(_r["model"]))
+    check(not list(jsonschema.Draft202012Validator(schema).iter_errors(_r)), f"{_name} still follows the schema")
+    _e, _w = cc.check_result(_r, cat, macs, versions | {_r["kapitsa"]["version"]})
+    check(not _e, f"the published {_old} result passes the checker", str(_e))
+    _bad = copy.deepcopy(_r)
+    _bad["model"]["precision"] = "something else"
+    check(any("precision" in x for x in cc.check_result(_bad, cat, macs, versions | {_r["kapitsa"]["version"]})[0]),
+          f"a {_old} result with a made-up precision is still refused")
+    _bad = copy.deepcopy(_r)
+    _bad["model"]["variant"] = _old + "9"
+    check(any("no variant" in x for x in cc.check_result(_bad, cat, macs, versions | {_r["kapitsa"]["version"]})[0]),
+          f"an unknown old variant ({_old}9) is still refused")
 
 
 def prompts(r, sizes):
@@ -240,6 +286,30 @@ os.makedirs(empty)
 p = subprocess.run([sys.executable, os.path.join(REPO, "tools", "community_table.py"), "--results", empty, "--out",
                     os.path.join(tmp, "E.md")], capture_output=True, text=True)
 check("No results yet" in open(os.path.join(tmp, "E.md")).read(), "no results: says how to add the first")
+
+# the repository's own table: one command writes RESULTS.md and docs/site/leaderboard-data.js; a table written
+# elsewhere (--results/--out) leaves the leaderboard alone. A stand-in repo, since the scripts find the repo from their folder.
+fake = os.path.join(tmp, "repo")
+for rel in ("tools/community_table.py", "tools/community_check.py", "tools/build_leaderboard_data.py", "src/hub/catalog.cpp",
+            "bench/community/schema.json", "bench/community/mac-models.json"):
+    os.makedirs(os.path.dirname(os.path.join(fake, rel)), exist_ok=True)
+    shutil.copy(os.path.join(REPO, rel), os.path.join(fake, rel))
+shutil.copytree(res_dir, os.path.join(fake, "bench", "community", "results"))
+os.remove(os.path.join(fake, "bench", "community", "results", "notes.json"))  # not a result; the leaderboard's reader has no skip for it
+fake_table, fake_board = (os.path.join(fake, "bench", "community", "RESULTS.md"),
+                          os.path.join(fake, "docs", "site", "leaderboard-data.js"))
+fake_cmd = [sys.executable, os.path.join(fake, "tools", "community_table.py")]
+p = subprocess.run(fake_cmd + ["--results", res_dir, "--out", os.path.join(tmp, "elsewhere.md")], capture_output=True, text=True)
+check(p.returncode == 0 and not os.path.exists(fake_board) and not os.path.exists(fake_table),
+      "a table written elsewhere leaves the repo's RESULTS.md and leaderboard data alone", p.stderr[-200:])
+p = subprocess.run(fake_cmd, capture_output=True, text=True)
+board = open(fake_board).read() if os.path.exists(fake_board) else ""
+n_results = len(glob.glob(os.path.join(fake, "bench", "community", "results", "*.json")))
+check(p.returncode == 0 and os.path.exists(fake_table) and board.count('{"time_utc"') == n_results,
+      "the repo's own table: RESULTS.md and the leaderboard data from one command", p.stderr[-200:] + str(board.count('{"time_utc"')))
+check("git add bench/community/RESULTS.md docs/site/leaderboard-data.js" in p.stdout, "and it names the two files to commit", p.stdout[-200:])
+p = subprocess.run([sys.executable, os.path.join(fake, "tools", "build_leaderboard_data.py"), "--check"], capture_output=True, text=True)
+check(p.returncode == 0, "that leaderboard data is what build_leaderboard_data.py --check expects", p.stderr[-200:])
 
 # ---------------------------------------------------------------- the pull request check, against a stand-in API
 good_name = "bench/community/results/kapitsa-bench-2026-10-18-m4-pro-qwen3.6-35b-a3b-4bit-quick-bbbbbb.json"

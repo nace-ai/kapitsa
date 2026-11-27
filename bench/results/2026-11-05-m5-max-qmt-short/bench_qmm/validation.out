@@ -1,0 +1,16 @@
+2026-11-05 07:21:56.968 bench_qmm[401:17102024] Metal API Validation Enabled
+2026-11-05 07:21:56.968 bench_qmm[401:17102024] Metal GPU Validation Enabled
+[kapitsa] compiled kernels in 15 ms
+[kapitsa] compiled the tensor kernels in 1035 ms
+qmt_m64_n64                M=   17 N=  512 K= 2048     402.7 us  med  0.09  best  0.09 TFLOP/s  err=2.3e-06
+qmtg_m64_n64               M=   17 N=  512 K= 2048     419.0 us  med  0.17  best  0.17 TFLOP/s  err=2.6e-04
+qmt_m64_n64_ld             M=   17 N=  512 K= 2048     412.3 us  med  0.09  best  0.09 TFLOP/s  err=1.4e-06
+qmt_m64_n64                M=   33 N=  640 K= 5120     943.6 us  med  0.23  best  0.23 TFLOP/s  err=4.1e-06
+qmtg_m64_n64               M=   33 N=  640 K= 5120     595.7 us  med  0.73  best  0.73 TFLOP/s  err=4.1e-04
+qmt_m64_n64_ld             M=   33 N=  640 K= 5120     281.6 us  med  0.77  best  0.77 TFLOP/s  err=3.6e-06
+qmt_m64_n64                M=   48 N= 5120 K= 1024      57.6 us  med  8.73  best  8.73 TFLOP/s  err=6.0e-07
+qmtg_m64_n64               M=   48 N= 5120 K= 1024      80.2 us  med 12.55  best 12.55 TFLOP/s  err=2.4e-04
+qmt_m64_n64_ld             M=   48 N= 5120 K= 1024      67.3 us  med  7.48  best  7.48 TFLOP/s  err=7.3e-07
+qmt_m64_n64                M=   63 N= 2048 K= 1024      56.8 us  med  4.66  best  4.66 TFLOP/s  err=5.6e-07
+qmtg_m64_n64               M=   63 N= 2048 K= 1024      62.4 us  med  8.47  best  8.47 TFLOP/s  err=2.5e-04
+qmt_m64_n64_ld             M=   63 N= 2048 K= 1024      56.1 us  med  4.71  best  4.71 TFLOP/s  err=1.2e-06

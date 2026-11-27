@@ -1,4 +1,7 @@
 #include "model/qwen4_exp.h"
+#include "model/hy4_flash.h"
+#include "engine/device_profile.h"
+#include "engine/profile.h"
 #include "loader/safetensors.h"
 #include "model/kparams.h"
 #include "model/qwen4_config.h"
@@ -126,10 +129,7 @@ bool q20_experts_in(const json& root) {
 bool Qwen4Exp::is_model(const std::string& dir) {
   const auto rp = json_file(dir + "/config.json");
   const json& r = *rp;
-  if (!r.is_object()) return false;
-  if (r.value("model_type", std::string()) == "qwen4_exp") return true;
-  return r.contains("text_config") && r["text_config"].is_object() &&
-         r["text_config"].value("model_type", std::string()) == "qwen4_exp_text";
+  return qwen_layout(r) == QwenLayout::qwen4exp;
 }
 
 float Qwen4Exp::norm_offset(double m) { return m <= 0.25 ? 1.0f : m >= 0.75 ? 0.0f : -1.0f; }
@@ -143,21 +143,31 @@ bool Qwen4Exp::q20_pack(const std::string& dir) {
   }
 }
 
+// The fast profile (engine/profile.h) runs it on every Mac with matrix units, the class tattn() already checks
+// (profile table row "tattn_fast"). #818 measured it on the M5 Pro: 32K prefill about 12% faster, 64K about 20%, for
+// 4 top-1 flips in 72 rows against attn_sparse_rows (docs/profiles.md). NI_QSA_TATTN=1 or 0 overrides.
 static bool tattn_env() {
   static const bool on = [] {
-    const char* v = getenv("NI_QSA_TATTN");
-    return v && atoi(v) != 0;
+    bool here = false;  // the class the kernel runs in: matrix units and the Metal 4 library (macOS 26)
+    if (__builtin_available(macOS 26.0, *)) here = matrix_units();
+    return profile_switch("NI_QSA_TATTN", here,
+                          "Flash-Next sparse prefill attention on the matrix units (NI_QSA_TATTN)");
   }();
   return on;
 }
 
 bool Qwen4Exp::tattn(const Qwen35Config& c) {
   if (!tattn_env() || c.hkv <= 0 || c.hq / c.hkv != 12 || c.head_dim != 256) return false;
-  if (__builtin_available(macOS 26.0, *)) return Gpu::get().apple_family() >= 10;
+  if (__builtin_available(macOS 26.0, *)) return matrix_units();
   return false;
 }
 
 bool Qwen4Exp::tattn(const std::string& dir) { return is_model(dir) && tattn(read_config(dir)); }
+
+bool Qwen4Exp::tattn_chunks(const std::string& dir) {
+  const char* v = getenv("NI_QSA_TATTN");
+  return v && *v && strcmp(v, "0") != 0 && tattn(dir);
+}
 
 void Qwen4Exp::set_split(const Split& s) { process_split() = s; }
 const Qwen4Exp::Split& Qwen4Exp::split() { return process_split(); }
@@ -200,6 +210,7 @@ Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk, size_t mem_budget,
 }
 
 std::unique_ptr<Qwen35> load_qwen(const std::string& dir, int prefill_chunk, bool allow_noncausal) {
+  if (Hy4Flash::is_model(dir)) return std::make_unique<Hy4Flash>(dir, prefill_chunk);
   if (Qwen4Exp::is_model(dir)) return std::make_unique<Qwen4Exp>(dir, prefill_chunk);
   if (!allow_noncausal) Qwen35::require_causal(dir);
   return std::make_unique<Qwen35>(dir, prefill_chunk);
@@ -562,12 +573,14 @@ static size_t qwen4_act_bytes(const Qwen35Config& c, const Qwen4ExpConfig& c4, i
                               int group = 1) {
   const size_t D = size_t(c.hidden), SD = size_t(c4.hc) * D, Tz = size_t(T), V = size_t(maxv), R = size_t(c4.hc_rank);
   const size_t IQ = size_t(c4.ix_heads + 1) * c4.ix_dim;
+  const size_t qidx_ld = size_t((c4.ix_budget + c4.ix_ratio + 3) / 4) * 4;
+  const size_t parts = (SD / 1024 + 1) * V;
   return Tz * SD * 4 - Tz * D * 4  // x_ grows from [T, D] to [T, S*D]
          + Tz * D * 4 + 2 * Tz * c4.hc * 4 + V * SD * 4 + Tz * SD * 2 + Tz * R * 4 + Tz * R * 2 + Tz * SD * 4 +
          Tz * IQ * 4 + Tz * c4.ix_heads * c4.ix_dim * 4 + Tz * SD * 4 + Tz * D * 4 + 2 * Tz * D * 2 + 4 * V * D * 4 +
          (mtp ? Tz * SD * 4 + V * SD * 4 - V * D * 4 : 0)  // the MTP head's state; mtp_post_ widened
-         + Tz * size_t(c4.ix_budget + c4.ix_ratio + 3) / 4 * 4 * 4 + Tz * 4  // sparse attention's key lists
-         + SD * 4 + 64 + (SD / 1024 + 1) * V * R * 4  // the one-row gated residual's row, hc_down_sk's partials
+         + Tz * qidx_ld * 4 + Tz * 4 + 16  // sparse attention's key lists
+         + SD * 4 + 64 + parts * R * 2 * 4 + V * SD * 4 + parts * 10 * 4  // hc_row, hc_inv, hc_part, hc_rows, hc_stat
          + q20::group_slot_bytes(group, Tz, D, size_t(c4.hc));  // the chunks' slots, staging (NI_PREFILL_GROUP)
 }
 
@@ -654,9 +667,9 @@ bool Qwen4Exp::reserve(Seq& s, int need) {
   return Qwen35::reserve(s, need);
 }
 
-void Qwen4Exp::grow_kv(Seq& s, int cap) {
+void Qwen4Exp::grow_kv(Seq& s, int cap, size_t batch_max) {
   const int old = s.cap;
-  Qwen35::grow_kv(s, cap);
+  Qwen35::grow_kv(s, cap, batch_max);
   // the indexer's caches grow alongside: rows by position, so the old buffer is the new one's prefix
   Gpu& g = Gpu::get();
   const size_t kb = size_t(cap) * c4_.ix_dim * 2, bb = (size_t(cap) / c4_.ix_ratio + 1) * c4_.ix_dim * 4;
@@ -670,19 +683,26 @@ void Qwen4Exp::grow_kv(Seq& s, int cap) {
     bufs.push_back({&s.mtp_ixk, kb});
     bufs.push_back({&s.mtp_ixb, bb});
   }
-  std::vector<Buffer> olds;
-  std::unique_ptr<Encoder> e;
-  for (auto& [b, n] : bufs) {
-    Buffer nb = g.alloc(n, "index_cache");
-    if (old > 0 && *b) {
-      if (!e) e = g.begin();
-      enc_copy(*e, *b, nb);
-    }
-    olds.push_back(*b);
-    *b = nb;
+  // Match the attention cache's bounded copy batches before releasing the old index rows.
+  for (size_t i = 0; i < bufs.size();) {
+    std::vector<Buffer> olds;
+    std::unique_ptr<Encoder> e;
+    size_t batch = 0;
+    do {
+      auto& [b, n] = bufs[i];
+      Buffer nb = g.alloc(n, "index_cache");
+      if (old > 0 && *b) {
+        if (!e) e = g.begin();
+        enc_copy(*e, *b, nb);
+      }
+      olds.push_back(*b);
+      *b = nb;
+      batch += n;
+      ++i;
+    } while (i < bufs.size() && batch + bufs[i].second <= batch_max);
+    if (e) e->commit_and_wait();
+    for (Buffer& b : olds) g.release(b);
   }
-  if (e) e->commit_and_wait();
-  for (Buffer& b : olds) g.release(b);
 }
 
 void Qwen4Exp::drop_kv(Seq& s) {
@@ -703,6 +723,12 @@ size_t Qwen4Exp::kv_bytes_per_pos() const {
   // attention rows are int8-packed (kernels/kv_int8.h), the index cache as before; +16 is the row's scale
   const size_t arow = kv_row_bytes(cfg_.head_dim);  // int8 or fp16 rows, as the attention kernels read them
   return layers * (size_t(2) * cfg_.hkv * arow + size_t(c4_.ix_dim) * 2 + size_t(c4_.ix_dim) * 4 / c4_.ix_ratio);
+}
+
+size_t Qwen4Exp::kv_unit_bytes_per_pos() const {
+  // the largest buffer that grows: an attention cache, or an index cache (the block index's rows counted as if one
+  // per position: an upper bound)
+  return std::max({Qwen35::kv_unit_bytes_per_pos(), size_t(c4_.ix_dim) * 2, size_t(c4_.ix_dim) * 4});
 }
 
 void Qwen4Exp::reset(Seq& s) {
@@ -914,7 +940,7 @@ void Qwen4Exp::init_store(const std::string& dir) {
     if (sa.waited_ms)
       logi("expert store: the system's available memory %.1f GB at first, %.1f GB after %.2f s", double(sa.first) / 1e9,
            double(sa.avail) / 1e9, sa.waited_ms / 1e3);
-    in.cap = q20::auto_store_cap(Gpu::get().apple10());
+    in.cap = q20::auto_store_cap(matrix_units());
     // The layer-major groups' store-world choice (q20::group_world - the one function every side asks;
     // ni::planned_group_world predicts it before a load): the store is sized WITHOUT the slot bytes first -
     // alloc4_group has not allocated them, so `used` above does not carry them - and only a store that stays
@@ -1113,7 +1139,7 @@ void Qwen4Exp::enc_gr_rows(Encoder& e, const GatedRes& g, int R, const Buffer& X
     static const bool hc3 = !(getenv("NI_HC3") && !strcmp(getenv("NI_HC3"), "0"));
     constexpr int nr = 2, cpt = 2;
     if (hc3 && R <= 4 && rank <= 512 && rank % (8 * nr) == 0 && D % (16 * cpt) == 0) {
-      // NI_HC_WIDE (on by default on the M5 Max, where it was measured; 1 on the other Macs, 0 off): wider grids for
+      // NI_HC_WIDE (on by default on the wide class, the 40-core M5 Max; 1 on the other Macs, 0 off): wider grids for
       // the pair, the stats in R threadgroups of their own beside the down projection's dots (hc_down_sk4; hc_down_sk3
       // runs them after the dots of its row block 0) and the verify rows' up projection on 2 blocks of 16 channels per
       // threadgroup (hc_up_mix4_c2: 80 threadgroups at Flash-Next's shape against c4's 40, one a core on the M5 Max).
@@ -1122,7 +1148,7 @@ void Qwen4Exp::enc_gr_rows(Encoder& e, const GatedRes& g, int R, const Buffer& X
       static const bool wide = [] {
         const char* v = getenv("NI_HC_WIDE");
         if (v && *v) return atoi(v) > 0;
-        return Gpu::get().name().find("M5 Max") != std::string::npos;
+        return default_on(Knob::kHcWide, ModelFacts{});
       }();
       e.use(pipe((wide ? "hc_down_sk4_n" : "hc_down_sk3_n") + std::to_string(nr) + b));
       e.buf(0, X, x_row0 * SD * 4); e.buf(1, yb_); e.buf(2, inj_prev); e.buf(3, g.norm->buf);
@@ -1425,8 +1451,9 @@ void Qwen4Exp::enc_attn_sparse(Encoder& e, const Buffer& kc, const Buffer& vc, i
     const AttnSparseParams p{uint32_t(cfg_.hq), uint32_t(cfg_.hkv), maxn, uint32_t(cap), scale, 1, qidx_ld_};
     // The lists on the matrix units (tensor/qsattn_t.metal, qattn_t_sparse_g12d2) where the kernel fits: 12 query
     // heads per KV head, head dim 256, Apple10 and macOS 26 (the Metal 4 library). Else attn_sparse_rows.
-    // Opt-in (NI_QSA_TATTN=1): off by default since #585, a 64K decode that ends early and loops with it on.
-    // tattn() is also engine.cpp auto_chunk's gate for the Q2_0 pack's 4096-row chunks.
+    // Off in the precise profile; on in the fast profile on Macs with matrix units (tattn_env). Q and P enter as
+    // hi + lo halves since #818, which fixed #585's 64K decode that ended early and looped.
+    // tattn_chunks() (NI_QSA_TATTN=1 only) is engine.cpp auto_chunk's gate for the Q2_0 pack's 4096-row chunks.
     const bool tat = tattn(cfg_);
     if (tattn_env()) {
       static bool logged = false;
@@ -1750,6 +1777,7 @@ void Qwen4Exp::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const Samplin
   if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
   if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
   if (snap && (!can_snapshot() || snap_row <= 0 || snap_row >= T)) fatal("prefill snapshot at row %d of %d", snap_row, T);
+  const GroupedPass gp(e, grouped_prefill());
   const int D = cfg_.hidden;
   // the chunk's n-gram rows (the tokens are known): gathered while the GPU runs the previous chunk
   Buffer rows;

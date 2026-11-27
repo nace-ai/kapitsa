@@ -1,0 +1,16 @@
+{
+  "label": "27b-http-candidate",
+  "argv": [
+    "/Users/bytedance/Documents/ChatGPT/kapitsa/work/pr775/m4-local/venv/bin/python",
+    "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool/tests/test_server.py",
+    "http://127.0.0.1:50596"
+  ],
+  "cwd": "/Users/bytedance/.codex/worktrees/mtp-affine-shapes/qwen-nameless-tool",
+  "started_at": "2026-11-07T05:58:20.898279+00:00",
+  "environment": {
+    "NI_LOCK_HELD": "1",
+    "KAPITSA_NO_AUTO_UPDATE": "1",
+    "KAPITSA_NO_PROMPT": "1",
+    "KAPITSA_HOME": "/Users/bytedance/Documents/ChatGPT/kapitsa/batch2-20261106/mtp-gpu-1041/m4-27b/home-27b-http-candidate"
+  }
+}

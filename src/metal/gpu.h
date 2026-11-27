@@ -13,11 +13,13 @@ namespace ni {
 // NI_KV_I8=1: the Qwen3.5-family attention caches hold int8 rows (src/kernels/kv_int8.h) instead of fp16. The Metal
 // library is compiled with the same answer (compile_library), so this is read once, before any kernel compiles, and
 // cannot change while the process runs. Unset (the default) is the fp16 layout every earlier build wrote.
+// The environment's answer now (kv_i8 below reads it once; a CPU check of the refusal reads it as often as it likes).
+inline bool kv_i8_requested() {
+  const char* v = getenv("NI_KV_I8");
+  return v && *v && atoi(v) != 0;
+}
 inline bool kv_i8() {
-  static const bool on = [] {
-    const char* v = getenv("NI_KV_I8");
-    return v && *v && atoi(v) != 0;
-  }();
+  static const bool on = kv_i8_requested();
   return on;
 }
 
@@ -26,6 +28,23 @@ inline bool kv_i8() {
 inline size_t kv_row_bytes(int head_dim) {
   return kv_i8() ? size_t((head_dim + 16) / 16 * 16) : size_t(head_dim) * 2;
 }
+
+// Newest Apple GPU family this binary asks Metal about. Family n is the MTLGPUFamily value 1000+n.
+// 10 is the M5. supportsFamily returns false for a value the OS does not know, so probing past the
+// current chip does not invent a family. Raise this when a new family ships; do not stop at 10.
+inline constexpr int kAppleFamilyProbeMax = 16;
+
+// Highest n in (7, kAppleFamilyProbeMax] for which supports(n) is true, else 7 (every Mac GPU
+// Kapitsa runs on is at least Apple7).
+template <class Supports>
+int apple_family_probed(Supports supports) {
+  for (int n = kAppleFamilyProbeMax; n > 7; --n)
+    if (supports(n)) return n;
+  return 7;
+}
+
+// Metadata only: no command queue or GPU singleton. Returns 0 when Metal has no device.
+int probe_apple_family();
 
 // A GPU-visible buffer (shared storage, so `ptr` is CPU-addressable on Apple silicon).
 // `offset` lets one MTLBuffer back many tensors (e.g. a whole mmapped safetensors file).
@@ -87,9 +106,12 @@ class Gpu {
   bool core_count_measured() const;  // read from the IORegistry (not the override or the name fallback)
   size_t max_threadgroup_memory() const;  // MTLDevice maxThreadgroupMemoryLength
   size_t max_buffer_length() const;       // MTLDevice maxBufferLength
-  bool apple10() const;                   // MTLGPUFamilyApple10 (M5: Metal 4 neural accelerators)
-  int apple_family() const;               // the newest MTLGPUFamilyApple<n>: 7 on the M1, 8 M2, 9 M3 and M4, 10 M5
+  // The base M4 with at most 10 GPU cores: the defaults tuned and gated on that chip alone turn on here
+  int apple_family() const;               // apple_family_probed: 7 M1, 8 M2, 9 M3 and M4, 10 M5, higher when the OS says so
   size_t allocated_bytes() const;  // MTLDevice currentAllocatedSize
+  // macOS's memory pressure is at warning or critical (kern.memorystatus_vm_pressure_level above 1; the
+  // NI_RESIDENCY_PRESSURE_TEST file stands in for it in tests)
+  static bool memory_pressed();
   static const char* thermal_state();  // NSProcessInfo thermalState: nominal, fair, serious, critical
 
   // tracked=false skips Metal's hazard tracking: only for buffers the GPU never writes after
@@ -188,6 +210,10 @@ class Encoder {
   void group_begin() { in_group_ = true; group_first_ = true; }
   void group_end() { in_group_ = false; }
   bool grouped() const { return auto_barrier_; }
+  // Turns what follows in this command buffer into a grouped encoder's dispatches (on: concurrent, a barrier before
+  // each dispatch outside a group, as begin_grouped()) or a plain encoder's (off: serial). The open compute encoder
+  // ends and a new one starts in the same command buffer, as at an event wait; the next dispatch binds its own state.
+  void set_grouped(bool on);
   void commit();             // non-blocking
   // `f` runs (on a Metal thread) once the GPU has finished this command buffer; set before commit(). For progress
   // displays: no wait, nothing on the GPU's path.
@@ -225,7 +251,47 @@ class Encoder {
   // another's, e.g. a drafting pass's "d:"); nullptr or "" for none
   static void profile_tag(const char* tag);
 
+  // ---- Two dependent chains side by side (a GPU-only prefill wavefront) ----
+  // While a Tape is set (record), the encoder writes what it would encode into it instead: pipelines, bindings,
+  // grids, and where a barrier would come (a step: the dispatches that may run together, as a grouped encoder's
+  // group). play() encodes a tape as recorded; play_pair() encodes two tapes as one, a step of each beside the other
+  // between barriers, so each chain keeps its own order and the two overlap. Pairing: a latency-bound step (a
+  // DeltaNet scan, prefill attention) waits for the other chain's next GEMM step, which hides it. The chains must not
+  // touch each other's buffers. Not while profiling (NI_PROFILE) or NI_DUP: tapes_ok() says so.
+  struct Tape {
+    struct Bind {
+      int kind, idx;  // 0 buffer, 1 bytes, 2 threadgroup memory
+      void* mtl;
+      size_t off;     // buffer offset, or the bytes' offset in data
+      uint32_t len;   // bytes / threadgroup memory length
+    };
+    struct Op {
+      void* pso;
+      const char* name;
+      uint32_t max_threads, grid[3], tpg[3];
+      size_t b0, b1;  // binds[b0, b1)
+      bool step;      // a barrier comes before it
+      void* ind;      // an indirect dispatch's argument buffer (id<MTLBuffer>), else nullptr
+      size_t ind_off;
+    };
+    std::vector<Op> ops;
+    std::vector<Bind> binds;
+    std::vector<uint8_t> data;
+    void clear() { ops.clear(); binds.clear(); data.clear(); }
+  };
+  static bool tapes_ok();
+  void record(Tape* t);  // nullptr: encode again
+  bool recording() const { return rec_ != nullptr; }
+  void play(const Tape& t);
+  void play_pair(const Tape& a, const Tape& b);
+
  private:
+  Tape* rec_ = nullptr;
+  std::vector<Tape::Bind> rec_state_;  // the bindings so far while recording: 32 buffer indices, then 8 tg memory
+  bool rec_dispatched_ = false, rec_barrier_ = false;
+  void rec_set(int kind, int idx, void* mtl, size_t off, uint32_t len);
+  void rec_dispatch(const uint32_t grid[3], const uint32_t tpg[3], void* ind, size_t ind_off);
+  void emit(const Tape& t, const Tape::Op& o);
   friend class Gpu;
   void open_encoder();
   void* cb_ = nullptr;

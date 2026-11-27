@@ -1,5 +1,6 @@
 #include "util/load_threads.h"
 #include "loader/safetensors.h"
+#include "loader/load_stop.h"
 #include "util/log.h"
 
 #include <nlohmann/json.hpp>
@@ -12,6 +13,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <limits>
 #include <thread>
 
 namespace ni {
@@ -31,6 +33,8 @@ size_t dtype_size(DType d) {
   fatal("%s is incomplete or not a safetensors file (%s, %lld bytes): copy or download it again", path.c_str(), why,
         size);
 }
+
+static DType parse_dtype(const std::string& s);
 
 // A file's header, checked: a copy cut short or a placeholder (zeros) stops with the file named rather than a JSON
 // exception. *size: the file's bytes (a file of headers alone serves the plans; its tensors are checked when read).
@@ -53,6 +57,21 @@ static nlohmann::json read_header(int fd, const std::string& path, uint64_t& hle
         o[1].get<uint64_t>() < o[0].get<uint64_t>() || !v.contains("dtype") || !v["dtype"].is_string() ||
         !v.contains("shape") || !v["shape"].is_array())
       incomplete(path, "bad tensor entry", st.st_size);
+    // Readers size their destinations from shape/dtype, but read the offset range into them.
+    const uint64_t limit = uint64_t(std::numeric_limits<int64_t>::max());
+    uint64_t count = 1;
+    for (const auto& dim : v["shape"]) {
+      if (!dim.is_number_unsigned() || dim.get<uint64_t>() > limit)
+        incomplete(path, "bad tensor shape", st.st_size);
+      const uint64_t n = dim.get<uint64_t>();
+      if (n && count > limit / n) incomplete(path, "tensor shape overflows", st.st_size);
+      count *= n;
+    }
+    const uint64_t b = o[0].get<uint64_t>(), e = o[1].get<uint64_t>();
+    if (e > limit - (8 + hlen)) incomplete(path, "tensor offset overflows", st.st_size);
+    const size_t width = dtype_size(parse_dtype(v["dtype"].get<std::string>()));
+    if (width && (count > limit / width || count * width != e - b))
+      incomplete(path, "tensor shape/dtype does not match its byte range", st.st_size);
   }
   return j;
 }
@@ -71,6 +90,13 @@ static DType parse_dtype(const std::string& s) {
   return DType::Unknown;
 }
 
+// Check after tensor filtering: an unused tower may carry a dtype this engine does not support.
+static DType checked_dtype(const std::string& s, const std::string& path, const std::string& name) {
+  const DType d = parse_dtype(s);
+  if (d == DType::Unknown) fatal("%s: tensor %s has unsupported dtype %s", path.c_str(), name.c_str(), s.c_str());
+  return d;
+}
+
 namespace {
 struct ReadJob {
   int fd;
@@ -78,6 +104,50 @@ struct ReadJob {
   uint8_t* dst;
   size_t len;
 };
+
+// F_NOCACHE skips the page cache only for a read whose file offset, length and destination are page-aligned: any
+// other read goes through the cache and leaves its pages there. Tensors in a safetensors file start at 8 + header
+// length + their offset, so almost none are aligned, and a plain pread leaves nearly every page it read in the cache:
+// a 106 GB pack's load on a 128 GB Mac filled it while the same bytes went into GPU memory (#939: in both panics the
+// readers were stuck in the kernel with 70 GB of file-backed pages and 900 free). So a misaligned piece is read whole pages at a time into a
+// page-aligned staging buffer and copied from there.
+constexpr size_t kPage = size_t(16) << 10;
+constexpr size_t kPiece = size_t(32) << 20;  // the largest piece a staging buffer takes
+
+struct Staging {
+  uint8_t* p = nullptr;
+  Staging() {
+    if (posix_memalign(reinterpret_cast<void**>(&p), kPage, kPiece + 2 * kPage)) fatal("staging buffer allocation failed");
+  }
+  ~Staging() { free(p); }
+  Staging(const Staging&) = delete;
+  Staging& operator=(const Staging&) = delete;
+};
+
+bool pread_all(int fd, uint8_t* dst, size_t len, size_t off) {
+  for (size_t done = 0; done < len;) {
+    const ssize_t r = pread(fd, dst + done, len - done, off_t(off + done));
+    if (r <= 0) return false;
+    done += size_t(r);
+  }
+  return true;
+}
+
+// len <= kPiece bytes at file offset off into dst, past the page cache
+bool read_uncached(int fd, uint8_t* dst, size_t len, size_t off, Staging& st) {
+  if (off % kPage == 0 && len % kPage == 0 && reinterpret_cast<uintptr_t>(dst) % kPage == 0)
+    return pread_all(fd, dst, len, off);
+  const size_t a = off / kPage * kPage, head = off - a;
+  const size_t want = head + len, span = (want + kPage - 1) / kPage * kPage;
+  size_t done = 0;
+  while (done < want) {  // the last page may run past the end of the file: a short read there is enough
+    const ssize_t r = pread(fd, st.p + done, span - done, off_t(a + done));
+    if (r <= 0) return false;
+    done += size_t(r);
+  }
+  memcpy(dst, st.p + head, len);
+  return true;
+}
 } // namespace
 
 void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Filter& file_filter, const Filter& defer) {
@@ -93,7 +163,7 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
   std::sort(files.begin(), files.end());
   if (files.empty() && !file_filter) fatal("no .safetensors in %s", dir.c_str());
 
-  constexpr size_t kAlign = 256, kChunk = 32u << 20;
+  constexpr size_t kAlign = 256;
   std::vector<ReadJob> jobs;
   std::vector<Fd> fds;
   for (auto& path : files) {
@@ -117,9 +187,10 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
       if (keep && !keep(name)) continue;
       Item it;
       it.name = name;
-      it.t.dtype = parse_dtype(v["dtype"].get<std::string>());
+      it.t.dtype = checked_dtype(v["dtype"].get<std::string>(), path, name);
       for (auto& s : v["shape"]) it.t.shape.push_back(s.get<int64_t>());
       size_t b = v["data_offsets"][0].get<size_t>(), e = v["data_offsets"][1].get<size_t>();
+      if (e > fsize - data0) incomplete(path, "its tensors run past its end", (long long)fsize);
       it.src = data0 + b;
       it.len = e - b;
       if (defer && defer(name)) {  // listed without a buffer; read_deferred() reads it
@@ -134,8 +205,6 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
     if (items.empty()) {
       continue;
     }
-    for (const Item& it : items)
-      if (it.src + it.len > fsize) incomplete(path, "its tensors run past its end", (long long)fsize);
     // Read in file order for sequential I/O.
     std::sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.src < b.src; });
     std::string base = path.substr(path.find_last_of('/') + 1);
@@ -145,8 +214,8 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
     fds.push_back(std::move(opened));
     for (auto& it : items) {
       it.t.buf = fb.view(it.dst, it.len);
-      for (size_t o = 0; o < it.len; o += kChunk)
-        jobs.push_back({fd, it.src + o, fb.as<uint8_t>() + it.dst + o, std::min(kChunk, it.len - o)});
+      for (size_t o = 0; o < it.len; o += kPiece)
+        jobs.push_back({fd, it.src + o, fb.as<uint8_t>() + it.dst + o, std::min(kPiece, it.len - o)});
       tensors_[it.name] = it.t;
     }
   }
@@ -158,16 +227,13 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
   LoadThreads th;
   for (unsigned i = 0; i < nth; ++i)
     th.emplace_back([&] {
+      Staging st;
       for (size_t k; (k = next.fetch_add(1)) < jobs.size();) {
+        load_stop_point();  // (a stop during the load: src/loader/load_stop.h)
         const ReadJob& jb = jobs[k];
-        size_t done = 0;
-        while (done < jb.len) {
-          ssize_t r = pread(jb.fd, jb.dst + done, jb.len - done, off_t(jb.file_off + done));
-          if (r <= 0) {
-            failed = true;
-            return;
-          }
-          done += size_t(r);
+        if (!read_uncached(jb.fd, jb.dst, jb.len, jb.file_off, st)) {
+          failed = true;
+          return;
         }
       }
     });
@@ -187,24 +253,20 @@ void WeightStore::read_deferred(const std::string& name, void* dst) const {
   if (fd < 0) fatal("open %s failed", p.path.c_str());
   fcntl(fd, F_NOCACHE, 1);
   // parallel reads of 32 MB pieces
-  constexpr size_t kChunk = 32u << 20;
   std::atomic<size_t> next{0};
   std::atomic<bool> failed{false};
-  const size_t n = (p.len + kChunk - 1) / kChunk;
+  const size_t n = (p.len + kPiece - 1) / kPiece;
   const unsigned nth = std::min<unsigned>(8, std::max<size_t>(1, n));
   LoadThreads th;
   for (unsigned i = 0; i < nth; ++i)
     th.emplace_back([&] {
+      Staging st;
       for (size_t k; (k = next.fetch_add(1)) < n;) {
-        const size_t o = k * kChunk, len = std::min(kChunk, p.len - o);
-        size_t done = 0;
-        while (done < len) {
-          ssize_t r = pread(fd, static_cast<uint8_t*>(dst) + o + done, len - done, off_t(p.off + o + done));
-          if (r <= 0) {
-            failed = true;
-            return;
-          }
-          done += size_t(r);
+        load_stop_point();
+        const size_t o = k * kPiece, len = std::min(kPiece, p.len - o);
+        if (!read_uncached(fd, static_cast<uint8_t*>(dst) + o, len, p.off + o, st)) {
+          failed = true;
+          return;
         }
       }
     });
@@ -256,7 +318,7 @@ SafetensorsIndex::SafetensorsIndex(const std::string& dir, const std::function<b
       if (name == "__metadata__" || (skip && skip(name))) continue;
       Entry t;
       t.file = int(fi);
-      t.dtype = parse_dtype(v["dtype"].get<std::string>());
+      t.dtype = checked_dtype(v["dtype"].get<std::string>(), path, name);
       for (auto& x : v["shape"]) t.shape.push_back(x.get<int64_t>());
       const size_t b = v["data_offsets"][0].get<size_t>(), e = v["data_offsets"][1].get<size_t>();
       t.off = 8 + hlen + b;
@@ -280,7 +342,8 @@ const SafetensorsIndex::Entry& SafetensorsIndex::get(const std::string& name) co
 }
 
 void SafetensorsIndex::read(const Entry& t, size_t off, void* dst, size_t n) const {
-  if (off + n > t.len) fatal("%s: read past a tensor's end", dir_.c_str());
+  if (off > t.len || n > t.len - off) fatal("%s: read past a tensor's end", dir_.c_str());
+  load_stop_point();
   size_t done = 0;
   while (done < n) {
     const ssize_t r = pread(fds_[size_t(t.file)].get(), static_cast<uint8_t*>(dst) + done, n - done, off_t(t.off + off + done));

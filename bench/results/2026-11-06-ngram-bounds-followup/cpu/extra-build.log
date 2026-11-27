@@ -1,0 +1,9 @@
+[100%] Built target naceinfer
+[100%] Building CXX object CMakeFiles/qwen4_config_test.dir/tools/qwen4_config_test.cpp.o
+[100%] Linking CXX executable qwen4_config_test
+[100%] Built target qwen4_config_test
+[100%] Building CXX object CMakeFiles/systemone_codes_driver.dir/tests/systemone_codes_driver.cpp.o
+[100%] Building CXX object CMakeFiles/systemone_codes_driver.dir/src/tokenizer/tokenizer.cpp.o
+[100%] Building CXX object CMakeFiles/systemone_codes_driver.dir/src/systemone/systemone.cpp.o
+[100%] Linking CXX executable systemone_codes_driver
+[100%] Built target systemone_codes_driver

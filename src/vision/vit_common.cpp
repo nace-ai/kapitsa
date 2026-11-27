@@ -93,6 +93,11 @@ void VitWeights::read_bf16(const std::string& name, uint16_t* dst, size_t rows, 
   if (!t) fatal("vision: missing tensor %s%s", prefix_.c_str(), name.c_str());
   if (size_t(t->numel()) != rows * k)
     fatal("vision: %s%s has %lld values, expected %zu", prefix_.c_str(), name.c_str(), (long long)t->numel(), rows * k);
+  // An unpadded BF16 tensor already has the destination layout; avoid a full-size staging copy.
+  if (t->dtype == DType::BF16 && k == ld) {
+    ws_->read_deferred(prefix_ + name, dst);
+    return;
+  }
   std::vector<uint8_t> raw(size_t(t->numel()) * dtype_size(t->dtype));
   ws_->read_deferred(prefix_ + name, raw.data());
   for (size_t r = 0; r < rows; ++r) {
