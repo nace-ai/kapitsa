@@ -34,7 +34,7 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [Mac mini (2024) · M4 Pro 20-core GPU · 64 GB](#mac-mini-2024--m4-pro-20-core-gpu--64-gb) | 4 |
 | [MacBook Pro (14-inch, 2024) · M4 10-core GPU · 16 GB](#macbook-pro-14-inch-2024--m4-10-core-gpu--16-gb) | 2 |
 | [MacBook Pro (14-inch, 2024) · M4 Max 40-core GPU · 64 GB](#macbook-pro-14-inch-2024--m4-max-40-core-gpu--64-gb) | 2 |
-| [MacBook Pro (14-inch, 2024) · M4 Max 40-core GPU · 128 GB](#macbook-pro-14-inch-2024--m4-max-40-core-gpu--128-gb) | 1 |
+| [MacBook Pro (14-inch, 2024) · M4 Max 40-core GPU · 128 GB](#macbook-pro-14-inch-2024--m4-max-40-core-gpu--128-gb) | 2 |
 | [MacBook Pro (14-inch, 2024) · M4 Pro 16-core GPU · 48 GB](#macbook-pro-14-inch-2024--m4-pro-16-core-gpu--48-gb) | 2 |
 | [MacBook Pro (16-inch, 2024) · M4 Max 32-core GPU · 36 GB](#macbook-pro-16-inch-2024--m4-max-32-core-gpu--36-gb) | 1 |
 | [MacBook Pro (16-inch, 2024) · M4 Max 40-core GPU · 48 GB](#macbook-pro-16-inch-2024--m4-max-40-core-gpu--48-gb) | 1 |
@@ -586,6 +586,12 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | [2026-10-24](results/kapitsa-bench-2026-10-24-m4-max-flint-4bit-8c07e0.json) | 136.1 tok/s | 147.9 tok/s | 1,023 tok/s ⚠ | 798 tok/s ⚠ | 0.11 s ⚠ | 0.14 s ⚠ | 22.4 GB | pass | plain | 0.2.12 | 27.0.1 | contention (prefill_4000, prefill_16000) |
 
 ## MacBook Pro (14-inch, 2024) · M4 Max 40-core GPU · 128 GB
+
+### Qwen3.6 35B-A3B · Nace Q5
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-11-28](results/kapitsa-bench-2026-11-28-m4-max-qwen3.6-35b-a3b-q5-ddfd57.json) | 155.0 tok/s | 165.6 tok/s | 1,327 tok/s | 1,313 tok/s | 0.05 s | 0.06 s | 23.8 GB | pass | KFlash | 0.2.40 | 27.3 | repetition loop |
 
 ### Qwen3.8 Flash-Next 180B-A7B · 4-bit
 
