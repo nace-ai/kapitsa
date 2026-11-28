@@ -9,7 +9,8 @@
 // activation, q / k / v split, non-causal attention over one image's patches. Then each tower's own steps: the Qwen3.5
 // ViT's (qvit_*: patches from the resized image, position embeddings interpolated to the grid, 2D RoPE) and the RADIO
 // ViT's of Nemotron 3.5 (radio_*: position embeddings resized and cropped to the grid, the 2x2 pixel shuffle with the
-// projector's RMSNorm).
+// projector's RMSNorm) and Inkling-2's (ivit_*: patches of the image padded to whole tokens, axial RoPE over interleaved
+// pairs with a class token, the layer scales).
 
 // In-place bf16 -> qrf_load_w's half pairs (0,4), (1,5), (2,6), (3,7) per eight weights.
 // Run once at load, using the same conversions as the bf16 GEMM's inner loop.
@@ -458,4 +459,86 @@ struct RadioShuffleParams {
     const float v = x[size_t(p.prefix + src[q]) * p.D + c] + float(pb[c]);
     yr[k] = half(float(w[k]) * (v * r));
   }
+}
+
+// ==== the Inkling-2 ViT ====
+
+// Patch rows for the patch embedding, half [N, K_pad]: row r is patch r of the padded canvas's gw-wide patch grid in
+// merge-block order (token t = r / merge^2 in raster order, then the token's merge x merge patches row by row),
+// k = (py * P + px) * 3 + c (the reference's (row, column, channel) flattening); pixels past the image's width or height
+// are the processor's padding (`pad`: -1 on the 0-255 scale, normalized); columns [K, K_pad) are 0 for the GEMM's K
+// step. lut[channel * 257 + value]: rescale + normalize, computed on the CPU.
+struct IvitPatchParams {
+  uint W, H;      // the image (pixels)
+  uint gw;        // patches per row of the canvas
+  uint P, merge;
+  uint K, K_pad;  // 3 * P * P, and the row width
+  float pad;
+};
+[[kernel]] void ivit_patchify(const device uchar* rgb [[buffer(0)]], const device float* lut [[buffer(1)]],
+                              device half* X [[buffer(2)]], constant IvitPatchParams& p [[buffer(3)]],
+                              uint2 gid [[thread_position_in_grid]]) {
+  const uint k = gid.x, r = gid.y;
+  if (k >= p.K_pad) return;
+  device half* row = X + size_t(r) * p.K_pad;
+  if (k >= p.K) {
+    row[k] = half(0.0f);
+    return;
+  }
+  const uint mm = p.merge * p.merge, b = r / mm, bw = p.gw / p.merge;
+  const uint prow = (b / bw) * p.merge + (r % mm) / p.merge, pcol = (b % bw) * p.merge + r % p.merge;
+  const uint c = k % 3, px = (k / 3) % p.P, py = k / (3 * p.P);
+  const uint x = pcol * p.P + px, y = prow * p.P + py;
+  const float v = (x < p.W && y < p.H) ? lut[c * 257 + rgb[(size_t(y) * p.W + x) * 3 + c]] : p.pad;
+  row[k] = half(v);
+}
+
+// qkv rows (fp32 [rows, 3 * heads * HD], from the GEMM) + bias -> axial 2D RoPE on q and k -> half Q, K, V
+// [heads][N][HD]. Interleaved pairs (2i, 2i + 1), i < HD/2, rotate by pos * inv_freq[i % (HD/4)]: pos = the patch's
+// grid column + 1 for i < HD/4, its row + 1 after (the reference's cat(w_freqs, h_freqs), each frequency repeated for
+// its pair); row 0, the class token, sits at (0, 0). Thread = (row, head, pair).
+struct IvitRopeParams {
+  uint rows, r0, N, heads, HD, gw, merge;
+};
+[[kernel]] void ivit_qkv_rope(const device float* y [[buffer(0)]], const device bfloat* bias [[buffer(1)]],
+                              const device float* inv_freq [[buffer(2)]], device half* Q [[buffer(3)]],
+                              device half* K [[buffer(4)]], device half* V [[buffer(5)]],
+                              constant IvitRopeParams& p [[buffer(6)]], uint gid [[thread_position_in_grid]]) {
+  const uint half_d = p.HD / 2, quarter = p.HD / 4;
+  const uint i = gid % half_d, h = (gid / half_d) % p.heads, rr = gid / (half_d * p.heads);
+  if (rr >= p.rows) return;
+  const uint r = p.r0 + rr;
+  float pos = 0.0f;
+  if (r > 0) {
+    const uint q = r - 1, mm = p.merge * p.merge, b = q / mm, bw = p.gw / p.merge;
+    const uint prow = (b / bw) * p.merge + (q % mm) / p.merge, pcol = (b % bw) * p.merge + q % p.merge;
+    pos = float((i < quarter ? pcol : prow) + 1);
+  }
+  const float ang = pos * inv_freq[i % quarter];
+  const float cs = metal::precise::cos(ang), sn = metal::precise::sin(ang);
+  const uint W = p.heads * p.HD;
+  const device float* yr = y + size_t(rr) * 3 * W;
+  const uint c0 = h * p.HD + 2 * i, c1 = c0 + 1;
+  const size_t o = (size_t(h) * p.N + r) * p.HD + 2 * i;
+  for (uint m = 0; m < 2; ++m) {  // q, then k
+    const float a = yr[m * W + c0] + float(bias[m * W + c0]), b2 = yr[m * W + c1] + float(bias[m * W + c1]);
+    device half* dst = m == 0 ? Q : K;
+    dst[o] = half(a * cs - b2 * sn);
+    dst[o + 1] = half(b2 * cs + a * sn);
+  }
+  V[o] = half(yr[2 * W + c0] + float(bias[2 * W + c0]));
+  V[o + 1] = half(yr[2 * W + c1] + float(bias[2 * W + c1]));
+}
+
+// x[r] += gamma * (y[r] + bias): a block's branch (fp32 rows of y_ld from the GEMM, its linear's bias) through its layer
+// scale into the residual stream. Thread = (channel, row).
+struct IvitScaleParams {
+  uint rows, D, y_ld;
+};
+[[kernel]] void ivit_scale_add(device float* x [[buffer(0)]], const device float* y [[buffer(1)]],
+                               const device bfloat* bias [[buffer(2)]], const device bfloat* gamma [[buffer(3)]],
+                               constant IvitScaleParams& p [[buffer(4)]], uint2 gid [[thread_position_in_grid]]) {
+  const uint i = gid.x, r = gid.y;
+  if (i >= p.D || r >= p.rows) return;
+  x[size_t(r) * p.D + i] += float(gamma[i]) * (y[size_t(r) * p.y_ld + i] + float(bias[i]));
 }

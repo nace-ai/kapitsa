@@ -213,8 +213,9 @@ std::string hex(const Digest& d, size_t bytes) {
 
 // Raw pixels of the formats PNG and JPEG decode to, converted as PIL's convert("RGB") does: no color conversion,
 // alpha dropped (premultiplied data is unpremultiplied first), 16-bit samples by their high byte, palettes looked
-// up, gray replicated. False for anything else (the caller draws it instead).
-static bool raw_rgb(CGImageRef img, std::vector<uint8_t>& out) {
+// up, gray replicated; the straight alpha into `alpha` when the image has one (a padding byte is none: RGBX stays
+// opaque). False for anything else (the caller draws it instead).
+static bool raw_rgb(CGImageRef img, std::vector<uint8_t>& out, std::vector<uint8_t>& alpha_out) {
   const size_t w = CGImageGetWidth(img), h = CGImageGetHeight(img);
   const size_t bpc = CGImageGetBitsPerComponent(img), bpp = CGImageGetBitsPerPixel(img), bpr = CGImageGetBytesPerRow(img);
   const CGBitmapInfo info = CGImageGetBitmapInfo(img);
@@ -239,7 +240,10 @@ static bool raw_rgb(CGImageRef img, std::vector<uint8_t>& out) {
   } else {
     return false;
   }
+  // A fourth component is stored for every format but None: real alpha, or padding (NoneSkipFirst / NoneSkipLast,
+  // RGBX / XRGB: an opaque 32-bit BMP, say), which keeps its place in the pixel but is no transparency.
   const bool has_alpha = alpha != kCGImageAlphaNone && alpha != kCGImageAlphaOnly;
+  const bool real_alpha = has_alpha && alpha != kCGImageAlphaNoneSkipFirst && alpha != kCGImageAlphaNoneSkipLast;
   if (alpha == kCGImageAlphaOnly) return false;
   const size_t spp = ncomp + (has_alpha ? 1 : 0);
   if (bpp != spp * bpc) return false;
@@ -268,6 +272,7 @@ static bool raw_rgb(CGImageRef img, std::vector<uint8_t>& out) {
     return false;
   }
   out.resize(w * h * 3);
+  alpha_out.assign(real_alpha ? w * h : 0, 255);
   const size_t ci = alpha_first ? 1 : 0;  // first color sample
   const size_t ai = alpha_first ? 0 : ncomp;
   for (size_t y = 0; y < h; ++y) {
@@ -293,6 +298,7 @@ static bool raw_rgb(CGImageRef img, std::vector<uint8_t>& out) {
         const uint32_t a = sample(ai);
         for (uint32_t& v : c) v = a ? std::min<uint32_t>(255, (v * 255 + a / 2) / a) : 0;
       }
+      if (real_alpha) alpha_out[y * w + x] = uint8_t(sample(ai));
       o[3 * x] = uint8_t(c[0]), o[3 * x + 1] = uint8_t(c[1]), o[3 * x + 2] = uint8_t(c[2]);
     }
   }
@@ -315,9 +321,9 @@ static void drawn_rgb(CGImageRef img, std::vector<uint8_t>& out) {
   for (size_t i = 0; i < w * h; ++i) memcpy(&out[3 * i], &rgbx[4 * i], 3);
 }
 
-// EXIF orientation 2-8 applied to an RGB image (as PIL's ImageOps.exif_transpose).
-static void orient(std::vector<uint8_t>& rgb, int& w, int& h, int o) {
-  if (o < 2 || o > 8) return;
+// EXIF orientation 2-8 applied to an image of `n` bytes per pixel (as PIL's ImageOps.exif_transpose).
+static void orient(std::vector<uint8_t>& rgb, int& w, int& h, int o, size_t n = 3) {
+  if (o < 2 || o > 8 || rgb.empty()) return;
   const bool swap = o >= 5;
   const int W = swap ? h : w, H = swap ? w : h;
   std::vector<uint8_t> out(rgb.size());
@@ -333,7 +339,7 @@ static void orient(std::vector<uint8_t>& rgb, int& w, int& h, int o) {
         case 7: sx = w - 1 - y, sy = h - 1 - x; break;     // transverse
         case 8: sx = w - 1 - y, sy = x; break;             // rotate 90 counter-clockwise
       }
-      memcpy(&out[(size_t(y) * W + x) * 3], &rgb[(size_t(sy) * w + sx) * 3], 3);
+      memcpy(&out[(size_t(y) * W + x) * n], &rgb[(size_t(sy) * w + sx) * n], n);
     }
   rgb.swap(out);
   w = W, h = H;
@@ -369,12 +375,14 @@ Image decode(const std::string& bytes) {
                   " pixels: Kapitsa takes images of up to 100 megapixels");
     }
     try {
-      if (!raw_rgb(img, im.rgb)) drawn_rgb(img, im.rgb);
+      if (!raw_rgb(img, im.rgb, im.alpha)) drawn_rgb(img, im.rgb);
     } catch (...) {
       CGImageRelease(img);
       throw;
     }
     CGImageRelease(img);
+    int aw = im.width, ah = im.height;
+    orient(im.alpha, aw, ah, orientation, 1);
     orient(im.rgb, im.width, im.height, orientation);
     std::vector<uint8_t> head(8);
     memcpy(head.data(), &im.width, 4);

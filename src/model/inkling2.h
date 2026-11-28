@@ -3,7 +3,8 @@
 // [0..5, 6..17, 6..17, 6..17, 18..23], 200,058 unpadded vocab out of 201,024 padded, AttRes across blocks +
 // cross-pass MessageGate controllers + static/dynamic short convolutions + SWA/global sink attention with
 // relative position bias + 128-expert top-8 SiTU MoE in NVFP4 L0-19 and MXFP8 L20-23 + final logit softcap 30).
-// Vision tower (model.visual.*) is skipped in Stage 1.
+// Images: the vision tower (model.visual.*) is src/vision/ink2_vit.h; enc_forward writes its rows over the placeholder
+// tokens' normalized embeddings (Seq::embeds).
 #pragma once
 
 #include "engine/profile.h"

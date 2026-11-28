@@ -12,7 +12,7 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Re
 
 **Requirements:** a Mac with Apple silicon (M1 or newer) and macOS 14 Sonoma or later.
 
-**Limits:** Apple silicon only: no Linux or Windows. Flint, the four text-only Nemotrons, Clover, Ornith, Hy4-flash, Inkling-2-Mini and the 35B's `16gb` build read text only, not images ([which models read images](docs/usage.md#images)).
+**Limits:** Apple silicon only: no Linux or Windows. Flint, the four text-only Nemotrons, Clover, Ornith, Hy4-flash and the 35B's `16gb` build read text only, not images ([which models read images](docs/usage.md#images)).
 
 ```bash
 brew install nace-ai/tap/kapitsa

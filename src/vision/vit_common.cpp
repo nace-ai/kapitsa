@@ -147,6 +147,7 @@ Buffer VitWeights::vec(const std::string& name) {
 void VitWeights::make_resident() { Gpu::get().make_resident(owned_); }
 
 void VitWeights::release() {
+  if (owned_.empty()) return;  // nothing loaded: no GPU to ask (an encoder only preparing images, on the CPU)
   Gpu& g = Gpu::get();
   for (Buffer& b : owned_) g.release(b);
   owned_.clear();
