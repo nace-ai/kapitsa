@@ -1,0 +1,121 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-11-28T10:25:43Z",
+  "kapitsa": {
+    "version": "0.2.40",
+    "commit": "d1861ef"
+  },
+  "mac": {
+    "identifier": "Mac16,6",
+    "name": "MacBook Pro (14-inch, 2024)",
+    "year": 2024,
+    "chip": "Apple M4 Max",
+    "cpu_cores": 16,
+    "gpu_cores": 40,
+    "memory_gb": 128,
+    "macos": "27.3",
+    "macos_build": "26C5047e"
+  },
+  "model": {
+    "name": "qwen3.6-35b-a3b",
+    "title": "Qwen3.6-35B-A3B",
+    "variant": "q5",
+    "precision": "Nace Q5",
+    "catalog": true,
+    "revision": "50b3b1c",
+    "decoding": "KFlash",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)",
+    "drafter": "incoai/Qwen3.6-35B-A3B-DFlash2@51ef7b6",
+    "drafter_kind": "DFlash2",
+    "drafter_source": "dflash2",
+    "drafter_reason": "found in the model's folder"
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 155.0,
+      "runs_tps": [
+        163.96,
+        161.2,
+        154.71,
+        150.21,
+        155.0
+      ],
+      "median_accepted_draft_tps": 114.82,
+      "median_accepted_draft_share": 0.7422
+    },
+    "decode_greedy": {
+      "median_tps": 165.57,
+      "runs_tps": [
+        172.11,
+        171.17,
+        162.3,
+        165.57,
+        163.38
+      ],
+      "median_accepted_draft_tps": 122.24,
+      "median_accepted_draft_share": 0.7383
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4133,
+        "ttft_s": 3.1146,
+        "tps": 1327.0,
+        "followup_s": [
+          0.0489,
+          0.0478,
+          0.0409
+        ],
+        "followup_median_s": 0.0478,
+        "followup_suffix_tps": 513.4
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16287,
+        "ttft_s": 12.4036,
+        "tps": 1313.1,
+        "followup_s": [
+          0.0604,
+          0.0633,
+          0.0547
+        ],
+        "followup_median_s": 0.0604,
+        "followup_suffix_tps": 384.1
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 23.78
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "fair",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 2.26,
+    "gpu_other_max_pct": 4.76,
+    "gpu_ambient_mean_pct": 0.13,
+    "gpu_users": [
+      "com.apple.WebKit.GPU"
+    ],
+    "contention": []
+  },
+  "flags": [
+    "decode: repetition loop (distinct-4-gram 0.446)"
+  ],
+  "invalid": []
+}
